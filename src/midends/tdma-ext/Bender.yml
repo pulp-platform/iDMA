@@ -1,0 +1,18 @@
+package:
+  name: tdma-ext
+  authors:
+    - "Thomas Benz <tbenz@iis.ee.ethz.ch>"
+    - "Gian Mart <gimarti@iis.ee.ethz.ch>"
+    - "Thomas Kramer <>"
+
+sources:
+  - src/fifo.sv
+  - src/reg_intf.sv
+  - src/axi_dma_pkg.sv
+  - src/tdma_addr_calc.sv
+  - src/tdma_conf_intf.sv
+  - src/tdma_frontend.sv
+  - src/tdma_top.sv
+  - src/tdma_fix.sv
+  - test/tdma_fe_tb.sv
+
