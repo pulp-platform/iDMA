@@ -16,3 +16,6 @@ Home of the DMA. Replaces the version on `github.com/axi`!!!!
 ### Trace
 `sh> make trace`
 
+## Docs
+Requires a morty installation for full functionality (See https://github.com/zarubaf/morty)
+`make -C doc clean morty-docs html`

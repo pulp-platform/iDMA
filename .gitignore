@@ -8,3 +8,4 @@ dma_trace*.txt
 dma_transfers*
 modelsim.ini
 transcript
+doc/build
