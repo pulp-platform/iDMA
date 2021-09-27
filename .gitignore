@@ -9,3 +9,4 @@ dma_transfers*
 modelsim.ini
 transcript
 doc/build
+Bender.lock

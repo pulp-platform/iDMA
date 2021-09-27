@@ -12,66 +12,66 @@
 
 /// replaces the mchan in the pulp cluster if the new AXI DMA should be used
 /// strictly 32 bit on the TCDM side.
+
+`include "register_interface/typedef.svh"
 module cluster_dma_frontend #(
     /// number of cores in the cluster
-    parameter int unsigned NumCores       = -1,
+    parameter int  unsigned NumCtrl        = -1,
     /// id width of peripherals
-    parameter int unsigned PerifIdWidth   = -1,
+    parameter int  unsigned PeriphIdWidth   = -1,
     /// id width of the DMA AXI Master port
-    parameter int unsigned DmaAxiIdWidth  = -1,
+    parameter int  unsigned DmaAxiIdWidth  = -1,
     /// data width of the DMA AXI Master port
-    parameter int unsigned DmaDataWidth   = -1,
+    parameter int  unsigned DmaDataWidth   = -1,
     /// address width of the DMA AXI Master port
-    parameter int unsigned DmaAddrWidth   = -1,
+    parameter int  unsigned DmaAddrWidth   = -1,
     /// number of AX requests in-flight
-    parameter int unsigned AxiAxReqDepth  = -1,
+    parameter int  unsigned AxiAxReqDepth  = -1,
     /// number of 1D transfers buffered in backend
-    parameter int unsigned TfReqFifoDepth = -1,
-    parameter int unsigned NumStreams     = 1,
+    parameter int  unsigned TfReqFifoDepth = -1,
+    parameter int  unsigned NumStreams     = 1,
     /// data request type
-    parameter type axi_req_t      = logic,
+    parameter type          axi_req_t      = logic,
     /// data response type
-    parameter type axi_res_t      = logic
-)(
-    input  logic                      clk_i,
-    input  logic                      rst_ni,
-    input logic [5:0]                 cluster_id_i,
-    /// x-bar
-    input  logic                      ctrl_pe_targ_req_i,
-    input  logic                      ctrl_pe_targ_type_i,
-    input  logic [3:0]                ctrl_pe_targ_be_i,
-    input  logic [31:0]               ctrl_pe_targ_add_i,
-    input  logic [31:0]               ctrl_pe_targ_data_i,
-    input  logic [PerifIdWidth-1:0]   ctrl_pe_targ_id_i,
-    output logic                      ctrl_pe_targ_gnt_o,
-    output logic                      ctrl_pe_targ_r_valid_o,
-    output logic [31:0]               ctrl_pe_targ_r_data_o,
-    output logic                      ctrl_pe_targ_r_opc_o,
-    output logic [PerifIdWidth-1:0]   ctrl_pe_targ_r_id_o,
-    /// from cores
-    input  logic [NumCores-1:0]       ctrl_targ_req_i,
-    input  logic [NumCores-1:0]       ctrl_targ_type_i,
-    input  logic [NumCores-1:0][3:0]  ctrl_targ_be_i,
-    input  logic [NumCores-1:0][31:0] ctrl_targ_add_i,
-    input  logic [NumCores-1:0][31:0] ctrl_targ_data_i,
-    output logic [NumCores-1:0]       ctrl_targ_gnt_o,
-    output logic [NumCores-1:0]       ctrl_targ_r_valid_o,
-    output logic [NumCores-1:0][31:0] ctrl_targ_r_data_o,
+    parameter type          axi_res_t      = logic
+) (
+    input  logic                                         clk_i,
+    input  logic                                         rst_ni,
+    input  logic     [           5:0]                    cluster_id_i,
+    /// Control Ports
+    input  logic     [   NumCtrl-1:0]                    ctrl_targ_req_i,
+    input  logic     [   NumCtrl-1:0]                    ctrl_targ_type_i,
+    input  logic     [   NumCtrl-1:0][             3:0]  ctrl_targ_be_i,
+    input  logic     [   NumCtrl-1:0][            31:0]  ctrl_targ_add_i,
+    input  logic     [   NumCtrl-1:0][            31:0]  ctrl_targ_data_i,
+    input  logic     [   NumCtrl-1:0][PeriphIdWidth-1:0] ctrl_targ_id_i,
+    output logic     [   NumCtrl-1:0]                    ctrl_targ_gnt_o,
+    output logic     [   NumCtrl-1:0]                    ctrl_targ_r_valid_o,
+    output logic     [   NumCtrl-1:0][            31:0]  ctrl_targ_r_data_o,
+    output logic     [   NumCtrl-1:0]                    ctrl_targ_r_opc_o,
+    output logic     [   NumCtrl-1:0][PeriphIdWidth-1:0] ctrl_targ_r_id_o,
     /// wide AXI port
-    output axi_req_t [NumStreams-1:0] axi_dma_req_o,
-    input  axi_res_t [NumStreams-1:0] axi_dma_res_i,
+    output axi_req_t [NumStreams-1:0]                    axi_dma_req_o,
+    input  axi_res_t [NumStreams-1:0]                    axi_dma_res_i,
     /// status signal
-    output logic                      busy_o,
+    output logic                                         busy_o,
     /// events and interrupts (cores)
-    output logic [NumCores-1:0]       term_event_o,
-    output logic [NumCores-1:0]       term_irq_o,
-    /// events and interrupts (peripherals)
-    output logic                      term_event_pe_o,
-    output logic                      term_irq_pe_o
+    output logic     [  NumCtrl-1:0]                     term_event_o,
+    output logic     [  NumCtrl-1:0]                     term_irq_o
 );
 
     // number of register sets in fe
-    localparam int unsigned NumRegs  = NumCores + 1;
+    localparam int unsigned NumRegs  = NumCtrl;
+
+    // import cluster_dma_frontend_reg_pkg::* ;
+    `REG_BUS_TYPEDEF_ALL(dma_regs, logic[9:0], logic[31:0], logic[3:0])
+    dma_regs_req_t [NumRegs-1:0] dma_regs_req;
+    dma_regs_rsp_t [NumRegs-1:0] dma_regs_rsp;
+    cluster_dma_frontend_reg_pkg::cluster_dma_frontend_reg2hw_t [NumRegs-1:0] dma_reg2hw;
+    cluster_dma_frontend_reg_pkg::cluster_dma_frontend_hw2reg_t [NumRegs-1:0] dma_hw2reg;
+
+    logic [NumRegs-1:0] gnt_stall;
+    logic [NumRegs-1:0][31:0] access_addr;
 
     // arbitration index width
     localparam int unsigned IdxWidth = (NumRegs + 1 > 32'd1) ? unsigned'($clog2(NumRegs + 1)) : 32'd1;
@@ -109,9 +109,6 @@ module cluster_dma_frontend #(
     // transaction id
     logic [NumStreams-1:0][27:0] next_id, done_id;
 
-    // keep track of peripherals
-    logic [PerifIdWidth-1:0] peripherals_id_q;
-
     // rr input
     transf_descr_t [NumRegs-1:0] transf_descr;
     logic          [NumRegs-1:0] be_ready;
@@ -135,60 +132,84 @@ module cluster_dma_frontend #(
 
 
     // generate registers for cores
-    for (genvar i = 0; i < NumCores; i++) begin : gen_core_regs
-
-        cluster_dma_frontend_regs #(
-            .transf_descr_t ( transf_descr_t    ),
-            .AddrWidth      ( DmaAddrWidth      ),
-            .NumStreams     ( NumStreams        )
-        ) i_dma_conf_regs_cores (
-            .clk_i          ( clk_i                   ),
-            .rst_ni         ( rst_ni                  ),
-            .ctrl_req_i     ( ctrl_targ_req_i     [i] ),
-            .ctrl_type_i    ( ctrl_targ_type_i    [i] ),
-            .ctrl_be_i      ( ctrl_targ_be_i      [i] ),
-            .ctrl_add_i     ( ctrl_targ_add_i     [i] ),
-            .ctrl_data_i    ( ctrl_targ_data_i    [i] ),
-            .ctrl_gnt_o     ( ctrl_targ_gnt_o     [i] ),
-            .ctrl_valid_o   ( ctrl_targ_r_valid_o [i] ),
-            .ctrl_data_o    ( ctrl_targ_r_data_o  [i] ),
-            .next_id_i      ( next_id                 ),
-            .done_id_i      ( done_id                 ),
-            .be_sel_i       ( be_idx_arb              ),
-            .be_ready_i     ( be_ready            [i] ),
-            .be_valid_o     ( be_valid            [i] ),
-            .be_busy_i      ( busy_o                  ),
-            .transf_descr_o ( transf_descr        [i] )
+    for (genvar i = 0; i < NumRegs; i++) begin : gen_ctrl_regs
+        
+        periph_to_reg #(
+            .AW   (10            ),
+            .DW   (32            ),
+            .BW   (8             ),
+            .IW   (PeriphIdWidth ),
+            .req_t(dma_regs_req_t),
+            .rsp_t(dma_regs_rsp_t)
+        ) i_pe_translate (
+            .clk_i    (clk_i                  ),
+            .rst_ni   (rst_ni                 ),
+            .req_i    (ctrl_targ_req_i     [i]),
+            .add_i    (access_addr         [i][9:0]),
+            .wen_i    (ctrl_targ_type_i    [i]),
+            .wdata_i  (ctrl_targ_data_i    [i]),
+            .be_i     (ctrl_targ_be_i      [i]),
+            .id_i     (ctrl_targ_id_i      [i]),
+            .gnt_o    (gnt_stall           [i]),
+            .r_rdata_o(ctrl_targ_r_data_o  [i]),
+            .r_opc_o  (ctrl_targ_r_opc_o   [i]),
+            .r_id_o   (ctrl_targ_r_id_o    [i]),
+            .r_valid_o(ctrl_targ_r_valid_o [i]),
+            .reg_req_o(dma_regs_req        [i]),
+            .reg_rsp_i(dma_regs_rsp        [i])
         );
-    end // gen_core_regs
 
-    // generate registers for peripherals
-    cluster_dma_frontend_regs #(
-        .transf_descr_t ( transf_descr_t    ),
-        .AddrWidth      ( DmaAddrWidth      ),
-        .NumStreams     ( NumStreams        )
-    ) i_dma_conf_regs_periphs (
-        .clk_i          ( clk_i                             ),
-        .rst_ni         ( rst_ni                            ),
-        .ctrl_req_i     ( ctrl_pe_targ_req_i                ),
-        .ctrl_type_i    ( ctrl_pe_targ_type_i               ),
-        .ctrl_be_i      ( ctrl_pe_targ_be_i                 ),
-        .ctrl_add_i     ( ctrl_pe_targ_add_i                ),
-        .ctrl_data_i    ( ctrl_pe_targ_data_i               ),
-        .ctrl_gnt_o     ( ctrl_pe_targ_gnt_o                ),
-        .ctrl_valid_o   ( ctrl_pe_targ_r_valid_o            ),
-        .ctrl_data_o    ( ctrl_pe_targ_r_data_o             ),
-        .next_id_i      ( next_id                           ),
-        .done_id_i      ( done_id                           ),
-        .be_sel_i       ( be_idx_arb                        ),
-        .be_ready_i     ( be_ready               [NumCores] ),
-        .be_valid_o     ( be_valid               [NumCores] ),
-        .be_busy_i      ( busy_o                            ),
-        .transf_descr_o ( transf_descr           [NumCores] )
-    );
+        cluster_dma_frontend_reg_top #(
+            .reg_req_t(dma_regs_req_t),
+            .reg_rsp_t(dma_regs_rsp_t)
+            // .AW       (32            )
+        ) i_dma_conf_regs (
+            .clk_i    (clk_i           ),
+            .rst_ni   (rst_ni          ),
+            .reg_req_i(dma_regs_req [i]),
+            .reg_rsp_o(dma_regs_rsp [i]),
+            .reg2hw   (dma_reg2hw   [i]),
+            .hw2reg   (dma_hw2reg   [i]),
+            .devmode_i('0              )
+        );
 
-    // set this to zero as it is done mchan
-    assign ctrl_pe_targ_r_opc_o = 1'b0;
+        always_comb begin : proc_process_regs
+            transf_descr[i].num_bytes = dma_reg2hw[i].num_bytes.q;
+            transf_descr[i].dst_addr = dma_reg2hw[i].dst_addr.q;
+            transf_descr[i].src_addr = dma_reg2hw[i].src_addr.q;
+            transf_descr[i].decouple = dma_reg2hw[i].conf.decouple.q;
+            transf_descr[i].deburst = dma_reg2hw[i].conf.deburst.q;
+            transf_descr[i].serialize = dma_reg2hw[i].conf.serialize.q;
+
+            be_valid[i] = '0;
+            dma_hw2reg[i].next_id.d = '0;
+            ctrl_targ_gnt_o[i] = gnt_stall[i];
+            dma_hw2reg[i].done.d = '0;
+            dma_hw2reg[i].status.d = busy_o;
+            access_addr[i] = ctrl_targ_add_i[i];
+
+            if (dma_reg2hw[i].next_id.re) begin
+                if (dma_reg2hw[i].num_bytes.q != '0) begin
+                    be_valid[i] = 1'b1;
+                    ctrl_targ_gnt_o[i] = be_ready[i]; // Stall transaction until be_ready
+                    dma_hw2reg[i].next_id.d = {4'h0 + be_idx_arb, next_id[be_idx_arb]};
+                end
+            end
+
+            // Directly connected done registers, at word offsets from base done register for NumStreams
+            if (ctrl_targ_add_i[i][9:0] >= cluster_dma_frontend_reg_pkg::CLUSTER_DMA_FRONTEND_DONE_OFFSET) begin
+                access_addr[i] = cluster_dma_frontend_reg_pkg::CLUSTER_DMA_FRONTEND_DONE_OFFSET;
+            end
+            if (dma_reg2hw[i].done.re) begin
+                if ((ctrl_targ_add_i[i][9:0] - cluster_dma_frontend_reg_pkg::CLUSTER_DMA_FRONTEND_DONE_OFFSET) >> 2 < NumStreams) begin
+                    dma_hw2reg[i].done.d = {4'h0, done_id[(ctrl_targ_add_i[i][9:0] - cluster_dma_frontend_reg_pkg::CLUSTER_DMA_FRONTEND_DONE_OFFSET) >> 2]};
+                end else begin
+                    dma_hw2reg[i].done.d = 32'hbadacce5;
+                end
+            end
+
+        end
+    end // gen_ctrl_regs
 
     // round robin to arbitrate
     rr_arb_tree #(
@@ -243,12 +264,12 @@ module cluster_dma_frontend #(
 
     for (genvar i = 0; i < NumStreams; i++) begin : gen_backends
 
-        // // modify id
-        // burst_req_t burst_req_stream;
-        // always_comb begin : proc_modify_id
-        //     burst_req_stream    = burst_req;
-        //     burst_req_stream.id = burst_req.id + i;
-        // end
+        // modify id
+        burst_req_t burst_req_stream;
+        always_comb begin : proc_modify_id
+            burst_req_stream    = burst_req;
+            burst_req_stream.id = burst_req.id + i;
+        end
 
         logic issue;
 
@@ -271,7 +292,7 @@ module cluster_dma_frontend #(
             .dma_id_i         ( cluster_id_i              ),
             .axi_dma_req_o    ( axi_dma_req_o         [i] ),
             .axi_dma_res_i    ( axi_dma_res_i         [i] ),
-            .burst_req_i      ( burst_req                 ),
+            .burst_req_i      ( burst_req_stream          ),
             .valid_i          ( be_valid_stream       [i] ),
             .ready_o          ( be_ready_stream       [i] ),
             .backend_idle_o   ( be_idle_stream        [i] ),
@@ -303,17 +324,5 @@ module cluster_dma_frontend #(
     assign term_irq_o      = |trans_complete_stream ? '1 : '0;
     assign term_event_pe_o = |trans_complete_stream ? '1 : '0;
     assign term_irq_pe_o   = |trans_complete_stream ? '1 : '0;
-
-    // keep id for peripherals
-    always_ff @(posedge clk_i or negedge rst_ni) begin : proc_id_peripherals
-        if(~rst_ni) begin
-            peripherals_id_q <= 0;
-        end else begin
-            peripherals_id_q <= ctrl_pe_targ_id_i;
-        end
-    end
-
-    // id is returned
-    assign ctrl_pe_targ_r_id_o = peripherals_id_q;
 
 endmodule : cluster_dma_frontend

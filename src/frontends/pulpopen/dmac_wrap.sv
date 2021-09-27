@@ -26,22 +26,24 @@ module dmac_wrap
   parameter AXI_USER_WIDTH     = 6,
   parameter AXI_ID_WIDTH       = 4,
   parameter PE_ID_WIDTH        = 1,
+  parameter NB_PE_PORTS        = 1,
   parameter DATA_WIDTH         = 32,
   parameter ADDR_WIDTH         = 32,
   parameter BE_WIDTH           = DATA_WIDTH/8,
-  parameter NUM_STREAMS        = 4
+  parameter NUM_STREAMS        = 1,
+  parameter TCDM_SIZE          = 0
 ) (
   input logic                      clk_i,
   input logic                      rst_ni,
   input logic                      test_mode_i,
-  XBAR_PERIPH_BUS.Slave            pe_ctrl_slave,
+  XBAR_PERIPH_BUS.Slave            pe_ctrl_slave[NB_PE_PORTS-1:0],
   XBAR_TCDM_BUS.Slave              ctrl_slave[NB_CORES-1:0],
-  XBAR_TCDM_BUS.Master             tcdm_master[3:0],
+  hci_core_intf.master             tcdm_master[3:0],
   AXI_BUS.Master                   ext_master,
   output logic [NB_CORES-1:0]      term_event_o,
   output logic [NB_CORES-1:0]      term_irq_o,
-  output logic                     term_event_pe_o,
-  output logic                     term_irq_pe_o,
+  output logic [NB_PE_PORTS-1:0]   term_event_pe_o,
+  output logic [NB_PE_PORTS-1:0]   term_irq_pe_o,
   output logic                     busy_o
 );
 
@@ -49,14 +51,17 @@ module dmac_wrap
   localparam int unsigned SlvIdxWidth = AXI_ID_WIDTH - $clog2(NUM_STREAMS);
 
   // CORE --> MCHAN CTRL INTERFACE BUS SIGNALS
-  logic [NB_CORES-1:0][DATA_WIDTH-1:0] config_wdata;
-  logic [NB_CORES-1:0][ADDR_WIDTH-1:0] config_add;
-  logic [NB_CORES-1:0]                 config_req;
-  logic [NB_CORES-1:0]                 config_wen;
-  logic [NB_CORES-1:0][BE_WIDTH-1:0]   config_be;
-  logic [NB_CORES-1:0]                 config_gnt;
-  logic [NB_CORES-1:0][DATA_WIDTH-1:0] config_r_rdata;
-  logic [NB_CORES-1:0]                 config_r_valid;
+  logic [NB_CORES+NB_PE_PORTS-1:0][DATA_WIDTH-1:0]  config_wdata;
+  logic [NB_CORES+NB_PE_PORTS-1:0][ADDR_WIDTH-1:0]  config_add;
+  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_req;
+  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_wen;
+  logic [NB_CORES+NB_PE_PORTS-1:0][BE_WIDTH-1:0]    config_be;
+  logic [NB_CORES+NB_PE_PORTS-1:0][PE_ID_WIDTH-1:0] config_id;
+  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_gnt;
+  logic [NB_CORES+NB_PE_PORTS-1:0][DATA_WIDTH-1:0]  config_r_rdata;
+  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_r_valid;
+  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_r_opc;
+  logic [NB_CORES+NB_PE_PORTS-1:0][PE_ID_WIDTH-1:0] config_r_id;
 
   // tie-off pe control ports
   for (genvar i = 0; i < NB_CORES; i++) begin : gen_ctrl_registers
@@ -65,10 +70,25 @@ module dmac_wrap
     assign config_wdata[i]       = ctrl_slave[i].wdata;
     assign config_wen[i]         = ctrl_slave[i].wen;
     assign config_be[i]          = ctrl_slave[i].be;
+    assign config_id[i]          = '0;
     assign ctrl_slave[i].gnt     = config_gnt[i];
-    assign ctrl_slave[i].r_opc   = '0;
+    assign ctrl_slave[i].r_opc   = config_r_opc[i];
     assign ctrl_slave[i].r_valid = config_r_valid[i];
     assign ctrl_slave[i].r_rdata = config_r_rdata[i];
+  end
+
+  for (genvar i = 0; i < NB_PE_PORTS; i++) begin : gen_pe_ctrl_registers
+    assign config_add[NB_CORES+i]         = pe_ctrl_slave[i].add;
+    assign config_req[NB_CORES+i]         = pe_ctrl_slave[i].req;
+    assign config_wdata[NB_CORES+i]       = pe_ctrl_slave[i].wdata;
+    assign config_wen[NB_CORES+i]         = pe_ctrl_slave[i].wen;
+    assign config_be[NB_CORES+i]          = pe_ctrl_slave[i].be;
+    assign config_id[NB_CORES+i]          = pe_ctrl_slave[i].id;
+    assign pe_ctrl_slave[i].gnt     = config_gnt[NB_CORES+i];
+    assign pe_ctrl_slave[i].r_opc   = config_r_opc[NB_CORES+i];
+    assign pe_ctrl_slave[i].r_valid = config_r_valid[NB_CORES+i];
+    assign pe_ctrl_slave[i].r_rdata = config_r_rdata[NB_CORES+i];
+    assign pe_ctrl_slave[i].r_id    = config_r_id[NB_CORES+i];
   end
 
   // AXI4+ATOP types
@@ -107,8 +127,8 @@ module dmac_wrap
   `AXI_ASSIGN_TO_RESP(soc_rsp, ext_master)
 
   cluster_dma_frontend #(
-    .NumCores          ( NB_CORES        ),
-    .PerifIdWidth      ( PE_ID_WIDTH     ),
+    .NumCtrl           ( NB_CORES+NB_PE_PORTS ),
+    .PeriphIdWidth     ( PE_ID_WIDTH     ),
     .DmaAxiIdWidth     ( AXI_ID_WIDTH    ),
     .DmaDataWidth      ( AXI_DATA_WIDTH  ),
     .DmaAddrWidth      ( AXI_ADDR_WIDTH  ),
@@ -121,40 +141,31 @@ module dmac_wrap
     .clk_i                   ( clk_i                   ),
     .rst_ni                  ( rst_ni                  ),
     .cluster_id_i            ( '0                      ),
-    .ctrl_pe_targ_req_i      ( pe_ctrl_slave.req       ),
-    .ctrl_pe_targ_type_i     ( pe_ctrl_slave.wen       ),
-    .ctrl_pe_targ_be_i       ( pe_ctrl_slave.be        ),
-    .ctrl_pe_targ_add_i      ( pe_ctrl_slave.add       ),
-    .ctrl_pe_targ_data_i     ( pe_ctrl_slave.wdata     ),
-    .ctrl_pe_targ_id_i       ( pe_ctrl_slave.id        ),
-    .ctrl_pe_targ_gnt_o      ( pe_ctrl_slave.gnt       ),
-    .ctrl_pe_targ_r_valid_o  ( pe_ctrl_slave.r_valid   ),
-    .ctrl_pe_targ_r_data_o   ( pe_ctrl_slave.r_rdata   ),
-    .ctrl_pe_targ_r_opc_o    ( pe_ctrl_slave.r_opc     ),
-    .ctrl_pe_targ_r_id_o     ( pe_ctrl_slave.r_id      ),
     .ctrl_targ_req_i         ( config_req              ),
     .ctrl_targ_type_i        ( config_wen              ),
     .ctrl_targ_be_i          ( config_be               ),
     .ctrl_targ_add_i         ( config_add              ),
     .ctrl_targ_data_i        ( config_wdata            ),
+    .ctrl_targ_id_i          ( config_id               ),
     .ctrl_targ_gnt_o         ( config_gnt              ),
     .ctrl_targ_r_valid_o     ( config_r_valid          ),
     .ctrl_targ_r_data_o      ( config_r_rdata          ),
+    .ctrl_targ_r_opc_o       ( config_r_opc            ),
+    .ctrl_targ_r_id_o        ( config_r_id             ),
     .axi_dma_req_o           ( dma_req                 ),
     .axi_dma_res_i           ( dma_rsp                 ),
     .busy_o                  ( busy_o                  ),
-    .term_event_o            ( term_event_o            ),
-    .term_irq_o              ( term_irq_o              ),
-    .term_event_pe_o         ( term_event_pe_o         ),
-    .term_irq_pe_o           ( term_irq_pe_o           )
+    .term_event_o            ( {term_event_pe_o, term_event_o} ),
+    .term_irq_o              ( {term_irq_pe_o, term_irq_o}     )
   );
 
   // xbar
   localparam int unsigned NumRules = 3;
-  if (AXI_ADDR_WIDTH != 64) begin : gen_non_64bit_addr_error
-    $error("Non-64-bit AXI addresses require changes to code.");
-  end
-  typedef axi_pkg::xbar_rule_64_t xbar_rule_t; // change this to different width if required
+  typedef struct packed {
+    int unsigned idx;
+    logic [AXI_ADDR_WIDTH-1:0] start_addr;
+    logic [AXI_ADDR_WIDTH-1:0] end_addr;
+  } xbar_rule_t;
   xbar_rule_t [NumRules-1:0] addr_map;
   logic [AXI_ADDR_WIDTH-1:0] cluster_base_addr;
   assign cluster_base_addr = 32'h1000_0000; /* + (cluster_id_i << 22);*/
@@ -166,11 +177,11 @@ module dmac_wrap
     },
     '{ // TCDM
       start_addr: cluster_base_addr,
-      end_addr:   cluster_base_addr + 24'h10_0000,
+      end_addr:   cluster_base_addr + TCDM_SIZE,
       idx:        1
     },
     '{ // SoC high
-      start_addr: cluster_base_addr + 24'h10_0000,
+      start_addr: cluster_base_addr + TCDM_SIZE,
       end_addr:   '1,
       idx:        0
     }
@@ -188,6 +199,7 @@ module dmac_wrap
     LatencyMode:        axi_pkg::CUT_ALL_PORTS,
     AxiIdWidthSlvPorts:            SlvIdxWidth,
     AxiIdUsedSlvPorts:             SlvIdxWidth,
+    UniqueIds:                            1'b1,
     AxiAddrWidth:               AXI_ADDR_WIDTH,
     AxiDataWidth:               AXI_DATA_WIDTH,
     NoAddrRules:                      NumRules
@@ -228,7 +240,7 @@ module dmac_wrap
     `AXI_SET_R_STRUCT(tcdm_rsp.r, tcdm_read_rsp.r)
     tcdm_rsp.r_valid        = tcdm_read_rsp.r_valid;
     tcdm_rsp.ar_ready       = tcdm_read_rsp.ar_ready;
-    `AXI_SET_B_STRUCT(tcdm_rsp.b, tcdm_read_rsp.b)
+    `AXI_SET_B_STRUCT(tcdm_rsp.b, tcdm_write_rsp.b)
     tcdm_rsp.b_valid        = tcdm_write_rsp.b_valid;
     tcdm_rsp.w_ready        = tcdm_write_rsp.w_ready;
     tcdm_rsp.aw_ready       = tcdm_write_rsp.aw_ready;
@@ -250,7 +262,7 @@ module dmac_wrap
 
   logic tcdm_master_we_0, tcdm_master_we_1, tcdm_master_we_2, tcdm_master_we_3;
 
-  axi2mem #(
+  axi_to_mem #(
     .axi_req_t   ( mem_req_t           ),
     .axi_resp_t  ( mst_resp_t          ),
     .AddrWidth   ( ADDR_WIDTH          ),
@@ -267,15 +279,15 @@ module dmac_wrap
     .mem_req_o    ( { tcdm_master[0].req,     tcdm_master[1].req     } ),
     .mem_gnt_i    ( { tcdm_master[0].gnt,     tcdm_master[1].gnt     } ),
     .mem_addr_o   ( { tcdm_master[0].add,     tcdm_master[1].add     } ),
-    .mem_wdata_o  ( { tcdm_master[0].wdata,   tcdm_master[1].wdata   } ),
+    .mem_wdata_o  ( { tcdm_master[0].data,    tcdm_master[1].data    } ),
     .mem_strb_o   ( { tcdm_master[0].be,      tcdm_master[1].be      } ),
-    .mem_atop_o   ( ),
+    // .mem_atop_o   ( ),
     .mem_we_o     ( { tcdm_master_we_0,       tcdm_master_we_1       } ),
     .mem_rvalid_i ( { tcdm_master[0].r_valid, tcdm_master[1].r_valid } ),
-    .mem_rdata_i  ( { tcdm_master[0].r_rdata, tcdm_master[1].r_rdata } )
+    .mem_rdata_i  ( { tcdm_master[0].r_data,  tcdm_master[1].r_data  } )
   );
 
-  axi2mem #(
+  axi_to_mem #(
     .axi_req_t   ( mem_req_t           ),
     .axi_resp_t  ( mst_resp_t          ),
     .AddrWidth   ( ADDR_WIDTH          ),
@@ -292,12 +304,12 @@ module dmac_wrap
     .mem_req_o    ( { tcdm_master[2].req,     tcdm_master[3].req     } ),
     .mem_gnt_i    ( { tcdm_master[2].gnt,     tcdm_master[3].gnt     } ),
     .mem_addr_o   ( { tcdm_master[2].add,     tcdm_master[3].add     } ),
-    .mem_wdata_o  ( { tcdm_master[2].wdata,   tcdm_master[3].wdata   } ),
+    .mem_wdata_o  ( { tcdm_master[2].data,    tcdm_master[3].data    } ),
     .mem_strb_o   ( { tcdm_master[2].be,      tcdm_master[3].be      } ),
-    .mem_atop_o   ( ),
+    // .mem_atop_o   ( ),
     .mem_we_o     ( { tcdm_master_we_2,       tcdm_master_we_3       } ),
     .mem_rvalid_i ( { tcdm_master[2].r_valid, tcdm_master[3].r_valid } ),
-    .mem_rdata_i  ( { tcdm_master[2].r_rdata, tcdm_master[3].r_rdata } )
+    .mem_rdata_i  ( { tcdm_master[2].r_data,  tcdm_master[3].r_data  } )
   );
 
   // tie-off TCDM master port
@@ -310,5 +322,20 @@ module dmac_wrap
   assign tcdm_master[1].wen = !tcdm_master_we_1;
   assign tcdm_master[2].wen = !tcdm_master_we_2;
   assign tcdm_master[3].wen = !tcdm_master_we_3;
+
+  assign tcdm_master[0].boffs = '0;
+  assign tcdm_master[1].boffs = '0;
+  assign tcdm_master[2].boffs = '0;
+  assign tcdm_master[3].boffs = '0;
+
+  assign tcdm_master[0].lrdy  = '1;
+  assign tcdm_master[1].lrdy  = '1;
+  assign tcdm_master[2].lrdy  = '1;
+  assign tcdm_master[3].lrdy  = '1;
+
+  assign tcdm_master[0].user  = '0;
+  assign tcdm_master[1].user  = '0;
+  assign tcdm_master[2].user  = '0;
+  assign tcdm_master[3].user  = '0;
 
 endmodule : dmac_wrap

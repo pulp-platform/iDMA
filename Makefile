@@ -41,3 +41,13 @@ trace:
 
 dma_trace_%.txt: scripts/dma_trace.py scripts/dma_backend.py
 	$(PYTHON) $< dma_trace_$*.log > $@
+
+REG_PATH = $(shell $(BENDER) path register_interface)
+REG_TOOL = $(REG_PATH)/vendor/lowrisc_opentitan/util/regtool.py
+PULPOPEN_FE_DIR = src/frontends/pulpopen
+HJSON = $(PULPOPEN_FE_DIR)/cluster_dma_frontend.hjson
+
+pulpopen_regs:
+	$(PYTHON) $(REG_TOOL) $(HJSON) -t $(PULPOPEN_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(HJSON) -d > $(PULPOPEN_FE_DIR)/doc.html
+	$(PYTHON) $(REG_TOOL) $(HJSON) -D > $(PULPOPEN_FE_DIR)/pulp_idma.h
