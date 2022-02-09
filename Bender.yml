@@ -23,6 +23,11 @@ sources:
   - src/axi_dma_burst_reshaper.sv
   # Level 2
   - src/axi_dma_backend.sv
+  # Level 3: MemPool
+  - src/frontends/mempool/mempool_dma_frontend_reg_pkg.sv
+  - src/frontends/mempool/mempool_dma_frontend_reg_top.sv
+  - src/frontends/mempool/mempool_dma.sv
+
 
   # Midends
   # Level 0
