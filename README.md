@@ -19,7 +19,3 @@ Home of the DMA. Replaces the version on `github.com/axi`!!!!
 ## Docs
 Requires a morty installation for full functionality (See https://github.com/zarubaf/morty)
 `make -C doc clean morty-docs html`
-
-
-### CVA6 Integration (build, minimal driver and simulation)
-Please have a look at the tutorial in [driver/cva6/README](driver/cva6/README.md)

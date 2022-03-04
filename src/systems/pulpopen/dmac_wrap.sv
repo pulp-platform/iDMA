@@ -11,27 +11,32 @@
 /*
  * dmac_wrap.sv
  * Thomas Benz <tbenz@iis.ee.ethz.ch>
+ * Michael Rogenmoser <michaero@iis.ee.ethz.ch>
  */
 
 // DMA Core wrapper
 
 `include "axi/assign.svh"
 `include "axi/typedef.svh"
+`include "register_interface/typedef.svh"
 
-module dmac_wrap
-#(
-  parameter NB_CORES           = 4,
-  parameter AXI_ADDR_WIDTH     = 32,
-  parameter AXI_DATA_WIDTH     = 64,
-  parameter AXI_USER_WIDTH     = 6,
-  parameter AXI_ID_WIDTH       = 4,
-  parameter PE_ID_WIDTH        = 1,
-  parameter NB_PE_PORTS        = 1,
-  parameter DATA_WIDTH         = 32,
-  parameter ADDR_WIDTH         = 32,
-  parameter BE_WIDTH           = DATA_WIDTH/8,
-  parameter NUM_STREAMS        = 1,
-  parameter TCDM_SIZE          = 0
+module dmac_wrap #(
+  parameter NB_CORES            = 4,
+  parameter AXI_ADDR_WIDTH      = 32,
+  parameter AXI_DATA_WIDTH      = 64,
+  parameter AXI_USER_WIDTH      = 6,
+  parameter AXI_ID_WIDTH        = 4,
+  parameter PE_ID_WIDTH         = 1,
+  parameter NB_PE_PORTS         = 1,
+  parameter DATA_WIDTH          = 32,
+  parameter ADDR_WIDTH          = 32,
+  parameter BE_WIDTH            = DATA_WIDTH/8,
+  parameter NUM_STREAMS         = 1, // Only 1 for now
+  parameter TCDM_SIZE           = 0,
+  parameter TwoDMidend          = 1, // Leave this on for now
+  parameter NB_OUTSND_BURSTS    = 8,
+  parameter GLOBAL_QUEUE_DEPTH  = 16,
+  parameter BACKEND_QUEUE_DEPTH = 16
 ) (
   input logic                      clk_i,
   input logic                      rst_ni,
@@ -47,21 +52,22 @@ module dmac_wrap
   output logic                     busy_o
 );
 
+  localparam int unsigned NumRegs = NB_CORES+NB_PE_PORTS;
   localparam int unsigned MstIdxWidth = AXI_ID_WIDTH;
   localparam int unsigned SlvIdxWidth = AXI_ID_WIDTH - $clog2(NUM_STREAMS);
 
   // CORE --> MCHAN CTRL INTERFACE BUS SIGNALS
-  logic [NB_CORES+NB_PE_PORTS-1:0][DATA_WIDTH-1:0]  config_wdata;
-  logic [NB_CORES+NB_PE_PORTS-1:0][ADDR_WIDTH-1:0]  config_add;
-  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_req;
-  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_wen;
-  logic [NB_CORES+NB_PE_PORTS-1:0][BE_WIDTH-1:0]    config_be;
-  logic [NB_CORES+NB_PE_PORTS-1:0][PE_ID_WIDTH-1:0] config_id;
-  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_gnt;
-  logic [NB_CORES+NB_PE_PORTS-1:0][DATA_WIDTH-1:0]  config_r_rdata;
-  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_r_valid;
-  logic [NB_CORES+NB_PE_PORTS-1:0]                  config_r_opc;
-  logic [NB_CORES+NB_PE_PORTS-1:0][PE_ID_WIDTH-1:0] config_r_id;
+  logic [NumRegs-1:0][DATA_WIDTH-1:0]  config_wdata;
+  logic [NumRegs-1:0][ADDR_WIDTH-1:0]  config_add;
+  logic [NumRegs-1:0]                  config_req;
+  logic [NumRegs-1:0]                  config_wen;
+  logic [NumRegs-1:0][BE_WIDTH-1:0]    config_be;
+  logic [NumRegs-1:0][PE_ID_WIDTH-1:0] config_id;
+  logic [NumRegs-1:0]                  config_gnt;
+  logic [NumRegs-1:0][DATA_WIDTH-1:0]  config_r_rdata;
+  logic [NumRegs-1:0]                  config_r_valid;
+  logic [NumRegs-1:0]                  config_r_opc;
+  logic [NumRegs-1:0][PE_ID_WIDTH-1:0] config_r_id;
 
   // tie-off pe control ports
   for (genvar i = 0; i < NB_CORES; i++) begin : gen_ctrl_registers
@@ -119,45 +125,188 @@ module dmac_wrap
   // BUS definitions
   mst_req_t  tcdm_req, soc_req;
   mem_req_t  tcdm_read_req, tcdm_write_req;
-  mst_resp_t tcdm_rsp, soc_rsp, tcdm_read_rsp, tcdm_write_rsp;
+  mst_resp_t soc_rsp, tcdm_read_rsp, tcdm_write_rsp;
+  mst_resp_t tcdm_rsp;
   slv_req_t  [NUM_STREAMS-1:0] dma_req;
   slv_resp_t [NUM_STREAMS-1:0] dma_rsp;
   // interface to structs
   `AXI_ASSIGN_FROM_REQ(ext_master, soc_req)
   `AXI_ASSIGN_TO_RESP(soc_rsp, ext_master)
 
-  cluster_dma_frontend #(
-    .NumCtrl           ( NB_CORES+NB_PE_PORTS ),
-    .PeriphIdWidth     ( PE_ID_WIDTH     ),
-    .DmaAxiIdWidth     ( AXI_ID_WIDTH    ),
-    .DmaDataWidth      ( AXI_DATA_WIDTH  ),
-    .DmaAddrWidth      ( AXI_ADDR_WIDTH  ),
-    .AxiAxReqDepth     ( 2               ),
-    .TfReqFifoDepth    ( 2               ),
-    .NumStreams        ( NUM_STREAMS     ),
-    .axi_req_t         ( slv_req_t       ),
-    .axi_res_t         ( slv_resp_t      )
-  ) i_cluster_dma_frontend (
-    .clk_i                   ( clk_i                   ),
-    .rst_ni                  ( rst_ni                  ),
-    .cluster_id_i            ( '0                      ),
-    .ctrl_targ_req_i         ( config_req              ),
-    .ctrl_targ_type_i        ( config_wen              ),
-    .ctrl_targ_be_i          ( config_be               ),
-    .ctrl_targ_add_i         ( config_add              ),
-    .ctrl_targ_data_i        ( config_wdata            ),
-    .ctrl_targ_id_i          ( config_id               ),
-    .ctrl_targ_gnt_o         ( config_gnt              ),
-    .ctrl_targ_r_valid_o     ( config_r_valid          ),
-    .ctrl_targ_r_data_o      ( config_r_rdata          ),
-    .ctrl_targ_r_opc_o       ( config_r_opc            ),
-    .ctrl_targ_r_id_o        ( config_r_id             ),
-    .axi_dma_req_o           ( dma_req                 ),
-    .axi_dma_res_i           ( dma_rsp                 ),
-    .busy_o                  ( busy_o                  ),
-    .term_event_o            ( {term_event_pe_o, term_event_o} ),
-    .term_irq_o              ( {term_irq_pe_o, term_irq_o}     )
+  // Register BUS definitions
+  `REG_BUS_TYPEDEF_ALL(dma_regs, logic[9:0], logic[31:0], logic[3:0])
+  dma_regs_req_t [NumRegs-1:0] dma_regs_req;
+  dma_regs_rsp_t [NumRegs-1:0] dma_regs_rsp;
+
+  // DMA burst definitions
+  // 1D burst request
+  typedef logic [AXI_ID_WIDTH-1:0] axi_id_t;
+  typedef logic             [31:0] num_bytes_t;
+  typedef struct packed {
+      axi_id_t            id;
+      addr_t              src, dst;
+      num_bytes_t         num_bytes;
+      axi_pkg::cache_t    cache_src, cache_dst;
+      axi_pkg::burst_t    burst_src, burst_dst;
+      logic               decouple_rw;
+      logic               deburst;
+      logic               serialize;
+  } burst_req_t;
+  // 2D burst request
+  typedef struct packed {
+      axi_id_t            id;
+      addr_t              src, dst;
+      num_bytes_t         num_bytes;
+      logic               is_twod;
+      num_bytes_t         stride_src, stride_dst, num_repetitions;
+      axi_pkg::cache_t    cache_src, cache_dst;
+      axi_pkg::burst_t    burst_src, burst_dst;
+      logic               decouple_rw;
+      logic               deburst;
+      logic               serialize; 
+  } twod_req_t;
+  twod_req_t twod_req;
+  burst_req_t burst_req;
+
+  logic fe_valid, fe_ready, be_valid, be_ready;
+  logic backend_idle, trans_complete, oned_trans_complete, twod_req_last, twod_req_last_realigned;
+
+  // ------------------------------------------------------
+  // FRONTEND
+  // ------------------------------------------------------
+
+  for (genvar i = 0; i < NumRegs; i++) begin
+    periph_to_reg #(
+      .AW    ( 10             ),
+      .DW    ( 32             ),
+      .BW    ( 8              ),
+      .IW    ( PE_ID_WIDTH    ),
+      .req_t ( dma_regs_req_t ),
+      .rsp_t ( dma_regs_rsp_t )
+    ) i_pe_translate (
+      .clk_i,
+      .rst_ni,
+      .req_i     ( config_req     [i] ),
+      .add_i     ( config_add     [i][9:0] ),
+      .wen_i     ( config_wen     [i] ),
+      .wdata_i   ( config_wdata   [i] ),
+      .be_i      ( config_be      [i] ),
+      .id_i      ( config_id      [i] ),
+      .gnt_o     ( config_gnt     [i] ),
+      .r_rdata_o ( config_r_rdata [i] ),
+      .r_opc_o   ( config_r_opc   [i] ),
+      .r_id_o    ( config_r_id    [i] ),
+      .r_valid_o ( config_r_valid [i] ),
+      .reg_req_o ( dma_regs_req   [i] ),
+      .reg_rsp_i ( dma_regs_rsp   [i] )
+    );
+  end
+
+  idma_reg32_2d_frontend #(
+    .NumRegs        ( NumRegs        ),
+    .IdCounterWidth ( 28             ),
+    .dma_regs_req_t ( dma_regs_req_t ),
+    .dma_regs_rsp_t ( dma_regs_rsp_t ),
+    .burst_req_t    ( twod_req_t     )
+  ) i_idma_reg32_2d_frontend (
+    .clk_i,
+    .rst_ni,
+    .dma_ctrl_req_i   ( dma_regs_req   ),
+    .dma_ctrl_rsp_o   ( dma_regs_rsp   ),
+    .burst_req_o      ( twod_req       ),
+    .valid_o          ( fe_valid       ),
+    .ready_i          ( fe_ready       ),
+    .backend_idle_i   ( backend_idle   ),
+    .trans_complete_i ( trans_complete )
   );
+
+  // interrupts and events (currently broadcast tx_cplt event only)
+  assign term_event_pe_o = |trans_complete ? '1 : '0;
+  assign term_irq_pe_o   = '0;
+  assign term_event_o    = |trans_complete ? '1 : '0;
+  assign term_irq_o      = '0;
+
+  assign busy_o = ~backend_idle;
+
+// TODO: possibly implement distributor for NumStreams > 1?
+//       -> Will be a challenge to keep transfers in order...
+
+
+  // ------------------------------------------------------
+  // MIDEND
+  // ------------------------------------------------------
+
+  idma_2D_midend #(
+    .ADDR_WIDTH     ( AXI_ADDR_WIDTH     ),
+    .REQ_FIFO_DEPTH ( GLOBAL_QUEUE_DEPTH ),
+    .burst_req_t    ( burst_req_t        ),
+    .twod_req_t     ( twod_req_t         )
+  ) i_idma_2D_midend (
+    .clk_i,
+    .rst_ni,
+    .twod_req_i        ( twod_req      ),
+    .twod_req_valid_i  ( fe_valid      ),
+    .twod_req_ready_o  ( fe_ready      ),
+    .burst_req_o       ( burst_req     ),
+    .burst_req_valid_o ( be_valid      ),
+    .burst_req_ready_i ( be_ready      ),
+    .twod_req_last_o   ( twod_req_last )
+  );
+
+
+  // transfer complete alignment, should be integrated into twod module
+  localparam TwodBufferDepth = 2 * BACKEND_QUEUE_DEPTH + NB_OUTSND_BURSTS + 3 + 1;
+  fifo_v3 #(
+    .DATA_WIDTH ( 1               ),
+    .DEPTH      ( TwodBufferDepth )
+  ) i_fifo_v3_last_twod_buffer (
+    .clk_i,
+    .rst_ni,
+    .flush_i    ( 1'b0                    ),
+    .testmode_i ( 1'b0                    ),
+    .full_o     (),
+    .empty_o    (),
+    .usage_o    (),
+    .data_i     ( twod_req_last           ),
+    .push_i     ( be_ready && be_valid    ),
+    .data_o     ( twod_req_last_realigned ),
+    .pop_i      ( oned_trans_complete     )
+  );
+
+  assign trans_complete = oned_trans_complete && twod_req_last_realigned;
+
+  // ------------------------------------------------------
+  // BACKEND
+  // ------------------------------------------------------
+
+  axi_dma_backend #(
+    .DataWidth      ( AXI_DATA_WIDTH      ),
+    .AddrWidth      ( AXI_ADDR_WIDTH      ),
+    .IdWidth        ( AXI_ID_WIDTH        ),
+    .AxReqFifoDepth ( NB_OUTSND_BURSTS    ),
+    .TransFifoDepth ( BACKEND_QUEUE_DEPTH ),
+    .BufferDepth    ( 3                   ),
+    .axi_req_t      ( slv_req_t           ),
+    .axi_res_t      ( slv_resp_t          ),
+    .burst_req_t    ( burst_req_t         ),
+    .DmaIdWidth     ( 6                   ),
+    .DmaTracing     ( 0                   )
+  ) i_axi_dma_backend (
+    .clk_i,
+    .rst_ni,
+    .dma_id_i         ( '0                  ),
+    .axi_dma_req_o    ( dma_req             ),
+    .axi_dma_res_i    ( dma_rsp             ),
+    .burst_req_i      ( burst_req           ),
+    .valid_i          ( be_valid            ),
+    .ready_o          ( be_ready            ),
+    .backend_idle_o   ( backend_idle        ),
+    .trans_complete_o ( oned_trans_complete )
+  );
+
+  // ------------------------------------------------------
+  // AXI connection to EXT/TCDM
+  // ------------------------------------------------------
 
   // xbar
   localparam int unsigned NumRules = 3;
@@ -193,13 +342,13 @@ module dmac_wrap
   localparam axi_pkg::xbar_cfg_t XbarCfg = '{
     NoSlvPorts:                    NumSlvPorts,
     NoMstPorts:                    NumMstPorts,
-    MaxMstTrans:                             3,
-    MaxSlvTrans:                             3,
+    MaxMstTrans:              NB_OUTSND_BURSTS,
+    MaxSlvTrans:              NB_OUTSND_BURSTS,
     FallThrough:                          1'b0,
     LatencyMode:        axi_pkg::CUT_ALL_PORTS,
     AxiIdWidthSlvPorts:            SlvIdxWidth,
     AxiIdUsedSlvPorts:             SlvIdxWidth,
-    UniqueIds:                            1'b1,
+    UniqueIds:                            1'b0,
     AxiAddrWidth:               AXI_ADDR_WIDTH,
     AxiDataWidth:               AXI_DATA_WIDTH,
     NoAddrRules:                      NumRules
@@ -226,8 +375,8 @@ module dmac_wrap
     .clk_i                  ( clk_i                 ),
     .rst_ni                 ( rst_ni                ),
     .test_i                 ( test_mode_i           ),
-    .slv_ports_req_i        ( dma_req               ),
-    .slv_ports_resp_o       ( dma_rsp               ),
+    .slv_ports_req_i        ( dma_req          ),
+    .slv_ports_resp_o       ( dma_rsp          ),
     .mst_ports_req_o        ( { tcdm_req, soc_req } ),
     .mst_ports_resp_i       ( { tcdm_rsp, soc_rsp } ),
     .addr_map_i             ( addr_map              ),
@@ -262,6 +411,8 @@ module dmac_wrap
 
   logic tcdm_master_we_0, tcdm_master_we_1, tcdm_master_we_2, tcdm_master_we_3;
 
+  localparam TcdmFifoDepth = 1;
+
   axi_to_mem #(
     .axi_req_t   ( mem_req_t           ),
     .axi_resp_t  ( mst_resp_t          ),
@@ -269,7 +420,7 @@ module dmac_wrap
     .DataWidth   ( AXI_DATA_WIDTH      ),
     .IdWidth     ( MstIdxWidth         ),
     .NumBanks    ( 2                   ),
-    .BufDepth    ( 1                   )
+    .BufDepth    ( TcdmFifoDepth       )
   ) i_axi_to_mem_read (
     .clk_i        ( clk_i         ),
     .rst_ni       ( rst_ni        ),
@@ -294,7 +445,7 @@ module dmac_wrap
     .DataWidth   ( AXI_DATA_WIDTH      ),
     .IdWidth     ( MstIdxWidth         ),
     .NumBanks    ( 2                   ),
-    .BufDepth    ( 1                   )
+    .BufDepth    ( TcdmFifoDepth       )
   ) i_axi_to_mem_write (
     .clk_i        ( clk_i          ),
     .rst_ni       ( rst_ni         ),

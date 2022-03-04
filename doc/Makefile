@@ -8,6 +8,8 @@ SPHINXPROJ    = iDMA
 SOURCEDIR     = source
 BUILDDIR      = build
 
+all-html: morty-docs regs html
+
 # Put it first so that "make" without argument is like "make help".
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
@@ -22,3 +24,9 @@ help:
 # Requires an up-to-date morty installation
 morty-docs:
 	morty -d $(BUILDDIR)/html/morty ../src/*.sv
+
+regs:
+	mkdir -p $(BUILDDIR)/html/regs
+	cp ../src/frontends/register_32bit_2d/idma_reg32_2d_frontend.html $(BUILDDIR)/html/regs/.
+	cp ../src/frontends/register_64bit/idma_reg64_frontend.html $(BUILDDIR)/html/regs/.
+	cp ../src/frontends/register_32bit_2d/reg_html.css $(BUILDDIR)/html/regs/.

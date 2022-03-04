@@ -5,7 +5,7 @@ This driver demonstrates the usage of the iDMA engine from the CVA6 application-
 
 Compile driver:
 ```bash
-cd idma/driver/cva6/
+cd idma/src/systems/cva6_reg/driver/
 make
 ```
 
@@ -29,7 +29,7 @@ make verilate
 Simulate bare-metal application using verilator
 ```bash
 # run simulation
-work-ver/Variane_testharness idma/driver/cva6/dma_driver.elf
+work-ver/Variane_testharness idma/src/systems/cva6_reg/driver/dma_driver.elf
 ```
 
 Example output:

@@ -2,8 +2,6 @@ GIT ?= git
 BENDER ?= bender
 VSIM ?= vsim
 PYTHON ?= python3
-GCC ?= riscv64-unknown-elf-gcc
-
 
 all: sim_all
 
@@ -47,21 +45,25 @@ dma_trace_%.txt: scripts/dma_trace.py scripts/dma_backend.py
 REG_PATH ?= $(shell $(BENDER) path register_interface)
 REG_TOOL ?= $(REG_PATH)/vendor/lowrisc_opentitan/util/regtool.py
 
-PULPOPEN_FE_DIR = src/frontends/pulpopen
-CVA6_FE_DIR = src/frontends/cva6
-PULPOPEN_HJSON = /cluster_dma_frontend.hjson
-CVA6_HJSON = /dma_frontend.hjson
+REG32_2D_FE_DIR = src/frontends/register_32bit_2d/
+REG32_2D_HJSON = $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.hjson
+REG64_FE_DIR = src/frontends/register_64bit/
+REG64_HJSON = $(REG64_FE_DIR)/idma_reg64_frontend.hjson
 
+REG_HTML_STRING = "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n"
 
-pulpopen_regs:
-	$(PYTHON) $(REG_TOOL) $(PULPOPEN_FE_DIR)/$(PULPOPEN_HJSON) -t $(PULPOPEN_FE_DIR) -r
-	$(PYTHON) $(REG_TOOL) $(PULPOPEN_FE_DIR)/$(PULPOPEN_HJSON) -d > $(PULPOPEN_FE_DIR)/doc.html
-	$(PYTHON) $(REG_TOOL) $(PULPOPEN_FE_DIR)/$(PULPOPEN_HJSON) -D > $(PULPOPEN_FE_DIR)/pulp_idma.h
+reg32_2d_regs:
+	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -t $(REG32_2D_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -D > $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.h
+	printf $(REG_HTML_STRING) > $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
+	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -d >> $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
+	printf "</html>\n" >> $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
+	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG32_2D_FE_DIR)
 
-cva6_regs:
-	$(PYTHON) $(REG_TOOL) $(CVA6_FE_DIR)/$(CVA6_HJSON) -t $(CVA6_FE_DIR) -r
-	$(PYTHON) $(REG_TOOL) $(CVA6_FE_DIR)/$(CVA6_HJSON) -d > $(CVA6_FE_DIR)/doc.html
-	$(PYTHON) $(REG_TOOL) $(CVA6_FE_DIR)/$(CVA6_HJSON) -D > $(CVA6_FE_DIR)/cva6_idma.h
-
-cva6_test:
-	$(GCC) $(CVA6_FE_DIR)/tests.c -o tests
+reg64_regs:
+	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -t $(REG64_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -D > $(REG64_FE_DIR)/idma_reg64_frontend.h
+	printf $(REG_HTML_STRING) > $(REG64_FE_DIR)/idma_reg64_frontend.html
+	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -d >> $(REG64_FE_DIR)/idma_reg64_frontend.html
+	printf "</html>\n" >> $(REG64_FE_DIR)/idma_reg64_frontend.html
+	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG64_FE_DIR)

@@ -349,7 +349,7 @@ module axi_dma_data_mover #(
     //-------------------------------------- 
     logic is_last_aw;
     fifo_v3 #(
-        .DEPTH       ( ReqFifoDepth + BufferDepth ),
+        .DEPTH       ( ReqFifoDepth + BufferDepth + ReqFifoDepth ), // This size may need adjusting
         .dtype       ( logic                      )
     ) i_last_transaction_queue (
         .clk_i       ( clk_i                 ),

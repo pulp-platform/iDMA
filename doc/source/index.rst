@@ -36,6 +36,7 @@ The main documentation of the submodules is divided into the following sections:
   frontend.rst
   error_handling.rst
   verification.rst
+  system_integration.rst
 
 .. only:: html
 

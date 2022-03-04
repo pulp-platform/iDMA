@@ -7,7 +7,7 @@
 `include "common_cells/registers.svh"
 
 /// Accept 2D requests and flatten them to 1D requests.
-module axi_dma_twod_ext #(
+module idma_2D_midend #(
     parameter int unsigned ADDR_WIDTH      = -1,
     parameter int unsigned REQ_FIFO_DEPTH  = -1,
     parameter type burst_req_t = logic,
@@ -85,7 +85,7 @@ module axi_dma_twod_ext #(
         // 1D Case
         //--------------------------------------
         // in the case that we have a 1D transfer, hand the transfer out
-        if (!twod_req_current.is_twod) begin
+        if (!twod_req_current.is_twod || twod_req_current.num_repetitions == 'h1) begin
             // bypass the 1D parameters
             burst_req_o.id           = twod_req_current.id;
             burst_req_o.src          = twod_req_current.src;
@@ -97,6 +97,7 @@ module axi_dma_twod_ext #(
             burst_req_o.burst_dst    = twod_req_current.burst_dst;
             burst_req_o.decouple_rw  = twod_req_current.decouple_rw;
             burst_req_o.deburst      = twod_req_current.deburst;
+            burst_req_o.serialize    = twod_req_current.serialize;
 
             // handshaking
             req_fifo_pop      = burst_req_ready_i & ~req_fifo_empty;
@@ -117,6 +118,7 @@ module axi_dma_twod_ext #(
             burst_req_o.burst_dst    = twod_req_current.burst_dst;
             burst_req_o.decouple_rw  = twod_req_current.decouple_rw;
             burst_req_o.deburst      = twod_req_current.deburst;
+            burst_req_o.serialize    = twod_req_current.serialize;
 
             // check if the counter can be loaded
             if ((num_bursts_q == '0) & !req_fifo_empty & burst_req_ready_i) begin

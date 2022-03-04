@@ -23,8 +23,8 @@ module axi_dma_burst_reshaper #(
     /// - num_bytes: the length of the contiguous 1D transfer requested, can be up to 32/64 bit long
     ///              num_bytes will be interpreted as an unsigned number
     ///              A value of 0 will cause the backend to discard the transfer prematurely
-    /// - src_cache, dst_cache: the configuration of the cache fields in the AX beats
-    /// - src_burst, dst_burst: currently only incremental bursts are supported (2'b01)
+    /// - cache_src, cache_dst: the configuration of the cache fields in the AX beats
+    /// - burst_dst, burst_dst: currently only incremental bursts are supported (2'b01)
     /// - decouple_rw: if set to true, there is no longer exactly one AXI write_request issued for 
     ///   every read request. This mode can improve performance of unaligned transfers when crossing
     ///   the AXI page boundaries.

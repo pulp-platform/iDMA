@@ -7,7 +7,7 @@
 
 `include "common_cells/assertions.svh"
 
-module dma_frontend_reg_top #(
+module idma_reg64_frontend_reg_top #(
     parameter type reg_req_t = logic,
     parameter type reg_rsp_t = logic,
     parameter int AW = 6
@@ -17,15 +17,15 @@ module dma_frontend_reg_top #(
   input  reg_req_t reg_req_i,
   output reg_rsp_t reg_rsp_o,
   // To HW
-  output dma_frontend_reg_pkg::dma_frontend_reg2hw_t reg2hw, // Write
-  input  dma_frontend_reg_pkg::dma_frontend_hw2reg_t hw2reg, // Read
+  output idma_reg64_frontend_reg_pkg::idma_reg64_frontend_reg2hw_t reg2hw, // Write
+  input  idma_reg64_frontend_reg_pkg::idma_reg64_frontend_hw2reg_t hw2reg, // Read
 
 
   // Config
   input devmode_i // If 1, explicit error return for unmapped register access
 );
 
-  import dma_frontend_reg_pkg::* ;
+  import idma_reg64_frontend_reg_pkg::* ;
 
   localparam int DW = 64;
   localparam int DBW = DW/8;                    // Byte Width
@@ -308,13 +308,13 @@ module dma_frontend_reg_top #(
   logic [6:0] addr_hit;
   always_comb begin
     addr_hit = '0;
-    addr_hit[0] = (reg_addr == DMA_FRONTEND_SRC_ADDR_OFFSET);
-    addr_hit[1] = (reg_addr == DMA_FRONTEND_DST_ADDR_OFFSET);
-    addr_hit[2] = (reg_addr == DMA_FRONTEND_NUM_BYTES_OFFSET);
-    addr_hit[3] = (reg_addr == DMA_FRONTEND_CONF_OFFSET);
-    addr_hit[4] = (reg_addr == DMA_FRONTEND_STATUS_OFFSET);
-    addr_hit[5] = (reg_addr == DMA_FRONTEND_NEXT_ID_OFFSET);
-    addr_hit[6] = (reg_addr == DMA_FRONTEND_DONE_OFFSET);
+    addr_hit[0] = (reg_addr == IDMA_REG64_FRONTEND_SRC_ADDR_OFFSET);
+    addr_hit[1] = (reg_addr == IDMA_REG64_FRONTEND_DST_ADDR_OFFSET);
+    addr_hit[2] = (reg_addr == IDMA_REG64_FRONTEND_NUM_BYTES_OFFSET);
+    addr_hit[3] = (reg_addr == IDMA_REG64_FRONTEND_CONF_OFFSET);
+    addr_hit[4] = (reg_addr == IDMA_REG64_FRONTEND_STATUS_OFFSET);
+    addr_hit[5] = (reg_addr == IDMA_REG64_FRONTEND_NEXT_ID_OFFSET);
+    addr_hit[6] = (reg_addr == IDMA_REG64_FRONTEND_DONE_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -322,13 +322,13 @@ module dma_frontend_reg_top #(
   // Check sub-word write is permitted
   always_comb begin
     wr_err = (reg_we &
-              ((addr_hit[0] & (|(DMA_FRONTEND_PERMIT[0] & ~reg_be))) |
-               (addr_hit[1] & (|(DMA_FRONTEND_PERMIT[1] & ~reg_be))) |
-               (addr_hit[2] & (|(DMA_FRONTEND_PERMIT[2] & ~reg_be))) |
-               (addr_hit[3] & (|(DMA_FRONTEND_PERMIT[3] & ~reg_be))) |
-               (addr_hit[4] & (|(DMA_FRONTEND_PERMIT[4] & ~reg_be))) |
-               (addr_hit[5] & (|(DMA_FRONTEND_PERMIT[5] & ~reg_be))) |
-               (addr_hit[6] & (|(DMA_FRONTEND_PERMIT[6] & ~reg_be)))));
+              ((addr_hit[0] & (|(IDMA_REG64_FRONTEND_PERMIT[0] & ~reg_be))) |
+               (addr_hit[1] & (|(IDMA_REG64_FRONTEND_PERMIT[1] & ~reg_be))) |
+               (addr_hit[2] & (|(IDMA_REG64_FRONTEND_PERMIT[2] & ~reg_be))) |
+               (addr_hit[3] & (|(IDMA_REG64_FRONTEND_PERMIT[3] & ~reg_be))) |
+               (addr_hit[4] & (|(IDMA_REG64_FRONTEND_PERMIT[4] & ~reg_be))) |
+               (addr_hit[5] & (|(IDMA_REG64_FRONTEND_PERMIT[5] & ~reg_be))) |
+               (addr_hit[6] & (|(IDMA_REG64_FRONTEND_PERMIT[6] & ~reg_be)))));
   end
 
   assign src_addr_we = addr_hit[0] & reg_we & !reg_error;

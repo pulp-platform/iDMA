@@ -1,7 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel=stylesheet href=reg_html.css>
+</head>
 <table class="regdef" id="Reg_src_addr">
  <tr>
   <th class="regdef" colspan=5>
-   <div>dma_frontend.src_addr @ 0x0</div>
+   <div>idma_reg64_frontend.src_addr @ 0x0</div>
    <div><p>Source Address</p></div>
    <div>Reset default = 0x0, mask 0xffffffffffffffff</div>
   </th>
@@ -19,7 +24,7 @@
 <table class="regdef" id="Reg_dst_addr">
  <tr>
   <th class="regdef" colspan=5>
-   <div>dma_frontend.dst_addr @ 0x8</div>
+   <div>idma_reg64_frontend.dst_addr @ 0x8</div>
    <div><p>Destination Address</p></div>
    <div>Reset default = 0x0, mask 0xffffffffffffffff</div>
   </th>
@@ -37,7 +42,7 @@
 <table class="regdef" id="Reg_num_bytes">
  <tr>
   <th class="regdef" colspan=5>
-   <div>dma_frontend.num_bytes @ 0x10</div>
+   <div>idma_reg64_frontend.num_bytes @ 0x10</div>
    <div><p>Number of bytes</p></div>
    <div>Reset default = 0x0, mask 0xffffffffffffffff</div>
   </th>
@@ -55,7 +60,7 @@
 <table class="regdef" id="Reg_conf">
  <tr>
   <th class="regdef" colspan=5>
-   <div>dma_frontend.conf @ 0x18</div>
+   <div>idma_reg64_frontend.conf @ 0x18</div>
    <div><p>Configuration Register for DMA settings</p></div>
    <div>Reset default = 0x0, mask 0x7</div>
   </th>
@@ -76,7 +81,7 @@
 <table class="regdef" id="Reg_status">
  <tr>
   <th class="regdef" colspan=5>
-   <div>dma_frontend.status @ 0x20</div>
+   <div>idma_reg64_frontend.status @ 0x20</div>
    <div><p>DMA Status</p></div>
    <div>Reset default = 0x0, mask 0x1</div>
   </th>
@@ -95,7 +100,7 @@
 <table class="regdef" id="Reg_next_id">
  <tr>
   <th class="regdef" colspan=5>
-   <div>dma_frontend.next_id @ 0x28</div>
+   <div>idma_reg64_frontend.next_id @ 0x28</div>
    <div><p>Next ID, launches transfer, returns 0 if transfer not set up properly.</p></div>
    <div>Reset default = 0x0, mask 0xffffffffffffffff</div>
   </th>
@@ -113,7 +118,7 @@
 <table class="regdef" id="Reg_done">
  <tr>
   <th class="regdef" colspan=5>
-   <div>dma_frontend.done @ 0x30</div>
+   <div>idma_reg64_frontend.done @ 0x30</div>
    <div><p>Get ID of finished transactions.</p></div>
    <div>Reset default = 0x0, mask 0xffffffffffffffff</div>
   </th>
@@ -128,3 +133,4 @@
 </tr></table></td></tr>
 <tr><th width=5%>Bits</th><th width=5%>Type</th><th width=5%>Reset</th><th>Name</th><th>Description</th></tr><tr><td class="regbits">63:0</td><td class="regperm">ro</td><td class="regrv">x</td><td class="regfn">done</td><td class="regde"><p>Get ID of finished transactions.</p></td></table>
 <br>
+</html>

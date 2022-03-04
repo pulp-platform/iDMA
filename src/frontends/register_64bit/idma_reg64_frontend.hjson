@@ -1,5 +1,5 @@
 {
-  name: "dma_frontend",
+  name: "idma_reg64_frontend",
   clock_primary: "clk_i",
 	reset_primary: "rst_ni",
   bus_interfaces: [

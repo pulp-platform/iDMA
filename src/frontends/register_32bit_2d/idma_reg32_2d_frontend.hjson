@@ -1,12 +1,7 @@
 {
-  name: "cluster_dma_frontend",
-  clocking: [
-    { clock: "clk_i",
-      reset: "rst_ni"
-    }
-  ],
-  # clock_primary: "clk_i",
-  # reset_primary: "rst_ni",
+  name: "idma_reg32_2d_frontend",
+  clock_primary: "clk_i",
+  reset_primary: "rst_ni",
   bus_interfaces: [
     { protocol: "reg_iface",
       direction: "device"
@@ -64,6 +59,44 @@
         { bits: "2",
           name: "serialize",
           desc: "Serialize enable"
+        },
+        { bits: "3",
+          name: "twod",
+          desc: "2D transfer"
+        }
+      ]
+    },
+    { name: "stride_src",
+      desc: "Source Stride",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "stride_src",
+          desc: "Source Stride"
+        }
+      ]
+    },
+    { name: "stride_dst"
+      desc: "Destination Stride",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "stride_dst",
+          desc: "Destination Stride"
+        }
+      ]
+    },
+    { name: "num_repetitions"
+      desc: "Number of 2D repetitions",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "num_repetitions",
+          desc: "Number of 2D repetitions",
+          resval: "1"
         }
       ]
     },
@@ -73,7 +106,7 @@
       hwaccess: "hwo",
       hwext: "true",
       fields: [
-        { bits: "0",
+        { bits: "15:0",
           name: "busy",
           desc: "DMA busy"
         }
