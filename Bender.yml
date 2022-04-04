@@ -48,6 +48,16 @@ sources:
     # Level 2
     - src/frontends/register_64bit/idma_reg64_frontend.sv
 
+  - files: # 64bit descriptor frontend
+    # Level 0
+    - src/frontends/desc64/idma_desc64_reg_pkg.sv
+    - src/frontends/desc64/idma_desc64_reg_top.sv
+    - src/frontends/desc64/idma_desc64_shared_counter.sv
+    # Level 1
+    - src/frontends/desc64/idma_desc64_reg_wrapper.sv
+    # Level 2
+    - src/frontends/desc64/idma_desc64_top.sv
+
 
   - target: all(pulp, not(mchan))
     files:
@@ -63,3 +73,8 @@ sources:
       - test/fixture_axi_dma_backend.sv
       # Level 1:
       - test/tb_axi_dma_backend.sv
+
+  - target: test # 64bit descriptor frontend
+    files:
+      # Level 0
+      - test/tb_idma_desc64_top.sv

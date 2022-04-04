@@ -49,6 +49,8 @@ REG32_2D_FE_DIR = src/frontends/register_32bit_2d/
 REG32_2D_HJSON = $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.hjson
 REG64_FE_DIR = src/frontends/register_64bit/
 REG64_HJSON = $(REG64_FE_DIR)/idma_reg64_frontend.hjson
+DESC64_FE_DIR = src/frontends/desc64/
+DESC64_HJSON = $(DESC64_FE_DIR)/idma_desc64_frontend.hjson
 
 REG_HTML_STRING = "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n"
 
@@ -67,3 +69,11 @@ reg64_regs:
 	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -d >> $(REG64_FE_DIR)/idma_reg64_frontend.html
 	printf "</html>\n" >> $(REG64_FE_DIR)/idma_reg64_frontend.html
 	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG64_FE_DIR)
+
+desc64_regs:
+	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -t $(DESC64_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -D > $(DESC64_FE_DIR)/idma_desc64_frontend.h
+	printf $(REG_HTML_STRING) > $(DESC64_FE_DIR)/idma_desc64_frontend.html
+	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -d >> $(DESC64_FE_DIR)/idma_desc64_frontend.html
+	printf "</html>\n" >> $(DESC64_FE_DIR)/idma_desc64_frontend.html
+	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(DESC64_FE_DIR)

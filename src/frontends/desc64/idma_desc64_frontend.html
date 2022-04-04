@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel=stylesheet href=reg_html.css>
+</head>
+<table class="regdef" id="Reg_desc_addr">
+ <tr>
+  <th class="regdef" colspan=5>
+   <div>idma_desc64.desc_addr @ 0x0</div>
+   <div><p>This register specifies the bus address at which the first transfer
+descriptor can be found. A write to this register starts the transfer.</p></div>
+   <div>Reset default = 0xffffffffffffffff, mask 0xffffffffffffffff</div>
+  </th>
+ </tr>
+<tr><td colspan=5><table class="regpic"><tr><td class="bitnum">63</td><td class="bitnum">62</td><td class="bitnum">61</td><td class="bitnum">60</td><td class="bitnum">59</td><td class="bitnum">58</td><td class="bitnum">57</td><td class="bitnum">56</td><td class="bitnum">55</td><td class="bitnum">54</td><td class="bitnum">53</td><td class="bitnum">52</td><td class="bitnum">51</td><td class="bitnum">50</td><td class="bitnum">49</td><td class="bitnum">48</td></tr><tr><td class="fname" colspan=16>desc_addr...</td>
+</tr>
+<tr><td class="bitnum">47</td><td class="bitnum">46</td><td class="bitnum">45</td><td class="bitnum">44</td><td class="bitnum">43</td><td class="bitnum">42</td><td class="bitnum">41</td><td class="bitnum">40</td><td class="bitnum">39</td><td class="bitnum">38</td><td class="bitnum">37</td><td class="bitnum">36</td><td class="bitnum">35</td><td class="bitnum">34</td><td class="bitnum">33</td><td class="bitnum">32</td></tr><tr><td class="fname" colspan=16>...desc_addr...</td>
+</tr>
+<tr><td class="bitnum">31</td><td class="bitnum">30</td><td class="bitnum">29</td><td class="bitnum">28</td><td class="bitnum">27</td><td class="bitnum">26</td><td class="bitnum">25</td><td class="bitnum">24</td><td class="bitnum">23</td><td class="bitnum">22</td><td class="bitnum">21</td><td class="bitnum">20</td><td class="bitnum">19</td><td class="bitnum">18</td><td class="bitnum">17</td><td class="bitnum">16</td></tr><tr><td class="fname" colspan=16>...desc_addr...</td>
+</tr>
+<tr><td class="bitnum">15</td><td class="bitnum">14</td><td class="bitnum">13</td><td class="bitnum">12</td><td class="bitnum">11</td><td class="bitnum">10</td><td class="bitnum">9</td><td class="bitnum">8</td><td class="bitnum">7</td><td class="bitnum">6</td><td class="bitnum">5</td><td class="bitnum">4</td><td class="bitnum">3</td><td class="bitnum">2</td><td class="bitnum">1</td><td class="bitnum">0</td></tr><tr><td class="fname" colspan=16>...desc_addr</td>
+</tr></table></td></tr>
+<tr><th width=5%>Bits</th><th width=5%>Type</th><th width=5%>Reset</th><th>Name</th><th>Description</th></tr><tr><td class="regbits">63:0</td><td class="regperm">wo</td><td class="regrv">0xffffffffffffffff</td><td class="regfn">desc_addr</td><td class="regde"></td></table>
+<br>
+<table class="regdef" id="Reg_status">
+ <tr>
+  <th class="regdef" colspan=5>
+   <div>idma_desc64.status @ 0x8</div>
+   <div><p>This register contains status information for the DMA.</p></div>
+   <div>Reset default = 0x0, mask 0x3</div>
+  </th>
+ </tr>
+<tr><td colspan=5><table class="regpic"><tr><td class="bitnum">63</td><td class="bitnum">62</td><td class="bitnum">61</td><td class="bitnum">60</td><td class="bitnum">59</td><td class="bitnum">58</td><td class="bitnum">57</td><td class="bitnum">56</td><td class="bitnum">55</td><td class="bitnum">54</td><td class="bitnum">53</td><td class="bitnum">52</td><td class="bitnum">51</td><td class="bitnum">50</td><td class="bitnum">49</td><td class="bitnum">48</td></tr><tr><td class="unused" colspan=16>&nbsp;</td>
+</tr>
+<tr><td class="bitnum">47</td><td class="bitnum">46</td><td class="bitnum">45</td><td class="bitnum">44</td><td class="bitnum">43</td><td class="bitnum">42</td><td class="bitnum">41</td><td class="bitnum">40</td><td class="bitnum">39</td><td class="bitnum">38</td><td class="bitnum">37</td><td class="bitnum">36</td><td class="bitnum">35</td><td class="bitnum">34</td><td class="bitnum">33</td><td class="bitnum">32</td></tr><tr><td class="unused" colspan=16>&nbsp;</td>
+</tr>
+<tr><td class="bitnum">31</td><td class="bitnum">30</td><td class="bitnum">29</td><td class="bitnum">28</td><td class="bitnum">27</td><td class="bitnum">26</td><td class="bitnum">25</td><td class="bitnum">24</td><td class="bitnum">23</td><td class="bitnum">22</td><td class="bitnum">21</td><td class="bitnum">20</td><td class="bitnum">19</td><td class="bitnum">18</td><td class="bitnum">17</td><td class="bitnum">16</td></tr><tr><td class="unused" colspan=16>&nbsp;</td>
+</tr>
+<tr><td class="bitnum">15</td><td class="bitnum">14</td><td class="bitnum">13</td><td class="bitnum">12</td><td class="bitnum">11</td><td class="bitnum">10</td><td class="bitnum">9</td><td class="bitnum">8</td><td class="bitnum">7</td><td class="bitnum">6</td><td class="bitnum">5</td><td class="bitnum">4</td><td class="bitnum">3</td><td class="bitnum">2</td><td class="bitnum">1</td><td class="bitnum">0</td></tr><tr><td class="unused" colspan=14>&nbsp;</td>
+<td class="fname" colspan=1 style="font-size:33.333333333333336%">fifo_full</td>
+<td class="fname" colspan=1 style="font-size:75.0%">busy</td>
+</tr></table></td></tr>
+<tr><th width=5%>Bits</th><th width=5%>Type</th><th width=5%>Reset</th><th>Name</th><th>Description</th></tr><tr><td class="regbits">0</td><td class="regperm">ro</td><td class="regrv">0x0</td><td class="regfn">busy</td><td class="regde"><p>The DMA is busy</p></td><tr><td class="regbits">1</td><td class="regperm">ro</td><td class="regrv">0x0</td><td class="regfn">fifo_full</td><td class="regde"><p>If this bit is set, the buffers of the DMA are full. Any further submissions via the
+desc_addr register may overwrite previously submitted jobs or get lost.</p></td></table>
+<br>
+</html>
