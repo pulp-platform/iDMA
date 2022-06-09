@@ -94,7 +94,7 @@ module idma_split_midend #(
             req_d = burst_req_i;
             ready_o = 1'b1;
             // Feed through the first request
-            burst_req_o = req_d;
+            burst_req_o = burst_req_i;
             // Modify it's size
             burst_req_o.num_bytes = DmaRegionWidth-start_addr[DmaRegionAddressBits-1:0];
             // Forward request
@@ -114,14 +114,16 @@ module idma_split_midend #(
         // Sent next burst from split.
         burst_req_o = req_q;
         valid_o = 1'b1;
-        if (ready_i) begin
-          req_valid = 1'b1;
-          if (req_q.num_bytes <= DmaRegionWidth) begin
-            // Last split
+        req_valid = ready_i;
+        if (req_q.num_bytes <= DmaRegionWidth) begin
+          // Last split
+          if (ready_i) begin
             state_d = Idle;
-          end else begin
-            // Clip size and increment address
-            burst_req_o.num_bytes = DmaRegionWidth;
+          end
+        end else begin
+          // Clip size and increment address
+          burst_req_o.num_bytes = DmaRegionWidth;
+          if (ready_i) begin
             req_d.num_bytes = req_q.num_bytes - DmaRegionWidth;
             req_d.src = req_q.src + DmaRegionWidth;
             req_d.dst = req_q.dst + DmaRegionWidth;
@@ -133,7 +135,7 @@ module idma_split_midend #(
   end
 
   // pragma translate_off
-  always_ff @(posedge clk_i) begin
+  always_ff @(posedge clk_i or negedge rst_ni) begin
     if (rst_ni && valid_i && ready_o) begin
       $display("[idma_split_midend] Got request");
       $display("Split: Request in: From: 0x%8x To: 0x%8x with size %d", burst_req_i.src, burst_req_i.dst, burst_req_i.num_bytes);
