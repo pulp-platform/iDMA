@@ -2,6 +2,8 @@ GIT ?= git
 BENDER ?= bender
 VSIM ?= vsim
 PYTHON ?= python3
+GCC ?= riscv64-unknown-elf-gcc
+
 
 all: sim_all
 
@@ -42,12 +44,24 @@ trace:
 dma_trace_%.txt: scripts/dma_trace.py scripts/dma_backend.py
 	$(PYTHON) $< dma_trace_$*.log > $@
 
-REG_PATH = $(shell $(BENDER) path register_interface)
-REG_TOOL = $(REG_PATH)/vendor/lowrisc_opentitan/util/regtool.py
+REG_PATH ?= $(shell $(BENDER) path register_interface)
+REG_TOOL ?= $(REG_PATH)/vendor/lowrisc_opentitan/util/regtool.py
+
 PULPOPEN_FE_DIR = src/frontends/pulpopen
-HJSON = $(PULPOPEN_FE_DIR)/cluster_dma_frontend.hjson
+CVA6_FE_DIR = src/frontends/cva6
+PULPOPEN_HJSON = /cluster_dma_frontend.hjson
+CVA6_HJSON = /dma_frontend.hjson
+
 
 pulpopen_regs:
-	$(PYTHON) $(REG_TOOL) $(HJSON) -t $(PULPOPEN_FE_DIR) -r
-	$(PYTHON) $(REG_TOOL) $(HJSON) -d > $(PULPOPEN_FE_DIR)/doc.html
-	$(PYTHON) $(REG_TOOL) $(HJSON) -D > $(PULPOPEN_FE_DIR)/pulp_idma.h
+	$(PYTHON) $(REG_TOOL) $(PULPOPEN_FE_DIR)/$(PULPOPEN_HJSON) -t $(PULPOPEN_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(PULPOPEN_FE_DIR)/$(PULPOPEN_HJSON) -d > $(PULPOPEN_FE_DIR)/doc.html
+	$(PYTHON) $(REG_TOOL) $(PULPOPEN_FE_DIR)/$(PULPOPEN_HJSON) -D > $(PULPOPEN_FE_DIR)/pulp_idma.h
+
+cva6_regs:
+	$(PYTHON) $(REG_TOOL) $(CVA6_FE_DIR)/$(CVA6_HJSON) -t $(CVA6_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(CVA6_FE_DIR)/$(CVA6_HJSON) -d > $(CVA6_FE_DIR)/doc.html
+	$(PYTHON) $(REG_TOOL) $(CVA6_FE_DIR)/$(CVA6_HJSON) -D > $(CVA6_FE_DIR)/cva6_idma.h
+
+cva6_test:
+	$(GCC) $(CVA6_FE_DIR)/tests.c -o tests

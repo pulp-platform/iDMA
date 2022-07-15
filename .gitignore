@@ -10,3 +10,4 @@ modelsim.ini
 transcript
 doc/build
 Bender.lock
+*.elf

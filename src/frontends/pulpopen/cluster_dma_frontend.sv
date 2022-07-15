@@ -303,7 +303,7 @@ module cluster_dma_frontend #(
         assign issue = be_ready_stream[i] & be_valid_stream[i]; /*& !zero_length;*/
 
         // transfer id
-        cluster_dma_transfer_id_gen #(
+        dma_transfer_id_gen #(
             .IdWidth      ( 28     )
         ) i_cluster_dma_transfer_id_gen (
             .clk_i        ( clk_i                     ),

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 ETH Zurich and University of Bologna
+// Copyright (c) 2020-2021 ETH Zurich and University of Bologna
 // Copyright and related rights are licensed under the Solderpad Hardware
 // License, Version 0.51 (the "License"); you may not use this file except in
 // compliance with the License.  You may obtain a copy of the License at
@@ -8,11 +8,12 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations under the License.
 //
-// Thomas Benz <tbenz@ethz.ch>
+// Author: Thomas Benz    <tbenz@ethz.ch>
+// Author: Andreas Kuster <kustera@ethz.ch>
+//
+// Description: DMA transaction id generator. Increases the transaction id on every request.
 
-// transaction id generator. just increase the transaction id on every request
-
-module cluster_dma_transfer_id_gen #(
+module dma_transfer_id_gen #(
     parameter int unsigned  IdWidth = -1
 ) (
     input  logic                clk_i,
@@ -30,13 +31,9 @@ module cluster_dma_transfer_id_gen #(
     //--------------------------------------
     // counters
     //--------------------------------------
-    logic [IdWidth-1:0] next_d,      next_q;
-    logic [IdWidth-1:0] completed_d, completed_q;
+    logic [IdWidth-1:0] next_d, next_q, completed_d, completed_q;
 
     // count up on events
-    // assign next_d      = (issue_i  == 1'b1) ? next_q + 'h1      : next_q;
-    // assign completed_d = (retire_i == 1'b1) ? completed_q + 'h1 : completed_q;
-
     always_comb begin : proc_next_id
         // default
         next_d = next_q;
@@ -86,4 +83,4 @@ module cluster_dma_transfer_id_gen #(
         end
     end
 
-endmodule : cluster_dma_transfer_id_gen
+endmodule : dma_transfer_id_gen

@@ -2,6 +2,7 @@ package:
   name: idma
   authors:
     - "Thomas Benz <tbenz@iis.ee.ethz.ch>" # current maintainer
+    - "Andreas Kuster <kustera@ethz.ch>"
 
 dependencies:
   common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.21.0 }
@@ -15,6 +16,7 @@ sources:
   # levels 1 and 0, etc. Files within a level are ordered alphabetically.
   # Level 0
   - src/axi_dma_data_path.sv
+  - src/frontends/dma_transfer_id_gen.sv
   # Level 1
   - src/axi_dma_data_mover.sv
   - src/axi_dma_burst_reshaper.sv
@@ -25,7 +27,6 @@ sources:
     files:
       # Level 0:
       - src/frontends/pulpopen/cluster_dma_frontend_reg_pkg.sv
-      - src/frontends/pulpopen/cluster_dma_transfer_id_gen.sv
       - src/frontends/pulpopen/rr_distributor.sv
       # Level 1:
       - src/frontends/pulpopen/cluster_dma_frontend_reg_top.sv
@@ -33,7 +34,16 @@ sources:
       - src/frontends/pulpopen/cluster_dma_frontend.sv
       # Level 3:
       - src/frontends/pulpopen/dmac_wrap.sv
-
+  - target: all(cva6, not(mchan))
+    files:
+      # Level 0:
+      - src/frontends/cva6/dma_frontend_reg_pkg.sv
+      # Level 1:
+      - src/frontends/cva6/dma_frontend_reg_top.sv
+      # Level 2:
+      - src/frontends/cva6/dma_frontend.sv
+      # Level 3:
+      - src/frontends/cva6/dma_core_wrap.sv  
   - target: test
     files:
       # Level 0:
