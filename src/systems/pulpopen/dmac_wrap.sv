@@ -55,7 +55,8 @@ module dmac_wrap #(
   localparam int unsigned NumRegs = NB_CORES+NB_PE_PORTS;
   localparam int unsigned MstIdxWidth = AXI_ID_WIDTH;
   localparam int unsigned SlvIdxWidth = AXI_ID_WIDTH - $clog2(NUM_STREAMS);
-
+  localparam int unsigned NumDims = 1; 
+  
   // CORE --> MCHAN CTRL INTERFACE BUS SIGNALS
   logic [NumRegs-1:0][DATA_WIDTH-1:0]  config_wdata;
   logic [NumRegs-1:0][ADDR_WIDTH-1:0]  config_add;
@@ -165,8 +166,14 @@ module dmac_wrap #(
       logic               deburst;
       logic               serialize; 
   } twod_req_t;
+   
+   // ND burst request
+   import idma_nd_midend_pkg::nd_req_t;
+   
+   nd_req_t nd_req;    
   twod_req_t twod_req;
   burst_req_t burst_req;
+   
 
   logic fe_valid, fe_ready, be_valid, be_ready;
   logic backend_idle, trans_complete, oned_trans_complete, twod_req_last, twod_req_last_realigned;
@@ -253,7 +260,22 @@ module dmac_wrap #(
     .twod_req_last_o   ( twod_req_last )
   );
 
-
+  /* idma_nd_midend  #(
+    .NumDims( NumDims ),
+    .addr_t( addr_t ),
+    .nd_req_t( nd_req_t )
+  ) i_idma_nd_midend (
+    .clk_i,
+    .rst_ni,
+    .nd_req_i( nd_req ),
+    .nd_valid_i( fe_valid ),
+    .nd_ready_o( fe_ready ),
+    .burst_req_o( burst_req ),
+    .burst_valid_o( be_valid ),
+    .burst_ready_i( be_ready )
+  );
+    */                    
+                        
   // transfer complete alignment, should be integrated into twod module
   localparam TwodBufferDepth = 2 * BACKEND_QUEUE_DEPTH + NB_OUTSND_BURSTS + 3 + 1;
   fifo_v3 #(
@@ -273,7 +295,8 @@ module dmac_wrap #(
     .pop_i      ( oned_trans_complete     )
   );
 
-  assign trans_complete = oned_trans_complete && twod_req_last_realigned;
+//  assign trans_complete = oned_trans_complete && twod_req_last_realigned;
+   assign trans_complete = oned_trans_complete;
 
   // ------------------------------------------------------
   // BACKEND
