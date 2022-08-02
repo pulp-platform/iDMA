@@ -243,7 +243,7 @@ module dmac_wrap #(
   // MIDEND
   // ------------------------------------------------------
 
-  idma_2D_midend #(
+ /* idma_2D_midend #(
     .ADDR_WIDTH     ( AXI_ADDR_WIDTH     ),
     .REQ_FIFO_DEPTH ( GLOBAL_QUEUE_DEPTH ),
     .burst_req_t    ( burst_req_t        ),
@@ -258,9 +258,9 @@ module dmac_wrap #(
     .burst_req_valid_o ( be_valid      ),
     .burst_req_ready_i ( be_ready      ),
     .twod_req_last_o   ( twod_req_last )
-  );
+  );*/
 
-  /* idma_nd_midend  #(
+   idma_nd_midend  #(
     .NumDims( NumDims ),
     .addr_t( addr_t ),
     .nd_req_t( nd_req_t )
@@ -274,10 +274,10 @@ module dmac_wrap #(
     .burst_valid_o( be_valid ),
     .burst_ready_i( be_ready )
   );
-    */                    
+                        
                         
   // transfer complete alignment, should be integrated into twod module
-  localparam TwodBufferDepth = 2 * BACKEND_QUEUE_DEPTH + NB_OUTSND_BURSTS + 3 + 1;
+ /* localparam TwodBufferDepth = 2 * BACKEND_QUEUE_DEPTH + NB_OUTSND_BURSTS + 3 + 1;
   fifo_v3 #(
     .DATA_WIDTH ( 1               ),
     .DEPTH      ( TwodBufferDepth )
@@ -293,7 +293,7 @@ module dmac_wrap #(
     .push_i     ( be_ready && be_valid    ),
     .data_o     ( twod_req_last_realigned ),
     .pop_i      ( oned_trans_complete     )
-  );
+  );*/
 
 //  assign trans_complete = oned_trans_complete && twod_req_last_realigned;
    assign trans_complete = oned_trans_complete;
