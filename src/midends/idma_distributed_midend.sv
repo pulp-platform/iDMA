@@ -35,15 +35,17 @@ module idma_distributed_midend #(
 
   // Handle Metadata
   logic [NoMstPorts-1:0] trans_complete_d, trans_complete_q;
+  logic [NoMstPorts-1:0] tie_off_trans_complete_d, tie_off_trans_complete_q;
   logic [NoMstPorts-1:0] backend_idle_d, backend_idle_q;
   assign meta_o.trans_complete = &trans_complete_q;
   assign meta_o.backend_idle = &backend_idle_q;
 
+  // TODO We could have multiple outstanding requests per port, so we need multiple trans_complete_tie_offs
   always_comb begin
     trans_complete_d = trans_complete_q;
     backend_idle_d = backend_idle_q;
     for (int unsigned i = 0; i < NoMstPorts; i++) begin
-      trans_complete_d[i] = trans_complete_q[i] | meta_i[i].trans_complete;
+      trans_complete_d[i] = trans_complete_q[i] | meta_i[i].trans_complete | tie_off_trans_complete_q[i];
       backend_idle_d[i] = meta_i[i].backend_idle;
     end
     if (meta_o.trans_complete) begin
@@ -51,11 +53,11 @@ module idma_distributed_midend #(
     end
   end
   `FF(trans_complete_q, trans_complete_d, '0, clk_i, rst_ni)
+  `FF(tie_off_trans_complete_q, tie_off_trans_complete_d, '0, clk_i, rst_ni)
   `FF(backend_idle_q, backend_idle_d, '1, clk_i, rst_ni)
 
-  // TODO Deburst
-
   // Fork
+  logic [NoMstPorts-1:0] valid, ready;
   stream_fork #(
     .N_OUP (NoMstPorts)
   ) i_stream_fork (
@@ -63,8 +65,8 @@ module idma_distributed_midend #(
     .rst_ni  (rst_ni ),
     .valid_i (valid_i),
     .ready_o (ready_o),
-    .valid_o (valid_o),
-    .ready_i (ready_i)
+    .valid_o (valid  ),
+    .ready_i (ready  )
   );
 
   full_addr_t src_addr, dst_addr, start_addr, end_addr;
@@ -79,6 +81,11 @@ module idma_distributed_midend #(
       start_addr = dst_addr;
     end
     end_addr = start_addr+burst_req_i.num_bytes;
+    // Connect valid ready by default
+    valid_o = valid;
+    ready = ready_i;
+    // Do not interfere with metadata per default
+    tie_off_trans_complete_d = '0;
     for (int i = 0; i < NoMstPorts; i++) begin
       // Feed metadata through directly
       burst_req_o[i] = burst_req_i;
@@ -86,7 +93,19 @@ module idma_distributed_midend #(
       burst_req_o[i].src = burst_req_i.src;
       burst_req_o[i].dst = burst_req_i.dst;
       // Modify lower addresses bits and size
-      if (($unsigned(start_addr) >= i*DmaRegionWidth)) begin
+      if (($unsigned(start_addr) >= (i+1)*DmaRegionWidth) || ($unsigned(end_addr) <= i*DmaRegionWidth)) begin
+        // We are not involved in the transfer
+        burst_req_o[i].src = '0;
+        burst_req_o[i].dst = '0;
+        burst_req_o[i].num_bytes = 1;
+        // Make handshake ourselves
+        valid_o[i] = 1'b0;
+        ready[i] = 1'b1;
+        // Inject trans complete
+        if (valid) begin
+          tie_off_trans_complete_d[i] = 1'b1;
+        end
+      end else if (($unsigned(start_addr) >= i*DmaRegionWidth)) begin
         // First (and potentially only) slice
         // Leave address as is
         if ($unsigned(end_addr) <= (i+1)*DmaRegionWidth) begin
@@ -94,7 +113,8 @@ module idma_distributed_midend #(
         end else begin
           burst_req_o[i].num_bytes = DmaRegionWidth-start_addr[DmaRegionAddressBits-1:0];
         end
-      end else if (($unsigned(start_addr) < i*DmaRegionWidth) && ($unsigned(end_addr) > (i+1)*DmaRegionWidth)) begin
+      // end else if (($unsigned(start_addr) < i*DmaRegionWidth)) begin
+      end else begin
         // Round up the address to the next DMA boundary
         if (($unsigned(burst_req_i.src) >= DmaRegionStart) && ($unsigned(burst_req_i.src) < DmaRegionEnd)) begin
           burst_req_o[i].src[FullRegionAddressBits-1:0] = i*DmaRegionWidth;
@@ -103,7 +123,7 @@ module idma_distributed_midend #(
           burst_req_o[i].src = burst_req_i.src+i*DmaRegionWidth-start_addr[DmaRegionAddressBits-1:0];
           burst_req_o[i].dst[FullRegionAddressBits-1:0] = i*DmaRegionWidth;
         end
-        if ($unsigned(end_addr) > (i+1)*DmaRegionWidth) begin
+        if ($unsigned(end_addr) >= (i+1)*DmaRegionWidth) begin
           // Middle slice
           // Emit a full-sized transfer
           burst_req_o[i].num_bytes = DmaRegionWidth;
@@ -111,12 +131,6 @@ module idma_distributed_midend #(
           // Last slice
           burst_req_o[i].num_bytes = end_addr[DmaRegionAddressBits-1:0];
         end
-      end else begin
-        // Not involved in transfer
-        // TODO, cut off
-          burst_req_o[i].src = '0;
-          burst_req_o[i].dst = '0;
-          burst_req_o[i].num_bytes = 1;
       end
     end
   end

@@ -5,6 +5,8 @@
 // Samuel Riedel <sriedel@iis.ee.ethz.ch>
 
 `include "register_interface/typedef.svh"
+`include "common_cells/registers.svh"
+
 module mempool_dma #(
   parameter int unsigned AddrWidth   = 32,
   parameter int unsigned DataWidth   = 32,
@@ -36,9 +38,9 @@ module mempool_dma #(
   input  logic                            rst_ni,
   input  axi_lite_req_t                   config_req_i,
   output axi_lite_rsp_t                   config_res_o,
-  output burst_req_t    [NumBackends-1:0] burst_req_o,
-  output logic          [NumBackends-1:0] valid_o,
-  input  logic          [NumBackends-1:0] ready_i,
+  output burst_req_t                      burst_req_o,
+  output logic                            valid_o,
+  input  logic                            ready_i,
   input  logic                            backend_idle_i,
   input  logic                            trans_complete_i,
   output logic           [DmaIdWidth-1:0] dma_id_o
@@ -56,10 +58,23 @@ module mempool_dma #(
   mempool_dma_frontend_reg2hw_t ctrl_reg2hw;
   mempool_dma_frontend_hw2reg_t ctrl_hw2reg;
 
+  logic trans_complete_d, trans_complete_q;
+  `FF(trans_complete_q, trans_complete_d, '0, clk_i, rst_ni)
+
+  always_comb begin
+    trans_complete_d = trans_complete_q;
+    if (trans_complete_i) begin
+      trans_complete_d = 1'b1;
+    end
+    if (valid_o) begin
+      trans_complete_d = 1'b0;
+    end
+  end
+
   assign ctrl_hw2reg = '{
     status  : backend_idle_i,
     next_id : 1'b0,
-    done    : trans_complete_i
+    done    : trans_complete_q
   };
 
   axi_lite_to_reg #(
@@ -93,27 +108,29 @@ module mempool_dma #(
     .devmode_i(1'b0        )
   );
 
-  for (genvar i = 0; unsigned'(i) < NumBackends; i++) begin: gen_reqs
-    assign burst_req_o[i] = '{
-      id          : 0,
-      src         : ctrl_reg2hw.src_addr,
-      dst         : ctrl_reg2hw.dst_addr,
-      num_bytes   : ctrl_reg2hw.num_bytes,
-      cache_src   : axi_pkg::CACHE_MODIFIABLE,
-      cache_dst   : axi_pkg::CACHE_MODIFIABLE,
-      burst_src   : axi_pkg::BURST_INCR,
-      burst_dst   : axi_pkg::BURST_INCR,
-      decouple_rw : 1'b1,
-      deburst     : 1'b0,
-      serialize   : 1'b1
-    };
-  end
+  assign burst_req_o = '{
+    id          : 0,
+    src         : ctrl_reg2hw.src_addr,
+    dst         : ctrl_reg2hw.dst_addr,
+    num_bytes   : ctrl_reg2hw.num_bytes,
+    cache_src   : axi_pkg::CACHE_MODIFIABLE,
+    cache_dst   : axi_pkg::CACHE_MODIFIABLE,
+    burst_src   : axi_pkg::BURST_INCR,
+    burst_dst   : axi_pkg::BURST_INCR,
+    decouple_rw : 1'b1,
+    deburst     : 1'b0,
+    serialize   : 1'b1
+  };
 
   always_comb begin
     valid_o = '0;
     if (ctrl_reg2hw.next_id.re) begin
       valid_o = 1'b1;
-      // TODO stall ctrl_reg_req, ctrl_reg_rsp interface
+      if (!ready_i) begin
+        // Store the valid request and stall upstream
+        // TODO config_res_o.raedy = 0;
+      end
+      // TODO stall ctrl_reg_req, ctrl_reg_rsp interface with ready_i
     end
   end
 
