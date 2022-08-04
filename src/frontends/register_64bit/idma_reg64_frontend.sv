@@ -1,14 +1,8 @@
-// Copyright 2019-2022 ETH Zurich and University of Bologna.
-// Copyright and related rights are licensed under the Solderpad Hardware
-// License, Version 0.51 (the "License"); you may not use this file except in
-// compliance with the License.  You may obtain a copy of the License at
-// http://solderpad.org/licenses/SHL-0.51. Unless required by applicable law
-// or agreed to in writing, software, hardware and materials distributed under
-// this License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-// CONDITIONS OF ANY KIND, either express or implied. See the License for the
-// specific language governing permissions and limitations under the License.
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
 //
-// Author: Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+// Michael Rogenmoser <michaero@ethz.ch>
 //
 // Description: DMA frontend module that includes 64bit config and status reg handling
 
@@ -35,7 +29,7 @@ module idma_reg64_frontend #(
     input  logic          trans_complete_i
 );
 
-    localparam DmaRegisterWidth = 64;
+    localparam int unsigned DmaRegisterWidth = 64;
 
     /*
      * Signal and register definitions
@@ -66,7 +60,7 @@ module idma_reg64_frontend #(
     );
 
     /*
-     * DMA Control Logic 
+     * DMA Control Logic
      */
     always_comb begin : proc_process_regs
 
@@ -94,24 +88,59 @@ module idma_reg64_frontend #(
 
     // map hw register onto generic burst request
     always_comb begin : hw_req_conv
-        burst_req_o             = '0;
-        burst_req_o.src         = dma_reg2hw.src_addr.q;
-        burst_req_o.dst         = dma_reg2hw.dst_addr.q;
-        burst_req_o.num_bytes   = dma_reg2hw.num_bytes.q;
-        burst_req_o.burst_src   = axi_pkg::BURST_INCR;
-        burst_req_o.burst_dst   = axi_pkg::BURST_INCR;
-        burst_req_o.decouple_rw = dma_reg2hw.conf.decouple.q;
-        burst_req_o.deburst     = dma_reg2hw.conf.deburst.q;
-        burst_req_o.serialize   = dma_reg2hw.conf.serialize.q;
+        burst_req_o                     = '0;
+
+        burst_req_o.length              = dma_reg2hw.num_bytes.q;
+        burst_req_o.src_addr            = dma_reg2hw.src_addr.q;
+        burst_req_o.dst_addr            = dma_reg2hw.dst_addr.q;
+
+            // Current backend only supports one ID
+        burst_req_o.opt.axi_id             = '0;
+            // DMA only supports incremental burst
+        burst_req_o.opt.src.burst          = axi_pkg::BURST_INCR;
+            // this frontend currently does not support cache variations
+        burst_req_o.opt.src.cache          = '0;
+            // AXI4 does not support locked transactions, use atomics
+        burst_req_o.opt.src.lock           = '0;
+            // unpriviledged, secure, data access
+        burst_req_o.opt.src.prot           = '0;
+            // not participating in qos
+        burst_req_o.opt.src.qos            = '0;
+            // only one region
+        burst_req_o.opt.src.region         = '0;
+            // DMA only supports incremental burst
+        burst_req_o.opt.dst.burst          = axi_pkg::BURST_INCR;
+            // this frontend currently does not support cache variations
+        burst_req_o.opt.dst.cache          = '0;
+            // AXI4 does not support locked transactions, use atomics
+        burst_req_o.opt.dst.lock           = '0;
+            // unpriviledged, secure, data access
+        burst_req_o.opt.dst.prot           = '0;
+            // not participating in qos
+        burst_req_o.opt.dst.qos            = '0;
+            // only one region in system
+        burst_req_o.opt.dst.region         = '0;
+            // ensure coupled AW to avoid deadlocks
+        burst_req_o.opt.beo.decouple_aw    = '0;
+        burst_req_o.opt.beo.decouple_rw    = dma_reg2hw.conf.decouple.q;
+            // this frontend currently only supports completely debursting
+        burst_req_o.opt.beo.src_max_llen   = '0;
+            // this frontend currently only supports completely debursting
+        burst_req_o.opt.beo.dst_max_llen   = '0;
+        burst_req_o.opt.beo.src_reduce_len = dma_reg2hw.conf.deburst.q;
+        burst_req_o.opt.beo.dst_reduce_len = dma_reg2hw.conf.deburst.q;
+
+            // serialization no longer supported
+        // burst_req_o.serialize   = dma_reg2hw.conf.serialize.q;
     end : hw_req_conv
 
     // only increment issue counter if we have a valid transfer
     assign issue = ready_i && valid_o;
 
     // transfer id generator
-    dma_transfer_id_gen #(
+    idma_transfer_id_gen #(
         .IdWidth      ( DmaRegisterWidth  )
-    ) i_dma_transfer_id_gen (
+    ) i_idma_transfer_id_gen (
         .clk_i,
         .rst_ni,
         .issue_i      ( issue             ),

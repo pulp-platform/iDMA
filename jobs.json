@@ -1,0 +1,83 @@
+{
+    "backend" : {
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"        : "backend/man_simple.txt",
+            "huge"          : "backend/man_huge.txt",
+            "large"         : "backend/man_large.txt",
+            "medium"        : "backend/man_medium.txt",
+            "mixed"         : "backend/man_mixed.txt",
+            "small"         : "backend/man_small.txt",
+            "tiny"          : "backend/man_tiny.txt",
+            "error_simple"  : "backend/man_error_simple.txt",
+            "error_mixed"   : "backend/man_error_mixed.txt",
+            "zero_transfer" : "backend/man_zero_transfer.txt"
+        },
+        "gen_jobs" : {
+        },
+        "testbench" : "tb_idma_backend",
+        "synth_top" : "idma_backend_synth",
+        "overrides" : {
+        }
+    },
+    "backend-occamy" : {
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"       : "backend-occamy/man_simple.txt",
+            "huge"         : "backend-occamy/man_huge.txt",
+            "large"        : "backend-occamy/man_large.txt",
+            "medium"       : "backend-occamy/man_medium.txt",
+            "mixed"        : "backend-occamy/man_mixed.txt",
+            "small"        : "backend-occamy/man_small.txt",
+            "tiny"         : "backend-occamy/man_tiny.txt",
+            "error_simple" : "backend-occamy/man_error_simple.txt"
+        },
+        "gen_jobs" : {
+        },
+        "testbench" : "tb_idma_backend",
+        "synth_top" : "idma_backend_synth",
+        "overrides" : {
+            "NumAxInFlight" : 16,
+            "DataWidth"     : 512,
+            "AddrWidth"     : 64,
+            "TFLenWidth"    : 64
+        }
+    },
+    "tiny-dma" : {
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"       : "tiny-dma/man_simple.txt"
+        },
+        "gen_jobs" : {
+        },
+        "testbench" : "tb_idma_backend",
+        "synth_top" : "idma_backend_synth",
+        "overrides" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 20,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 1,
+            "NumAxInFlight"       : 2,
+            "BufferDepth"         : 2,
+            "TFLenWidth"          : 12,
+            "MemSysDepth"         : 0,
+            "MaskInvalidData"     : 0,
+            "RAWCouplingAvail"    : 0,
+            "HardwareLegalizer"   : 0,
+            "RejectZeroTransfers" : 0,
+            "ErrorHandling"       : 0
+        }
+    },
+    "4d-ext" : {
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"       : "4d-ext/man_simple.txt"
+        },
+        "gen_jobs" : {
+        },
+        "testbench" : "tb_idma_nd_backend",
+        "synth_top" : "idma_nd_backend_synth",
+        "overrides" : {
+        }
+    }
+}

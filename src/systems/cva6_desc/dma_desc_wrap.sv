@@ -1,9 +1,16 @@
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Axel Vanoni <axvanoni@student.ethz.ch>
+
 `include "axi/assign.svh"
 `include "axi/typedef.svh"
+`include "idma/typedef.svh"
 `include "register_interface/typedef.svh"
 `include "common_cells/registers.svh"
 
-/// Wrapper for the 
+/// Wrapper for the iDMA
 module dma_desc_wrap #(
   parameter int  AxiAddrWidth  = 64,
   parameter int  AxiDataWidth  = 64,
@@ -22,6 +29,7 @@ module dma_desc_wrap #(
 ) (
   input  logic         clk_i,
   input  logic         rst_ni,
+  input  logic         testmode_i,
   output logic         irq_o,
   output axi_mst_req_t axi_master_req_o,
   input  axi_mst_rsp_t axi_master_rsp_i,
@@ -52,25 +60,21 @@ module dma_desc_wrap #(
   dma_reg_req_t dma_reg_slv_req;
   dma_reg_rsp_t dma_reg_slv_rsp;
 
-  typedef struct packed {
-    logic [7:0]  id;
-    addr_t       src;
-    addr_t       dst;
-    logic [31:0] num_bytes;
-    cache_t      cache_src;
-    cache_t      cache_dst;
-    burst_t      burst_src;
-    burst_t      burst_dst;
-    logic        decouple_rw;
-    logic        deburst;
-    logic        serialize;
-  } burst_req_t;
+  // iDMA struct definitions
+  localparam int unsigned TFLenWidth  = 32;
+  typedef logic [TFLenWidth-1:0]  tf_len_t;
+  typedef logic [RepWidth-1:0]    reps_t;
+  typedef logic [StrideWidth-1:0] strides_t;
+
+  // iDMA request / response types
+  `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, post_mux_id_t, addr_t, tf_len_t)
+  `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
 
   burst_req_t dma_be_req;
   logic       dma_be_tx_complete;
-  logic       dma_be_idle;
   logic       dma_be_valid;
   logic       dma_be_ready;
+  idma_pkg::idma_busy_t idma_busy;
 
   idma_desc64_top #(
     .AddrWidth  (AxiAddrWidth) ,
@@ -78,44 +82,86 @@ module dma_desc_wrap #(
     .reg_req_t  (dma_reg_req_t),
     .reg_rsp_t  (dma_reg_rsp_t)
   ) i_dma_desc64 (
-    .clk_i               (clk_i),
-    .rst_ni              (rst_ni),
-    .master_req_o        (dma_reg_mst_req),
-    .master_rsp_i        (dma_reg_mst_rsp),
-    .slave_req_i         (dma_reg_slv_req),
-    .slave_rsp_o         (dma_reg_slv_rsp),
-    .dma_be_tx_complete_i(dma_be_tx_complete),
-    .dma_be_idle_i       (dma_be_idle),
-    .dma_be_valid_o      (dma_be_valid),
-    .dma_be_ready_i      (dma_be_ready),
-    .dma_be_req_o        (dma_be_req),
-    .irq_o               (irq_o)
+    .clk_i,
+    .rst_ni,
+    .master_req_o         ( dma_reg_mst_req    ),
+    .master_rsp_i         ( dma_reg_mst_rsp    ),
+    .slave_req_i          ( dma_reg_slv_req    ),
+    .slave_rsp_o          ( dma_reg_slv_rsp    ),
+    .dma_be_tx_complete_i ( dma_be_tx_complete ),
+    .dma_be_idle_i        ( ~|idma_busy        ),
+    .dma_be_valid_o       ( dma_be_valid       ),
+    .dma_be_ready_i       ( dma_be_ready       ),
+    .dma_be_req_o         ( dma_be_req         ),
+    .irq_o                ( irq_o              )
   );
 
-  axi_dma_backend #(
-    .DataWidth     (AxiDataWidth),
-    .AddrWidth     (AxiAddrWidth),
-    .IdWidth       (AxiIdWidth-1),
-    .AxReqFifoDepth(4),
-    .TransFifoDepth(4),
-    .BufferDepth   (4),
-    .axi_req_t     (dma_axi_mst_post_mux_req_t),
-    .axi_res_t     (dma_axi_mst_post_mux_resp_t),
-    .burst_req_t   (burst_req_t),
-    .DmaIdWidth    (1),
-    .DmaTracing    (0)
-  ) i_dma_backend (
-    .clk_i           (clk_i),
-    .rst_ni          (rst_ni),
-    .axi_dma_req_o   (axi_be_mst_req),
-    .axi_dma_res_i   (axi_be_mst_rsp),
-    .burst_req_i     (dma_be_req),
-    .valid_i         (dma_be_valid),
-    .ready_o         (dma_be_ready),
-    .backend_idle_o  (dma_be_idle),
-    .trans_complete_o(dma_be_tx_complete),
-    .dma_id_i        (1'h1)
+  idma_backend #(
+    .DataWidth           ( AxiDataWidth                ),
+    .AddrWidth           ( AxiAddrWidth                ),
+    .UserWidth           ( AxiUserWidth                ),
+    .AxiIdWidth          ( AxiIdWidth-1                ),
+    .NumAxInFlight       ( 2                           ),
+    .BufferDepth         ( 3                           ),
+    .TFLenWidth          ( TFLenWidth                  ),
+    .RAWCouplingAvail    ( 1'b1                        ),
+    .MaskInvalidData     ( 1'b1                        ),
+    .HardwareLegalizer   ( 1'b1                        ),
+    .RejectZeroTransfers ( 1'b1                        ),
+    .MemSysDepth         ( 32'd0                       ),
+    .ErrorCap            ( idma_pkg::NO_ERROR_HANDLING ),
+    .idma_req_t          ( idma_req_t                  ),
+    .idma_rsp_t          ( idma_rsp_t                  ),
+    .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
+    .idma_busy_t         ( idma_pkg::idma_busy_t       ),
+    .axi_req_t           ( axi_slv_req_t               ),
+    .axi_rsp_t           ( axi_slv_resp_t              )
+  ) i_idma_backend (
+    .clk_i,
+    .rst_ni,
+    .testmode_i    ( testmode_i         ),
+
+    .idma_req_i    ( dma_be_req         ),
+    .req_valid_i   ( dma_be_valid       ),
+    .req_ready_o   ( dma_be_ready       ),
+
+    .idma_rsp_o    ( /*NOT CONNECTED*/  ),
+    .rsp_valid_o   ( dma_be_tx_complete ),
+    .rsp_ready_i   ( 1'b1               ),
+
+    .idma_eh_req_i ( '0                 ), // No error handling
+    .eh_req_valid_i( 1'b1               ),
+    .eh_req_ready_o( /*NOT CONNECTED*/  ),
+
+    .axi_req_o     ( axi_be_mst_req     ),
+    .axi_rsp_i     ( axi_be_mst_rsp     ),
+    .busy_o        ( idma_busy          )
   );
+
+  // axi_dma_backend #(
+  //   .DataWidth     (AxiDataWidth),
+  //   .AddrWidth     (AxiAddrWidth),
+  //   .IdWidth       (AxiIdWidth-1),
+  //   .AxReqFifoDepth(4),
+  //   .TransFifoDepth(4),
+  //   .BufferDepth   (4),
+  //   .axi_req_t     (dma_axi_mst_post_mux_req_t),
+  //   .axi_res_t     (dma_axi_mst_post_mux_resp_t),
+  //   .burst_req_t   (burst_req_t),
+  //   .DmaIdWidth    (1),
+  //   .DmaTracing    (0)
+  // ) i_dma_backend (
+  //   .clk_i           (clk_i),
+  //   .rst_ni          (rst_ni),
+  //   .axi_dma_req_o   (axi_be_mst_req),
+  //   .axi_dma_res_i   (axi_be_mst_rsp),
+  //   .burst_req_i     (dma_be_req),
+  //   .valid_i         (dma_be_valid),
+  //   .ready_o         (dma_be_ready),
+  //   .backend_idle_o  (dma_be_idle),
+  //   .trans_complete_o(dma_be_tx_complete),
+  //   .dma_id_i        (1'h1)
+  // );
 
   axi_mux #(
     .SlvAxiIDWidth(AxiIdWidth - 1),

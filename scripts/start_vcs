@@ -1,0 +1,6 @@
+#!/usr/sepp/bin/vcs-2020.12 bash
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+bin/$1.vcs +vcs+lic+wait +job_file=$2 | tee logs/$3.vcs.log

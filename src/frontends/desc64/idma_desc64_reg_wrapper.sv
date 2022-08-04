@@ -1,3 +1,9 @@
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Axel Vanoni <axvanoni@student.ethz.ch>
+
 `include "common_cells/registers.svh"
 import idma_desc64_reg_pkg::idma_desc64_reg2hw_t;
 import idma_desc64_reg_pkg::idma_desc64_hw2reg_t;

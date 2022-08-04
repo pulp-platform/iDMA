@@ -1,0 +1,21 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+#
+# waiver file for the iDMA repo
+
+# 2D 32-bit frontend register file
+waive --rule=typedef-structs-unions --location="src/frontends/register_32bit_2d/idma_reg32_2d_frontend_reg_pkg.sv"
+waive --rule=line-length --location="src/frontends/register_32bit_2d/idma_reg32_2d_frontend_reg_pkg.sv"
+
+# 64-bit frontend register file
+waive --rule=typedef-structs-unions --location="src/frontends/register_64bit/idma_reg64_frontend_reg_pkg.sv"
+waive --rule=line-length --location="src/frontends/register_64bit/idma_reg64_frontend_reg_pkg.sv"
+
+# 64-bit descriptor-based register file
+waive --rule=typedef-structs-unions --location="src/frontends/desc64/idma_desc64_reg_pkg.sv"
+waive --rule=line-length --location="src/frontends/desc64/idma_desc64_reg_pkg.sv"
+waive --rule=line-length --location="src/frontends/desc64/idma_desc64_top.sv"
+
+# Declare zero-based big-endian unpacked dimensions sized as [N] -> legacy PULP code :S
+waive --rule=unpacked-dimensions-range-ordering --location="src/systems/pulpopen/dmac_wrap.sv"

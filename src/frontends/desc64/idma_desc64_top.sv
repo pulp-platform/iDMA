@@ -1,3 +1,9 @@
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Axel Vanoni <axvanoni@student.ethz.ch>
+
 `include "common_cells/registers.svh"
 
 /// This module serves as a descriptor-based frontend for the iDMA in the CVA6-core
@@ -98,7 +104,7 @@ module idma_desc64_top #(
         addr_t descriptor_addr;
     } addr_irq_t;
 
-    localparam addr_t ADDRESS_SENTINEL = ~'0;
+    localparam addr_t AddressSentinel = ~'0;
 
     typedef enum logic [1:0] {
         SubmitterIdle = '0,
@@ -201,17 +207,47 @@ module idma_desc64_top #(
     assign pending_descriptor_to_fifo_data.do_irq          = submitter_current_descriptor_q.flags[0];
     assign pending_descriptor_to_fifo_data.descriptor_addr = submitter_current_addr_q;
 
-    assign submitter_burst_req.id          = submitter_current_descriptor_q.flags[23:16];
-    assign submitter_burst_req.src         = submitter_current_descriptor_q.src_addr;
-    assign submitter_burst_req.dst         = submitter_current_descriptor_q.dest_addr;
-    assign submitter_burst_req.num_bytes   = submitter_current_descriptor_q.length;
-    assign submitter_burst_req.cache_src   = submitter_current_descriptor_q.flags[11:8];
-    assign submitter_burst_req.cache_dst   = submitter_current_descriptor_q.flags[15:12];
-    assign submitter_burst_req.burst_src   = submitter_current_descriptor_q.flags[2:1];
-    assign submitter_burst_req.burst_dst   = submitter_current_descriptor_q.flags[4:3];
-    assign submitter_burst_req.decouple_rw = submitter_current_descriptor_q.flags[5];
-    assign submitter_burst_req.serialize   = submitter_current_descriptor_q.flags[6];
-    assign submitter_burst_req.deburst     = submitter_current_descriptor_q.flags[7];
+    always_comb begin : proc_submitter_burst_req
+        submitter_burst_req                        = '0;
+
+        submitter_burst_req.length                 = submitter_current_descriptor_q.length;
+        submitter_burst_req.src_addr               = submitter_current_descriptor_q.src_addr;
+        submitter_burst_req.dst_addr               = submitter_current_descriptor_q.dest_addr;
+
+            // Current backend only supports one ID
+        submitter_burst_req.opt.axi_id             = submitter_current_descriptor_q.flags[23:16];
+        submitter_burst_req.opt.src.burst          = submitter_current_descriptor_q.flags[2:1];
+        submitter_burst_req.opt.src.cache          = submitter_current_descriptor_q.flags[11:8];
+            // AXI4 does not support locked transactions, use atomics
+        submitter_burst_req.opt.src.lock           = '0;
+            // unpriviledged, secure, data access
+        submitter_burst_req.opt.src.prot           = '0;
+            // not participating in qos
+        submitter_burst_req.opt.src.qos            = '0;
+            // only one region
+        submitter_burst_req.opt.src.region         = '0;
+        submitter_burst_req.opt.dst.burst          = submitter_current_descriptor_q.flags[4:3];
+        submitter_burst_req.opt.dst.cache          = submitter_current_descriptor_q.flags[15:12];
+            // AXI4 does not support locked transactions, use atomics
+        submitter_burst_req.opt.dst.lock           = '0;
+            // unpriviledged, secure, data access
+        submitter_burst_req.opt.dst.prot           = '0;
+            // not participating in qos
+        submitter_burst_req.opt.dst.qos            = '0;
+            // only one region in system
+        submitter_burst_req.opt.dst.region         = '0;
+            // ensure coupled AW to avoid deadlocks
+        submitter_burst_req.opt.beo.decouple_aw    = '0;
+        submitter_burst_req.opt.beo.decouple_rw    = submitter_current_descriptor_q.flags[5];
+            // this frontend currently only supports completely debursting
+        submitter_burst_req.opt.beo.src_max_llen   = '0;
+            // this frontend currently only supports completely debursting
+        submitter_burst_req.opt.beo.dst_max_llen   = '0;
+        submitter_burst_req.opt.beo.src_reduce_len = submitter_current_descriptor_q.flags[7];
+        submitter_burst_req.opt.beo.dst_reduce_len = submitter_current_descriptor_q.flags[7];
+            // serialization no longer supported
+        // submitter_burst_req.serialize   = submitter_current_descriptor_q.flags[6];
+    end
 
     always_comb begin : submitter_fsm
         submitter_d                    = submitter_q;
@@ -274,7 +310,7 @@ module idma_desc64_top #(
 
                     submitter_current_descriptor_d = '0;
 
-                    if (submitter_current_descriptor_q.next == ADDRESS_SENTINEL) begin
+                    if (submitter_current_descriptor_q.next == AddressSentinel) begin
                         submitter_d               = SubmitterIdle;
                     end else begin
                         submitter_d               = SubmitterFetchDescriptor;

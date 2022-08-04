@@ -1,0 +1,19 @@
+#!/bin/bash
+# Copyright 2020 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+set -e
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+# Skip third party sources.
+find $ROOT/ \
+    -not \( -path '*.bender' -prune \) \
+    -not \( -path '*util/lowrisc_misc-linters' -prune \) \
+    -not \( -path '*doc/source' -prune \) \
+    -not \( -name 'lint-commits.py' \) \
+    -name '*.py' \
+    | xargs pylint --reports=y --suggestion-mode=y \
+    --disable=W0632 \
+    --disable=C0103 \
+    --disable=R0801

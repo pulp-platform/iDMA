@@ -1,12 +1,6 @@
-// Copyright 2018 ETH Zurich and University of Bologna.
-// Copyright and related rights are licensed under the Solderpad Hardware
-// License, Version 0.51 (the "License"); you may not use this file except in
-// compliance with the License.  You may obtain a copy of the License at
-// http://solderpad.org/licenses/SHL-0.51. Unless required by applicable law
-// or agreed to in writing, software, hardware and materials distributed under
-// this License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-// CONDITIONS OF ANY KIND, either express or implied. See the License for the
-// specific language governing permissions and limitations under the License.
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
 
 /*
  * dmac_wrap.sv
@@ -18,25 +12,26 @@
 
 `include "axi/assign.svh"
 `include "axi/typedef.svh"
+`include "idma/typedef.svh"
 `include "register_interface/typedef.svh"
 
 module dmac_wrap #(
-  parameter NB_CORES            = 4,
-  parameter AXI_ADDR_WIDTH      = 32,
-  parameter AXI_DATA_WIDTH      = 64,
-  parameter AXI_USER_WIDTH      = 6,
-  parameter AXI_ID_WIDTH        = 4,
-  parameter PE_ID_WIDTH         = 1,
-  parameter NB_PE_PORTS         = 1,
-  parameter DATA_WIDTH          = 32,
-  parameter ADDR_WIDTH          = 32,
-  parameter BE_WIDTH            = DATA_WIDTH/8,
-  parameter NUM_STREAMS         = 1, // Only 1 for now
-  parameter TCDM_SIZE           = 0,
-  parameter TwoDMidend          = 1, // Leave this on for now
-  parameter NB_OUTSND_BURSTS    = 8,
-  parameter GLOBAL_QUEUE_DEPTH  = 16,
-  parameter BACKEND_QUEUE_DEPTH = 16
+  parameter int unsigned NB_CORES            = 4,
+  parameter int unsigned AXI_ADDR_WIDTH      = 32,
+  parameter int unsigned AXI_DATA_WIDTH      = 64,
+  parameter int unsigned AXI_USER_WIDTH      = 6,
+  parameter int unsigned AXI_ID_WIDTH        = 4,
+  parameter int unsigned PE_ID_WIDTH         = 1,
+  parameter int unsigned NB_PE_PORTS         = 1,
+  parameter int unsigned DATA_WIDTH          = 32,
+  parameter int unsigned ADDR_WIDTH          = 32,
+  parameter int unsigned BE_WIDTH            = DATA_WIDTH/8,
+  parameter int unsigned NUM_STREAMS         = 1, // Only 1 for now
+  parameter int unsigned TCDM_SIZE           = 0,
+  parameter int unsigned TwoDMidend          = 1, // Leave this on for now
+  parameter int unsigned NB_OUTSND_BURSTS    = 8,
+  parameter int unsigned GLOBAL_QUEUE_DEPTH  = 16,
+  parameter int unsigned BACKEND_QUEUE_DEPTH = 16
 ) (
   input logic                      clk_i,
   input logic                      rst_ni,
@@ -138,44 +133,36 @@ module dmac_wrap #(
   dma_regs_req_t [NumRegs-1:0] dma_regs_req;
   dma_regs_rsp_t [NumRegs-1:0] dma_regs_rsp;
 
-  // DMA burst definitions
-  // 1D burst request
-  typedef logic [AXI_ID_WIDTH-1:0] axi_id_t;
-  typedef logic             [31:0] num_bytes_t;
-  typedef struct packed {
-      axi_id_t            id;
-      addr_t              src, dst;
-      num_bytes_t         num_bytes;
-      axi_pkg::cache_t    cache_src, cache_dst;
-      axi_pkg::burst_t    burst_src, burst_dst;
-      logic               decouple_rw;
-      logic               deburst;
-      logic               serialize;
-  } burst_req_t;
-  // 2D burst request
-  typedef struct packed {
-      axi_id_t            id;
-      addr_t              src, dst;
-      num_bytes_t         num_bytes;
-      logic               is_twod;
-      num_bytes_t         stride_src, stride_dst, num_repetitions;
-      axi_pkg::cache_t    cache_src, cache_dst;
-      axi_pkg::burst_t    burst_src, burst_dst;
-      logic               decouple_rw;
-      logic               deburst;
-      logic               serialize; 
-  } twod_req_t;
-  twod_req_t twod_req;
-  burst_req_t burst_req;
+  // iDMA struct definitions
+  localparam int unsigned TFLenWidth  = AXI_ADDR_WIDTH;
+  localparam int unsigned NumDim      = 2; // Support 2D midend for 2D transfers
+  localparam int unsigned RepWidth    = 32;
+  localparam int unsigned StrideWidth = 32;
+  typedef logic [TFLenWidth-1:0]  tf_len_t;
+  typedef logic [RepWidth-1:0]    reps_t;
+  typedef logic [StrideWidth-1:0] strides_t;
 
-  logic fe_valid, fe_ready, be_valid, be_ready;
-  logic backend_idle, trans_complete, oned_trans_complete, twod_req_last, twod_req_last_realigned;
+  // iDMA request / response types
+  `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, slv_id_t, addr_t, tf_len_t)
+  `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
+
+  // iDMA ND request
+  `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, reps_t, strides_t)
+
+  idma_nd_req_t twod_req, twod_req_queue;
+  idma_req_t burst_req;
+  idma_rsp_t idma_rsp;
+
+  logic fe_valid, twod_queue_valid, be_valid, be_rsp_valid;
+  logic fe_ready, twod_queue_ready, be_ready, be_rsp_ready;
+  logic trans_complete, midend_busy;
+  idma_pkg::idma_busy_t idma_busy;
 
   // ------------------------------------------------------
   // FRONTEND
   // ------------------------------------------------------
 
-  for (genvar i = 0; i < NumRegs; i++) begin
+  for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
     periph_to_reg #(
       .AW    ( 10             ),
       .DW    ( 32             ),
@@ -207,7 +194,7 @@ module dmac_wrap #(
     .IdCounterWidth ( 28             ),
     .dma_regs_req_t ( dma_regs_req_t ),
     .dma_regs_rsp_t ( dma_regs_rsp_t ),
-    .burst_req_t    ( twod_req_t     )
+    .burst_req_t    ( idma_nd_req_t  )
   ) i_idma_reg32_2d_frontend (
     .clk_i,
     .rst_ni,
@@ -216,7 +203,7 @@ module dmac_wrap #(
     .burst_req_o      ( twod_req       ),
     .valid_o          ( fe_valid       ),
     .ready_i          ( fe_ready       ),
-    .backend_idle_i   ( backend_idle   ),
+    .backend_idle_i   ( ~busy_o        ),
     .trans_complete_i ( trans_complete )
   );
 
@@ -226,82 +213,108 @@ module dmac_wrap #(
   assign term_event_o    = |trans_complete ? '1 : '0;
   assign term_irq_o      = '0;
 
-  assign busy_o = ~backend_idle;
-
-// TODO: possibly implement distributor for NumStreams > 1?
-//       -> Will be a challenge to keep transfers in order...
-
+  assign busy_o = midend_busy | |idma_busy;
 
   // ------------------------------------------------------
   // MIDEND
   // ------------------------------------------------------
 
-  idma_2D_midend #(
-    .ADDR_WIDTH     ( AXI_ADDR_WIDTH     ),
-    .REQ_FIFO_DEPTH ( GLOBAL_QUEUE_DEPTH ),
-    .burst_req_t    ( burst_req_t        ),
-    .twod_req_t     ( twod_req_t         )
+  // global (2D) request FIFO
+  stream_fifo #(
+    .DEPTH       ( GLOBAL_QUEUE_DEPTH ),
+    .T           (idma_nd_req_t       )
+  ) i_2D_request_fifo (
+    .clk_i,
+    .rst_ni,
+    .flush_i    ( 1'b0            ),
+    .testmode_i ( test_mode_i     ),
+    .usage_o    (/*NOT CONNECTED*/),
+
+    .data_i    ( twod_req         ),
+    .valid_i   ( fe_valid         ),
+    .ready_o   ( fe_ready         ),
+
+    .data_o    ( twod_req_queue   ),
+    .valid_o   ( twod_queue_valid ),
+    .ready_i   ( twod_queue_ready )
+  );
+
+  localparam logic [1:0][31:0] RepWidths = '{default: 32'd32};
+
+  idma_nd_midend #(
+    .NumDim       ( 32'd2         ),
+    .addr_t       ( addr_t        ),
+    .idma_req_t   ( idma_req_t    ),
+    .idma_rsp_t   ( idma_rsp_t    ),
+    .idma_nd_req_t( idma_nd_req_t ),
+    .RepWidths    ( RepWidths     )
   ) i_idma_2D_midend (
     .clk_i,
     .rst_ni,
-    .twod_req_i        ( twod_req      ),
-    .twod_req_valid_i  ( fe_valid      ),
-    .twod_req_ready_o  ( fe_ready      ),
-    .burst_req_o       ( burst_req     ),
-    .burst_req_valid_o ( be_valid      ),
-    .burst_req_ready_i ( be_ready      ),
-    .twod_req_last_o   ( twod_req_last )
+
+    .nd_req_i         ( twod_req_queue   ),
+    .nd_req_valid_i   ( twod_queue_valid ),
+    .nd_req_ready_o   ( twod_queue_ready ),
+
+    .nd_rsp_o         (/*NOT CONNECTED*/ ),
+    .nd_rsp_valid_o   ( trans_complete   ),
+    .nd_rsp_ready_i   ( 1'b1             ), // Always ready to accept completed transfers
+
+    .burst_req_o      ( burst_req        ),
+    .burst_req_valid_o( be_valid         ),
+    .burst_req_ready_i( be_ready         ),
+
+    .burst_rsp_i      ( idma_rsp         ),
+    .burst_rsp_valid_i( be_rsp_valid     ),
+    .burst_rsp_ready_o( be_rsp_ready     ),
+
+    .busy_o           ( midend_busy      )
   );
-
-
-  // transfer complete alignment, should be integrated into twod module
-  localparam TwodBufferDepth = 2 * BACKEND_QUEUE_DEPTH + NB_OUTSND_BURSTS + 3 + 1;
-  fifo_v3 #(
-    .DATA_WIDTH ( 1               ),
-    .DEPTH      ( TwodBufferDepth )
-  ) i_fifo_v3_last_twod_buffer (
-    .clk_i,
-    .rst_ni,
-    .flush_i    ( 1'b0                    ),
-    .testmode_i ( 1'b0                    ),
-    .full_o     (),
-    .empty_o    (),
-    .usage_o    (),
-    .data_i     ( twod_req_last           ),
-    .push_i     ( be_ready && be_valid    ),
-    .data_o     ( twod_req_last_realigned ),
-    .pop_i      ( oned_trans_complete     )
-  );
-
-  assign trans_complete = oned_trans_complete && twod_req_last_realigned;
 
   // ------------------------------------------------------
   // BACKEND
   // ------------------------------------------------------
 
-  axi_dma_backend #(
-    .DataWidth      ( AXI_DATA_WIDTH      ),
-    .AddrWidth      ( AXI_ADDR_WIDTH      ),
-    .IdWidth        ( AXI_ID_WIDTH        ),
-    .AxReqFifoDepth ( NB_OUTSND_BURSTS    ),
-    .TransFifoDepth ( BACKEND_QUEUE_DEPTH ),
-    .BufferDepth    ( 3                   ),
-    .axi_req_t      ( slv_req_t           ),
-    .axi_res_t      ( slv_resp_t          ),
-    .burst_req_t    ( burst_req_t         ),
-    .DmaIdWidth     ( 6                   ),
-    .DmaTracing     ( 0                   )
-  ) i_axi_dma_backend (
+  idma_backend #(
+    .DataWidth           ( AXI_DATA_WIDTH              ),
+    .AddrWidth           ( AXI_ADDR_WIDTH              ),
+    .UserWidth           ( AXI_USER_WIDTH              ),
+    .AxiIdWidth          ( AXI_ID_WIDTH                ),
+    .NumAxInFlight       ( NB_OUTSND_BURSTS            ),
+    .BufferDepth         ( 3                           ),
+    .TFLenWidth          ( TFLenWidth                  ),
+    .RAWCouplingAvail    ( 1'b1                        ),
+    .MaskInvalidData     ( 1'b1                        ),
+    .HardwareLegalizer   ( 1'b1                        ),
+    .RejectZeroTransfers ( 1'b1                        ),
+    .MemSysDepth         ( 32'd0                       ),
+    .ErrorCap            ( idma_pkg::NO_ERROR_HANDLING ),
+    .idma_req_t          ( idma_req_t                  ),
+    .idma_rsp_t          ( idma_rsp_t                  ),
+    .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
+    .idma_busy_t         ( idma_pkg::idma_busy_t       ),
+    .axi_req_t           ( slv_req_t                   ),
+    .axi_rsp_t           ( slv_resp_t                  )
+  ) i_idma_backend (
     .clk_i,
     .rst_ni,
-    .dma_id_i         ( '0                  ),
-    .axi_dma_req_o    ( dma_req             ),
-    .axi_dma_res_i    ( dma_rsp             ),
-    .burst_req_i      ( burst_req           ),
-    .valid_i          ( be_valid            ),
-    .ready_o          ( be_ready            ),
-    .backend_idle_o   ( backend_idle        ),
-    .trans_complete_o ( oned_trans_complete )
+    .testmode_i    ( test_mode_i     ),
+
+    .idma_req_i    ( burst_req       ),
+    .req_valid_i   ( be_valid        ),
+    .req_ready_o   ( be_ready        ),
+
+    .idma_rsp_o    ( idma_rsp        ),
+    .rsp_valid_o   ( be_rsp_valid    ),
+    .rsp_ready_i   ( be_rsp_ready    ),
+
+    .idma_eh_req_i ( '0              ), // No error handling
+    .eh_req_valid_i( 1'b1            ),
+    .eh_req_ready_o(/*NOT CONNECTED*/),
+
+    .axi_req_o     ( dma_req         ),
+    .axi_rsp_i     ( dma_rsp         ),
+    .busy_o        ( idma_busy       )
   );
 
   // ------------------------------------------------------
@@ -335,8 +348,8 @@ module dmac_wrap #(
       idx:        0
     }
   };
-  localparam NumMstPorts = 2;
-  localparam NumSlvPorts = NUM_STREAMS;
+  localparam int unsigned NumMstPorts = 2;
+  localparam int unsigned NumSlvPorts = NUM_STREAMS;
 
   /* verilator lint_off WIDTHCONCAT */
   localparam axi_pkg::xbar_cfg_t XbarCfg = '{
@@ -411,9 +424,9 @@ module dmac_wrap #(
 
   logic tcdm_master_we_0, tcdm_master_we_1, tcdm_master_we_2, tcdm_master_we_3;
 
-  localparam TcdmFifoDepth = 1;
+  localparam int unsigned TcdmFifoDepth = 1;
 
-  axi_to_mem #(
+  idma_axi_to_mem #(
     .axi_req_t   ( mem_req_t           ),
     .axi_resp_t  ( mst_resp_t          ),
     .AddrWidth   ( ADDR_WIDTH          ),
@@ -438,7 +451,7 @@ module dmac_wrap #(
     .mem_rdata_i  ( { tcdm_master[0].r_data,  tcdm_master[1].r_data  } )
   );
 
-  axi_to_mem #(
+  idma_axi_to_mem #(
     .axi_req_t   ( mem_req_t           ),
     .axi_resp_t  ( mst_resp_t          ),
     .AddrWidth   ( ADDR_WIDTH          ),

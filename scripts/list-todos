@@ -1,0 +1,44 @@
+#!/bin/bash
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+set -e
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+EXCLUDED=" \
+    licence-checker.py \
+    idma_reg32_2d_frontend_reg_pkg.sv \
+    idma_reg32_2d_frontend_reg_top.sv \
+    idma_reg32_2d_frontend.h \
+    idma_reg64_frontend_reg_pkg.sv \
+    idma_reg64_frontend_reg_top.sv \
+    idma_reg64_frontend.h \
+    idma_desc64_reg_top.sv \
+    idma_desc64_reg_pkg.sv \
+    idma_desc64.h \
+    encoding.h \
+    list-todos.py \
+    doc/source/conf.py \
+    Makefile \
+"
+
+python3 util/list-todos.py " \
+    .c \
+    .h \
+    .py \
+    .sv \
+    .yml \
+    .tpl \
+    .verible \
+    .rst \
+    Makefile \
+    .sh \
+    .gitignore \
+    .S \
+    .svh \
+    .json \
+    .hjson \
+" "$EXCLUDED"

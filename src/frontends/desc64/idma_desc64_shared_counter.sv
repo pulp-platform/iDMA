@@ -1,3 +1,9 @@
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Axel Vanoni <axvanoni@student.ethz.ch>
+
 `include "common_cells/registers.svh"
 /// This module allows two domains to share a counter
 /// One end can increment the counter, the other can
@@ -6,7 +12,7 @@
 /// Note that the counter wraps on overflow, but saturates
 /// on underflow
 module idma_desc64_shared_counter #(
-    parameter CounterWidth=4
+    parameter int unsigned CounterWidth = 4
 ) (
     input  logic clk_i              ,
     input  logic rst_ni             ,

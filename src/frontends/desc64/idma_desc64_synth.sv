@@ -1,3 +1,9 @@
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Axel Vanoni <axvanoni@student.ethz.ch>
+
 // synth wrapper
 module idma_desc64_synth #(
     parameter int unsigned AddrWidth   = idma_desc64_synth_pkg::AddrWidth,

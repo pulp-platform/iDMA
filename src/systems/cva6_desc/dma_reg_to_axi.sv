@@ -1,3 +1,9 @@
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Axel Vanoni <axvanoni@student.ethz.ch>
+
 `include "common_cells/registers.svh"
 /// Hacky register interface to AXI converter
 module dma_reg_to_axi #(
@@ -68,10 +74,10 @@ module dma_reg_to_axi #(
     axi_req_o.r_ready   = !reg_req_i.write && d_valid;
   end
 
-  assign a_ready             = (reg_req_i.write ? axi_rsp_i.aw_ready : axi_rsp_i.ar_ready) && reg_req_i.valid;
-  assign d_ready             = (reg_req_i.write ? axi_rsp_i.w_ready : axi_rsp_i.r_valid) && reg_req_i.valid;
-  assign a_valid             = reg_req_i.valid && !a_acked_q;
-  assign d_valid             = reg_req_i.valid && !d_acked_q;
+  assign a_ready = (reg_req_i.write ? axi_rsp_i.aw_ready : axi_rsp_i.ar_ready) && reg_req_i.valid;
+  assign d_ready = (reg_req_i.write ? axi_rsp_i.w_ready : axi_rsp_i.r_valid) && reg_req_i.valid;
+  assign a_valid = reg_req_i.valid && !a_acked_q;
+  assign d_valid = reg_req_i.valid && !d_acked_q;
 
 
   /* Ignore axi_rsp_i.r.id */
@@ -83,7 +89,8 @@ module dma_reg_to_axi #(
   /* check that we don't get any errors in the simulation */
   // pragma translate_off
 `ifndef VERILATOR
-  assert property (@(posedge clk_i) (axi_rsp_i.r_valid && axi_req_o.r_ready) |-> (axi_rsp_i.r.resp == axi_pkg::RESP_OKAY));
+  assert property (@(posedge clk_i) (axi_rsp_i.r_valid && axi_req_o.r_ready) |-> \
+                  (axi_rsp_i.r.resp == axi_pkg::RESP_OKAY));
 `endif
   // pragma translate_on
   assign reg_rsp_o.ready     = ( reg_req_i.write && axi_rsp_i.w_ready) ||

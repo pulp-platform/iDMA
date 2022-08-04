@@ -1,18 +1,10 @@
-/*
- * Copyright (c) 2021-2022 ETH Zurich and University of Bologna
- * Copyright and related rights are licensed under the Solderpad Hardware
- * License, Version 0.51 (the "License"); you may not use this file except in
- * compliance with the License.  You may obtain a copy of the License at
- * http://solderpad.org/licenses/SHL-0.51. Unless required by applicable law
- * or agreed to in writing, software, hardware and materials distributed under
- * this License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
- * CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
- *
- * Author: Andreas Kuster <kustera@ethz.ch>
- * 
- * Description: Minimal iDMA engine testing program for CVA6
- */
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+//
+// Author: Andreas Kuster <kustera@ethz.ch>
+//
+// Description: Minimal iDMA engine testing program for CVA6
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,7 +90,7 @@ int main(int argc, char const *argv[]) {
         dst[i] = 0;
     }
 
-    // TODO: flush cache?
+    // flush cache?
 
     /*
      * Test register access
@@ -151,7 +143,7 @@ int main(int argc, char const *argv[]) {
         print_uart("\n");
     } while (*dma_done != transfer_id);
 
-    // TODO: invalidate cache?
+    // invalidate cache?
 
     // check result
     for (size_t i = 0; i < DMA_TRANSFER_SIZE / sizeof(uint64_t); i++) {

@@ -1,12 +1,6 @@
-// Copyright 2019-2022 ETH Zurich and University of Bologna.
-// Copyright and related rights are licensed under the Solderpad Hardware
-// License, Version 0.51 (the "License"); you may not use this file except in
-// compliance with the License.  You may obtain a copy of the License at
-// http://solderpad.org/licenses/SHL-0.51. Unless required by applicable law
-// or agreed to in writing, software, hardware and materials distributed under
-// this License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-// CONDITIONS OF ANY KIND, either express or implied. See the License for the
-// specific language governing permissions and limitations under the License.
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
 //
 // Author: Thomas Benz    <tbenz@iis.ee.ethz.ch>
 // Author: Andreas Kuster <kustera@ethz.ch>
@@ -15,21 +9,23 @@
 
 `include "axi/assign.svh"
 `include "axi/typedef.svh"
+`include "idma/typedef.svh"
 `include "register_interface/typedef.svh"
 
 module dma_core_wrap #(
-  parameter AXI_ADDR_WIDTH     = -1,
-  parameter AXI_DATA_WIDTH     = -1,
-  parameter AXI_USER_WIDTH     = -1,
-  parameter AXI_ID_WIDTH       = -1,
-  parameter AXI_SLV_ID_WIDTH   = -1
+  parameter int unsigned AXI_ADDR_WIDTH     = -1,
+  parameter int unsigned AXI_DATA_WIDTH     = -1,
+  parameter int unsigned AXI_USER_WIDTH     = -1,
+  parameter int unsigned AXI_ID_WIDTH       = -1,
+  parameter int unsigned AXI_SLV_ID_WIDTH   = -1
 ) (
-  input logic          clk_i,
-  input logic          rst_ni,
+  input  logic   clk_i,
+  input  logic   rst_ni,
+  input  logic   testmode_i,
   AXI_BUS.Master axi_master,
   AXI_BUS.Slave  axi_slave
 );
-  localparam DmaRegisterWidth = 64;
+  localparam int unsigned DmaRegisterWidth = 64;
 
   typedef logic [AXI_ADDR_WIDTH-1:0]     addr_t;
   typedef logic [AXI_DATA_WIDTH-1:0]     data_t;
@@ -51,25 +47,19 @@ module dma_core_wrap #(
   `AXI_ASSIGN_TO_REQ(axi_slv_req, axi_slave)
   `AXI_ASSIGN_FROM_RESP(axi_slave, axi_slv_resp)
 
-  // DMA transfer descriptor
-  typedef logic [DmaRegisterWidth-1:0] num_bytes_t;
+  // iDMA struct definitions
+  localparam int unsigned TFLenWidth  = AXI_ADDR_WIDTH;
+  typedef logic [TFLenWidth-1:0]  tf_len_t;
 
-  // burst request
-  typedef struct packed {
-    axi_id_t            id;
-    addr_t              src, dst;
-    num_bytes_t         num_bytes;
-    axi_pkg::cache_t    cache_src, cache_dst;
-    axi_pkg::burst_t    burst_src, burst_dst;
-    logic               decouple_rw;
-    logic               deburst;
-    logic               serialize;
-  } burst_req_t;
+  // iDMA request / response types
+  `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, axi_slv_id_t, addr_t, tf_len_t)
+  `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
 
   `REG_BUS_TYPEDEF_ALL(dma_regs, logic[5:0], logic[63:0], logic[7:0])
 
   burst_req_t burst_req;
-  logic be_valid, be_ready, be_idle, be_trans_complete;
+  logic be_valid, be_ready, be_trans_complete;
+  idma_pkg::idma_busy_t idma_busy;
 
   dma_regs_req_t dma_regs_req;
   dma_regs_rsp_t dma_regs_rsp;
@@ -112,34 +102,50 @@ module dma_core_wrap #(
     .burst_req_o      ( burst_req         ),
     .valid_o          ( be_valid          ),
     .ready_i          ( be_ready          ),
-    .backend_idle_i   ( be_idle           ),
+    .backend_idle_i   ( ~|idma_busy       ),
     .trans_complete_i ( be_trans_complete )
   );
 
-  axi_dma_backend #(
-    .DataWidth      ( AXI_DATA_WIDTH ),
-    .AddrWidth      ( AXI_ADDR_WIDTH ),
-    .IdWidth        ( AXI_ID_WIDTH   ),
-    .AxReqFifoDepth ( 2              ),
-    .TransFifoDepth ( 2              ),
-    .BufferDepth    ( 3              ),
-    .axi_req_t      ( axi_mst_req_t  ),
-    .axi_res_t      ( axi_mst_resp_t ),
-    .burst_req_t    ( burst_req_t    ),
-    .DmaIdWidth     ( 6              ),
-    .DmaTracing     ( 0              )
-  ) i_dma_backend (
+  idma_backend #(
+    .DataWidth           ( AXI_DATA_WIDTH              ),
+    .AddrWidth           ( AXI_ADDR_WIDTH              ),
+    .UserWidth           ( AXI_USER_WIDTH              ),
+    .AxiIdWidth          ( AXI_ID_WIDTH                ),
+    .NumAxInFlight       ( 2                           ),
+    .BufferDepth         ( 3                           ),
+    .TFLenWidth          ( TFLenWidth                  ),
+    .RAWCouplingAvail    ( 1'b1                        ),
+    .MaskInvalidData     ( 1'b1                        ),
+    .HardwareLegalizer   ( 1'b1                        ),
+    .RejectZeroTransfers ( 1'b1                        ),
+    .MemSysDepth         ( 32'd0                       ),
+    .ErrorCap            ( idma_pkg::NO_ERROR_HANDLING ),
+    .idma_req_t          ( idma_req_t                  ),
+    .idma_rsp_t          ( idma_rsp_t                  ),
+    .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
+    .idma_busy_t         ( idma_pkg::idma_busy_t       ),
+    .axi_req_t           ( axi_slv_req_t               ),
+    .axi_rsp_t           ( axi_slv_resp_t              )
+  ) i_idma_backend (
     .clk_i,
     .rst_ni,
-    .dma_id_i         ( '0                ),
-    .axi_dma_req_o    ( axi_mst_req       ),
-    .axi_dma_res_i    ( axi_mst_resp      ),
-    .burst_req_i      ( burst_req         ),
-    .valid_i          ( be_valid          ),
-    .ready_o          ( be_ready          ),
-    .backend_idle_o   ( be_idle           ),
-    .trans_complete_o ( be_trans_complete )
+    .testmode_i    ( testmode_i        ),
+
+    .idma_req_i    ( burst_req         ),
+    .req_valid_i   ( be_valid          ),
+    .req_ready_o   ( be_ready          ),
+
+    .idma_rsp_o    ( /*NOT CONNECTED*/ ),
+    .rsp_valid_o   ( be_trans_complete ),
+    .rsp_ready_i   ( 1'b1              ),
+
+    .idma_eh_req_i ( '0                ), // No error handling
+    .eh_req_valid_i( 1'b1              ),
+    .eh_req_ready_o( /*NOT CONNECTED*/ ),
+
+    .axi_req_o     ( axi_mst_req       ),
+    .axi_rsp_i     ( axi_mst_resp      ),
+    .busy_o        ( idma_busy         )
   );
 
 endmodule : dma_core_wrap
- 

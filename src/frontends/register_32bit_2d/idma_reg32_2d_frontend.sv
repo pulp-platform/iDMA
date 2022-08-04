@@ -1,14 +1,8 @@
-// Copyright 2019-2022 ETH Zurich and University of Bologna.
-// Copyright and related rights are licensed under the Solderpad Hardware
-// License, Version 0.51 (the "License"); you may not use this file except in
-// compliance with the License.  You may obtain a copy of the License at
-// http://solderpad.org/licenses/SHL-0.51. Unless required by applicable law
-// or agreed to in writing, software, hardware and materials distributed under
-// this License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-// CONDITIONS OF ANY KIND, either express or implied. See the License for the
-// specific language governing permissions and limitations under the License.
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
 //
-// Author: Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+// Michael Rogenmoser <michaero@ethz.ch>
 //
 // Description: DMA frontend module that includes 32bit config and status reg handling for 2d transfers
 
@@ -37,7 +31,7 @@ module idma_reg32_2d_frontend #(
   input  logic                        trans_complete_i
 );
 
-  localparam DmaRegisterWidth = 32;
+  localparam int unsigned DmaRegisterWidth = 32;
 
   idma_reg32_2d_frontend_reg_pkg::idma_reg32_2d_frontend_reg2hw_t [NumRegs-1:0] dma_reg2hw;
   idma_reg32_2d_frontend_reg_pkg::idma_reg32_2d_frontend_hw2reg_t [NumRegs-1:0] dma_hw2reg;
@@ -51,7 +45,7 @@ module idma_reg32_2d_frontend #(
 
   burst_req_t [NumRegs-1:0] arb_burst_req;
 
-  for (genvar i = 0; i < NumRegs; i++) begin
+  for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
 
     idma_reg32_2d_frontend_reg_top #(
       .reg_req_t ( dma_regs_req_t ),
@@ -78,7 +72,8 @@ module idma_reg32_2d_frontend #(
       dma_ctrl_rsp_o[i] = dma_ctrl_rsp_tmp[i];
 
       if (dma_reg2hw[i].next_id.re) begin
-        if (dma_reg2hw[i].num_bytes.q != '0 && (dma_reg2hw[i].conf.twod.q != 1'b1 || dma_reg2hw[i].num_repetitions.q != '0)) begin
+        if (dma_reg2hw[i].num_bytes.q != '0 && (dma_reg2hw[i].conf.twod.q != 1'b1 ||
+                                                dma_reg2hw[i].num_repetitions.q != '0)) begin
           arb_valid[i] = 1'b1;
           dma_ctrl_rsp_o[i].ready = arb_ready[i];
           dma_hw2reg[i].next_id.d = next_id;
@@ -87,19 +82,59 @@ module idma_reg32_2d_frontend #(
     end
 
     always_comb begin : hw_req_conv
-      arb_burst_req[i]                 = '0;
-      arb_burst_req[i].src             = dma_reg2hw[i].src_addr.q;
-      arb_burst_req[i].dst             = dma_reg2hw[i].dst_addr.q;
-      arb_burst_req[i].num_bytes       = dma_reg2hw[i].num_bytes.q;
-      arb_burst_req[i].burst_src       = axi_pkg::BURST_INCR;
-      arb_burst_req[i].burst_dst       = axi_pkg::BURST_INCR;
-      arb_burst_req[i].decouple_rw     = dma_reg2hw[i].conf.decouple.q;
-      arb_burst_req[i].deburst         = dma_reg2hw[i].conf.deburst.q;
-      arb_burst_req[i].serialize       = dma_reg2hw[i].conf.serialize.q;
-      arb_burst_req[i].is_twod         = dma_reg2hw[i].conf.twod.q;
-      arb_burst_req[i].stride_src      = dma_reg2hw[i].stride_src.q;
-      arb_burst_req[i].stride_dst      = dma_reg2hw[i].stride_dst.q;
-      arb_burst_req[i].num_repetitions = dma_reg2hw[i].num_repetitions.q;
+      arb_burst_req[i]                                  = '0;
+
+      arb_burst_req[i].burst_req.length                 = dma_reg2hw[i].num_bytes.q;
+      arb_burst_req[i].burst_req.src_addr               = dma_reg2hw[i].src_addr.q;
+      arb_burst_req[i].burst_req.dst_addr               = dma_reg2hw[i].dst_addr.q;
+
+        // Current backend only supports one ID
+      arb_burst_req[i].burst_req.opt.axi_id             = '0;
+        // Current backend only supports incremental burst
+      arb_burst_req[i].burst_req.opt.src.burst          = axi_pkg::BURST_INCR;
+        // this frontend currently does not support cache variations
+      arb_burst_req[i].burst_req.opt.src.cache          = '0;
+        // AXI4 does not support locked transactions, use atomics
+      arb_burst_req[i].burst_req.opt.src.lock           = '0;
+        // unpriviledged, secure, data access
+      arb_burst_req[i].burst_req.opt.src.prot           = '0;
+        // not participating in qos
+      arb_burst_req[i].burst_req.opt.src.qos            = '0;
+        // only one region
+      arb_burst_req[i].burst_req.opt.src.region         = '0;
+        // Current backend only supports incremental burst
+      arb_burst_req[i].burst_req.opt.dst.burst          = axi_pkg::BURST_INCR;
+        // this frontend currently does not support cache variations
+      arb_burst_req[i].burst_req.opt.dst.cache          = '0;
+        // AXI4 does not support locked transactions, use atomics
+      arb_burst_req[i].burst_req.opt.dst.lock           = '0;
+        // unpriviledged, secure, data access
+      arb_burst_req[i].burst_req.opt.dst.prot           = '0;
+        // not participating in qos
+      arb_burst_req[i].burst_req.opt.dst.qos            = '0;
+        // only one region
+      arb_burst_req[i].burst_req.opt.dst.region         = '0;
+
+        // ensure coupled AW to avoid deadlocks
+      arb_burst_req[i].burst_req.opt.beo.decouple_aw    = '0;
+      arb_burst_req[i].burst_req.opt.beo.decouple_rw    = dma_reg2hw[i].conf.decouple.q;
+        // this frontend currently only supports completely debursting
+      arb_burst_req[i].burst_req.opt.beo.src_max_llen   = '0;
+        // this frontend currently only supports completely debursting
+      arb_burst_req[i].burst_req.opt.beo.dst_max_llen   = '0;
+      arb_burst_req[i].burst_req.opt.beo.src_reduce_len = dma_reg2hw[i].conf.deburst.q;
+      arb_burst_req[i].burst_req.opt.beo.dst_reduce_len = dma_reg2hw[i].conf.deburst.q;
+
+      if ( dma_reg2hw[i].conf.twod.q ) begin
+        arb_burst_req[i].d_req[0].reps                     = dma_reg2hw[i].num_repetitions.q;
+      end else begin
+        arb_burst_req[i].d_req[0].reps                     = 1;
+      end
+      arb_burst_req[i].d_req[0].src_strides                = dma_reg2hw[i].stride_src.q;
+      arb_burst_req[i].d_req[0].dst_strides                = dma_reg2hw[i].stride_dst.q;
+
+        // serialization no longer supported
+      // arb_burst_req[i].serialize       = dma_reg2hw[i].conf.serialize.q;
     end
   end
 
@@ -125,7 +160,7 @@ module idma_reg32_2d_frontend #(
 
   assign issue = ready_i && valid_o;
 
-  dma_transfer_id_gen #(
+  idma_transfer_id_gen #(
     .IdWidth ( IdCounterWidth )
   ) i_transfer_id_gen (
     .clk_i,

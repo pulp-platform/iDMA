@@ -1,5 +1,12 @@
 // Generated register defines for idma_reg32_2d_frontend
 
+// Copyright information found in source file:
+// Copyright 2022 ETH Zurich and University of Bologna.
+
+// Licensing information found in source file:
+// Licensed under Solderpad Hardware License, Version 0.51
+// SPDX-License-Identifier: SHL-0.51
+
 #ifndef _IDMA_REG32_2D_FRONTEND_REG_DEFS_
 #define _IDMA_REG32_2D_FRONTEND_REG_DEFS_
 
