@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## 0.2.1 - 07-08-2022
+### Changed
+Moved the IIS-internal non-free resources to a dedicated subgroup to tidy up. Version v0.2.1 is
+fully compatible with v0.2.0.
+
 ## 0.2.0 - 04-08-2022
 ### Changed
 Added a completely redesigned DMA engine - the iDMA including a basic verification environment.
