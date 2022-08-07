@@ -29,7 +29,7 @@ typedef logic [CounterWidth-1:0] counter_t;
 counter_t counter_d, counter_q;
 `FF(counter_q, counter_d, '0);
 
-assign greater_than_zero_o = counter_q != '0;
+assign greater_than_zero_o = counter_q != '0 || (increment_i && decrement_i);
 
 always_comb begin
     counter_d = counter_q;

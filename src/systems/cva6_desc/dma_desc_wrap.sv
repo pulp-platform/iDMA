@@ -55,37 +55,35 @@ module dma_desc_wrap #(
   dma_axi_mst_post_mux_resp_t axi_be_mst_rsp;
 
   `REG_BUS_TYPEDEF_ALL(dma_reg, addr_t, data_t, strb_t)
-  dma_reg_req_t dma_reg_mst_req;
-  dma_reg_rsp_t dma_reg_mst_rsp;
   dma_reg_req_t dma_reg_slv_req;
   dma_reg_rsp_t dma_reg_slv_rsp;
 
   // iDMA struct definitions
   localparam int unsigned TFLenWidth  = 32;
   typedef logic [TFLenWidth-1:0]  tf_len_t;
-  typedef logic [RepWidth-1:0]    reps_t;
-  typedef logic [StrideWidth-1:0] strides_t;
 
   // iDMA request / response types
   `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, post_mux_id_t, addr_t, tf_len_t)
   `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
 
-  burst_req_t dma_be_req;
+  idma_req_t  dma_be_req;
   logic       dma_be_tx_complete;
   logic       dma_be_valid;
   logic       dma_be_ready;
   idma_pkg::idma_busy_t idma_busy;
 
   idma_desc64_top #(
-    .AddrWidth  (AxiAddrWidth) ,
-    .burst_req_t(burst_req_t)  ,
-    .reg_req_t  (dma_reg_req_t),
-    .reg_rsp_t  (dma_reg_rsp_t)
+    .AddrWidth  ( AxiAddrWidth                ),
+    .burst_req_t( idma_req_t                  ),
+    .axi_req_t  ( dma_axi_mst_post_mux_req_t  ),
+    .axi_rsp_t  ( dma_axi_mst_post_mux_resp_t ),
+    .reg_req_t  ( dma_reg_req_t               ),
+    .reg_rsp_t  ( dma_reg_rsp_t               )
   ) i_dma_desc64 (
     .clk_i,
     .rst_ni,
-    .master_req_o         ( dma_reg_mst_req    ),
-    .master_rsp_i         ( dma_reg_mst_rsp    ),
+    .master_req_o         ( axi_fe_mst_req     ),
+    .master_rsp_i         ( axi_fe_mst_rsp     ),
     .slave_req_i          ( dma_reg_slv_req    ),
     .slave_rsp_o          ( dma_reg_slv_rsp    ),
     .dma_be_tx_complete_i ( dma_be_tx_complete ),
@@ -114,8 +112,8 @@ module dma_desc_wrap #(
     .idma_rsp_t          ( idma_rsp_t                  ),
     .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
     .idma_busy_t         ( idma_pkg::idma_busy_t       ),
-    .axi_req_t           ( axi_slv_req_t               ),
-    .axi_rsp_t           ( axi_slv_resp_t              )
+    .axi_req_t           ( dma_axi_mst_post_mux_req_t  ),
+    .axi_rsp_t           ( dma_axi_mst_post_mux_resp_t )
   ) i_idma_backend (
     .clk_i,
     .rst_ni,
@@ -138,31 +136,6 @@ module dma_desc_wrap #(
     .busy_o        ( idma_busy          )
   );
 
-  // axi_dma_backend #(
-  //   .DataWidth     (AxiDataWidth),
-  //   .AddrWidth     (AxiAddrWidth),
-  //   .IdWidth       (AxiIdWidth-1),
-  //   .AxReqFifoDepth(4),
-  //   .TransFifoDepth(4),
-  //   .BufferDepth   (4),
-  //   .axi_req_t     (dma_axi_mst_post_mux_req_t),
-  //   .axi_res_t     (dma_axi_mst_post_mux_resp_t),
-  //   .burst_req_t   (burst_req_t),
-  //   .DmaIdWidth    (1),
-  //   .DmaTracing    (0)
-  // ) i_dma_backend (
-  //   .clk_i           (clk_i),
-  //   .rst_ni          (rst_ni),
-  //   .axi_dma_req_o   (axi_be_mst_req),
-  //   .axi_dma_res_i   (axi_be_mst_rsp),
-  //   .burst_req_i     (dma_be_req),
-  //   .valid_i         (dma_be_valid),
-  //   .ready_o         (dma_be_ready),
-  //   .backend_idle_o  (dma_be_idle),
-  //   .trans_complete_o(dma_be_tx_complete),
-  //   .dma_id_i        (1'h1)
-  // );
-
   axi_mux #(
     .SlvAxiIDWidth(AxiIdWidth - 1),
     .slv_aw_chan_t(dma_axi_mst_post_mux_aw_chan_t),
@@ -184,7 +157,7 @@ module dma_desc_wrap #(
     .SpillAw      ('b0),
     .SpillW       ('0),
     .SpillB       ('0),
-    .SpillAr      ('b0),
+    .SpillAr      ('b1),
     .SpillR       ('0)
   ) i_axi_mux (
     .clk_i       (clk_i),
@@ -211,26 +184,11 @@ module dma_desc_wrap #(
   ) i_axi_to_reg (
     .clk_i     (clk_i),
     .rst_ni    (rst_ni),
-    .testmode_i(1'b0),
+    .testmode_i(testmode_i),
     .axi_req_i (axi_slv_req),
     .axi_rsp_o (axi_slv_rsp),
     .reg_req_o (dma_reg_slv_req),
     .reg_rsp_i (dma_reg_slv_rsp)
-  );
-
-  dma_reg_to_axi #(
-    .axi_req_t             (dma_axi_mst_post_mux_req_t),
-    .axi_rsp_t             (dma_axi_mst_post_mux_resp_t),
-    .reg_req_t             (dma_reg_req_t),
-    .reg_rsp_t             (dma_reg_rsp_t),
-    .ByteWidthInPowersOfTwo($clog2(AxiDataWidth / 8))
-  ) i_dma_reg_to_axi (
-    .clk_i    (clk_i),
-    .rst_ni   (rst_ni),
-    .axi_req_o(axi_fe_mst_req),
-    .axi_rsp_i(axi_fe_mst_rsp),
-    .reg_req_i(dma_reg_mst_req),
-    .reg_rsp_o(dma_reg_mst_rsp)
   );
 
   assign axi_slv_req     = axi_slave_req_i;
