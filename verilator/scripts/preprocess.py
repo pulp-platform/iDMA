@@ -8,8 +8,8 @@
 """Only filters modules required for the DMA to make verilator work properly."""
 import sys
 
-WHITE_LIST = ['fifo_v3', 'stream_fifo', 'spill_register', 'popcount', 'stream_fork',
-    'axi_pkg', 'cf_math', 'idma_', '+define+', '+incdir+']
+WHITE_LIST = ['fifo_v3', 'stream_fifo', 'spill_register', 'popcount', 'stream_fork', 'fifo_v2',
+    'axi_pkg', 'cf_math', 'fall_through_register', 'idma_', '+define+', '+incdir+']
 
 _, inp_file = sys.argv
 

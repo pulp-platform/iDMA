@@ -242,11 +242,15 @@ module idma_backend #(
     logic r_dp_rsp_ready, w_dp_rsp_ready;
 
     // Ax handshaking
-    logic ar_ready, aw_ready, aw_ready_dp;
-    logic aw_valid_dp;
+    logic ar_ready, ar_ready_dp;
+    logic aw_ready, aw_ready_dp;
+    logic aw_valid_dp, ar_valid_dp;
 
     // Ax request from R-AW coupler to datapath
     axi_aw_chan_t aw_req_dp;
+
+    // Ax request from the decoupling stage to the datapath
+    axi_ar_chan_t ar_req_dp;
 
     // flush and preemptively empty the legalizer
     logic legalizer_flush, legalizer_kill;
@@ -525,6 +529,23 @@ module idma_backend #(
         .ready_i   ( w_dp_req_out_ready  )
     );
 
+    // Add fall-through register to allow the input to be ready if the output is not. This
+    // does not add a cycle of delay
+    fall_through_register #(
+        .T          ( axi_ar_chan_t )
+    ) i_ar_fall_through_register (
+        .clk_i,
+        .rst_ni,
+        .testmode_i,
+        .clr_i      ( 1'b0         ),
+        .valid_i    ( r_valid      ),
+        .ready_o    ( ar_ready     ),
+        .data_i     ( r_req.ar_req ),
+        .valid_o    ( ar_valid_dp  ),
+        .ready_i    ( ar_ready_dp  ),
+        .data_o     ( ar_req_dp    )
+    );
+
 
     //--------------------------------------
     // Last flag store
@@ -582,9 +603,9 @@ module idma_backend #(
         .w_dp_rsp_o      ( w_dp_rsp           ),
         .w_dp_valid_o    ( w_dp_rsp_valid     ),
         .w_dp_ready_i    ( w_dp_rsp_ready     ),
-        .ar_req_i        ( r_req.ar_req       ),
-        .ar_valid_i      ( r_valid            ),
-        .ar_ready_o      ( ar_ready           ),
+        .ar_req_i        ( ar_req_dp          ),
+        .ar_valid_i      ( ar_valid_dp        ),
+        .ar_ready_o      ( ar_ready_dp        ),
         .aw_req_i        ( aw_req_dp          ),
         .aw_valid_i      ( aw_valid_dp        ),
         .aw_ready_o      ( aw_ready_dp        ),
@@ -625,10 +646,25 @@ module idma_backend #(
             .busy_o           ( busy_o.raw_coupler_busy  )
         );
     end else begin : gen_r_aw_bypass
-        // bypass the signals or set neutral values
-        assign aw_req_dp               = w_req.aw_req;
-        assign aw_ready                = aw_ready_dp;
-        assign aw_valid_dp             = w_valid;
+
+        // Add fall-through register to allow the input to be ready if the output is not. This
+        // does not add a cycle of delay
+        fall_through_register #(
+            .T          ( axi_aw_chan_t )
+        ) i_aw_fall_through_register (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .clr_i      ( 1'b0          ),
+            .valid_i    ( w_valid       ),
+            .ready_o    ( aw_ready      ),
+            .data_i     ( w_req.aw_req  ),
+            .valid_o    ( aw_valid_dp   ),
+            .ready_i    ( aw_ready_dp   ),
+            .data_o     ( aw_req_dp     )
+        );
+
+        // no unit: not busy
         assign busy_o.raw_coupler_busy = 1'b0;
     end
 
