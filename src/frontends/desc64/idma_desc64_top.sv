@@ -5,68 +5,89 @@
 // Axel Vanoni <axvanoni@student.ethz.ch>
 
 `include "common_cells/registers.svh"
+`include "common_cells/assertions.svh"
 
 /// This module serves as a descriptor-based frontend for the iDMA in the CVA6-core
 module idma_desc64_top #(
     /// Width of the addresses
     parameter int unsigned AddrWidth              = 64   ,
+    /// Width of a data item on the AXI bus
+    parameter int unsigned DataWidth              = 64   ,
+    /// Width an AXI ID
+    parameter int unsigned AxiIdWidth             = 3    ,
     /// burst request type. See the documentation of the idma backend for details
-    parameter type         burst_req_t            = logic,
+    parameter type         idma_req_t            = logic,
+    /// burst response type. See the documentation of the idma backend for details
+    parameter type         idma_rsp_t            = logic,
     /// regbus interface types. Use the REG_BUS_TYPEDEF macros to define the types
     /// or see the idma backend documentation for more details
     parameter type         reg_rsp_t              = logic,
     parameter type         reg_req_t              = logic,
+    /// AXI interface types used for fetching descriptors.
+    /// Use the AXI_TYPEDEF_ALL macros to define the types
+    parameter type         axi_rsp_t              = logic,
+    parameter type         axi_req_t              = logic,
     /// Specifies the depth of the fifo behind the descriptor address register
-    parameter int unsigned InputFifoDepth       = 8,
+    parameter int unsigned InputFifoDepth         =     8,
     /// Specifies the buffer size of the fifo that tracks requests submitted to the backend
-    parameter int unsigned PendingFifoDepth     = 8,
-    /// Specifies the counter width of the buffer that tracks completions delivered by the backend
-    parameter int unsigned TxDoneBufferWidth   = 5
+    parameter int unsigned PendingFifoDepth       =     8
 )(
     /// clock
-    input  logic       clk_i               ,
+    input  logic                  clk_i             ,
     /// reset
-    input  logic       rst_ni              ,
+    input  logic                  rst_ni            ,
 
-    /// regbus interface
+    /// axi interface
     /// master pair
     /// master request
-    output reg_req_t   master_req_o        ,
+    output axi_req_t              master_req_o      ,
     /// master response
-    input  reg_rsp_t   master_rsp_i        ,
+    input  axi_rsp_t              master_rsp_i      ,
+    /// ID to be used by the read channel
+    input  logic [AxiIdWidth-1:0] axi_r_id_i        ,
+    /// ID to be used by the write channel
+    input  logic [AxiIdWidth-1:0] axi_w_id_i        ,
+    /// regbus interface
     /// slave pair
     /// The slave interface exposes two registers: One address register to
     /// write a descriptor address to process and a status register that
     /// exposes whether the DMA is busy on bit 0 and whether FIFOs are full
     /// on bit 1.
     /// master request
-    input  reg_req_t   slave_req_i         ,
+    input  reg_req_t              slave_req_i       ,
     /// master response
-    output reg_rsp_t   slave_rsp_o         ,
+    output reg_rsp_t              slave_rsp_o       ,
 
     /// backend interface
     /// burst request submission
     /// burst request data. See iDMA backend documentation for fields
-    output burst_req_t dma_be_req_o        ,
+    output idma_req_t             dma_be_req_o      ,
     /// valid signal for the backend data submission
-    output logic       dma_be_valid_o      ,
+    output logic                  dma_be_req_valid_o,
     /// ready signal for the backend data submission
-    input  logic       dma_be_ready_i      ,
+    input  logic                  dma_be_req_ready_i,
     /// status information from the backend
-    /// event: when a transfer has completed
-    input  logic       dma_be_tx_complete_i,
+    input  idma_rsp_t             dma_be_rsp_i      ,
+    /// valid signal for the backend response
+    input  logic                  dma_be_rsp_valid_i,
+    /// ready signal for the backend response
+    output logic                  dma_be_rsp_ready_o,
     /// whether the backend is currently idle
-    input  logic       dma_be_idle_i       ,
+    input  logic                  dma_be_idle_i     ,
 
     /// Event: irq
-    output logic       irq_o
+    output logic                  irq_o
 );
 
     import idma_desc64_reg_pkg::*;
-    import axi_pkg::BURST_INCR;
 
     // {{{ typedefs and parameters
     typedef logic [AddrWidth-1:0] addr_t;
+
+    // pragma translate_off
+    `ASSERT_INIT(AddrWidthIsSupported, AddrWidth == 64)
+    `ASSERT_INIT(DataWidthIsSupported, DataWidth >= 64 && DataWidth <= 256)
+    // pragma translate_on
 
     /// Descriptor layout
     typedef struct packed {
@@ -99,6 +120,12 @@ module idma_desc64_top #(
         addr_t       dest_addr;
     } descriptor_t;
 
+    localparam int          dw_in_bytes             = DataWidth / 8;
+    localparam int          axi_size_as_int         = $clog2(dw_in_bytes) > 3 ? 3 : $clog2(dw_in_bytes); //$max(3, (dw_in_bytes));
+    localparam logic [2:0]  axi_size_for_data_width = 3'(axi_size_as_int);
+    localparam int unsigned words_per_descriptor    = 32 / dw_in_bytes < 1 ? 1 : 32 / dw_in_bytes;
+    localparam int unsigned counter_width           = words_per_descriptor == 1 ? 0 : words_per_descriptor - 1;
+
     typedef struct packed {
         logic  do_irq;
         addr_t descriptor_addr;
@@ -107,21 +134,24 @@ module idma_desc64_top #(
     localparam addr_t AddressSentinel = ~'0;
 
     typedef enum logic [1:0] {
-        SubmitterIdle = '0,
-        SubmitterFetchDescriptor,
+        SubmitterIdle,
+        SubmitterSendAR,
+        SubmitterWaitForData,
         SubmitterSendToBE
     } submitter_e;
 
     typedef enum logic [1:0] {
         FeedbackIdle,
         FeedbackWaitingOnBackend,
-        FeedbackUpdateMemory,
-        FeedbackRaiseIRQ
+        FeedbackSendAW,
+        FeedbackSendData
     } feedback_fsm_e;
 
     // }}} typedefs and parameters
 
     // {{{ signal declarations
+
+    axi_req_t master_req;
 
     // {{{ descriptor addr input to fifo
     idma_desc64_reg2hw_t register_file_to_hw;
@@ -135,7 +165,7 @@ module idma_desc64_top #(
     logic                 desc_addr_from_input_fifo_valid;
     logic                 desc_addr_from_input_fifo_ready;
 
-    logic [2:0]           desc_addr_fifo_usage;
+    logic [$clog2(InputFifoDepth)-1:0]           desc_addr_fifo_usage;
     // }}} descriptor addr input to fifo
 
     // {{{ pending descriptor FIFO
@@ -151,14 +181,11 @@ module idma_desc64_top #(
     // {{{ submitter FSM
     // state
     submitter_e  submitter_q,                    submitter_d;
-    logic [1:0]  submitter_fetch_counter_q,      submitter_fetch_counter_d;
+    logic [counter_width:0] submitter_fetch_counter_q, submitter_fetch_counter_d;
     // data
     addr_t       submitter_current_addr_q,       submitter_current_addr_d;
     descriptor_t submitter_current_descriptor_q, submitter_current_descriptor_d;
-    burst_req_t  submitter_burst_req;
-    // register_interface master
-    reg_req_t    submitter_master_req;
-    reg_rsp_t    submitter_master_rsp;
+    idma_req_t   submitter_burst_req;
     // ready-valid signals
     logic        submitter_input_fifo_ready;
     logic        submitter_input_fifo_valid;
@@ -168,7 +195,6 @@ module idma_desc64_top #(
 
     // {{{ instantiated modules
     logic completion_counter_decrement;
-    logic completion_counter_has_items;
     // }}} instantiated modules
 
     // {{{ feedback FSM
@@ -177,12 +203,7 @@ module idma_desc64_top #(
     // data
     addr_irq_t     feedback_addr_irq_q,                 feedback_addr_irq_d;
     logic          feedback_irq_q,                      feedback_irq_d;
-    // register_interface master
-    reg_req_t      feedback_master_req_q,               feedback_master_req_d;
-    reg_rsp_t      feedback_master_rsp;
-    // ready-valid signals
-    logic          feedback_pending_descriptor_ready_q, feedback_pending_descriptor_ready_d;
-    logic          feedback_counter_ready_q,            feedback_counter_ready_d;
+    logic          dma_be_rsp_ready;
     // }}} feedback FSM
 
     // }}} signal declarations
@@ -196,13 +217,19 @@ module idma_desc64_top #(
     // {{{ submitter FSM
     assign desc_addr_from_input_fifo_ready                 = submitter_q == SubmitterIdle;
     assign submitter_input_fifo_valid                      = desc_addr_from_input_fifo_valid;
-
     assign pending_descriptor_to_fifo_valid                = submitter_pending_fifo_valid_q;
-    assign submitter_master_req.addr                       = submitter_current_addr_q + (submitter_fetch_counter_q << 3);
-    assign submitter_master_req.write                      = '0;
-    assign submitter_master_req.wdata                      = '0;
-    assign submitter_master_req.wstrb                      = '0;
-    assign submitter_master_req.valid                      = submitter_q == SubmitterFetchDescriptor;
+
+    // TODO: make sure that a burst does not cross a 4-KB boundary
+    always_comb begin : proc_submitter_axi_ar
+        master_req.ar                                      = '0;
+        master_req.ar.id                                   = axi_r_id_i;
+        master_req.ar.addr                                 = submitter_current_addr_q;
+        master_req.ar.len                                  = 8'(words_per_descriptor - 1);
+        master_req.ar.size                                 = axi_size_for_data_width;
+        master_req.ar.burst                                = axi_pkg::BURST_INCR;
+    end
+    assign master_req.ar_valid                             = submitter_q == SubmitterSendAR;
+    assign master_req.r_ready                              = submitter_q == SubmitterWaitForData;
 
     assign pending_descriptor_to_fifo_data.do_irq          = submitter_current_descriptor_q.flags[0];
     assign pending_descriptor_to_fifo_data.descriptor_addr = submitter_current_addr_q;
@@ -262,40 +289,81 @@ module idma_desc64_top #(
                 if (submitter_input_fifo_valid) begin
                     submitter_current_addr_d  = desc_addr_from_input_fifo_data;
 
-                    submitter_d               = SubmitterFetchDescriptor;
+                    submitter_d               = SubmitterSendAR;
                     submitter_fetch_counter_d = '0;
                 end
             end
-            SubmitterFetchDescriptor: begin
-                if (submitter_master_rsp.ready) begin
-                    submitter_fetch_counter_d = submitter_fetch_counter_q + 1;
-                    unique case (submitter_fetch_counter_q)
-                        2'b00: begin
-                            submitter_current_descriptor_d.flags     = submitter_master_rsp.rdata[63:32];
-                            submitter_current_descriptor_d.length    = submitter_master_rsp.rdata[31:0];
-                        end
-                        2'b01: begin
-                            submitter_current_descriptor_d.next      = submitter_master_rsp.rdata;
-                        end
-                        2'b10: begin
-                            submitter_current_descriptor_d.src_addr  = submitter_master_rsp.rdata;
-                        end
-                        2'b11: begin
-                            submitter_current_descriptor_d.dest_addr = submitter_master_rsp.rdata;
-                            submitter_fetch_counter_d                = '0;
-                            submitter_d                              = SubmitterSendToBE;
-                            submitter_burst_valid_d                  = 1'b1;
-                            submitter_pending_fifo_valid_d           = 1'b1;
-                        end
-                        default: begin
-                            submitter_d                    = submitter_e'('X);
-                            submitter_current_addr_d       = 'X;
-                            submitter_current_descriptor_d = 'X;
-                            submitter_burst_valid_d        = 'X;
-                            submitter_pending_fifo_valid_d = 'X;
-                            submitter_fetch_counter_d      = 'X;
-                        end
-                    endcase
+            SubmitterSendAR: begin
+                if (master_rsp_i.ar_ready) begin
+                    submitter_d = SubmitterWaitForData;
+                end
+            end
+            SubmitterWaitForData: begin
+                if (master_rsp_i.r_valid) begin
+                    if (DataWidth == 64) begin : gen_wait_for_data_64
+                        submitter_fetch_counter_d = submitter_fetch_counter_q + 2'b01;
+                        unique case (submitter_fetch_counter_q)
+                            2'b00: begin
+                                submitter_current_descriptor_d.length    = master_rsp_i.r.data[31:0];
+                                submitter_current_descriptor_d.flags     = master_rsp_i.r.data[63:32];
+                            end
+                            2'b01: begin
+                                submitter_current_descriptor_d.next      = master_rsp_i.r.data;
+                            end
+                            2'b10: begin
+                                submitter_current_descriptor_d.src_addr  = master_rsp_i.r.data;
+                            end
+                            2'b11: begin
+                                submitter_current_descriptor_d.dest_addr = master_rsp_i.r.data;
+                                submitter_fetch_counter_d                = 2'b00;
+                                submitter_d                              = SubmitterSendToBE;
+                                submitter_burst_valid_d                  = 1'b1;
+                                submitter_pending_fifo_valid_d           = 1'b1;
+                            end
+                            default: begin
+                                submitter_d                    = submitter_e'('X);
+                                submitter_current_addr_d       = 'X;
+                                submitter_current_descriptor_d = 'X;
+                                submitter_burst_valid_d        = 'X;
+                                submitter_pending_fifo_valid_d = 'X;
+                                submitter_fetch_counter_d      = 'X;
+                            end
+                        endcase
+                    end else if (DataWidth == 128) begin : gen_wait_for_data_128
+                        submitter_fetch_counter_d = 1'b1;
+                        unique case (submitter_fetch_counter_q)
+                            1'b0: begin
+                                submitter_current_descriptor_d.length    = master_rsp_i.r.data[31:0];
+                                submitter_current_descriptor_d.flags     = master_rsp_i.r.data[63:32];
+                                submitter_current_descriptor_d.next      = master_rsp_i.r.data[127:64];
+                            end
+                            1'b1: begin
+                                submitter_current_descriptor_d.src_addr  = master_rsp_i.r.data[63:0];
+                                submitter_current_descriptor_d.dest_addr = master_rsp_i.r.data[127:64];
+                                submitter_fetch_counter_d                = 1'b0;
+                                submitter_d                              = SubmitterSendToBE;
+                                submitter_burst_valid_d                  = 1'b1;
+                                submitter_pending_fifo_valid_d           = 1'b1;
+                            end
+                            default: begin
+                                submitter_d                    = submitter_e'('X);
+                                submitter_current_addr_d       = 'X;
+                                submitter_current_descriptor_d = 'X;
+                                submitter_burst_valid_d        = 'X;
+                                submitter_pending_fifo_valid_d = 'X;
+                                submitter_fetch_counter_d      = 'X;
+                            end
+                        endcase
+                    end else if (DataWidth == 256) begin : gen_wait_for_data_256
+                        submitter_current_descriptor_d.length    = master_rsp_i.r.data[31:0];
+                        submitter_current_descriptor_d.flags     = master_rsp_i.r.data[63:32];
+                        submitter_current_descriptor_d.next      = master_rsp_i.r.data[127:64];
+                        submitter_current_descriptor_d.src_addr  = master_rsp_i.r.data[191:128];
+                        submitter_current_descriptor_d.dest_addr = master_rsp_i.r.data[255:192];
+                        submitter_d                              = SubmitterSendToBE;
+                        submitter_burst_valid_d                  = 1'b1;
+                        submitter_pending_fifo_valid_d           = 1'b1;
+                    end
                 end
             end
             SubmitterSendToBE: begin
@@ -303,9 +371,9 @@ module idma_desc64_top #(
                 // as we might be waiting on the other signal, while the
                 // first ready goes low again, marking our signal erroniously as valid.
                 if (pending_descriptor_to_fifo_ready) submitter_pending_fifo_valid_d = 1'b0;
-                if (dma_be_ready_i)                   submitter_burst_valid_d        = 1'b0;
+                if (dma_be_req_ready_i)               submitter_burst_valid_d        = 1'b0;
 
-                if ((submitter_burst_valid_q        == 1'b0 || dma_be_ready_i                   == 1'b1) &&
+                if ((submitter_burst_valid_q        == 1'b0 || dma_be_req_ready_i               == 1'b1) &&
                     (submitter_pending_fifo_valid_q == 1'b0 || pending_descriptor_to_fifo_ready == 1'b1)) begin
 
                     submitter_current_descriptor_d = '0;
@@ -313,9 +381,8 @@ module idma_desc64_top #(
                     if (submitter_current_descriptor_q.next == AddressSentinel) begin
                         submitter_d               = SubmitterIdle;
                     end else begin
-                        submitter_d               = SubmitterFetchDescriptor;
+                        submitter_d               = SubmitterSendAR;
                         submitter_current_addr_d  = submitter_current_descriptor_q.next;
-                        submitter_fetch_counter_d = '0;
                     end
                 end
             end
@@ -329,65 +396,79 @@ module idma_desc64_top #(
             end
         endcase
     end : submitter_fsm
+
+    // When we get the last data item of the descriptor, it must be the last in the burst
+    // pragma translate_off
+    if (DataWidth == 64) begin : gen_assert_last_64
+        assert property (@(posedge clk_i) submitter_q == SubmitterWaitForData
+            && submitter_fetch_counter_q == 2'b11
+            && master_rsp_i.r_valid |-> master_rsp_i.r.last);
+    end else if (DataWidth == 128) begin : gen_assert_last_128
+        assert property (@(posedge clk_i) submitter_q == SubmitterWaitForData
+            && submitter_fetch_counter_q == 1'b1
+            && master_rsp_i.r_valid |-> master_rsp_i.r.last);
+    end else if (DataWidth == 256) begin : gen_assert_last_256
+        assert property (@(posedge clk_i) submitter_q == SubmitterWaitForData
+            && master_rsp_i.r_valid |-> master_rsp_i.r.last);
+    end
+    // pragma translate_on
     // }}} submitter FSM
 
     // {{{ feedback FSM
-    assign pending_descriptor_from_fifo_ready = feedback_pending_descriptor_ready_q;
-    assign completion_counter_decrement       = feedback_counter_ready_q;
+    assign pending_descriptor_from_fifo_ready = feedback_fsm_q == FeedbackIdle;
+    assign dma_be_rsp_ready                   = feedback_fsm_q == FeedbackWaitingOnBackend;
+    assign master_req.aw_valid                = feedback_fsm_q == FeedbackSendAW;
+    assign master_req.w_valid                 = feedback_fsm_q == FeedbackSendData;
+    // ignore the b channel, we have no error reporting atm
+    assign master_req.b_ready                 = 1'b1;
+
+    always_comb begin : proc_feedback_axi_aw
+        master_req.aw                         = '0;
+        master_req.aw.id                      = axi_w_id_i;
+        master_req.aw.addr                    = feedback_addr_irq_q;
+        master_req.aw.size                    = 3'b011;
+    end
+
+    always_comb begin : proc_feedback_axi_w
+        master_req.w                          = '0;
+        master_req.w.data                     = 'X;
+        master_req.w.data[63:0]               = 64'hffff_ffff_ffff_ffff;
+        master_req.w.strb                     = 'hff;
+        master_req.w.last                     = 1'b1;
+    end
 
     always_comb begin : feedback_fsm
         feedback_fsm_d                      = feedback_fsm_q;
         feedback_addr_irq_d                 = feedback_addr_irq_q;
-        feedback_master_req_d               = feedback_master_req_q;
-        feedback_irq_d                      = '0;
-        feedback_pending_descriptor_ready_d = '0;
-        feedback_counter_ready_d            = '0;
+        feedback_irq_d                      = 1'b0;
 
         unique case (feedback_fsm_q)
             FeedbackIdle: begin
-                feedback_pending_descriptor_ready_d = 1'b1;
                 if (pending_descriptor_from_fifo_valid) begin
                     feedback_addr_irq_d = pending_descriptor_from_fifo_data;
-
-                    feedback_fsm_d = FeedbackWaitingOnBackend;
+                    feedback_fsm_d      = FeedbackWaitingOnBackend;
                 end
             end
             FeedbackWaitingOnBackend: begin
-                if (completion_counter_has_items) begin
-                    feedback_counter_ready_d = 1'b1;
-                    feedback_fsm_d = FeedbackUpdateMemory;
+                if (dma_be_rsp_valid_i) begin
+                    feedback_fsm_d = FeedbackSendAW;
                 end
             end
-            FeedbackUpdateMemory: begin
-                if (feedback_master_req_q.valid == '0) begin
-                    // overwrite the flags and length fields with all 1s
-                    // to mark it as completed
-                    feedback_master_req_d.addr  = feedback_addr_irq_q.descriptor_addr;
-                    feedback_master_req_d.write = 1'b1;
-                    feedback_master_req_d.wdata = ~'0;
-                    feedback_master_req_d.wstrb = ~'0;
-                    feedback_master_req_d.valid = 1'b1;
-                end else if (feedback_master_rsp.ready == 1'b1) begin
-                    feedback_master_req_d.write = '0;
-                    feedback_master_req_d.valid = '0;
-                    if (feedback_addr_irq_q.do_irq) begin
-                        feedback_fsm_d = FeedbackRaiseIRQ;
-                    end else begin
-                        feedback_fsm_d = FeedbackIdle;
-                    end
+            FeedbackSendAW: begin
+                if (master_rsp_i.aw_ready == 1'b1) begin
+                    feedback_fsm_d = FeedbackSendData;
                 end
             end
-            FeedbackRaiseIRQ: begin
-                feedback_irq_d = 1'b1;
-                feedback_fsm_d = FeedbackIdle;
+            FeedbackSendData: begin
+                if (master_rsp_i.w_ready == 1'b1) begin
+                    feedback_fsm_d = FeedbackIdle;
+                    feedback_irq_d = feedback_addr_irq_q.do_irq;
+                end
             end
             default: begin
                 feedback_fsm_d                      = feedback_fsm_e'('X);
                 feedback_addr_irq_d                 = 'X;
-                feedback_master_req_d               = 'X;
                 feedback_irq_d                      = 'X;
-                feedback_pending_descriptor_ready_d = 'X;
-                feedback_counter_ready_d            = 'X;
             end
         endcase
     end : feedback_fsm
@@ -400,7 +481,7 @@ module idma_desc64_top #(
     assign register_file_to_reg.status.busy.de = 1'b1;
 
     // leave a bit of wiggle room for the previous registers to catch up
-    assign register_file_to_reg.status.fifo_full.d  = desc_addr_fifo_usage > 6;
+    assign register_file_to_reg.status.fifo_full.d  = desc_addr_fifo_usage > (InputFifoDepth - 1);
     assign register_file_to_reg.status.fifo_full.de = 1'b1;
     // }}} status update
 
@@ -462,35 +543,6 @@ module idma_desc64_top #(
     );
     // }}} pending descriptor FIFO
 
-    // {{{ counter module
-    idma_desc64_shared_counter #(
-        .CounterWidth(TxDoneBufferWidth)
-    ) i_completion_counter (
-        .clk_i              (clk_i)                       ,
-        .rst_ni             (rst_ni)                      ,
-        .increment_i        (dma_be_tx_complete_i)        ,
-        .decrement_i        (completion_counter_decrement),
-        .greater_than_zero_o(completion_counter_has_items)
-    );
-    // }}} counter module
-
-    // {{{ regbus master arbitration
-    reg_mux #(
-        .NoPorts  (2)        ,
-        .AW       (AddrWidth),
-        .DW       (AddrWidth),
-        .req_t    (reg_req_t),
-        .rsp_t    (reg_rsp_t)
-    ) i_master_arbitration (
-        .clk_i    (clk_i)                                        ,
-        .rst_ni   (rst_ni)                                       ,
-        .in_req_i ({submitter_master_req, feedback_master_req_q}),
-        .in_rsp_o ({submitter_master_rsp, feedback_master_rsp})  ,
-        .out_req_o(master_req_o)                                 ,
-        .out_rsp_i(master_rsp_i)
-    );
-    // }}} regbus master arbitration
-
     // }}} instantiated modules
 
     // {{{ state-holding processes
@@ -498,38 +550,36 @@ module idma_desc64_top #(
     // {{{ submitter FSM
     // state
     `FF(submitter_q,                    submitter_d,                    SubmitterIdle);
-    `FF(submitter_fetch_counter_q,      submitter_fetch_counter_d,      '0);
+    if (words_per_descriptor > 1) begin: gen_counter_ff_if_needed
+        `FF(submitter_fetch_counter_q,  submitter_fetch_counter_d,      '0);
+    end
 
     // data
     `FF(submitter_current_addr_q,       submitter_current_addr_d,       '0);
     `FF(submitter_current_descriptor_q, submitter_current_descriptor_d, '{default: '0});
 
     // ready-valid signals
-    `FF(submitter_burst_valid_q,        submitter_burst_valid_d,        '0);
-    `FF(submitter_pending_fifo_valid_q, submitter_pending_fifo_valid_d, '0);
+    `FF(submitter_burst_valid_q,        submitter_burst_valid_d,        1'b0);
+    `FF(submitter_pending_fifo_valid_q, submitter_pending_fifo_valid_d, 1'b0);
     // }}} submitter FSM
 
     // {{{ feedback FSM
-    `FF(feedback_fsm_q,                      feedback_fsm_d,                      FeedbackIdle);
+    `FF(feedback_fsm_q,                      feedback_fsm_d,            FeedbackIdle);
 
     // data
-    `FF(feedback_addr_irq_q,                 feedback_addr_irq_d,                 '0);
-    `FF(feedback_irq_q,                      feedback_irq_d,                      '0);
+    `FF(feedback_addr_irq_q,                 feedback_addr_irq_d,       '0);
+    `FF(feedback_irq_q,                      feedback_irq_d,            '0);
 
-    // register_interface master request
-    `FF(feedback_master_req_q,               feedback_master_req_d,               '{default: '0});
-
-    // ready-valid signals
-    `FF(feedback_pending_descriptor_ready_q, feedback_pending_descriptor_ready_d, '0);
-    `FF(feedback_counter_ready_q,            feedback_counter_ready_d,            '0);
     // }}} feedback FSM
 
     // }}} state-holding processes
 
     // {{{ output assignments
-    assign dma_be_req_o   = submitter_burst_req;
-    assign dma_be_valid_o = submitter_burst_valid_q;
-    assign irq_o          = feedback_irq_q;
+    assign dma_be_req_o       = submitter_burst_req;
+    assign dma_be_req_valid_o = submitter_burst_valid_q;
+    assign irq_o              = feedback_irq_q;
+    assign master_req_o       = master_req;
+    assign dma_be_rsp_ready_o = dma_be_rsp_ready;
     // }}} output assignments
 
 endmodule : idma_desc64_top
