@@ -17,6 +17,7 @@ stages:
   - analyze
   - pickle
   - doc
+  - deploy-doc
   - prepare-non-free
   - iDMA
 
@@ -89,6 +90,21 @@ morty-pickle:
 
 
 ############# Below: only works on IIS machines ####################
+
+deploy-doc:
+  stage: deploy-doc
+  needs:
+    - doc
+  only:
+    refs:
+      - master
+  script:
+    - DOC_PATH="/home/tbenz/public_html/idma/doc/ci/master"
+    - test -f "${DOC_PATH}/index.html" && rm -rv "${DOC_PATH}/"
+    - mkdir -p "${DOC_PATH}"
+    - touch "${DOC_PATH}/index.html"
+    - cp -rv doc/build/html/* "${DOC_PATH}/"
+
 
 prepare-non-free:
   stage: prepare-non-free
