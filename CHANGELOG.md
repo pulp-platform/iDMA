@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## 0.2.2 - 09-08-2022
+### Changed
+Add GitHub actions to lint the code as well as build the documentation. Remove the corresponding
+jobs from the IIS-internal GitLab pipeline.
+
+### Fixed
+Fix the `AX`-handshaking. The ready signal of the iDMA request no longer depends on the ready signal
+of the `Ax` channels. See [#3](https://github.com/pulp-platform/iDMA/pull/3).
+
 ## 0.2.1 - 07-08-2022
 ### Changed
 Moved the IIS-internal non-free resources to a dedicated subgroup to tidy up. Version v0.2.1 is

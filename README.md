@@ -21,6 +21,10 @@ iDMA is centered around the idea to split the DMA engine in 3 distinct parts:
 The interface between the parts are well-defined, making it easy to adapt to a new system or to add
 new capabilities.
 
+## Documentation
+The [latest documentation](https://pulp-platform.github.io/iDMA) can be accessed pre-built.
+The [Morty docs](https://pulp-platform.github.io.iDMA/morty/intex.html) provide the generated description of the SystemVerilog files within this repository.
+
 ## License
 iDMA is released under Solderpad v0.51 (SHL-0.51) see [`LICENSE`](LICENSE):
 
