@@ -10,6 +10,7 @@ SPHINXBUILD  ?= sphinx-build
 SPHINXPROJ    = iDMA
 SOURCEDIR     = source
 BUILDDIR      = build
+MORTY        ?= morty
 
 all-html: morty-docs regs html
 
@@ -26,7 +27,7 @@ help:
 
 # Requires an up-to-date morty installation
 morty-docs:
-	morty $$(cat ../sources.txt | sed -e "s/+incdir+/-I /" | sed -e "s/.\//..\//" | grep "\.\.\/src/\|-I") --doc $(BUILDDIR)/html/morty
+	$(MORTY) $$(cat ../sources.txt | sed -e "s/+incdir+/-I /" | sed -e "s/.\//..\//" | grep "\.\.\/src/\|-I") --doc $(BUILDDIR)/html/morty
 
 regs:
 	mkdir -p $(BUILDDIR)/html/regs

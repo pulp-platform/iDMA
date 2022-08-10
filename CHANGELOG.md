@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## 0.2.3 - 11-08-2022
+### Changed
+Morty is now fetched as a binary distributable for building the doc in CI.
+
 ## 0.2.2 - 09-08-2022
 ### Changed
 Add GitHub actions to lint the code as well as build the documentation. Remove the corresponding

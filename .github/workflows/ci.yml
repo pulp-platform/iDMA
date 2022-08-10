@@ -137,8 +137,10 @@ jobs:
           retention-days: 7
 
   docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [lint, lint-verilog]
+    env:
+      MORTY: ./morty
     steps:
       - uses: actions/checkout@v3
       - name: Install Bender
@@ -150,7 +152,11 @@ jobs:
       - name: Python Requirements
         run: python3 -m pip install -r requirements.txt
       - name: Install Morty
-        run: cargo install --git https://github.com/zarubaf/morty
+        run: |
+          curl --proto '=https' --tlsv1.2 -sLO https://github.com/pulp-platform/morty/releases/download/v0.7.0/morty-ubuntu.22.04-x86_64.tar.gz
+          tar -xvf morty-ubuntu.22.04-x86_64.tar.gz morty
+          rm -f morty-ubuntu.22.04-x86_64.tar.gz
+          cp morty doc
       - name: Build Doc
         run: make doc
       - name: Pickle
