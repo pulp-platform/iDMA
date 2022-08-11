@@ -8,6 +8,7 @@
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
+`include "idma/tracer.svh"
 
 module tb_idma_backend import idma_pkg::*; #(
     parameter int unsigned BufferDepth         = 3,
@@ -104,6 +105,12 @@ module tb_idma_backend import idma_pkg::*; #(
 
     // busy signal
     idma_busy_t busy;
+
+
+    //--------------------------------------
+    // DMA Tracer
+    //--------------------------------------
+    `IDMA_TRACER(i_idma_backend, "logs/idma_backend_trace.log");
 
 
     //--------------------------------------
