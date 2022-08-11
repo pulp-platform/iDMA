@@ -11,14 +11,14 @@ find $ROOT/ \
     -not \( -path '*.bender/*' -prune \) \
     -not \( -path '*morty/*' -prune \) \
     -not \( -path '*test/*' -prune \) \
-    -not \( -path '*systems/pulpopen/idma_axi_to_mem.sv' -prune \) \
+    -not \( -path '*idma_desc64_reader.sv*' -prune \) \
     -name '*.sv'
 
 find $ROOT/ \
     -not \( -path '*.bender/*' -prune \) \
     -not \( -path '*morty/*' -prune \) \
     -not \( -path '*test/*' -prune \) \
-    -not \( -path '*systems/pulpopen/idma_axi_to_mem.sv' -prune \) \
+    -not \( -path '*idma_desc64_reader.sv*' -prune \) \
     -name '*.sv' \
     | xargs verible-verilog-lint \
     --rules=-interface-name-style --lint_fatal --parse_fatal \

@@ -8,6 +8,7 @@
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
+`include "idma/tracer.svh"
 
 module tb_idma_backend import idma_pkg::*; #(
     parameter int unsigned BufferDepth         = 3,
@@ -26,7 +27,8 @@ module tb_idma_backend import idma_pkg::*; #(
     parameter bit          HardwareLegalizer   = 1,
     parameter bit          RejectZeroTransfers = 1,
     parameter bit          ErrorHandling       = 1,
-    parameter bit          IdealMemory         = 1
+    parameter bit          IdealMemory         = 1,
+    parameter bit          DmaTracing          = 0
 );
 
     // timing parameters
@@ -104,6 +106,21 @@ module tb_idma_backend import idma_pkg::*; #(
 
     // busy signal
     idma_busy_t busy;
+
+
+    //--------------------------------------
+    // DMA Tracer
+    //--------------------------------------
+    // only activate tracer if requested
+    if (DmaTracing) begin
+        // fetch the name of the trace file from CMD line
+        string trace_file;
+        initial begin
+            void'($value$plusargs("trace_file=%s", trace_file));
+        end
+        // attach the tracer
+        `IDMA_TRACER(i_idma_backend, trace_file);
+    end
 
 
     //--------------------------------------
