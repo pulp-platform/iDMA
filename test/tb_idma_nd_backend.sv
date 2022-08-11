@@ -20,11 +20,15 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     parameter int unsigned NumDim              = 4,
     parameter int unsigned RepWidth            = 32,
     parameter int unsigned StrideWidth         = 32,
+    parameter int unsigned MemNumReqOutst      = 1,
+    parameter int unsigned MemLatency          = 0,
+    parameter int unsigned WatchDogNumCycles   = 100,
     parameter bit          MaskInvalidData     = 1,
     parameter bit          RAWCouplingAvail    = 1,
     parameter bit          HardwareLegalizer   = 1,
     parameter bit          RejectZeroTransfers = 1,
-    parameter bit          ErrorHandling       = 1
+    parameter bit          ErrorHandling       = 1,
+    parameter bit          IdealMemory         = 1
 );
 
     // timing parameters
@@ -38,9 +42,6 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     localparam bit PrintFifoInfo = 1'b1;
 
     // TB parameters
-    // watchdog trips after N cycles of inactivity
-    localparam int unsigned WatchDogNumCycles = 100;
-
     // dependent parameters
     localparam int unsigned StrbWidth       = DataWidth / 8;
     localparam int unsigned OffsetWidth     = $clog2(StrbWidth);
@@ -345,11 +346,56 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     assign idma_nd_dv.rsp_valid     = nd_rsp_valid;
     assign idma_nd_dv.eh_req_ready  = eh_req_ready;
 
-    // error trigger
-    always_comb begin
-        axi_req_mem = axi_req;
-        axi_rsp = axi_rsp_mem;
+    // throttle the AXI bus
+    if (IdealMemory) begin : gen_ideal_mem_connect
+
+        // if the memory is ideal: 0 cycle latency here
+        assign axi_req_mem = axi_req;
+        assign axi_rsp = axi_rsp_mem;
+
+    end else begin : gen_delayed_mem_connect
+
+        // the throttled AXI buses
+        axi_req_t axi_req_throttled;
+        axi_rsp_t axi_rsp_throttled;
+
+        // axi throttle: limit the amount of concurrent requests in the memory system
+        axi_throttle #(
+            .MaxNumAwPending ( 2**32 - 1  ),
+            .MaxNumArPending ( 2**32 - 1  ),
+            .axi_req_t       ( axi_req_t  ),
+            .axi_rsp_t       ( axi_rsp_t  )
+        ) i_axi_throttle (
+            .clk_i       ( clk               ),
+            .rst_ni      ( rst_n             ),
+            .req_i       ( axi_req           ),
+            .rsp_o       ( axi_rsp           ),
+            .req_o       ( axi_req_throttled ),
+            .rsp_i       ( axi_rsp_throttled ),
+            .w_credit_i  ( MemNumReqOutst    ),
+            .r_credit_i  ( MemNumReqOutst    )
+        );
+
+        // delay the signals using AXI4 multicuts
+        axi_multicut #(
+            .NoCuts     ( MemLatency    ),
+            .aw_chan_t  ( axi_aw_chan_t ),
+            .w_chan_t   ( axi_w_chan_t  ),
+            .b_chan_t   ( axi_b_chan_t  ),
+            .ar_chan_t  ( axi_ar_chan_t ),
+            .r_chan_t   ( axi_r_chan_t  ),
+            .axi_req_t  ( axi_req_t     ),
+            .axi_resp_t ( axi_rsp_t     )
+        ) i_axi_multicut (
+            .clk_i       ( clk               ),
+            .rst_ni      ( rst_n             ),
+            .slv_req_i   ( axi_req_throttled ),
+            .slv_resp_o  ( axi_rsp_throttled ),
+            .mst_req_o   ( axi_req_mem       ),
+            .mst_resp_i  ( axi_rsp_mem       )
+        );
     end
+
 
     //--------------------------------------
     // Various TB Tasks

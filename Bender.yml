@@ -94,8 +94,10 @@ sources:
       - test/watchdog.sv
       - test/idma_intf.sv
       - test/idma_sim_mem.sv
+      - test/stream_throttle.sv
       # Level 1:
       - test/idma_test.sv
+      - test/axi_throttle.sv
       # Level 2:
       - test/tb_idma_backend.sv
       - test/tb_idma_nd_backend.sv

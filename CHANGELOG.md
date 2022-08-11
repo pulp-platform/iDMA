@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## Unreleased
+### Added
+Add support to enable non-ideal behavior of the testbench memory.
 
 ## 0.2.3 - 11-08-2022
 ### Changed
