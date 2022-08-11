@@ -11,7 +11,7 @@ package:
 dependencies:
   common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.26.0 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.2 }
-  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.37.0 }
+  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta }
   register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: 0.3.1 }
 
 export_include_dirs:
@@ -61,13 +61,23 @@ sources:
 
   - files: # 64bit descriptor frontend
     # Level 0
+    - src/frontends/desc64/idma_desc64_synth_pkg.sv
+    - src/frontends/desc64/idma_desc64_ar_gen.sv
+    - src/frontends/desc64/idma_desc64_ar_gen_prefetch.sv
+    - src/frontends/desc64/idma_desc64_reader.sv
+    - src/frontends/desc64/idma_desc64_reader_gater.sv
     - src/frontends/desc64/idma_desc64_reg_pkg.sv
     - src/frontends/desc64/idma_desc64_reg_top.sv
-    - src/frontends/desc64/idma_desc64_shared_counter.sv
+    - src/frontends/desc64/idma_desc64_reshaper.sv
     # Level 1
     - src/frontends/desc64/idma_desc64_reg_wrapper.sv
     # Level 2
     - src/frontends/desc64/idma_desc64_top.sv
+    - src/systems/cva6_desc/dma_desc_wrap.sv
+    - src/systems/cva6_desc/dma_desc_synth_pkg.sv
+    - src/systems/cva6_desc/dma_desc_synth.sv
+    # Level 3
+    - src/frontends/desc64/idma_desc64_synth.sv
 
   # Systems
   - target: all(pulp, not(mchan))
@@ -99,3 +109,4 @@ sources:
     files:
       # Level 0
       - test/frontends/tb_idma_desc64_top.sv
+      - test/frontends/tb_idma_desc64_bench.sv

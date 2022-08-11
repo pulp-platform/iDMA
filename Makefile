@@ -146,7 +146,7 @@ VLT_ARGS  += --no-skip-identical
 VLT_TOP   ?=
 
 verilator/files_raw.txt: Bender.yml Bender.lock
-	$(BENDER) script verilator -t synthesis > $@
+	$(BENDER) script verilator -t synthesis -t pulp -t cva6 > $@
 
 verilator/files.txt: verilator/scripts/preprocess.py verilator/files_raw.txt
 	$(PYTHON) $^ > $@
@@ -291,39 +291,39 @@ REG_HTML_STRING = "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href=
 gen_regs: reg32_2d_regs reg64_regs desc64_regs
 
 reg32_2d_regs:
-	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -t $(REG32_2D_FE_DIR) -r
-	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -D > $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.h
-	printf $(REG_HTML_STRING) > $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
-	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -d >> $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
-	printf "</html>\n" >> $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
-	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG32_2D_FE_DIR)
+	"$(PYTHON)" "$(REG_TOOL)" "$(REG32_2D_HJSON)" -t "$(REG32_2D_FE_DIR)" -r
+	"$(PYTHON)" "$(REG_TOOL)" "$(REG32_2D_HJSON)" -D > "$(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.h"
+	printf $(REG_HTML_STRING) > "$(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html"
+	"$(PYTHON)" "$(REG_TOOL)" "$(REG32_2D_HJSON)" -d >> "$(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html"
+	printf "</html>\n" >> "$(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html"
+	cp "$(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css" "$(REG32_2D_FE_DIR)"
 
 reg64_regs:
-	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -t $(REG64_FE_DIR) -r
-	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -D > $(REG64_FE_DIR)/idma_reg64_frontend.h
-	printf $(REG_HTML_STRING) > $(REG64_FE_DIR)/idma_reg64_frontend.html
-	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -d >> $(REG64_FE_DIR)/idma_reg64_frontend.html
-	printf "</html>\n" >> $(REG64_FE_DIR)/idma_reg64_frontend.html
-	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG64_FE_DIR)
+	"$(PYTHON)" "$(REG_TOOL)" "$(REG64_HJSON)" -t "$(REG64_FE_DIR)" -r
+	"$(PYTHON)" "$(REG_TOOL)" "$(REG64_HJSON)" -D > "$(REG64_FE_DIR)/idma_reg64_frontend.h"
+	printf $(REG_HTML_STRING) > "$(REG64_FE_DIR)/idma_reg64_frontend.html"
+	"$(PYTHON)" "$(REG_TOOL)" "$(REG64_HJSON)" -d >> "$(REG64_FE_DIR)/idma_reg64_frontend.html"
+	printf "</html>\n" >> "$(REG64_FE_DIR)/idma_reg64_frontend.html"
+	cp "$(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css" "$(REG64_FE_DIR)"
 
 desc64_regs:
-	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -t $(DESC64_FE_DIR) -r
-	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -D > $(DESC64_FE_DIR)/idma_desc64_frontend.h
-	printf $(REG_HTML_STRING) > $(DESC64_FE_DIR)/idma_desc64_frontend.html
-	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -d >> $(DESC64_FE_DIR)/idma_desc64_frontend.html
-	printf "</html>\n" >> $(DESC64_FE_DIR)/idma_desc64_frontend.html
-	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(DESC64_FE_DIR)
+	"$(PYTHON)" "$(REG_TOOL)" "$(DESC64_HJSON)" -t "$(DESC64_FE_DIR)" -r
+	"$(PYTHON)" "$(REG_TOOL)" "$(DESC64_HJSON)" -D > "$(DESC64_FE_DIR)/idma_desc64_frontend.h"
+	printf $(REG_HTML_STRING) > "$(DESC64_FE_DIR)/idma_desc64_frontend.html"
+	"$(PYTHON)" "$(REG_TOOL)" "$(DESC64_HJSON)" -d >> "$(DESC64_FE_DIR)/idma_desc64_frontend.html"
+	printf "</html>\n" >> "$(DESC64_FE_DIR)/idma_desc64_frontend.html"
+	cp "$(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css" "$(DESC64_FE_DIR)"
 
 regs_clean:
-	rm -f $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.h
-	rm -f $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend_reg_pkg.sv
-	rm -f $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend_reg_top.sv
-	rm -f $(REG32_2D_FE_DIR)/reg_html.css
-	rm -f $(REG64_FE_DIR)/idma_reg64_frontend.h
-	rm -f $(REG64_FE_DIR)/idma_reg32_frontend_reg_pkg.sv
-	rm -f $(REG64_FE_DIR)/idma_reg32_frontend_reg_top.sv
-	rm -f $(REG64_FE_DIR)/reg_html.css
-	rm -f $(DESC64_FE_DIR)/idma_desc64_frontend.h
-	rm -f $(DESC64_FE_DIR)/idma_desc64_reg_pkg.sv
-	rm -f $(DESC64_FE_DIR)/idma_desc64_reg_top.sv
-	rm -f $(DESC64_FE_DIR)/reg_html.css
+	rm -f "$(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.h"
+	rm -f "$(REG32_2D_FE_DIR)/idma_reg32_2d_frontend_reg_pkg.sv"
+	rm -f "$(REG32_2D_FE_DIR)/idma_reg32_2d_frontend_reg_top.sv"
+	rm -f "$(REG32_2D_FE_DIR)/reg_html.css"
+	rm -f "$(REG64_FE_DIR)/idma_reg64_frontend.h"
+	rm -f "$(REG64_FE_DIR)/idma_reg32_frontend_reg_pkg.sv"
+	rm -f "$(REG64_FE_DIR)/idma_reg32_frontend_reg_top.sv"
+	rm -f "$(REG64_FE_DIR)/reg_html.css"
+	rm -f "$(DESC64_FE_DIR)/idma_desc64_frontend.h"
+	rm -f "$(DESC64_FE_DIR)/idma_desc64_reg_pkg.sv"
+	rm -f "$(DESC64_FE_DIR)/idma_desc64_reg_top.sv"
+	rm -f "$(DESC64_FE_DIR)/reg_html.css"
