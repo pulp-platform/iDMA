@@ -79,5 +79,17 @@
         "synth_top" : "idma_nd_backend_synth",
         "overrides" : {
         }
+    },
+    "frontend-descriptor": {
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple" : "/dev/null"
+        },
+        "gen_jobs" : {
+        },
+        "testbench" : "tb_idma_desc64_top",
+        "synth_top" : "idma_desc64_synth",
+        "overrides" : {
+        }
     }
 }
