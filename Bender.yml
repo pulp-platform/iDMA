@@ -100,3 +100,4 @@ sources:
     files:
       # Level 0
       - test/frontends/tb_idma_desc64_top.sv
+      - test/frontends/tb_idma_desc64_bench.sv
