@@ -134,7 +134,7 @@ module dmac_wrap #(
 
   // iDMA struct definitions
   localparam int unsigned TFLenWidth  = AXI_ADDR_WIDTH;
-  localparam int unsigned NumDim      = 2; // Support 2D midend for 2D transfers
+  localparam int unsigned NumDim      = 3; // Support 3D midend for 3D transfers
   localparam int unsigned RepWidth    = 32;
   localparam int unsigned StrideWidth = 32;
   typedef logic [TFLenWidth-1:0]  tf_len_t;
@@ -247,7 +247,7 @@ module dmac_wrap #(
     .idma_rsp_t   ( idma_rsp_t    ),
     .idma_nd_req_t( idma_nd_req_t ),
     .RepWidths    ( RepWidths     )
-  ) i_idma_2D_midend (
+  ) i_idma_nD_midend (
     .clk_i,
     .rst_ni,
 

@@ -20,6 +20,7 @@
 
 #define IDMA_DEFAULT_CONFIG 0x0
 #define IDMA_DEFAULT_CONFIG_2D 0x8
+#define IDMA_DEFAULT_CONFIG_3D 0x16
 
 typedef unsigned int dma_ext_t;
 typedef unsigned int dma_loc_t;
@@ -97,6 +98,11 @@ static inline int plp_dma_l1ToExt_2d(dma_ext_t ext, unsigned int loc, unsigned s
   */
 static inline int plp_dma_extToL1_2d(unsigned int loc, dma_ext_t ext, unsigned short size, unsigned short stride, unsigned short length);
 
+static inline int plp_dma_memcpy_3d(dma_ext_t ext, unsigned int loc, unsigned int size, unsigned int *stride, unsigned int length, int ext2loc);
+
+static inline int plp_dma_l1ToExt_3d(dma_ext_t ext, unsigned int loc, unsigned short size, unsigned short *stride, unsigned short length);
+
+static inline int plp_dma_extToL1_3d(unsigned int loc, dma_ext_t ext, unsigned short size, unsigned short *stride, unsigned short length);
 //!@}
 
 /** @name DMA wait functions
@@ -170,6 +176,7 @@ static inline unsigned int pulp_idma_memcpy(unsigned int const dst_addr, unsigne
   */
 static inline unsigned int pulp_idma_memcpy_2d(unsigned int const dst_addr, unsigned int const src_addr, unsigned int num_bytes, unsigned int dst_stride, unsigned int src_stride, unsigned int num_reps);
 
+static inline unsigned int pulp_idma_memcpy_3d(unsigned int const dst_addr, unsigned int const src_addr, unsigned int num_bytes, unsigned int *dst_stride, unsigned int *src_stride, unsigned int *num_reps);
 
 /**
  * iDMA advanced memory transfer
@@ -271,6 +278,25 @@ static inline unsigned int pulp_idma_memcpy_2d(unsigned int const dst_addr, unsi
   return dma_tx_id;
 }
 
+static inline unsigned int pulp_idma_memcpy_3d(unsigned int const dst_addr, unsigned int const src_addr, unsigned int num_bytes, unsigned int *dst_stride, unsigned int *src_stride, unsigned int *num_reps) {
+  DMA_WRITE(src_addr, IDMA_REG32_2D_FRONTEND_SRC_ADDR_REG_OFFSET);
+  DMA_WRITE(dst_addr, IDMA_REG32_2D_FRONTEND_DST_ADDR_REG_OFFSET);
+  DMA_WRITE(num_bytes, IDMA_REG32_2D_FRONTEND_NUM_BYTES_REG_OFFSET);
+  DMA_WRITE(IDMA_DEFAULT_CONFIG_3D, IDMA_REG32_2D_FRONTEND_CONF_REG_OFFSET);
+  DMA_WRITE(src_stride[0], IDMA_REG32_2D_FRONTEND_STRIDE_SRC_REG_OFFSET);
+  DMA_WRITE(dst_stride[0], IDMA_REG32_2D_FRONTEND_STRIDE_DST_REG_OFFSET);
+  DMA_WRITE(num_reps[0],   IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS_REG_OFFSET);
+  DMA_WRITE(src_stride[1], IDMA_REG32_2D_FRONTEND_STRIDE1_SRC_REG_OFFSET);
+  DMA_WRITE(dst_stride[1], IDMA_REG32_2D_FRONTEND_STRIDE1_DST_REG_OFFSET);
+  DMA_WRITE(num_reps[1],   IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS1_REG_OFFSET);
+  asm volatile("" : : : "memory");
+
+  // Launch TX
+  unsigned int dma_tx_id = DMA_READ(IDMA_REG32_2D_FRONTEND_NEXT_ID_REG_OFFSET);
+
+  return dma_tx_id;
+}
+
 
 static inline unsigned int pulp_idma_memcpy_advanced(unsigned int const dst_addr, unsigned int const src_addr, unsigned int num_bytes, unsigned int decouple, unsigned int deburst, unsigned int serialize, unsigned int twod, unsigned int dst_stride, unsigned int src_stride, unsigned int num_reps) {
   DMA_WRITE(src_addr, IDMA_REG32_2D_FRONTEND_SRC_ADDR_REG_OFFSET);
@@ -332,6 +358,22 @@ static inline int plp_dma_l1ToExt_2d(dma_ext_t ext, unsigned int loc, unsigned s
 
 static inline int plp_dma_extToL1_2d(unsigned int loc, dma_ext_t ext, unsigned short size, unsigned short stride, unsigned short length) {
     return pulp_idma_memcpy_2d(loc, ext, length, length, stride, size/length);
+}
+
+static inline int plp_dma_memcpy_3d(dma_ext_t ext, unsigned int loc, unsigned int size, unsigned int *stride, unsigned int length, int ext2loc) {
+  if (ext2loc) {
+    return pulp_idma_memcpy_3d(loc, ext, length, length, stride, size/length);
+  } else {
+    return pulp_idma_memcpy_3d(ext, loc, length, stride, length, size/length);
+  }
+}
+
+static inline int plp_dma_l1ToExt_3d(dma_ext_t ext, unsigned int loc, unsigned short size, unsigned short *stride, unsigned short length) {
+    return pulp_idma_memcpy_3d(ext, loc, length, stride, length, size/length);
+}
+
+static inline int plp_dma_extToL1_3d(unsigned int loc, dma_ext_t ext, unsigned short size, unsigned short *stride, unsigned short length) {
+    return pulp_idma_memcpy_3d(loc, ext, length, length, stride, size/length);
 }
 
 static inline void plp_dma_barrier() {

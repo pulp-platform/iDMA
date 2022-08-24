@@ -12,7 +12,7 @@
 module idma_nd_midend #(
     /// Number of dimensions. This has to be at least two as the first dimension is already
     /// handled by the backend itself
-    parameter int unsigned NumDim = 32'd2,
+    parameter int unsigned NumDim = 32'd3,
     /// Address type
     parameter type addr_t = logic,
     /// 1D iDMA request type
