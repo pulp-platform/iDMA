@@ -298,23 +298,13 @@ module tb_idma_desc64_top #(
 
             wait (generated_stimuli.size() > '0);
 
-            i_reg_iface_driver.send_read(
-                .addr (IDMA_DESC64_STATUS_OFFSET),
-                .data (status)                    ,
+            i_reg_iface_driver.send_write(
+                .addr (IDMA_DESC64_DESC_ADDR_OFFSET) ,
+                .data (current_stimulus_group[0].base),
+                .strb (8'hff)                         ,
                 .error(error)
             );
-            if ((status & 64'b10) == 64'b0) begin
-                // the fifos are not full yet, so we can submit
-                current_stimulus_group = generated_stimuli.pop_front();
-
-                i_reg_iface_driver.send_write(
-                    .addr (IDMA_DESC64_DESC_ADDR_OFFSET) ,
-                    .data (current_stimulus_group[0].base),
-                    .strb (8'hff)                         ,
-                    .error(error)
-                );
-                inflight_stimuli.push_back(current_stimulus_group);
-            end
+            inflight_stimuli.push_back(current_stimulus_group);
         end
     endtask
 
@@ -652,6 +642,7 @@ module tb_idma_desc64_top #(
         end else begin
             $display("Simulation finished in a timely manner.");
         end
+        $display("Saw %d descriptors."     , number_of_descriptors);
         $display("Read  address errors: %d", read_addr_errors);
         $display("Read  length  errors: %d", read_length_errors);
         $display("Read  size    errors: %d", read_size_errors);

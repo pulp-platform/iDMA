@@ -63,7 +63,7 @@ module idma_desc64_reg_wrapper #(
         // only take into account the fifo if a write is going to it
         if (reg_req_i.addr == IDMA_DESC64_DESC_ADDR_OFFSET) begin
             reg_rsp_o.ready = response.ready && descriptor_fifo_ready_i;
-            descriptor_fifo_valid_o = descriptor_fifo_valid_q;
+            descriptor_fifo_valid_o = reg2hw_o.desc_addr.qe || descriptor_fifo_valid_q;
         end else begin
             reg_rsp_o.ready = response.ready;
             descriptor_fifo_valid_o = '0;
@@ -72,7 +72,7 @@ module idma_desc64_reg_wrapper #(
 
     always_comb begin
         descriptor_fifo_valid_d = descriptor_fifo_valid_q;
-        if (reg2hw_o.desc_addr.qe) begin
+        if (reg2hw_o.desc_addr.qe && !descriptor_fifo_ready_i) begin
             descriptor_fifo_valid_d = 1'b1;
         end else if (descriptor_fifo_ready_i) begin
             descriptor_fifo_valid_d = '0;
