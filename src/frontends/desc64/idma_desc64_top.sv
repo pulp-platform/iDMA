@@ -35,7 +35,11 @@ module idma_desc64_top #(
     parameter int unsigned PendingFifoDepth       =     8,
     /// How many requests the backend might have at the same time in its buffers.
     /// Usually, `NumAxInFlight + BufferDepth`
-    parameter int unsigned BackendDepth           =     0
+    parameter int unsigned BackendDepth           =     0,
+    /// Specifies how many unsent AWs/Ws are allowed
+    parameter int unsigned MaxAWWPending          =     1,
+    /// Specifies how many descriptors may be fetched speculatively
+    parameter int unsigned NSpeculation           =     4
 )(
     /// clock
     input  logic                  clk_i             ,
@@ -120,6 +124,8 @@ typedef struct packed {
     addr_t       dest_addr;
 } descriptor_t;
 
+typedef logic [$clog2(NSpeculation + 1)-1:0] flush_t;
+
 idma_req_t idma_req;
 logic      idma_req_valid;
 logic      idma_req_ready;
@@ -154,6 +160,9 @@ logic [1:0]                        ws_per_writeback;
 logic [$clog2(MaxAWWPending):0] w_counter_q, w_counter_d;
 logic                           aw_tx;
 logic                           w_tx;
+
+flush_t n_requests_to_flush;
+logic   n_requests_to_flush_valid;
 
 addr_t input_addr;
 logic  input_addr_valid, input_addr_ready;
@@ -260,13 +269,15 @@ idma_desc64_reg_wrapper #(
     .input_addr_ready_i (input_addr_ready)
 );
 
-idma_desc64_ar_gen #(
+idma_desc64_ar_gen_prefetch #(
     .DataWidth    (DataWidth),
+    .NSpeculation (NSpeculation),
     .descriptor_t (descriptor_t),
     .axi_ar_chan_t(axi_ar_chan_t),
     .axi_id_t     (logic [AxiIdWidth-1:0]),
     .usage_t      (logic [$bits(idma_req_available)-1:0]),
-    .addr_t       (addr_t)
+    .addr_t       (addr_t),
+    .flush_t      (flush_t)
 ) i_ar_gen (
     .clk_i,
     .rst_ni,
@@ -280,6 +291,8 @@ idma_desc64_ar_gen #(
     .next_address_from_descriptor_i      (next_addr_from_desc),
     .next_address_from_descriptor_valid_i(next_addr_from_desc_valid),
     .idma_req_available_slots_i          (idma_req_available),
+    .n_requests_to_flush_o               (n_requests_to_flush),
+    .n_requests_to_flush_valid_o         (n_requests_to_flush_valid),
     .feedback_addr_o                     (feedback_addr),
     .feedback_addr_valid_o               (feedback_addr_valid),
     .busy_o                              (ar_busy)
@@ -295,8 +308,8 @@ idma_desc64_reader #(
     .clk_i,
     .rst_ni,
     .r_chan_i                    (master_rsp_i.r),
-    .r_chan_valid_i              (master_rsp_i.r_valid),
-    .r_chan_ready_o              (master_req_o.r_ready),
+    .r_chan_valid_i              (gated_r_valid),
+    .r_chan_ready_o              (gated_r_ready),
     .idma_req_o                  (idma_req),
     .idma_req_valid_o            (idma_req_valid),
     .idma_req_ready_i            (idma_req_ready),
@@ -323,6 +336,20 @@ stream_fifo #(
     .data_o    (queued_addr),
     .valid_o   (queued_addr_valid),
     .ready_i   (queued_addr_ready)
+);
+
+idma_desc64_reader_gater #(
+    .flush_t(flush_t)
+) i_reader_gater (
+    .clk_i,
+    .rst_ni,
+    .n_to_flush_i      (n_requests_to_flush),
+    .n_to_flush_valid_i(n_requests_to_flush_valid),
+    .r_valid_i         (master_rsp_i.r_valid),
+    .r_ready_o         (master_req_o.r_ready),
+    .r_valid_o         (gated_r_valid),
+    .r_ready_i         (gated_r_ready),
+    .r_last_i          (master_rsp_i.r.last)
 );
 
 stream_fifo #(

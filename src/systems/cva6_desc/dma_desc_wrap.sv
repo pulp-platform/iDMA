@@ -45,6 +45,9 @@ module dma_desc_wrap #(
   // has one less bit for the mux not to error
   typedef logic [AxiIdWidth-2:0]       post_mux_id_t;
 
+  localparam int unsigned NumAxInFlight = 2;
+  localparam int unsigned BufferDepth   = 3;
+
   axi_slv_req_t axi_slv_req;
   axi_slv_rsp_t axi_slv_rsp;
 
@@ -89,14 +92,16 @@ module dma_desc_wrap #(
     .reg_rsp_t        ( dma_reg_rsp_t                  ),
     .InputFifoDepth   ( 4 ),
     .PendingFifoDepth ( 4 ),
-    .BackendDepth     ( NumAxInFlight + BufferDepth )
+    .BackendDepth     ( NumAxInFlight + BufferDepth ),
+    .MaxAWWPending    ( 1 ),
+    .NSpeculation     ( 4 )
   ) i_dma_desc64 (
     .clk_i,
     .rst_ni,
     .master_req_o     ( axi_fe_mst_req   ),
     .master_rsp_i     ( axi_fe_mst_rsp   ),
-    .axi_ar_id_i      ( (AxiIdWidth-1)'1 ),
-    .axi_aw_id_i      ( (AxiIdWidth-1)'1 ),
+    .axi_ar_id_i      (               '1 ),
+    .axi_aw_id_i      (               '1 ),
     .slave_req_i      ( dma_reg_slv_req  ),
     .slave_rsp_o      ( dma_reg_slv_rsp  ),
     .idma_req_o       ( idma_req         ),
@@ -114,8 +119,8 @@ module dma_desc_wrap #(
     .AddrWidth           ( AxiAddrWidth                ),
     .UserWidth           ( AxiUserWidth                ),
     .AxiIdWidth          ( AxiIdWidth-1                ),
-    .NumAxInFlight       ( 2                           ),
-    .BufferDepth         ( 3                           ),
+    .NumAxInFlight       ( NumAxInFlight               ),
+    .BufferDepth         ( BufferDepth                 ),
     .TFLenWidth          ( TFLenWidth                  ),
     .RAWCouplingAvail    ( 1'b1                        ),
     .MaskInvalidData     ( 1'b1                        ),

@@ -29,6 +29,7 @@ module tb_idma_desc64_bench #(
     parameter int unsigned InputFifoDepth     = 8,
     parameter int unsigned PendingFifoDepth   = 8,
     parameter int unsigned MaxAWWPending      = 8,
+    parameter int unsigned NSpeculation       = 2,
     // from backend tb
     parameter int unsigned BufferDepth         = 3,
     parameter int unsigned NumAxInFlight       = 3,
@@ -148,8 +149,17 @@ module tb_idma_desc64_bench #(
     axi_req_t  dma_be_master_request;
     mem_axi_resp_t axi_mem_response;
     mem_axi_req_t  axi_mem_request;
+    mem_axi_resp_t axi_throttle_rsp;
+    mem_axi_req_t  axi_throttle_req;
     mem_axi_resp_t axi_multicut_rsp;
     mem_axi_req_t  axi_multicut_req;
+
+    AXI_BUS_DV #(
+        .AXI_ADDR_WIDTH(64),
+        .AXI_DATA_WIDTH(64),
+        .AXI_ID_WIDTH(3),
+        .AXI_USER_WIDTH(1)
+    ) i_axi_be_bus (clk);
 
     AXI_BUS_DV #(
         .AXI_ADDR_WIDTH(64),
@@ -194,7 +204,9 @@ module tb_idma_desc64_bench #(
         .reg_req_t       (reg_req_t),
         .InputFifoDepth  (InputFifoDepth),
         .PendingFifoDepth(PendingFifoDepth),
-        .BackendDepth    (NumAxInFlight + BufferDepth)
+        .BackendDepth    (NumAxInFlight + BufferDepth),
+        .MaxAWWPending   (MaxAWWPending),
+        .NSpeculation    (NSpeculation)
     ) i_dut (
         .clk_i           (clk),
         .rst_ni          (rst_n),
@@ -287,8 +299,8 @@ module tb_idma_desc64_bench #(
         .test_i     (1'b0),
         .slv_reqs_i ({dma_be_master_request, dma_fe_master_request}),
         .slv_resps_o({dma_be_master_response, dma_fe_master_response}),
-        .mst_req_o  (axi_multicut_req),
-        .mst_resp_i (axi_multicut_rsp)
+        .mst_req_o  (axi_throttle_req),
+        .mst_resp_i (axi_throttle_rsp)
     );
 
     // sim memory
@@ -310,6 +322,23 @@ module tb_idma_desc64_bench #(
         .axi_rsp_o  ( axi_mem_response  )
     );
 
+    // allow only 5 outstanding requests at the time
+    axi_throttle #(
+        .MaxNumAwPending(5),
+        .MaxNumArPending(5),
+        .axi_req_t(mem_axi_req_t),
+        .axi_rsp_t(mem_axi_resp_t)
+    ) i_axi_throttle (
+        .clk_i (clk),
+        .rst_ni(rst_n),
+        .req_i(axi_throttle_req),
+        .rsp_o(axi_throttle_rsp),
+        .req_o(axi_multicut_req),
+        .rsp_i(axi_multicut_rsp),
+        .w_credit_i ('d5),
+        .r_credit_i ('d5)
+    );
+
     // delay the signals using AXI4 multicuts
     axi_multicut #(
         .NoCuts     ( MemLatency    ),
@@ -325,8 +354,8 @@ module tb_idma_desc64_bench #(
         .rst_ni      ( rst_n                  ),
         .slv_req_i   ( axi_multicut_req       ),
         .slv_resp_o  ( axi_multicut_rsp       ),
-        .mst_req_o   ( axi_mem_request            ),
-        .mst_resp_i  ( axi_mem_response            )
+        .mst_req_o   ( axi_mem_request        ),
+        .mst_resp_i  ( axi_mem_response       )
     );
 
     `REG_BUS_ASSIGN_TO_REQ(dma_slave_request, i_reg_iface_bus);
@@ -335,12 +364,16 @@ module tb_idma_desc64_bench #(
     `AXI_ASSIGN_FROM_REQ(i_axi_iface_bus, dma_fe_master_request);
     `AXI_ASSIGN_FROM_RESP(i_axi_iface_bus, dma_fe_master_response);
 
+    `AXI_ASSIGN_FROM_REQ(i_axi_be_bus, dma_be_master_request);
+    `AXI_ASSIGN_FROM_RESP(i_axi_be_bus, dma_be_master_response);
+
     initial begin
         i_axi_iface_driver.reset_slave();
     end
 
     // queues for communication and data transfer
     stimulus_t   generated_stimuli[$][$];
+    result_t     ar_seen_result[$];
     result_t     inflight_results_after_reads[$];
     result_t     inflight_results_submitted_to_be[$];
     result_t     aw_seen_result[$];
@@ -385,7 +418,8 @@ module tb_idma_desc64_bench #(
                 if (contiguous != NumContiguous) begin
                     base_current += 'd32;
                 end else begin
-                    base_current += 'd64;
+                    // make sure all invalid prefetches grab Xs from memory
+                    base_current += 'h1000;
                     contiguous    = '0;
                 end
             end
@@ -425,7 +459,8 @@ module tb_idma_desc64_bench #(
                 if (contiguous != NumContiguous) begin
                     base_current += 'd32;
                 end else begin
-                    base_current += 'd64;
+                    // make sure all invalid prefetches grab Xs from memory
+                    base_current += 'h1000;
                     contiguous    = '0;
                 end
             end
@@ -475,7 +510,8 @@ module tb_idma_desc64_bench #(
 
     task collect_responses();
         fork
-            axi_master_aquire_ars();
+            axi_master_acquire_ars();
+            axi_master_acquire_rs();
             axi_master_acquire_aw();
             axi_master_acquire_w();
             axi_master_acquire_irqs();
@@ -528,8 +564,6 @@ module tb_idma_desc64_bench #(
         automatic logic [63:0] result = '0;
         automatic logic [31:0] flags  = '0;
 
-        $display("IRQ flag is %d", stim.do_irq);
-
         flags[0]     = stim.do_irq;
         flags[2:1]   = stim.burst.opt.src.burst;
         flags[4:3]   = stim.burst.opt.dst.burst;
@@ -547,7 +581,7 @@ module tb_idma_desc64_bench #(
         return result;
     endfunction
 
-    task axi_master_aquire_ars();
+    task axi_master_acquire_ars();
         @(posedge rst_n);
         forever begin
             automatic ax_beat_t ar_beat;
@@ -558,9 +592,33 @@ module tb_idma_desc64_bench #(
             current_result.read_address = ar_beat.ax_addr;
             current_result.read_length  = ar_beat.ax_len;
             current_result.read_size    = ar_beat.ax_size;
-            inflight_results_after_reads.push_back(current_result);
+            ar_seen_result.push_back(current_result);
         end
-    endtask
+    endtask : axi_master_acquire_ars
+
+    task axi_master_acquire_rs();
+        @(posedge rst_n);
+        forever begin
+            automatic r_beat_t r_beat;
+            automatic result_t current_result;
+            wait (ar_seen_result.size() > 0);
+            current_result = ar_seen_result.pop_front();
+            i_axi_iface_driver.mon_r(r_beat);
+            if ($isunknown(r_beat.r_data)) begin
+                // drop current result
+                // as it is a prefetched one
+            end else begin
+                inflight_results_after_reads.push_back(current_result);
+            end
+            // four reads per descriptor in the 64-bit case
+            i_axi_iface_driver.mon_r(r_beat);
+            i_axi_iface_driver.mon_r(r_beat);
+            i_axi_iface_driver.mon_r(r_beat);
+            if (!r_beat.r_last) begin
+                $error("R acquisition has come out-of-sync.");
+            end
+        end
+    endtask : axi_master_acquire_rs
 
     task axi_master_acquire_aw();
         // set to one to skip first submission of what would be an invalid result
@@ -568,7 +626,6 @@ module tb_idma_desc64_bench #(
         @(posedge rst_n);
         forever begin
             automatic ax_beat_t aw_beat;
-            @(posedge clk);
             i_axi_iface_driver.mon_aw(aw_beat);
 
             wait (inflight_results_submitted_to_be.size() > 0);
