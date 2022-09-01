@@ -1,3 +1,10 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Axel Vanoni <axvanoni@student.ethz.ch>
+
+# run tests with only chaining
 source scripts/compile_vsim.tcl
 vsim tb_idma_desc64_top -t 1ps \
     -GMaxChainedDescriptors=100 \

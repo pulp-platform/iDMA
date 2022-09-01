@@ -66,44 +66,47 @@ module dma_desc_wrap #(
   `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, post_mux_id_t, addr_t, tf_len_t)
   `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
 
-  idma_req_t  dma_be_req;
-  logic       dma_be_req_valid;
-  logic       dma_be_req_ready;
+  idma_req_t  idma_req;
+  logic       idma_req_valid;
+  logic       idma_req_ready;
 
-  idma_rsp_t  dma_be_rsp;
-  logic       dma_be_rsp_valid;
-  logic       dma_be_rsp_ready;
+  idma_rsp_t  idma_rsp;
+  logic       idma_rsp_valid;
+  logic       idma_rsp_ready;
   idma_pkg::idma_busy_t idma_busy;
 
   idma_desc64_top #(
-    .AddrWidth        ( AxiAddrWidth                ),
-    .DataWidth        ( AxiDataWidth                ),
-    .AxiIdWidth       ( AxiIdWidth - 1              ),
-    .idma_req_t       ( idma_req_t                  ),
-    .idma_rsp_t       ( idma_rsp_t                  ),
-    .axi_req_t        ( dma_axi_mst_post_mux_req_t  ),
-    .axi_rsp_t        ( dma_axi_mst_post_mux_resp_t ),
-    .reg_req_t        ( dma_reg_req_t               ),
-    .reg_rsp_t        ( dma_reg_rsp_t               ),
+    .AddrWidth        ( AxiAddrWidth                   ),
+    .DataWidth        ( AxiDataWidth                   ),
+    .AxiIdWidth       ( AxiIdWidth - 1                 ),
+    .idma_req_t       ( idma_req_t                     ),
+    .idma_rsp_t       ( idma_rsp_t                     ),
+    .axi_req_t        ( dma_axi_mst_post_mux_req_t     ),
+    .axi_rsp_t        ( dma_axi_mst_post_mux_resp_t    ),
+    .axi_ar_chan_t    ( dma_axi_mst_post_mux_ar_chan_t ),
+    .axi_r_chan_t     ( dma_axi_mst_post_mux_r_chan_t  ),
+    .reg_req_t        ( dma_reg_req_t                  ),
+    .reg_rsp_t        ( dma_reg_rsp_t                  ),
     .InputFifoDepth   ( 8 ),
-    .PendingFifoDepth ( 8 )
+    .PendingFifoDepth ( 8 ),
+    .MaxAWWPending    ( 1 )
   ) i_dma_desc64 (
     .clk_i,
     .rst_ni,
-    .master_req_o         ( axi_fe_mst_req     ),
-    .master_rsp_i         ( axi_fe_mst_rsp     ),
-    .axi_r_id_i           ( (AxiIdWidth-1)'1   ),
-    .axi_w_id_i           ( (AxiIdWidth-1)'1   ),
-    .slave_req_i          ( dma_reg_slv_req    ),
-    .slave_rsp_o          ( dma_reg_slv_rsp    ),
-    .dma_be_req_o         ( dma_be_req         ),
-    .dma_be_req_valid_o   ( dma_be_req_valid   ),
-    .dma_be_req_ready_i   ( dma_be_req_ready   ),
-    .dma_be_rsp_i         ( dma_be_rsp         ),
-    .dma_be_rsp_valid_i   ( dma_be_rsp_valid   ),
-    .dma_be_rsp_ready_o   ( dma_be_rsp_ready   ),
-    .dma_be_idle_i        ( ~|idma_busy        ),
-    .irq_o                ( irq_o              )
+    .master_req_o     ( axi_fe_mst_req   ),
+    .master_rsp_i     ( axi_fe_mst_rsp   ),
+    .axi_ar_id_i      ( (AxiIdWidth-1)'1 ),
+    .axi_aw_id_i      ( (AxiIdWidth-1)'1 ),
+    .slave_req_i      ( dma_reg_slv_req  ),
+    .slave_rsp_o      ( dma_reg_slv_rsp  ),
+    .idma_req_o       ( idma_req         ),
+    .idma_req_valid_o ( idma_req_valid   ),
+    .idma_req_ready_i ( idma_req_ready   ),
+    .idma_rsp_i       ( idma_rsp         ),
+    .idma_rsp_valid_i ( idma_rsp_valid   ),
+    .idma_rsp_ready_o ( idma_rsp_ready   ),
+    .idma_busy_i      ( |idma_busy       ),
+    .irq_o            ( irq_o            )
   );
 
   idma_backend #(
@@ -129,23 +132,23 @@ module dma_desc_wrap #(
   ) i_idma_backend (
     .clk_i,
     .rst_ni,
-    .testmode_i    ( testmode_i         ),
+    .testmode_i    ( testmode_i        ),
 
-    .idma_req_i    ( dma_be_req         ),
-    .req_valid_i   ( dma_be_req_valid   ),
-    .req_ready_o   ( dma_be_req_ready   ),
+    .idma_req_i    ( idma_req          ),
+    .req_valid_i   ( idma_req_valid    ),
+    .req_ready_o   ( idma_req_ready    ),
 
-    .idma_rsp_o    ( dma_be_rsp         ),
-    .rsp_valid_o   ( dma_be_rsp_valid   ),
-    .rsp_ready_i   ( dma_be_rsp_ready   ),
+    .idma_rsp_o    ( idma_rsp          ),
+    .rsp_valid_o   ( idma_rsp_valid    ),
+    .rsp_ready_i   ( idma_rsp_ready    ),
 
-    .idma_eh_req_i ( '0                 ), // No error handling
-    .eh_req_valid_i( 1'b1               ),
-    .eh_req_ready_o( /*NOT CONNECTED*/  ),
+    .idma_eh_req_i ( '0                ), // No error handling
+    .eh_req_valid_i( 1'b1              ),
+    .eh_req_ready_o( /*NOT CONNECTED*/ ),
 
-    .axi_req_o     ( axi_be_mst_req     ),
-    .axi_rsp_i     ( axi_be_mst_rsp     ),
-    .busy_o        ( idma_busy          )
+    .axi_req_o     ( axi_be_mst_req    ),
+    .axi_rsp_i     ( axi_be_mst_rsp    ),
+    .busy_o        ( idma_busy         )
   );
 
   axi_mux #(

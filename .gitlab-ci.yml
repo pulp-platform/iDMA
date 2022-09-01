@@ -71,3 +71,13 @@ tiny-dma-run:
         job: prepare-non-free
     strategy: depend
 
+frontend-descriptor-run:
+  stage: iDMA
+  needs:
+    - prepare-non-free
+  trigger:
+    include:
+      - artifact: idma-non-free/ci/gitlab-frontend-descriptor-ci.yml
+        job: prepare-non-free
+    strategy: depend
+

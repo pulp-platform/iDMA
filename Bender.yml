@@ -63,7 +63,9 @@ sources:
     # Level 0
     - src/frontends/desc64/idma_desc64_reg_pkg.sv
     - src/frontends/desc64/idma_desc64_reg_top.sv
-    - src/frontends/desc64/idma_desc64_shared_counter.sv
+    - src/frontends/desc64/idma_desc64_ar_gen.sv
+    - src/frontends/desc64/idma_desc64_reader.sv
+    - src/frontends/desc64/idma_desc64_reshaper.sv
     # Level 1
     - src/frontends/desc64/idma_desc64_reg_wrapper.sv
     # Level 2

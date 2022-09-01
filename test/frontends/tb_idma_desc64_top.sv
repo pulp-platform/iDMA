@@ -17,11 +17,15 @@ import axi_pkg::*;
 import reg_test::reg_driver;
 
 module tb_idma_desc64_top #(
-    parameter integer NumberOfTests           = 100,
-    parameter integer SimulationTimeoutCycles = 100000,
-    parameter integer MaxChainedDescriptors   = 10,
-    parameter integer MinChainedDescriptors   = 1
-
+    parameter int unsigned NumberOfTests           = 100,
+    parameter int unsigned SimulationTimeoutCycles = 100000,
+    parameter int   signed ChainedDescriptors      = -1,
+    parameter int unsigned MaxChainedDescriptors   = 10,
+    parameter int unsigned MinChainedDescriptors   = 1,
+    parameter int unsigned InputFifoDepth          = 8,
+    parameter int unsigned PendingFifoDepth        = 8,
+    parameter int unsigned BackendDepth            = 5,
+    parameter int unsigned MaxAWWPending           = 8
 ) ();
     localparam time PERIOD     = 10ns;
     localparam time APPL_DELAY = PERIOD / 4;
@@ -128,7 +132,7 @@ module tb_idma_desc64_top #(
 
     idma_req_t dma_be_req;
 
-    logic dma_be_idle;
+    logic backend_busy;
     logic dma_be_req_valid;
     logic dma_be_req_ready;
     logic dma_be_rsp_valid;
@@ -136,32 +140,38 @@ module tb_idma_desc64_top #(
     logic irq;
 
     idma_desc64_top #(
-        .AddrWidth  (64),
-        .DataWidth  (64),
-        .AxiIdWidth (3),
-        .idma_req_t (idma_req_t),
-        .idma_rsp_t (idma_rsp_t),
-        .axi_rsp_t  (axi_resp_t),
-        .axi_req_t  (axi_req_t),
-        .reg_rsp_t  (reg_rsp_t),
-        .reg_req_t  (reg_req_t)
+        .AddrWidth       (64),
+        .DataWidth       (64),
+        .AxiIdWidth      (3),
+        .idma_req_t      (idma_req_t),
+        .idma_rsp_t      (idma_rsp_t),
+        .axi_rsp_t       (axi_resp_t),
+        .axi_req_t       (axi_req_t),
+        .axi_ar_chan_t   (axi_ar_chan_t),
+        .axi_r_chan_t    (axi_r_chan_t),
+        .reg_rsp_t       (reg_rsp_t),
+        .reg_req_t       (reg_req_t),
+        .InputFifoDepth  (InputFifoDepth),
+        .PendingFifoDepth(PendingFifoDepth),
+        .BackendDepth    (BackendDepth),
+        .MaxAWWPending   (MaxAWWPending)
     ) i_dut (
-        .clk_i               (clk),
-        .rst_ni              (rst_n),
-        .master_req_o        (dma_master_request),
-        .master_rsp_i        (dma_master_response),
-        .axi_r_id_i          (3'b111),
-        .axi_w_id_i          (3'b111),
-        .slave_req_i         (dma_slave_request),
-        .slave_rsp_o         (dma_slave_response),
-        .dma_be_req_o        (dma_be_req),
-        .dma_be_req_valid_o  (dma_be_req_valid),
-        .dma_be_req_ready_i  (dma_be_req_ready),
-        .dma_be_rsp_i        ('0),
-        .dma_be_rsp_valid_i  (dma_be_rsp_valid),
-        .dma_be_rsp_ready_o  (dma_be_rsp_ready),
-        .dma_be_idle_i       (dma_be_idle),
-        .irq_o               (irq)
+        .clk_i           (clk),
+        .rst_ni          (rst_n),
+        .master_req_o    (dma_master_request),
+        .master_rsp_i    (dma_master_response),
+        .axi_ar_id_i     (3'b111),
+        .axi_aw_id_i     (3'b111),
+        .slave_req_i     (dma_slave_request),
+        .slave_rsp_o     (dma_slave_response),
+        .idma_req_o      (dma_be_req),
+        .idma_req_valid_o(dma_be_req_valid),
+        .idma_req_ready_i(dma_be_req_ready),
+        .idma_rsp_i      ('0),
+        .idma_rsp_valid_i(dma_be_rsp_valid),
+        .idma_rsp_ready_o(dma_be_rsp_ready),
+        .idma_busy_i     (backend_busy),
+        .irq_o           (irq)
     );
 
     assign dma_slave_request.addr  = i_reg_iface_bus.addr;
@@ -180,16 +190,15 @@ module tb_idma_desc64_top #(
         i_axi_iface_driver.reset_slave();
         dma_be_rsp_valid = 1'b0;
         dma_be_req_ready = 1'b0;
+        backend_busy = 1'b0;
     end
 
     // queues for communication and data transfer
     stimulus_t   generated_stimuli[$][$];
     stimulus_t   inflight_stimuli[$][$];
-    logic        inflight_be_tokens[$];
     result_t     inflight_results_after_reads[$];
     result_t     inflight_results_submitted_to_be[$];
     result_t     result_queue[$];
-    assign dma_be_idle             = inflight_be_tokens.size() == 0;
 
     function automatic void generate_stimuli();
         repeat (NumberOfTests) begin
@@ -197,10 +206,14 @@ module tb_idma_desc64_top #(
             automatic stimulus_t current_stimuli_group[$];
             automatic int        number_of_descriptors_in_test;
 
-            void'(std::randomize(number_of_descriptors_in_test) with {
-                number_of_descriptors_in_test >= MinChainedDescriptors;
-                number_of_descriptors_in_test <= MaxChainedDescriptors;
-            });
+            if (ChainedDescriptors < 0) begin
+                void'(std::randomize(number_of_descriptors_in_test) with {
+                    number_of_descriptors_in_test >= MinChainedDescriptors;
+                    number_of_descriptors_in_test <= MaxChainedDescriptors;
+                });
+            end else begin
+                number_of_descriptors_in_test = ChainedDescriptors;
+            end
 
             current_stimulus = new();
             if (!current_stimulus.randomize()) begin
@@ -280,7 +293,6 @@ module tb_idma_desc64_top #(
         fork
             axi_master_aquire_ars();
             axi_master_acquire_aw_w_and_irqs();
-            backend_submission_monitor();
             acquire_bursts();
         join
     endtask
@@ -297,6 +309,7 @@ module tb_idma_desc64_top #(
             automatic logic        error;
 
             wait (generated_stimuli.size() > '0);
+            current_stimulus_group = generated_stimuli.pop_front();
 
             i_reg_iface_driver.send_write(
                 .addr (IDMA_DESC64_DESC_ADDR_OFFSET) ,
@@ -441,7 +454,13 @@ module tb_idma_desc64_top #(
             @(posedge clk);
             // wait for either an irq or an aw_beat
             fork
-                wait(irq);
+                forever begin
+                    #(ACQ_DELAY);
+                    if (irq) begin
+                        break;
+                    end
+                    @(posedge clk);
+                end
                 i_axi_iface_driver.mon_aw(aw_beat);
             join_any
             disable fork;
@@ -475,26 +494,10 @@ module tb_idma_desc64_top #(
         end
     endtask
 
-    task backend_submission_monitor();
-        @(posedge rst_n);
-        forever begin
-            forever begin
-                @(posedge clk);
-                #(ACQ_DELAY);
-                if (dma_be_req_valid && dma_be_req_ready) break;
-            end
-            // annotate that a job has entered the backend
-            inflight_be_tokens.push_back(1'b1);
-        end
-    endtask
-
     task backend_tx_done_notifier();
         @(posedge rst_n);
         forever begin
-            wait (inflight_be_tokens.size() > 0);
-
-            // remove token, as we handled the request
-            void'(inflight_be_tokens.pop_front());
+            wait (backend_busy);
 
             rand_wait(5, 20, clk);
 
@@ -505,6 +508,7 @@ module tb_idma_desc64_top #(
             @(posedge clk);
             #(APPL_DELAY);
             dma_be_rsp_valid = 1'b0;
+            backend_busy = 1'b0;
         end
     endtask
 
@@ -527,16 +531,24 @@ module tb_idma_desc64_top #(
     endtask
 
     task backend_acceptor();
-        automatic result_t current_result;
         @(posedge rst_n);
         forever begin
-            wait (dma_be_req_valid);
+            wait (!backend_busy);
             @(posedge clk);
             #(APPL_DELAY)
             dma_be_req_ready = 1'b1;
+            #(ACQ_DELAY - APPL_DELAY);
+            forever begin
+                if (dma_be_req_valid) begin
+                    break;
+                end
+                @(posedge clk);
+                #(ACQ_DELAY);
+            end
             @(posedge clk);
             #(APPL_DELAY)
             dma_be_req_ready = 1'b0;
+            backend_busy = 1'b1;
         end
     endtask
 

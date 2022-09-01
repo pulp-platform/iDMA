@@ -4,12 +4,14 @@
 
 # Axel Vanoni <axvanoni@student.ethz.ch>
 
-# run frontend tests without chaining
 source scripts/compile_vsim.tcl
-vsim tb_idma_desc64_top -t 1ps \
-    -GNumberOfTests=20 \
-    -GMaxChainedDescriptors=1 \
-    -GSimulationTimeoutCycles=2000 \
+vsim tb_idma_desc64_bench -t 1ps \
+    -GNumberOfTests=150 \
+    -GChainedDescriptors=20 \
+    -GSimulationTimeoutCycles=300000 \
+    -GTransferLength=24 \
+    -GDoIRQ=0 \
+    +trace_file=trace-test.log \
     -voptargs=+acc
 #-voptargs=-pedantic
 
