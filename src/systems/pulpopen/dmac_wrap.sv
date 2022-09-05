@@ -119,8 +119,7 @@ module dmac_wrap #(
   `AXI_TYPEDEF_RESP_T(mst_resp_t, mst_b_chan_t, mst_r_chan_t)
   // BUS definitions
   mst_req_t  tcdm_req, soc_req;
-  mem_req_t  tcdm_read_req, tcdm_write_req;
-  mst_resp_t soc_rsp, tcdm_read_rsp, tcdm_write_rsp;
+  mst_resp_t soc_rsp;
   mst_resp_t tcdm_rsp;
   slv_req_t  [NUM_STREAMS-1:0] dma_req;
   slv_resp_t [NUM_STREAMS-1:0] dma_rsp;
@@ -242,7 +241,7 @@ module dmac_wrap #(
   localparam logic [1:0][31:0] RepWidths = '{default: 32'd32};
 
   idma_nd_midend #(
-    .NumDim       ( 32'd2         ),
+    .NumDim       ( NumDim        ),
     .addr_t       ( addr_t        ),
     .idma_req_t   ( idma_req_t    ),
     .idma_rsp_t   ( idma_rsp_t    ),
@@ -388,8 +387,8 @@ module dmac_wrap #(
     .clk_i                  ( clk_i                 ),
     .rst_ni                 ( rst_ni                ),
     .test_i                 ( test_mode_i           ),
-    .slv_ports_req_i        ( dma_req          ),
-    .slv_ports_resp_o       ( dma_rsp          ),
+    .slv_ports_req_i        ( dma_req               ),
+    .slv_ports_resp_o       ( dma_rsp               ),
     .mst_ports_req_o        ( { tcdm_req, soc_req } ),
     .mst_ports_resp_i       ( { tcdm_rsp, soc_rsp } ),
     .addr_map_i             ( addr_map              ),
@@ -397,83 +396,40 @@ module dmac_wrap #(
     .default_mst_port_i     ( '0                    )
   );
 
-  // split AXI bus in read and write
-  always_comb begin : proc_tcdm_axi_rw_split
-    `AXI_SET_R_STRUCT(tcdm_rsp.r, tcdm_read_rsp.r)
-    tcdm_rsp.r_valid        = tcdm_read_rsp.r_valid;
-    tcdm_rsp.ar_ready       = tcdm_read_rsp.ar_ready;
-    `AXI_SET_B_STRUCT(tcdm_rsp.b, tcdm_write_rsp.b)
-    tcdm_rsp.b_valid        = tcdm_write_rsp.b_valid;
-    tcdm_rsp.w_ready        = tcdm_write_rsp.w_ready;
-    tcdm_rsp.aw_ready       = tcdm_write_rsp.aw_ready;
-
-    tcdm_write_req          = '0;
-    `AXI_SET_AW_STRUCT(tcdm_write_req.aw, tcdm_req.aw)
-    tcdm_write_req.aw.addr  = tcdm_req.aw.addr[ADDR_WIDTH-1:0];
-    tcdm_write_req.aw_valid = tcdm_req.aw_valid;
-    `AXI_SET_W_STRUCT(tcdm_write_req.w, tcdm_req.w)
-    tcdm_write_req.w_valid  = tcdm_req.w_valid;
-    tcdm_write_req.b_ready  = tcdm_req.b_ready;
-
-    tcdm_read_req           = '0;
-    `AXI_SET_AR_STRUCT(tcdm_read_req.ar, tcdm_req.ar)
-    tcdm_read_req.ar.addr   = tcdm_req.ar.addr[ADDR_WIDTH-1:0];
-    tcdm_read_req.ar_valid  = tcdm_req.ar_valid;
-    tcdm_read_req.r_ready   = tcdm_req.r_ready;
-  end
-
-  logic tcdm_master_we_0, tcdm_master_we_1, tcdm_master_we_2, tcdm_master_we_3;
-
   localparam int unsigned TcdmFifoDepth = 1;
 
-  idma_axi_to_mem #(
-    .axi_req_t   ( mem_req_t           ),
-    .axi_resp_t  ( mst_resp_t          ),
-    .AddrWidth   ( ADDR_WIDTH          ),
-    .DataWidth   ( AXI_DATA_WIDTH      ),
-    .IdWidth     ( MstIdxWidth         ),
-    .NumBanks    ( 2                   ),
-    .BufDepth    ( TcdmFifoDepth       )
-  ) i_axi_to_mem_read (
-    .clk_i        ( clk_i         ),
-    .rst_ni       ( rst_ni        ),
-    .busy_o       ( ),
-    .axi_req_i    ( tcdm_read_req ),
-    .axi_resp_o   ( tcdm_read_rsp ),
-    .mem_req_o    ( { tcdm_master[0].req,     tcdm_master[1].req     } ),
-    .mem_gnt_i    ( { tcdm_master[0].gnt,     tcdm_master[1].gnt     } ),
-    .mem_addr_o   ( { tcdm_master[0].add,     tcdm_master[1].add     } ),
-    .mem_wdata_o  ( { tcdm_master[0].data,    tcdm_master[1].data    } ),
-    .mem_strb_o   ( { tcdm_master[0].be,      tcdm_master[1].be      } ),
-    // .mem_atop_o   ( ),
-    .mem_we_o     ( { tcdm_master_we_0,       tcdm_master_we_1       } ),
-    .mem_rvalid_i ( { tcdm_master[0].r_valid, tcdm_master[1].r_valid } ),
-    .mem_rdata_i  ( { tcdm_master[0].r_data,  tcdm_master[1].r_data  } )
-  );
-
-  idma_axi_to_mem #(
-    .axi_req_t   ( mem_req_t           ),
-    .axi_resp_t  ( mst_resp_t          ),
-    .AddrWidth   ( ADDR_WIDTH          ),
-    .DataWidth   ( AXI_DATA_WIDTH      ),
-    .IdWidth     ( MstIdxWidth         ),
-    .NumBanks    ( 2                   ),
-    .BufDepth    ( TcdmFifoDepth       )
-  ) i_axi_to_mem_write (
-    .clk_i        ( clk_i          ),
-    .rst_ni       ( rst_ni         ),
-    .busy_o       ( ),
-    .axi_req_i    ( tcdm_write_req ),
-    .axi_resp_o   ( tcdm_write_rsp ),
-    .mem_req_o    ( { tcdm_master[2].req,     tcdm_master[3].req     } ),
-    .mem_gnt_i    ( { tcdm_master[2].gnt,     tcdm_master[3].gnt     } ),
-    .mem_addr_o   ( { tcdm_master[2].add,     tcdm_master[3].add     } ),
-    .mem_wdata_o  ( { tcdm_master[2].data,    tcdm_master[3].data    } ),
-    .mem_strb_o   ( { tcdm_master[2].be,      tcdm_master[3].be      } ),
-    // .mem_atop_o   ( ),
-    .mem_we_o     ( { tcdm_master_we_2,       tcdm_master_we_3       } ),
-    .mem_rvalid_i ( { tcdm_master[2].r_valid, tcdm_master[3].r_valid } ),
-    .mem_rdata_i  ( { tcdm_master[2].r_data,  tcdm_master[3].r_data  } )
+  axi_to_mem_split #(
+    .axi_req_t    ( mem_req_t           ),
+    .axi_resp_t   ( mst_resp_t          ),
+    .AddrWidth    ( ADDR_WIDTH          ),
+    .AxiDataWidth ( AXI_DATA_WIDTH      ),
+    .IdWidth      ( MstIdxWidth         ),
+    .MemDataWidth ( DATA_WIDTH          ),
+    .BufDepth     ( TcdmFifoDepth       ),
+    .HideStrb     ( 1'b1                )
+  ) i_axi_to_mem (
+    .clk_i,
+    .rst_ni,
+    .busy_o       (),
+    .axi_req_i    ( tcdm_req ),
+    .axi_resp_o   ( tcdm_rsp ),
+    .mem_req_o    ( { tcdm_master[0].req,     tcdm_master[1].req,
+                        tcdm_master[2].req,     tcdm_master[3].req     } ),
+    .mem_gnt_i    ( { tcdm_master[0].gnt,     tcdm_master[1].gnt,
+                        tcdm_master[2].gnt,     tcdm_master[3].gnt     } ),
+    .mem_addr_o   ( { tcdm_master[0].add,     tcdm_master[1].add,
+                        tcdm_master[2].add,     tcdm_master[3].add     } ),
+    .mem_wdata_o  ( { tcdm_master[0].data,    tcdm_master[1].data,
+                        tcdm_master[2].data,    tcdm_master[3].data    } ),
+    .mem_strb_o   ( { tcdm_master[0].be,      tcdm_master[1].be,
+                        tcdm_master[2].be,      tcdm_master[3].be      } ),
+    .mem_atop_o   ( ),
+    .mem_we_o     ( { tcdm_master_we_0,       tcdm_master_we_1,
+                        tcdm_master_we_2,       tcdm_master_we_3       } ),
+    .mem_rvalid_i ( { tcdm_master[0].r_valid, tcdm_master[1].r_valid,
+                        tcdm_master[2].r_valid, tcdm_master[3].r_valid } ),
+    .mem_rdata_i  ( { tcdm_master[0].r_data,  tcdm_master[1].r_data,
+                        tcdm_master[2].r_data,  tcdm_master[3].r_data  } )
   );
 
   // tie-off TCDM master port
