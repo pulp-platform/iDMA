@@ -10,7 +10,7 @@
         input byte_t byte_i,
         input addr_t addr_i
     );
-        i_idma_sim_mem.mem[addr_i] = byte_i;
+        i_axi_sim_mem.mem[addr_i] = byte_i;
     endtask
 
     // read a byte from the AXI-attached memory
@@ -18,8 +18,8 @@
         output byte_t byte_o,
         input  addr_t addr_i
     );
-        if (i_idma_sim_mem.mem.exists(addr_i))
-            byte_o = i_idma_sim_mem.mem[addr_i];
+        if (i_axi_sim_mem.mem.exists(addr_i))
+            byte_o = i_axi_sim_mem.mem[addr_i];
         else
             byte_o = '1;
     endtask
@@ -40,9 +40,9 @@
         input axi_pkg::resp_t resp_i
     );
         if (is_read_i)
-            i_idma_sim_mem.rerr[addr_i] = resp_i;
+            i_axi_sim_mem.rerr[addr_i] = resp_i;
         else
-            i_idma_sim_mem.werr[addr_i] = resp_i;
+            i_axi_sim_mem.werr[addr_i] = resp_i;
     endtask
 
     // compare if a byte is equal

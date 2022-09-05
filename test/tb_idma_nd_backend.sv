@@ -220,18 +220,18 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     );
 
     // sim memory
-    idma_sim_mem #(
+    axi_sim_mem #(
         .AddrWidth         ( AddrWidth    ),
         .DataWidth         ( DataWidth    ),
         .IdWidth           ( AxiIdWidth   ),
         .UserWidth         ( UserWidth    ),
-        .req_t             ( axi_req_t    ),
-        .rsp_t             ( axi_rsp_t    ),
+        .axi_req_t         ( axi_req_t    ),
+        .axi_rsp_t         ( axi_rsp_t    ),
         .WarnUninitialized ( 1'b0         ),
         .ClearErrOnAccess  ( 1'b1         ),
         .ApplDelay         ( TA           ),
         .AcqDelay          ( TT           )
-    ) i_idma_sim_mem (
+    ) i_axi_sim_mem (
         .clk_i      ( clk          ),
         .rst_ni     ( rst_n        ),
         .axi_req_i  ( axi_req_mem  ),
@@ -243,22 +243,22 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     // TB Monitors
     //--------------------------------------
     // AXI
-    highlighter #(.T(axi_aw_chan_t)) i_aw_hl (.ready_i(axi_rsp.aw_ready), .valid_i(axi_req.aw_valid), .data_i(axi_req.aw));
-    highlighter #(.T(axi_ar_chan_t)) i_ar_hl (.ready_i(axi_rsp.ar_ready), .valid_i(axi_req.ar_valid), .data_i(axi_req.ar));
-    highlighter #(.T(axi_w_chan_t))  i_w_hl  (.ready_i(axi_rsp.w_ready),  .valid_i(axi_req.w_valid),  .data_i(axi_req.w));
-    highlighter #(.T(axi_r_chan_t))  i_r_hl  (.ready_i(axi_req.r_ready),  .valid_i(axi_rsp.r_valid),  .data_i(axi_rsp.r));
-    highlighter #(.T(axi_b_chan_t))  i_b_hl  (.ready_i(axi_req.b_ready),  .valid_i(axi_rsp.b_valid),  .data_i(axi_rsp.b));
+    signal_highlighter #(.T(axi_aw_chan_t)) i_aw_hl (.ready_i(axi_rsp.aw_ready), .valid_i(axi_req.aw_valid), .data_i(axi_req.aw));
+    signal_highlighter #(.T(axi_ar_chan_t)) i_ar_hl (.ready_i(axi_rsp.ar_ready), .valid_i(axi_req.ar_valid), .data_i(axi_req.ar));
+    signal_highlighter #(.T(axi_w_chan_t))  i_w_hl  (.ready_i(axi_rsp.w_ready),  .valid_i(axi_req.w_valid),  .data_i(axi_req.w));
+    signal_highlighter #(.T(axi_r_chan_t))  i_r_hl  (.ready_i(axi_req.r_ready),  .valid_i(axi_rsp.r_valid),  .data_i(axi_rsp.r));
+    signal_highlighter #(.T(axi_b_chan_t))  i_b_hl  (.ready_i(axi_req.b_ready),  .valid_i(axi_rsp.b_valid),  .data_i(axi_rsp.b));
 
     // DMA backend types
-    highlighter #(.T(idma_nd_req_t)) i_nd_req_hl (.ready_i(nd_req_ready),    .valid_i(nd_req_valid),     .data_i(nd_req));
-    highlighter #(.T(idma_rsp_t))    i_nd_rsp_hl (.ready_i(nd_rsp_ready),    .valid_i(nd_rsp_valid),     .data_i(nd_rsp));
-    highlighter #(.T(idma_req_t))    i_req_hl    (.ready_i(burst_req_ready), .valid_i(burst_req_valid),  .data_i(burst_req));
-    highlighter #(.T(idma_rsp_t))    i_rsp_hl    (.ready_i(burst_rsp_ready), .valid_i(burst_rsp_valid),  .data_i(burst_rsp));
-    highlighter #(.T(idma_eh_req_t)) i_eh_hl     (.ready_i(eh_req_ready),    .valid_i(eh_req_valid),     .data_i(idma_eh_req));
+    signal_highlighter #(.T(idma_nd_req_t)) i_nd_req_hl (.ready_i(nd_req_ready),    .valid_i(nd_req_valid),     .data_i(nd_req));
+    signal_highlighter #(.T(idma_rsp_t))    i_nd_rsp_hl (.ready_i(nd_rsp_ready),    .valid_i(nd_rsp_valid),     .data_i(nd_rsp));
+    signal_highlighter #(.T(idma_req_t))    i_req_hl    (.ready_i(burst_req_ready), .valid_i(burst_req_valid),  .data_i(burst_req));
+    signal_highlighter #(.T(idma_rsp_t))    i_rsp_hl    (.ready_i(burst_rsp_ready), .valid_i(burst_rsp_valid),  .data_i(burst_rsp));
+    signal_highlighter #(.T(idma_eh_req_t)) i_eh_hl     (.ready_i(eh_req_ready),    .valid_i(eh_req_valid),     .data_i(idma_eh_req));
 
     // Watchdogs
-    watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_w_watchdog (.clk_i(clk), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
-    watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_r_watchdog (.clk_i(clk), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
+    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_w_watchdog (.clk_i(clk), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_r_watchdog (.clk_i(clk), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
 
 
     //--------------------------------------

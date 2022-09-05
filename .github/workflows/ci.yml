@@ -113,6 +113,12 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      - name: Python Requirements
+        run: pip install -r requirements.txt
       - name: List contributors
         run: scripts/list-contributors | tee contributions.txt
       - name: Upload contributions.txt
@@ -127,6 +133,12 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      - name: Python Requirements
+        run: pip install -r requirements.txt
       - name: List todos
         run: scripts/list-todos | tee open_todos.txt
       - name: Upload todos.txt
