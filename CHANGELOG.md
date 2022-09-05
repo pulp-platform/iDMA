@@ -6,32 +6,55 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## Unreleased
+
+## 0.2.4 - 2022-09-05
+
 ### Added
-Add support to enable non-ideal behavior of the testbench memory.
+- Add support to enable non-ideal behavior of the testbench memory using  the `axi_throttle` module
+  as well as an AXI multicut.
 
-## 0.2.3 - 11-08-2022
 ### Changed
-Morty is now fetched as a binary distributable for building the doc in CI.
-
-## 0.2.2 - 09-08-2022
-### Changed
-Add GitHub actions to lint the code as well as build the documentation. Remove the corresponding
-jobs from the IIS-internal GitLab pipeline.
+- Update the following dependencies:
+  - `axi` from `v0.35.1` to `v0.37.0`
+  - `common_cells` from `1.21.0` to `1.26.0`
+  - `common_verification` from `0.2.0` to `0.2.2`
+- Replace local modules with their upstream versions: #11, #12
 
 ### Fixed
-Fix the `AX`-handshaking. The ready signal of the iDMA request no longer depends on the ready signal
-of the `Ax` channels. See [#3](https://github.com/pulp-platform/iDMA/pull/3).
+- Fix the `Aw`-handshaking in the `channel-coupler` module. #10
+- Fix missing python modules in GitHub CI.
+- Fix wrong date format as well as missing indentation in `CHANGELOG.md`.
 
-## 0.2.1 - 07-08-2022
+`v0.2.4` is fully **backward-compatible** to version `v0.2.0` through `v0.2.3`.
+
+## 0.2.3 - 2022-08-11
+
 ### Changed
-Moved the IIS-internal non-free resources to a dedicated subgroup to tidy up. Version v0.2.1 is
+- Morty is now fetched as a binary distributable for building the doc in CI.
+
+## 0.2.2 - 2022-08-09
+
+### Changed
+- Add GitHub actions to lint the code as well as build the documentation. Remove the corresponding
+  jobs from the IIS-internal GitLab pipeline.
+
+### Fixed
+- Fix the `AX`-handshaking. The ready signal of the iDMA request no longer depends on the ready
+  signal of the `Ax` channels. See [#3](https://github.com/pulp-platform/iDMA/pull/3).
+
+## 0.2.1 - 2022-08-07
+
+### Changed
+- Moved the IIS-internal non-free resources to a dedicated subgroup to tidy up. Version v0.2.1 is
 fully compatible with v0.2.0.
 
-## 0.2.0 - 04-08-2022
-### Changed
-Added a completely redesigned DMA engine - the iDMA including a basic verification environment.
+## 0.2.0 - 2022-08-04
 
-## 0.1.0 - 02-08-2022
+### Changed
+- Added a completely redesigned DMA engine - the iDMA including a basic verification environment.
+
+## 0.1.0 - 2022-08-02
+
 - Final version of the legacy DMA engine (used to be part of the [AXI Repository](https://github.com/pulp-platform/axi)
 on the [`axi_dma_tbenz` branch](https://github.com/pulp-platform/axi/tree/axi_dma_tbenz)).
 This release replaces ***all*** older versions of this IP.
