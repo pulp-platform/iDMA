@@ -154,7 +154,7 @@ module idma_channel_coupler #(
     end
 
     // assign outputs
-    assign aw_ready   = aw_sent;
+    assign aw_ready = aw_valid_o & aw_ready_i;
 
     // fall through register to decouple the aw valid signal from the aw ready
     // now payload is required; just the decoupling of the handshaking signals
