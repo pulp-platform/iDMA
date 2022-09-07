@@ -82,7 +82,7 @@ end else if (DataWidth == 128) begin : gen_128_data_path
     always_comb begin
         first_half_of_descriptor_d = first_half_of_descriptor_q;
         if (r_chan_valid_i && r_chan_ready_o && !r_chan_i.last) begin
-            first_half_of_descriptor_d = r_chan.data;
+            first_half_of_descriptor_d = r_chan_i.data;
         end
     end
 

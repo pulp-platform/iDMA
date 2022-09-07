@@ -130,6 +130,7 @@ idma_req_t idma_req;
 logic      idma_req_valid;
 logic      idma_req_ready;
 logic      idma_req_inflight;
+logic      gated_r_valid, gated_r_ready;
 
 logic do_irq;
 logic do_irq_valid;
@@ -371,7 +372,7 @@ stream_fifo #(
 );
 
 stream_fifo #(
-    .FALL_THROUGH (1'b1),
+    .FALL_THROUGH (1'b0),
     .DEPTH        (PendingFifoDepth),
     .T            (idma_req_t)
 ) i_idma_request_fifo (

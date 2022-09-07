@@ -145,6 +145,8 @@ module tb_idma_desc64_bench #(
 
     axi_resp_t dma_fe_master_response;
     axi_req_t  dma_fe_master_request;
+    axi_resp_t dma_be_cut_resp;
+    axi_req_t  dma_be_cut_req;
     axi_resp_t dma_be_master_response;
     axi_req_t  dma_be_master_request;
     mem_axi_resp_t axi_mem_response;
@@ -258,16 +260,34 @@ module tb_idma_desc64_bench #(
         .idma_eh_req_i  ( '0               ),
         .eh_req_valid_i ( '1               ),
         .eh_req_ready_o ( /* unconnected */),
-        .axi_req_o      ( dma_be_master_request   ),
-        .axi_rsp_i      ( dma_be_master_response  ),
+        .axi_req_o      ( dma_be_cut_req   ),
+        .axi_rsp_i      ( dma_be_cut_resp  ),
         .busy_o         ( busy             )
     );
 
     string trace_file;
     initial begin
-        void'($value$plusargs("trace_file=%s", trace_file));
+        //void'($value$plusargs("trace_file=%s", trace_file));
+        trace_file="./trace-vcs.txt";
     end
     `IDMA_TRACER(i_idma_backend, trace_file);
+
+    axi_cut #(
+        .aw_chan_t (axi_aw_chan_t),
+        .w_chan_t  (axi_w_chan_t),
+        .b_chan_t  (axi_b_chan_t),
+        .ar_chan_t (axi_ar_chan_t),
+        .r_chan_t  (axi_r_chan_t),
+        .axi_req_t (axi_req_t),
+        .axi_resp_t(axi_resp_t)
+    ) i_axi_cut (
+        .clk_i      (clk),
+        .rst_ni     (rst_n),
+        .slv_req_i  (dma_be_cut_req),
+        .slv_resp_o (dma_be_cut_resp),
+        .mst_req_o  (dma_be_master_request),
+        .mst_resp_i (dma_be_master_response)
+    );
 
     // AXI mux
     axi_mux #(
