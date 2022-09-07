@@ -207,7 +207,6 @@ module tb_idma_desc64_bench #(
         .InputFifoDepth  (InputFifoDepth),
         .PendingFifoDepth(PendingFifoDepth),
         .BackendDepth    (NumAxInFlight + BufferDepth),
-        .MaxAWWPending   (MaxAWWPending),
         .NSpeculation    (NSpeculation)
     ) i_dut (
         .clk_i           (clk),
@@ -260,18 +259,18 @@ module tb_idma_desc64_bench #(
         .idma_eh_req_i  ( '0               ),
         .eh_req_valid_i ( '1               ),
         .eh_req_ready_o ( /* unconnected */),
-        .axi_req_o      ( dma_be_cut_req   ),
-        .axi_rsp_i      ( dma_be_cut_resp  ),
+        .axi_req_o      ( dma_be_master_request   ),
+        .axi_rsp_i      ( dma_be_master_response  ),
         .busy_o         ( busy             )
     );
 
     string trace_file;
     initial begin
-        //void'($value$plusargs("trace_file=%s", trace_file));
-        trace_file="./trace-vcs.txt";
+        void'($value$plusargs("trace_file=%s", trace_file));
     end
     `IDMA_TRACER(i_idma_backend, trace_file);
 
+    /*
     axi_cut #(
         .aw_chan_t (axi_aw_chan_t),
         .w_chan_t  (axi_w_chan_t),
@@ -288,6 +287,7 @@ module tb_idma_desc64_bench #(
         .mst_req_o  (dma_be_master_request),
         .mst_resp_i (dma_be_master_response)
     );
+    */
 
     // AXI mux
     axi_mux #(

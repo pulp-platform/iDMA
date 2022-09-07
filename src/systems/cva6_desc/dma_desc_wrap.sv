@@ -95,7 +95,6 @@ module dma_desc_wrap #(
     .InputFifoDepth   ( 4 ),
     .PendingFifoDepth ( 4 ),
     .BackendDepth     ( NumAxInFlight + BufferDepth ),
-    .MaxAWWPending    ( 1 ),
     .NSpeculation     ( 4 )
   ) i_dma_desc64 (
     .clk_i,

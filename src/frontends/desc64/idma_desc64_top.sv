@@ -36,8 +36,6 @@ module idma_desc64_top #(
     /// How many requests the backend might have at the same time in its buffers.
     /// Usually, `NumAxInFlight + BufferDepth`
     parameter int unsigned BackendDepth           =     0,
-    /// Specifies how many unsent AWs/Ws are allowed
-    parameter int unsigned MaxAWWPending          =     1,
     /// Specifies how many descriptors may be fetched speculatively
     parameter int unsigned NSpeculation           =     4
 )(
