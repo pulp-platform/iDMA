@@ -87,9 +87,9 @@ module dma_desc_wrap #(
     .axi_r_chan_t     ( dma_axi_mst_post_mux_r_chan_t  ),
     .reg_req_t        ( dma_reg_req_t                  ),
     .reg_rsp_t        ( dma_reg_rsp_t                  ),
-    .InputFifoDepth   ( 8 ),
-    .PendingFifoDepth ( 8 ),
-    .MaxAWWPending    ( 1 )
+    .InputFifoDepth   ( 4 ),
+    .PendingFifoDepth ( 4 ),
+    .BackendDepth     ( NumAxInFlight + BufferDepth )
   ) i_dma_desc64 (
     .clk_i,
     .rst_ni,

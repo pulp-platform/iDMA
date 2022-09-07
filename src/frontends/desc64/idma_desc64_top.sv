@@ -35,9 +35,7 @@ module idma_desc64_top #(
     parameter int unsigned PendingFifoDepth       =     8,
     /// How many requests the backend might have at the same time in its buffers.
     /// Usually, `NumAxInFlight + BufferDepth`
-    parameter int unsigned BackendDepth           =     0,
-    /// Specifies how many unsent AWs/Ws are allowed
-    parameter int unsigned MaxAWWPending          =     1
+    parameter int unsigned BackendDepth           =     0
 )(
     /// clock
     input  logic                  clk_i             ,
@@ -85,6 +83,9 @@ module idma_desc64_top #(
     /// Event: irq
     output logic                  irq_o
 );
+
+/// Specifies how many unsent AWs/Ws are allowed
+localparam int unsigned MaxAWWPending = BackendDepth;
 
 typedef logic [AddrWidth-1:0] addr_t;
 
@@ -150,9 +151,9 @@ logic [PendingFifoDepthBits:0]   idma_req_available;
 
 logic [1:0]                        ws_per_writeback;
 // one bit extra for the 32 bit case
-logic [$clog2(PendingFifoDepth):0] w_counter_q, w_counter_d;
-logic                              aw_tx;
-logic                              w_tx;
+logic [$clog2(MaxAWWPending):0] w_counter_q, w_counter_d;
+logic                           aw_tx;
+logic                           w_tx;
 
 addr_t input_addr;
 logic  input_addr_valid, input_addr_ready;

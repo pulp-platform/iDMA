@@ -193,8 +193,7 @@ module tb_idma_desc64_bench #(
         .reg_req_t       (reg_req_t),
         .InputFifoDepth  (InputFifoDepth),
         .PendingFifoDepth(PendingFifoDepth),
-        .BackendDepth    (NumAxInFlight + BufferDepth),
-        .MaxAWWPending   (MaxAWWPending)
+        .BackendDepth    (NumAxInFlight + BufferDepth)
     ) i_dut (
         .clk_i           (clk),
         .rst_ni          (rst_n),
@@ -246,8 +245,8 @@ module tb_idma_desc64_bench #(
         .idma_eh_req_i  ( '0               ),
         .eh_req_valid_i ( '1               ),
         .eh_req_ready_o ( /* unconnected */),
-        .axi_req_o      ( dma_be_master_request       ),
-        .axi_rsp_i      ( dma_be_master_response       ),
+        .axi_req_o      ( dma_be_master_request   ),
+        .axi_rsp_i      ( dma_be_master_response  ),
         .busy_o         ( busy             )
     );
 
@@ -274,7 +273,7 @@ module tb_idma_desc64_bench #(
         .mst_req_t     (mem_axi_req_t),
         .mst_resp_t    (mem_axi_resp_t),
         .NoSlvPorts    (2),
-        .MaxWTrans     (NumAxInFlight + MaxAWWPending),
+        .MaxWTrans     (NumAxInFlight + BufferDepth),
         .FallThrough   (1'b0),
         .SpillAw       (1'b0),
         .SpillW        (1'b0),
