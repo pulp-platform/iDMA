@@ -127,11 +127,15 @@ module idma_reg32_2d_frontend #(
 
       if ( dma_reg2hw[i].conf.twod.q ) begin
         arb_burst_req[i].d_req[0].reps                     = dma_reg2hw[i].num_repetitions.q;
+         arb_burst_req[i].d_req[1].reps = dma_reg2hw[i].num_repetitions1.q;//
       end else begin
         arb_burst_req[i].d_req[0].reps                     = 1;
+         arb_burst_req[i].d_req[1].reps                     = 1;//
       end
       arb_burst_req[i].d_req[0].src_strides                = dma_reg2hw[i].stride_src.q;
       arb_burst_req[i].d_req[0].dst_strides                = dma_reg2hw[i].stride_dst.q;
+       arb_burst_req[i].d_req[1].src_strides                = dma_reg2hw[i].stride_src1.q;//
+      arb_burst_req[i].d_req[1].dst_strides                = dma_reg2hw[i].stride_dst1.q;//
 
         // serialization no longer supported
       // arb_burst_req[i].serialize       = dma_reg2hw[i].conf.serialize.q;

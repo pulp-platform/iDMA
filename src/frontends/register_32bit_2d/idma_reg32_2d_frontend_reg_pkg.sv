@@ -54,6 +54,18 @@ package idma_reg32_2d_frontend_reg_pkg;
 
   typedef struct packed {
     logic [31:0] q;
+  } idma_reg32_2d_frontend_reg2hw_stride_src1_reg_t;
+
+  typedef struct packed {
+    logic [31:0] q;
+  } idma_reg32_2d_frontend_reg2hw_stride_dst1_reg_t;
+
+  typedef struct packed {
+    logic [31:0] q;
+  } idma_reg32_2d_frontend_reg2hw_num_repetitions1_reg_t;
+
+  typedef struct packed {
+    logic [31:0] q;
     logic        re;
   } idma_reg32_2d_frontend_reg2hw_next_id_reg_t;
 
@@ -76,13 +88,16 @@ package idma_reg32_2d_frontend_reg_pkg;
 
   // Register -> HW type
   typedef struct packed {
-    idma_reg32_2d_frontend_reg2hw_src_addr_reg_t src_addr; // [261:230]
-    idma_reg32_2d_frontend_reg2hw_dst_addr_reg_t dst_addr; // [229:198]
-    idma_reg32_2d_frontend_reg2hw_num_bytes_reg_t num_bytes; // [197:166]
-    idma_reg32_2d_frontend_reg2hw_conf_reg_t conf; // [165:162]
-    idma_reg32_2d_frontend_reg2hw_stride_src_reg_t stride_src; // [161:130]
-    idma_reg32_2d_frontend_reg2hw_stride_dst_reg_t stride_dst; // [129:98]
-    idma_reg32_2d_frontend_reg2hw_num_repetitions_reg_t num_repetitions; // [97:66]
+    idma_reg32_2d_frontend_reg2hw_src_addr_reg_t src_addr; // [357:326]
+    idma_reg32_2d_frontend_reg2hw_dst_addr_reg_t dst_addr; // [325:294]
+    idma_reg32_2d_frontend_reg2hw_num_bytes_reg_t num_bytes; // [293:262]
+    idma_reg32_2d_frontend_reg2hw_conf_reg_t conf; // [261:258]
+    idma_reg32_2d_frontend_reg2hw_stride_src_reg_t stride_src; // [257:226]
+    idma_reg32_2d_frontend_reg2hw_stride_dst_reg_t stride_dst; // [225:194]
+    idma_reg32_2d_frontend_reg2hw_num_repetitions_reg_t num_repetitions; // [193:162]
+    idma_reg32_2d_frontend_reg2hw_stride_src1_reg_t stride_src1; // [161:130]
+    idma_reg32_2d_frontend_reg2hw_stride_dst1_reg_t stride_dst1; // [129:98]
+    idma_reg32_2d_frontend_reg2hw_num_repetitions1_reg_t num_repetitions1; // [97:66]
     idma_reg32_2d_frontend_reg2hw_next_id_reg_t next_id; // [65:33]
     idma_reg32_2d_frontend_reg2hw_done_reg_t done; // [32:0]
   } idma_reg32_2d_frontend_reg2hw_t;
@@ -102,9 +117,12 @@ package idma_reg32_2d_frontend_reg_pkg;
   parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_STRIDE_SRC_OFFSET = 6'h 10;
   parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_STRIDE_DST_OFFSET = 6'h 14;
   parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS_OFFSET = 6'h 18;
-  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_STATUS_OFFSET = 6'h 1c;
-  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_NEXT_ID_OFFSET = 6'h 20;
-  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_DONE_OFFSET = 6'h 24;
+  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_STRIDE_SRC1_OFFSET = 6'h 1c;
+  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_STRIDE_DST1_OFFSET = 6'h 20;
+  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS1_OFFSET = 6'h 24;
+  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_STATUS_OFFSET = 6'h 28;
+  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_NEXT_ID_OFFSET = 6'h 2c;
+  parameter logic [BlockAw-1:0] IDMA_REG32_2D_FRONTEND_DONE_OFFSET = 6'h 30;
 
   // Reset values for hwext registers and their fields
   parameter logic [15:0] IDMA_REG32_2D_FRONTEND_STATUS_RESVAL = 16'h 0;
@@ -120,23 +138,29 @@ package idma_reg32_2d_frontend_reg_pkg;
     IDMA_REG32_2D_FRONTEND_STRIDE_SRC,
     IDMA_REG32_2D_FRONTEND_STRIDE_DST,
     IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS,
+    IDMA_REG32_2D_FRONTEND_STRIDE_SRC1,
+    IDMA_REG32_2D_FRONTEND_STRIDE_DST1,
+    IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS1,
     IDMA_REG32_2D_FRONTEND_STATUS,
     IDMA_REG32_2D_FRONTEND_NEXT_ID,
     IDMA_REG32_2D_FRONTEND_DONE
   } idma_reg32_2d_frontend_id_e;
 
   // Register width information to check illegal writes
-  parameter logic [3:0] IDMA_REG32_2D_FRONTEND_PERMIT [10] = '{
-    4'b 1111, // index[0] IDMA_REG32_2D_FRONTEND_SRC_ADDR
-    4'b 1111, // index[1] IDMA_REG32_2D_FRONTEND_DST_ADDR
-    4'b 1111, // index[2] IDMA_REG32_2D_FRONTEND_NUM_BYTES
-    4'b 0001, // index[3] IDMA_REG32_2D_FRONTEND_CONF
-    4'b 1111, // index[4] IDMA_REG32_2D_FRONTEND_STRIDE_SRC
-    4'b 1111, // index[5] IDMA_REG32_2D_FRONTEND_STRIDE_DST
-    4'b 1111, // index[6] IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS
-    4'b 0011, // index[7] IDMA_REG32_2D_FRONTEND_STATUS
-    4'b 1111, // index[8] IDMA_REG32_2D_FRONTEND_NEXT_ID
-    4'b 1111  // index[9] IDMA_REG32_2D_FRONTEND_DONE
+  parameter logic [3:0] IDMA_REG32_2D_FRONTEND_PERMIT [13] = '{
+    4'b 1111, // index[ 0] IDMA_REG32_2D_FRONTEND_SRC_ADDR
+    4'b 1111, // index[ 1] IDMA_REG32_2D_FRONTEND_DST_ADDR
+    4'b 1111, // index[ 2] IDMA_REG32_2D_FRONTEND_NUM_BYTES
+    4'b 0001, // index[ 3] IDMA_REG32_2D_FRONTEND_CONF
+    4'b 1111, // index[ 4] IDMA_REG32_2D_FRONTEND_STRIDE_SRC
+    4'b 1111, // index[ 5] IDMA_REG32_2D_FRONTEND_STRIDE_DST
+    4'b 1111, // index[ 6] IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS
+    4'b 1111, // index[ 7] IDMA_REG32_2D_FRONTEND_STRIDE_SRC1
+    4'b 1111, // index[ 8] IDMA_REG32_2D_FRONTEND_STRIDE_DST1
+    4'b 1111, // index[ 9] IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS1
+    4'b 0011, // index[10] IDMA_REG32_2D_FRONTEND_STATUS
+    4'b 1111, // index[11] IDMA_REG32_2D_FRONTEND_NEXT_ID
+    4'b 1111  // index[12] IDMA_REG32_2D_FRONTEND_DONE
   };
 
 endpackage

@@ -98,6 +98,15 @@ module idma_reg32_2d_frontend_reg_top #(
   logic [31:0] num_repetitions_qs;
   logic [31:0] num_repetitions_wd;
   logic num_repetitions_we;
+  logic [31:0] stride_src1_qs;
+  logic [31:0] stride_src1_wd;
+  logic stride_src1_we;
+  logic [31:0] stride_dst1_qs;
+  logic [31:0] stride_dst1_wd;
+  logic stride_dst1_we;
+  logic [31:0] num_repetitions1_qs;
+  logic [31:0] num_repetitions1_wd;
+  logic num_repetitions1_we;
   logic [15:0] status_qs;
   logic status_re;
   logic [31:0] next_id_qs;
@@ -374,6 +383,87 @@ module idma_reg32_2d_frontend_reg_top #(
   );
 
 
+  // R[stride_src1]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_stride_src1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (stride_src1_we),
+    .wd     (stride_src1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.stride_src1.q ),
+
+    // to register interface (read)
+    .qs     (stride_src1_qs)
+  );
+
+
+  // R[stride_dst1]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_stride_dst1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (stride_dst1_we),
+    .wd     (stride_dst1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.stride_dst1.q ),
+
+    // to register interface (read)
+    .qs     (stride_dst1_qs)
+  );
+
+
+  // R[num_repetitions1]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h1)
+  ) u_num_repetitions1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (num_repetitions1_we),
+    .wd     (num_repetitions1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.num_repetitions1.q ),
+
+    // to register interface (read)
+    .qs     (num_repetitions1_qs)
+  );
+
+
   // R[status]: V(True)
 
   prim_subreg_ext #(
@@ -424,19 +514,22 @@ module idma_reg32_2d_frontend_reg_top #(
 
 
 
-  logic [9:0] addr_hit;
+  logic [12:0] addr_hit;
   always_comb begin
     addr_hit = '0;
-    addr_hit[0] = (reg_addr == IDMA_REG32_2D_FRONTEND_SRC_ADDR_OFFSET);
-    addr_hit[1] = (reg_addr == IDMA_REG32_2D_FRONTEND_DST_ADDR_OFFSET);
-    addr_hit[2] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_BYTES_OFFSET);
-    addr_hit[3] = (reg_addr == IDMA_REG32_2D_FRONTEND_CONF_OFFSET);
-    addr_hit[4] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_SRC_OFFSET);
-    addr_hit[5] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_DST_OFFSET);
-    addr_hit[6] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS_OFFSET);
-    addr_hit[7] = (reg_addr == IDMA_REG32_2D_FRONTEND_STATUS_OFFSET);
-    addr_hit[8] = (reg_addr == IDMA_REG32_2D_FRONTEND_NEXT_ID_OFFSET);
-    addr_hit[9] = (reg_addr == IDMA_REG32_2D_FRONTEND_DONE_OFFSET);
+    addr_hit[ 0] = (reg_addr == IDMA_REG32_2D_FRONTEND_SRC_ADDR_OFFSET);
+    addr_hit[ 1] = (reg_addr == IDMA_REG32_2D_FRONTEND_DST_ADDR_OFFSET);
+    addr_hit[ 2] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_BYTES_OFFSET);
+    addr_hit[ 3] = (reg_addr == IDMA_REG32_2D_FRONTEND_CONF_OFFSET);
+    addr_hit[ 4] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_SRC_OFFSET);
+    addr_hit[ 5] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_DST_OFFSET);
+    addr_hit[ 6] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS_OFFSET);
+    addr_hit[ 7] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_SRC1_OFFSET);
+    addr_hit[ 8] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_DST1_OFFSET);
+    addr_hit[ 9] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS1_OFFSET);
+    addr_hit[10] = (reg_addr == IDMA_REG32_2D_FRONTEND_STATUS_OFFSET);
+    addr_hit[11] = (reg_addr == IDMA_REG32_2D_FRONTEND_NEXT_ID_OFFSET);
+    addr_hit[12] = (reg_addr == IDMA_REG32_2D_FRONTEND_DONE_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -444,16 +537,19 @@ module idma_reg32_2d_frontend_reg_top #(
   // Check sub-word write is permitted
   always_comb begin
     wr_err = (reg_we &
-              ((addr_hit[0] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[0] & ~reg_be))) |
-               (addr_hit[1] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[1] & ~reg_be))) |
-               (addr_hit[2] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[2] & ~reg_be))) |
-               (addr_hit[3] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[3] & ~reg_be))) |
-               (addr_hit[4] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[4] & ~reg_be))) |
-               (addr_hit[5] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[5] & ~reg_be))) |
-               (addr_hit[6] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[6] & ~reg_be))) |
-               (addr_hit[7] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[7] & ~reg_be))) |
-               (addr_hit[8] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[8] & ~reg_be))) |
-               (addr_hit[9] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[9] & ~reg_be)))));
+              ((addr_hit[ 0] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 0] & ~reg_be))) |
+               (addr_hit[ 1] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 1] & ~reg_be))) |
+               (addr_hit[ 2] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 2] & ~reg_be))) |
+               (addr_hit[ 3] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 3] & ~reg_be))) |
+               (addr_hit[ 4] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 4] & ~reg_be))) |
+               (addr_hit[ 5] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 5] & ~reg_be))) |
+               (addr_hit[ 6] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 6] & ~reg_be))) |
+               (addr_hit[ 7] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 7] & ~reg_be))) |
+               (addr_hit[ 8] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 8] & ~reg_be))) |
+               (addr_hit[ 9] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 9] & ~reg_be))) |
+               (addr_hit[10] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[10] & ~reg_be))) |
+               (addr_hit[11] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[11] & ~reg_be))) |
+               (addr_hit[12] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[12] & ~reg_be)))));
   end
 
   assign src_addr_we = addr_hit[0] & reg_we & !reg_error;
@@ -486,11 +582,20 @@ module idma_reg32_2d_frontend_reg_top #(
   assign num_repetitions_we = addr_hit[6] & reg_we & !reg_error;
   assign num_repetitions_wd = reg_wdata[31:0];
 
-  assign status_re = addr_hit[7] & reg_re & !reg_error;
+  assign stride_src1_we = addr_hit[7] & reg_we & !reg_error;
+  assign stride_src1_wd = reg_wdata[31:0];
 
-  assign next_id_re = addr_hit[8] & reg_re & !reg_error;
+  assign stride_dst1_we = addr_hit[8] & reg_we & !reg_error;
+  assign stride_dst1_wd = reg_wdata[31:0];
 
-  assign done_re = addr_hit[9] & reg_re & !reg_error;
+  assign num_repetitions1_we = addr_hit[9] & reg_we & !reg_error;
+  assign num_repetitions1_wd = reg_wdata[31:0];
+
+  assign status_re = addr_hit[10] & reg_re & !reg_error;
+
+  assign next_id_re = addr_hit[11] & reg_re & !reg_error;
+
+  assign done_re = addr_hit[12] & reg_re & !reg_error;
 
   // Read data return
   always_comb begin
@@ -528,14 +633,26 @@ module idma_reg32_2d_frontend_reg_top #(
       end
 
       addr_hit[7]: begin
-        reg_rdata_next[15:0] = status_qs;
+        reg_rdata_next[31:0] = stride_src1_qs;
       end
 
       addr_hit[8]: begin
-        reg_rdata_next[31:0] = next_id_qs;
+        reg_rdata_next[31:0] = stride_dst1_qs;
       end
 
       addr_hit[9]: begin
+        reg_rdata_next[31:0] = num_repetitions1_qs;
+      end
+
+      addr_hit[10]: begin
+        reg_rdata_next[15:0] = status_qs;
+      end
+
+      addr_hit[11]: begin
+        reg_rdata_next[31:0] = next_id_qs;
+      end
+
+      addr_hit[12]: begin
         reg_rdata_next[31:0] = done_qs;
       end
 

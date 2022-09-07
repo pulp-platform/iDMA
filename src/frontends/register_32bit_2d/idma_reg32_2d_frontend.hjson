@@ -105,6 +105,40 @@
         }
       ]
     },
+        { name: "stride_src1",
+      desc: "Source Stride 1",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "stride_src1",
+          desc: "Source Stride 1"
+        }
+      ]
+    },
+    { name: "stride_dst1"
+      desc: "Destination Stride 1",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "stride_dst1",
+          desc: "Destination Stride 1"
+        }
+      ]
+    },
+    { name: "num_repetitions1"
+      desc: "Number of 2D repetitions 1",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "num_repetitions1",
+          desc: "Number of 2D repetitions 1",
+          resval: "1"
+        }
+      ]
+    },
     { name: "status",
       desc: "DMA Status",
       swaccess: "ro",
