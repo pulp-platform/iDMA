@@ -335,8 +335,8 @@ module tb_idma_desc64_bench #(
         .rsp_o(axi_throttle_rsp),
         .req_o(axi_multicut_req),
         .rsp_i(axi_multicut_rsp),
-        .w_credit_i ('d5),
-        .r_credit_i ('d5)
+        .w_credit_i (3'd5),
+        .r_credit_i (3'd5)
     );
 
     // delay the signals using AXI4 multicuts
