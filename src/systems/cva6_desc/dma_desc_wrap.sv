@@ -7,6 +7,7 @@
 `include "axi/assign.svh"
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
+`include "idma/tracer.svh"
 `include "register_interface/typedef.svh"
 `include "common_cells/registers.svh"
 
@@ -79,6 +80,14 @@ module dma_desc_wrap #(
   logic       idma_rsp_valid;
   logic       idma_rsp_ready;
   idma_pkg::idma_busy_t idma_busy;
+
+  // pragma translate_off
+  string trace_file;
+  initial begin
+    void'($value$plusargs("trace_file=%s", trace_file));
+  end
+  `IDMA_TRACER(i_idma_backend, trace_file);
+  // pragma translate_on
 
   idma_desc64_top #(
     .AddrWidth        ( AxiAddrWidth                   ),
