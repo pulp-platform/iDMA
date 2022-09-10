@@ -94,6 +94,7 @@ module tb_idma_desc64_bench #(
         constraint src_burst_valid { burst.opt.src.burst inside { BURST_INCR }; }
         constraint dst_burst_valid { burst.opt.dst.burst inside { BURST_INCR }; }
         constraint reduce_len_equal { burst.opt.beo.src_reduce_len == burst.opt.beo.dst_reduce_len; }
+        constraint reduce_len_zero { burst.opt.beo.src_reduce_len == 1'b0; }
         constraint beo_zero { burst.opt.beo.decouple_aw == '0 && burst.opt.beo.src_max_llen == '0 && burst.opt.beo.dst_max_llen == '0 && burst.opt.last == '0 && burst.opt.beo.decouple_rw == '0; }
         constraint axi_params_zero_src { burst.opt.src.lock == '0 && burst.opt.src.prot == '0 && burst.opt.src.qos == '0 && burst.opt.src.region == '0; }
         constraint axi_params_zero_dst { burst.opt.dst.lock == '0 && burst.opt.dst.prot == '0 && burst.opt.dst.qos == '0 && burst.opt.dst.region == '0; }
