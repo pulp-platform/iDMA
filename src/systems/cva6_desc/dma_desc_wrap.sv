@@ -13,20 +13,23 @@
 
 /// Wrapper for the iDMA
 module dma_desc_wrap #(
-  parameter int  AxiAddrWidth  = 64,
-  parameter int  AxiDataWidth  = 64,
-  parameter int  AxiUserWidth  = -1,
-  parameter int  AxiIdWidth    = -1,
-  parameter int  AxiSlvIdWidth = -1,
-  parameter type mst_aw_chan_t = logic, // AW Channel Type, master port
-  parameter type mst_w_chan_t  = logic, //  W Channel Type, all ports
-  parameter type mst_b_chan_t  = logic, //  B Channel Type, master port
-  parameter type mst_ar_chan_t = logic, // AR Channel Type, master port
-  parameter type mst_r_chan_t  = logic, //  R Channel Type, master port
-  parameter type axi_mst_req_t = logic,
-  parameter type axi_mst_rsp_t = logic,
-  parameter type axi_slv_req_t = logic,
-  parameter type axi_slv_rsp_t = logic
+  parameter int  AxiAddrWidth     = 64,
+  parameter int  AxiDataWidth     = 64,
+  parameter int  AxiUserWidth     = -1,
+  parameter int  AxiIdWidth       = -1,
+  parameter int  AxiSlvIdWidth    = -1,
+  parameter int  NSpeculation     = 4,
+  parameter int  PendingFifoDepth = 4,
+  parameter int  InputFifoDepth   = 1,
+  parameter type mst_aw_chan_t    = logic, // AW Channel Type, master port
+  parameter type mst_w_chan_t     = logic, //  W Channel Type, all ports
+  parameter type mst_b_chan_t     = logic, //  B Channel Type, master port
+  parameter type mst_ar_chan_t    = logic, // AR Channel Type, master port
+  parameter type mst_r_chan_t     = logic, //  R Channel Type, master port
+  parameter type axi_mst_req_t    = logic,
+  parameter type axi_mst_rsp_t    = logic,
+  parameter type axi_slv_req_t    = logic,
+  parameter type axi_slv_rsp_t    = logic
 ) (
   input  logic         clk_i,
   input  logic         rst_ni,
@@ -81,14 +84,6 @@ module dma_desc_wrap #(
   logic       idma_rsp_ready;
   idma_pkg::idma_busy_t idma_busy;
 
-  // pragma translate_off
-  string trace_file;
-  initial begin
-    void'($value$plusargs("trace_file=%s", trace_file));
-  end
-  `IDMA_TRACER(i_idma_backend, trace_file);
-  // pragma translate_on
-
   idma_desc64_top #(
     .AddrWidth        ( AxiAddrWidth                   ),
     .DataWidth        ( AxiDataWidth                   ),
@@ -101,10 +96,10 @@ module dma_desc_wrap #(
     .axi_r_chan_t     ( dma_axi_mst_post_mux_r_chan_t  ),
     .reg_req_t        ( dma_reg_req_t                  ),
     .reg_rsp_t        ( dma_reg_rsp_t                  ),
-    .InputFifoDepth   ( 4 ),
-    .PendingFifoDepth ( 4 ),
-    .BackendDepth     ( NumAxInFlight + BufferDepth ),
-    .NSpeculation     ( 4 )
+    .InputFifoDepth   ( InputFifoDepth                 ),
+    .PendingFifoDepth ( PendingFifoDepth               ),
+    .BackendDepth     ( NumAxInFlight + BufferDepth    ),
+    .NSpeculation     ( NSpeculation                   )
   ) i_dma_desc64 (
     .clk_i,
     .rst_ni,
@@ -166,6 +161,89 @@ module dma_desc_wrap #(
     .busy_o        ( idma_busy         )
   );
 
+  // pragma translate_off
+  string trace_file;
+  initial begin
+    void'($value$plusargs("trace_file=%s", trace_file));
+  end
+  `ifndef SYNTHESYS
+  `ifndef VERILATOR
+  initial begin : inital_tracer
+    automatic bit first_iter = 1;
+    automatic integer tf;
+    automatic `IDMA_TRACER_MAX_TYPE cnst [string];
+    automatic `IDMA_TRACER_MAX_TYPE meta [string];
+    automatic `IDMA_TRACER_MAX_TYPE busy [string];
+    automatic `IDMA_TRACER_MAX_TYPE axib [string];
+    automatic string trace;
+    #0;
+    tf = $fopen(trace_file, "w");
+    $display("[Tracer] Logging iDMA backend %s to %s", "i_idma_backend", trace_file);
+    forever begin
+      @(posedge i_idma_backend.clk_i);
+      if (i_idma_backend.rst_ni & |i_idma_backend.busy_o) begin
+        break;
+      end
+    end
+    forever begin
+      @(posedge i_idma_backend.clk_i);
+      /* Trace */
+      trace = "{";
+      /* Constants */
+      cnst = '{
+        "inst"                  : "i_idma_backend",
+        "data_width"            : i_idma_backend.DataWidth,
+        "addr_width"            : i_idma_backend.AddrWidth,
+        "user_width"            : i_idma_backend.UserWidth,
+        "axi_id_width"          : i_idma_backend.AxiIdWidth,
+        "num_ax_in_flight"      : i_idma_backend.NumAxInFlight,
+        "buffer_depth"          : i_idma_backend.BufferDepth,
+        "tf_len_width"          : i_idma_backend.TFLenWidth,
+        "mem_sys_depth"         : i_idma_backend.MemSysDepth,
+        "rw_coupling_avail"     : i_idma_backend.RAWCouplingAvail,
+        "mask_invalid_data"     : i_idma_backend.MaskInvalidData,
+        "hardware_legalizer"    : i_idma_backend.HardwareLegalizer,
+        "reject_zero_transfers" : i_idma_backend.RejectZeroTransfers,
+        "error_cap"             : i_idma_backend.ErrorCap,
+        "print_fifo_info"       : i_idma_backend.PrintFifoInfo
+      };
+      meta = '{
+        "time" : $time()
+      };
+      busy = '{
+        "buffer"      : i_idma_backend.busy_o.buffer_busy,
+        "r_dp"        : i_idma_backend.busy_o.r_dp_busy,
+        "w_dp"        : i_idma_backend.busy_o.w_dp_busy,
+        "r_leg"       : i_idma_backend.busy_o.r_leg_busy,
+        "w_leg"       : i_idma_backend.busy_o.w_leg_busy,
+        "eh_fsm"      : i_idma_backend.busy_o.eh_fsm_busy,
+        "eh_cnt"      : i_idma_backend.busy_o.eh_cnt_busy,
+        "raw_coupler" : i_idma_backend.busy_o.raw_coupler_busy
+      };
+      axib = '{
+        "w_valid" : i_idma_backend.axi_req_o.w_valid,
+        "w_ready" : axi_be_cut_rsp.w_ready,
+        "w_strb"  : i_idma_backend.axi_req_o.w.strb,
+        "r_valid" : axi_be_cut_rsp.r_valid,
+        "r_ready" : i_idma_backend.axi_req_o.r_ready
+      };
+      if ($isunknown(axib["w_ready"]) || $isunknown(axib["r_valid"])) begin
+        $fatal("UNKNOWN AXI STATE, THIS SHOULD NEVER HAPPEN!");
+      end
+      /* Assembly */
+      `IDMA_TRACER_STR_ASSEMBLY(cnst, first_iter);
+      `IDMA_TRACER_STR_ASSEMBLY(meta, 1);
+      `IDMA_TRACER_STR_ASSEMBLY(busy, 1);
+      `IDMA_TRACER_STR_ASSEMBLY(axib, 1);
+      `IDMA_TRACER_CLEAR_COND(first_iter);
+      /* Commit */
+      $fwrite(tf, $sformatf("%s}\n", trace));
+    end
+  end
+`endif
+`endif
+  // pragma translate_on
+
   axi_cut #(
     .aw_chan_t    (dma_axi_mst_post_mux_aw_chan_t),
     .w_chan_t     (dma_axi_mst_post_mux_w_chan_t),
@@ -204,7 +282,7 @@ module dma_desc_wrap #(
     .SpillAw      ('b0),
     .SpillW       ('0),
     .SpillB       ('0),
-    .SpillAr      ('b1),
+    .SpillAr      ('b0),
     .SpillR       ('0)
   ) i_axi_mux (
     .clk_i       (clk_i),
