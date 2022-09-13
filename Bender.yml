@@ -72,6 +72,9 @@ sources:
     - src/frontends/desc64/idma_desc64_reg_wrapper.sv
     # Level 2
     - src/frontends/desc64/idma_desc64_top.sv
+    - src/systems/cva6_desc/dma_desc_wrap.sv
+    - src/systems/cva6_desc/dma_desc_synth_pkg.sv
+    - src/systems/cva6_desc/dma_desc_synth.sv
 
   # Systems
   - target: all(pulp, not(mchan))
