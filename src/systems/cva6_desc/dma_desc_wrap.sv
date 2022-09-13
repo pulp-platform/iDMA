@@ -60,8 +60,6 @@ module dma_desc_wrap #(
   dma_axi_mst_post_mux_resp_t axi_fe_mst_rsp;
   dma_axi_mst_post_mux_req_t  axi_be_mst_req;
   dma_axi_mst_post_mux_resp_t axi_be_mst_rsp;
-  dma_axi_mst_post_mux_req_t  axi_be_cut_req;
-  dma_axi_mst_post_mux_resp_t axi_be_cut_rsp;
 
   `REG_BUS_TYPEDEF_ALL(dma_reg, addr_t, data_t, strb_t)
   dma_reg_req_t dma_reg_slv_req;
@@ -156,8 +154,8 @@ module dma_desc_wrap #(
     .eh_req_valid_i( 1'b1              ),
     .eh_req_ready_o( /*NOT CONNECTED*/ ),
 
-    .axi_req_o     ( axi_be_cut_req    ),
-    .axi_rsp_i     ( axi_be_cut_rsp    ),
+    .axi_req_o     ( axi_be_mst_req    ),
+    .axi_rsp_i     ( axi_be_mst_rsp    ),
     .busy_o        ( idma_busy         )
   );
 
@@ -222,9 +220,9 @@ module dma_desc_wrap #(
       };
       axib = '{
         "w_valid" : i_idma_backend.axi_req_o.w_valid,
-        "w_ready" : axi_be_cut_rsp.w_ready,
+        "w_ready" : axi_be_mst_rsp.w_ready,
         "w_strb"  : i_idma_backend.axi_req_o.w.strb,
-        "r_valid" : axi_be_cut_rsp.r_valid,
+        "r_valid" : axi_be_mst_rsp.r_valid,
         "r_ready" : i_idma_backend.axi_req_o.r_ready
       };
       if ($isunknown(axib["w_ready"]) || $isunknown(axib["r_valid"])) begin
@@ -243,23 +241,6 @@ module dma_desc_wrap #(
 `endif
 `endif
   // pragma translate_on
-
-  axi_cut #(
-    .aw_chan_t    (dma_axi_mst_post_mux_aw_chan_t),
-    .w_chan_t     (dma_axi_mst_post_mux_w_chan_t),
-    .b_chan_t     (dma_axi_mst_post_mux_b_chan_t),
-    .ar_chan_t    (dma_axi_mst_post_mux_ar_chan_t),
-    .r_chan_t     (dma_axi_mst_post_mux_r_chan_t),
-    .axi_req_t    (dma_axi_mst_post_mux_req_t),
-    .axi_resp_t   (dma_axi_mst_post_mux_resp_t)
-  ) i_axi_cut (
-    .clk_i,
-    .rst_ni,
-    .slv_req_i (axi_be_cut_req),
-    .slv_resp_o(axi_be_cut_rsp),
-    .mst_req_o (axi_be_mst_req),
-    .mst_resp_i(axi_be_mst_rsp)
-  );
 
   axi_mux #(
     .SlvAxiIDWidth(AxiIdWidth - 1),

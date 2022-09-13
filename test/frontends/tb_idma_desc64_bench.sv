@@ -25,10 +25,10 @@ module tb_idma_desc64_bench #(
     parameter integer AlignmentMask           = 'h0f,
     parameter integer NumContiguous           = 10,
     parameter bit     DoIRQ                   = 0,
+    parameter integer MaxAxInFlight           = 4,
     // from frontend
     parameter int unsigned InputFifoDepth     = 8,
     parameter int unsigned PendingFifoDepth   = 8,
-    parameter int unsigned MaxAWWPending      = 8,
     parameter int unsigned NSpeculation       = 2,
     // from backend tb
     parameter int unsigned BufferDepth         = 3,
@@ -342,10 +342,10 @@ module tb_idma_desc64_bench #(
         .axi_rsp_o  ( axi_mem_response  )
     );
 
-    // allow only 5 outstanding requests at the time
+    // allow 1 AR, 1 AW in-flight
     axi_throttle #(
-        .MaxNumAwPending(5),
-        .MaxNumArPending(5),
+        .MaxNumAwPending(MaxAxInFlight),
+        .MaxNumArPending(MaxAxInFlight),
         .axi_req_t(mem_axi_req_t),
         .axi_rsp_t(mem_axi_resp_t)
     ) i_axi_throttle (
@@ -355,8 +355,8 @@ module tb_idma_desc64_bench #(
         .rsp_o(axi_throttle_rsp),
         .req_o(axi_multicut_req),
         .rsp_i(axi_multicut_rsp),
-        .w_credit_i (3'd5),
-        .r_credit_i (3'd5)
+        .w_credit_i (MaxAxInFlight),
+        .r_credit_i (MaxAxInFlight)
     );
 
     // delay the signals using AXI4 multicuts

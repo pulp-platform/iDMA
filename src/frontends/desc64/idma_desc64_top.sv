@@ -268,6 +268,36 @@ idma_desc64_reg_wrapper #(
     .input_addr_ready_i (input_addr_ready)
 );
 
+if (NSpeculation == 0) begin
+assign n_requests_to_flush = '0;
+assign n_requests_to_flush_valid = '0;
+assign master_req_o.r_ready = gated_r_ready;
+assign gated_r_valid = master_rsp_i.r_valid;
+idma_desc64_ar_gen #(
+    .DataWidth    (DataWidth),
+    .descriptor_t (descriptor_t),
+    .axi_ar_chan_t(axi_ar_chan_t),
+    .axi_id_t     (logic [AxiIdWidth-1:0]),
+    .usage_t      (logic [$bits(idma_req_available)-1:0]),
+    .addr_t       (addr_t)
+) i_ar_gen (
+    .clk_i,
+    .rst_ni,
+    .axi_ar_chan_o                       (master_req_o.ar),
+    .axi_ar_chan_valid_o                 (master_req_o.ar_valid),
+    .axi_ar_chan_ready_i                 (master_rsp_i.ar_ready),
+    .axi_ar_id_i,
+    .queued_address_i                    (queued_addr),
+    .queued_address_valid_i              (queued_addr_valid),
+    .queued_address_ready_o              (queued_addr_ready),
+    .next_address_from_descriptor_i      (next_addr_from_desc),
+    .next_address_from_descriptor_valid_i(next_addr_from_desc_valid),
+    .idma_req_available_slots_i          (idma_req_available),
+    .feedback_addr_o                     (feedback_addr),
+    .feedback_addr_valid_o               (feedback_addr_valid),
+    .busy_o                              (ar_busy)
+);
+end else begin
 idma_desc64_ar_gen_prefetch #(
     .DataWidth    (DataWidth),
     .NSpeculation (NSpeculation),
@@ -296,6 +326,23 @@ idma_desc64_ar_gen_prefetch #(
     .feedback_addr_valid_o               (feedback_addr_valid),
     .busy_o                              (ar_busy)
 );
+
+idma_desc64_reader_gater #(
+    .flush_t(flush_t)
+) i_reader_gater (
+    .clk_i,
+    .rst_ni,
+    .n_to_flush_i      (n_requests_to_flush),
+    .n_to_flush_valid_i(n_requests_to_flush_valid),
+    .r_valid_i         (master_rsp_i.r_valid),
+    .r_ready_o         (master_req_o.r_ready),
+    .r_valid_o         (gated_r_valid),
+    .r_ready_i         (gated_r_ready),
+    .r_last_i          (master_rsp_i.r.last)
+);
+
+
+end
 
 idma_desc64_reader #(
     .AddrWidth   (AddrWidth),
@@ -335,20 +382,6 @@ stream_fifo #(
     .data_o    (queued_addr),
     .valid_o   (queued_addr_valid),
     .ready_i   (queued_addr_ready)
-);
-
-idma_desc64_reader_gater #(
-    .flush_t(flush_t)
-) i_reader_gater (
-    .clk_i,
-    .rst_ni,
-    .n_to_flush_i      (n_requests_to_flush),
-    .n_to_flush_valid_i(n_requests_to_flush_valid),
-    .r_valid_i         (master_rsp_i.r_valid),
-    .r_ready_o         (master_req_o.r_ready),
-    .r_valid_o         (gated_r_valid),
-    .r_ready_i         (gated_r_ready),
-    .r_last_i          (master_rsp_i.r.last)
 );
 
 stream_fifo #(
