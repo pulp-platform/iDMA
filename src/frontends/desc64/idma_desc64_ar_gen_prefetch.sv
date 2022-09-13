@@ -107,6 +107,7 @@ addr_t      addr_out;
 
 logic [SpeculationWidth:0]        inflight_counter_q, inflight_counter_d;
 logic                             flush;
+logic                             flush_d, flush_q;
 logic                             commit;
 logic                             speculation_correct;
 logic                             legalization_usage;
@@ -127,23 +128,22 @@ assign next_ar.speculative = inflight_counter_q > 0;
 assign next_ar.addr        = base_addr_q + (inflight_counter_q << $clog2(DescriptorSize));
 
 assign staging_addr_valid_legalization = staging_addr_valid_pending &&
-                                          (staging_addr_ready_speculation ||
+                                          ((staging_addr_ready_speculation && !flush_q) ||
                                           !staging_addr.speculative) &&
                                           !flush;
 assign staging_addr_ready_pending      = staging_addr_ready_legalization &&
-                                          (staging_addr_ready_speculation ||
+                                          ((staging_addr_ready_speculation && !flush_q) ||
                                           !staging_addr.speculative) &&
                                           !flush;
 assign staging_addr_valid_speculation  = staging_addr_valid_pending &&
                                           staging_addr_ready_legalization &&
                                           staging_addr.speculative &&
-                                          !flush;
+                                          !flush && !flush_q;
 
 assign next_addr_valid_d = next_address_from_descriptor_valid_i;
 assign next_addr_valid_this_cycle = next_address_from_descriptor_valid_i && !next_addr_valid_q;
 
-// FIXME: actually fix the logic loop instead of working around it
-assign speculation_check_addr = flush ? 'd5 : (speculation_valid ? speculation_addr : next_ar.addr);
+assign speculation_check_addr = speculation_valid ? speculation_addr : next_ar.addr;
 
 assign speculation_correct = next_address_from_descriptor_i == '1 ?
         (queued_address_valid_i && speculation_check_addr == queued_address_i) :
@@ -222,6 +222,8 @@ assign queued_address_ready_o = !take_from_next && (!base_valid_q || next_addr_v
 `FF(base_addr_q, base_addr_d, '0);
 `FF(next_addr_valid_q, next_addr_valid_d, 1'b0);
 `FF(base_valid_q, base_valid_d, 1'b0);
+`FF(flush_q, flush_d, 1'b0);
+assign flush_d = flush;
 /* `FF(speculation_usage_q, speculation_usage_d, '0); */
 /* assign speculation_usage_d = flush ? '0 : speculation_usage; */
 
@@ -232,7 +234,7 @@ stream_fifo #(
 ) i_speculation_fifo (
     .clk_i,
     .rst_ni,
-    .flush_i   (flush),
+    .flush_i   (flush_q),
     .testmode_i(1'b0),
     .usage_o   (speculation_usage_short),
     .data_i    (staging_addr.addr),
