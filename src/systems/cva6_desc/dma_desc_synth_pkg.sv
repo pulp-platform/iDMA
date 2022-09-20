@@ -7,7 +7,7 @@ package dma_desc_synth_pkg;
   parameter int  AxiUserWidth     = 1;
   parameter int  AxiIdWidth       = 3;
   parameter int  AxiSlvIdWidth    = 3;
-  parameter int  NSpeculation     = 2;
+  parameter int  NSpeculation     = 4;
   parameter int  PendingFifoDepth = 4;
   parameter int  InputFifoDepth   = 1;
   parameter type mst_aw_chan_t    = axi_aw_chan_t; // AW Channel Type, master port

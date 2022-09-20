@@ -49,7 +49,7 @@ module dma_desc_wrap #(
   // has one less bit for the mux not to error
   typedef logic [AxiIdWidth-2:0]       post_mux_id_t;
 
-  localparam int unsigned NumAxInFlight = 2;
+  localparam int unsigned NumAxInFlight = NSpeculation < 3 ? 3 : NSpeculation;
   localparam int unsigned BufferDepth   = 3;
 
   axi_slv_req_t axi_slv_req;

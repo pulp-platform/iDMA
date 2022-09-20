@@ -23,16 +23,17 @@ module tb_idma_desc64_bench #(
     parameter integer ChainedDescriptors      = 10,
     parameter integer TransferLength          = 1024,
     parameter integer AlignmentMask           = 'h0f,
-    parameter integer NumContiguous           = 10,
-    parameter bit     DoIRQ                   = 0,
-    parameter integer MaxAxInFlight           = 4,
+    parameter integer NumContiguous           = 200000,
+    parameter integer MaxAxInFlight           = 64,
+    parameter bit     DoIRQ                   = 1,
+    parameter integer TransfersToSkip         = 4,
     // from frontend
     parameter int unsigned InputFifoDepth     = 8,
     parameter int unsigned PendingFifoDepth   = 8,
-    parameter int unsigned NSpeculation       = 2,
+    parameter int unsigned NSpeculation       = 4,
     // from backend tb
     parameter int unsigned BufferDepth         = 3,
-    parameter int unsigned NumAxInFlight       = 3,
+    parameter int unsigned NumAxInFlight       = NSpeculation > 3 ? NSpeculation : 3,
     parameter int unsigned TFLenWidth          = 32,
     parameter int unsigned MemSysDepth         = 0,
     parameter int unsigned MemNumReqOutst      = 1,
@@ -264,11 +265,97 @@ module tb_idma_desc64_bench #(
         .busy_o         ( busy             )
     );
 
-    string trace_file;
-    initial begin
-        void'($value$plusargs("trace_file=%s", trace_file));
+  string trace_file;
+  initial begin
+    void'($value$plusargs("trace_file=%s", trace_file));
+  end
+  `ifndef SYNTHESYS
+  `ifndef VERILATOR
+  initial begin : inital_tracer
+    automatic bit first_iter                 = 1'b1;
+    automatic int unsigned skipped_transfers = 0;
+    automatic int unsigned recorded_transfers = 0;
+    automatic integer tf;
+    automatic `IDMA_TRACER_MAX_TYPE cnst [string];
+    automatic `IDMA_TRACER_MAX_TYPE meta [string];
+    automatic `IDMA_TRACER_MAX_TYPE busy [string];
+    automatic `IDMA_TRACER_MAX_TYPE axib [string];
+    automatic string trace;
+    #0;
+    tf = $fopen(trace_file, "w");
+    $display("[Tracer] Logging iDMA backend %s to %s", "i_idma_backend", trace_file);
+    forever begin
+      @(posedge i_idma_backend.clk_i);
+      if (i_idma_backend.rst_ni & irq) begin
+        skipped_transfers += 1;
+        if (skipped_transfers > TransfersToSkip) begin
+          break;
+        end
+      end
     end
-    `IDMA_TRACER(i_idma_backend, trace_file);
+    forever begin
+      @(posedge i_idma_backend.clk_i);
+      if (irq) begin
+        recorded_transfers += 1;
+        if (recorded_transfers >= TransfersToSkip / 2) begin
+          break;
+        end
+      end
+      /* Trace */
+      trace = "{";
+      /* Constants */
+      cnst = '{
+        "inst"                  : "i_idma_backend",
+        "data_width"            : i_idma_backend.DataWidth,
+        "addr_width"            : i_idma_backend.AddrWidth,
+        "user_width"            : i_idma_backend.UserWidth,
+        "axi_id_width"          : i_idma_backend.AxiIdWidth,
+        "num_ax_in_flight"      : i_idma_backend.NumAxInFlight,
+        "buffer_depth"          : i_idma_backend.BufferDepth,
+        "tf_len_width"          : i_idma_backend.TFLenWidth,
+        "mem_sys_depth"         : i_idma_backend.MemSysDepth,
+        "rw_coupling_avail"     : i_idma_backend.RAWCouplingAvail,
+        "mask_invalid_data"     : i_idma_backend.MaskInvalidData,
+        "hardware_legalizer"    : i_idma_backend.HardwareLegalizer,
+        "reject_zero_transfers" : i_idma_backend.RejectZeroTransfers,
+        "error_cap"             : i_idma_backend.ErrorCap,
+        "print_fifo_info"       : i_idma_backend.PrintFifoInfo
+      };
+      meta = '{
+        "time" : $time()
+      };
+      busy = '{
+        "buffer"      : i_idma_backend.busy_o.buffer_busy,
+        "r_dp"        : i_idma_backend.busy_o.r_dp_busy,
+        "w_dp"        : i_idma_backend.busy_o.w_dp_busy,
+        "r_leg"       : i_idma_backend.busy_o.r_leg_busy,
+        "w_leg"       : i_idma_backend.busy_o.w_leg_busy,
+        "eh_fsm"      : i_idma_backend.busy_o.eh_fsm_busy,
+        "eh_cnt"      : i_idma_backend.busy_o.eh_cnt_busy,
+        "raw_coupler" : i_idma_backend.busy_o.raw_coupler_busy
+      };
+      axib = '{
+        "w_valid" : i_idma_backend.axi_req_o.w_valid,
+        "w_ready" : dma_be_master_response.w_ready,
+        "w_strb"  : i_idma_backend.axi_req_o.w.strb,
+        "r_valid" : dma_be_master_response.r_valid,
+        "r_ready" : i_idma_backend.axi_req_o.r_ready
+      };
+      if ($isunknown(axib["w_ready"]) || $isunknown(axib["r_valid"])) begin
+        $fatal("UNKNOWN AXI STATE, THIS SHOULD NEVER HAPPEN!");
+      end
+      /* Assembly */
+      `IDMA_TRACER_STR_ASSEMBLY(cnst, first_iter);
+      `IDMA_TRACER_STR_ASSEMBLY(meta, 1);
+      `IDMA_TRACER_STR_ASSEMBLY(busy, 1);
+      `IDMA_TRACER_STR_ASSEMBLY(axib, 1);
+      `IDMA_TRACER_CLEAR_COND(first_iter);
+      /* Commit */
+      $fwrite(tf, $sformatf("%s}\n", trace));
+    end
+  end
+`endif
+`endif
 
     /*
     axi_cut #(
@@ -306,7 +393,7 @@ module tb_idma_desc64_bench #(
         .mst_req_t     (mem_axi_req_t),
         .mst_resp_t    (mem_axi_resp_t),
         .NoSlvPorts    (2),
-        .MaxWTrans     (NumAxInFlight + BufferDepth),
+        .MaxWTrans     (MaxAxInFlight),
         .FallThrough   (1'b0),
         .SpillAw       (1'b0),
         .SpillW        (1'b0),
