@@ -99,6 +99,7 @@ logic       next_ar_valid, next_ar_ready;
 
 addr_spec_t staging_addr;
 logic       staging_addr_valid_pending, staging_addr_ready_pending;
+addr_t      staging_addr_legalization;
 logic       staging_addr_valid_legalization, staging_addr_ready_legalization;
 logic       staging_addr_valid_speculation, staging_addr_ready_speculation;
 
@@ -127,10 +128,11 @@ assign next_ar_valid       = unblocked && base_valid_q;
 assign next_ar.speculative = inflight_counter_q > 0;
 assign next_ar.addr        = base_addr_q + (inflight_counter_q << $clog2(DescriptorSize));
 
-assign staging_addr_valid_legalization = staging_addr_valid_pending &&
+assign staging_addr_valid_legalization = flush ? idma_req_available_slots_i > '0 && (next_address_from_descriptor_i == '1 ? 
+                                            queued_address_valid_i : 1'b1) :
+                                          staging_addr_valid_pending &&
                                           ((staging_addr_ready_speculation && !flush_q) ||
-                                          !staging_addr.speculative) &&
-                                          !flush;
+                                          !staging_addr.speculative);
 assign staging_addr_ready_pending      = staging_addr_ready_legalization &&
                                           ((staging_addr_ready_speculation && !flush_q) ||
                                           !staging_addr.speculative) &&
@@ -142,6 +144,10 @@ assign staging_addr_valid_speculation  = staging_addr_valid_pending &&
 
 assign next_addr_valid_d = next_address_from_descriptor_valid_i;
 assign next_addr_valid_this_cycle = next_address_from_descriptor_valid_i && !next_addr_valid_q;
+
+assign staging_addr_legalization = flush ? (
+                                    next_address_from_descriptor_i == '1 ? queued_address_i : next_address_from_descriptor_i
+                                    ) : staging_addr.addr;
 
 assign speculation_check_addr = speculation_valid ? speculation_addr : next_ar.addr;
 
@@ -194,7 +200,7 @@ end
 always_comb begin : proc_inflight_counter
     inflight_counter_d = inflight_counter_q;
     if (flush) begin
-        inflight_counter_d = '0;
+        inflight_counter_d = (staging_addr_valid_legalization && staging_addr_ready_legalization);
     end else begin
         inflight_counter_d = inflight_counter_q + (next_ar_valid && next_ar_ready) - commit;
     end
@@ -207,12 +213,17 @@ always_comb begin : proc_feedback_addr
     // After a flush or when starting fresh however, we have a first address
     // that is known and doesn't pass through the speculation buffer. We need
     // to pass that address through in that case.
-    if (!staging_addr.speculative &&
-        staging_addr_valid_legalization &&
-        staging_addr_ready_legalization) begin
+    if (!flush) begin
+        if (!staging_addr.speculative &&
+            staging_addr_valid_legalization &&
+            staging_addr_ready_legalization) begin
 
-        feedback_addr_o = staging_addr.addr;
-        feedback_addr_valid_o = 1'b1;
+            feedback_addr_o = staging_addr.addr;
+            feedback_addr_valid_o = 1'b1;
+        end
+    end else begin
+        feedback_addr_o = staging_addr_legalization;
+        feedback_addr_valid_o = staging_addr_valid_legalization && staging_addr_ready_legalization;
     end
 end
 
@@ -272,8 +283,8 @@ stream_fifo #(
     .rst_ni,
     .flush_i   (1'b0),
     .testmode_i(1'b0),
-    .usage_o   ( /* legalization_usage */),
-    .data_i    (staging_addr.addr),
+    .usage_o   (legalization_usage),
+    .data_i    (staging_addr_legalization),
     .valid_i   (staging_addr_valid_legalization),
     .ready_o   (staging_addr_ready_legalization),
     .data_o    (addr_out),
