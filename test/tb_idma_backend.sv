@@ -2,7 +2,8 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Thomas Benz <tbenz@ethz.ch>
+// Thomas Benz  <tbenz@ethz.ch>
+// Tobias Senti <tsenti@student.ethz.ch>
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
@@ -98,7 +99,7 @@ module tb_idma_backend import idma_pkg::*; #(
     logic eh_req_ready;
 
     // AXI4 master
-    axi_req_t axi_req, axi_req_mem;
+    axi_req_t axi_req, axi_req_mem, axi_req_mem_delayed;
     axi_rsp_t axi_rsp, axi_rsp_mem;
 
     // busy signal
@@ -210,6 +211,56 @@ module tb_idma_backend import idma_pkg::*; #(
         .mon_w_valid_o      ( /* NOT CONNECTED */ )
     );
 
+    axi_cut #(
+        .Bypass     ( 1'b0                ),
+        .aw_chan_t  ( axi_aw_chan_t       ),
+        .w_chan_t   ( axi_w_chan_t        ),
+        .b_chan_t   ( axi_b_chan_t        ),
+        .ar_chan_t  ( axi_ar_chan_t       ),
+        .r_chan_t   ( axi_r_chan_t        ),
+        .axi_req_t  ( axi_req_t           ),
+        .axi_resp_t ( axi_rsp_t           )
+    ) i_axi_cut (
+        .clk_i      ( clk                 ),
+        .rst_ni     ( rst_n               ),
+
+        .slv_req_i  ( axi_req_mem         ),
+        .slv_resp_o (                     ),
+        .mst_req_o  ( axi_req_mem_delayed ),
+        .mst_resp_i ( axi_rsp_mem         )
+    );
+
+    axi_sim_mem #(
+        .AddrWidth         ( AddrWidth    ),
+        .DataWidth         ( DataWidth    ),
+        .IdWidth           ( AxiIdWidth   ),
+        .UserWidth         ( UserWidth    ),
+        .axi_req_t         ( axi_req_t    ),
+        .axi_rsp_t         ( axi_rsp_t    ),
+        .WarnUninitialized ( 1'b0         ),
+        .ClearErrOnAccess  ( 1'b1         ),
+        .ApplDelay         ( TA           ),
+        .AcqDelay          ( TT           )
+    ) i_axi_sim_mem_delayed (
+        .clk_i              ( clk                 ),
+        .rst_ni             ( rst_n               ),
+        .axi_req_i          ( axi_req_mem_delayed ),
+        .axi_rsp_o          (                     ),
+        .mon_r_last_o       ( /* NOT CONNECTED */ ),
+        .mon_r_beat_count_o ( /* NOT CONNECTED */ ),
+        .mon_r_user_o       ( /* NOT CONNECTED */ ),
+        .mon_r_id_o         ( /* NOT CONNECTED */ ),
+        .mon_r_data_o       ( /* NOT CONNECTED */ ),
+        .mon_r_addr_o       ( /* NOT CONNECTED */ ),
+        .mon_r_valid_o      ( /* NOT CONNECTED */ ),
+        .mon_w_last_o       ( /* NOT CONNECTED */ ),
+        .mon_w_beat_count_o ( /* NOT CONNECTED */ ),
+        .mon_w_user_o       ( /* NOT CONNECTED */ ),
+        .mon_w_id_o         ( /* NOT CONNECTED */ ),
+        .mon_w_data_o       ( /* NOT CONNECTED */ ),
+        .mon_w_addr_o       ( /* NOT CONNECTED */ ),
+        .mon_w_valid_o      ( /* NOT CONNECTED */ )
+    );
 
     //--------------------------------------
     // TB Monitors
@@ -254,8 +305,10 @@ module tb_idma_backend import idma_pkg::*; #(
         .idma_rsp_t          ( idma_rsp_t          ),
         .idma_eh_req_t       ( idma_eh_req_t       ),
         .idma_busy_t         ( idma_busy_t         ),
-        .axi_req_t           ( axi_req_t           ),
-        .axi_rsp_t           ( axi_rsp_t           )
+        .protocol_req_t      ( axi_req_t           ),
+        .protocol_rsp_t      ( axi_rsp_t           ),
+        .aw_chan_t           ( axi_aw_chan_t       ),
+        .ar_chan_t           ( axi_ar_chan_t       )
     ) i_idma_backend  (
         .clk_i          ( clk             ),
         .rst_ni         ( rst_n           ),
@@ -269,8 +322,8 @@ module tb_idma_backend import idma_pkg::*; #(
         .idma_eh_req_i  ( idma_eh_req     ),
         .eh_req_valid_i ( eh_req_valid    ),
         .eh_req_ready_o ( eh_req_ready    ),
-        .axi_req_o      ( axi_req         ),
-        .axi_rsp_i      ( axi_rsp         ),
+        .protocol_req_o ( axi_req         ),
+        .protocol_rsp_i ( axi_rsp         ),
         .busy_o         ( busy            )
     );
 

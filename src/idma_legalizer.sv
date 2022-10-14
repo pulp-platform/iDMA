@@ -2,15 +2,19 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Thomas Benz <tbenz@ethz.ch>
+// Thomas Benz  <tbenz@ethz.ch>
+// Tobias Senti <tsenti@student.ethz.ch>
 
 `include "common_cells/registers.svh"
 `include "common_cells/assertions.svh"
+`include "idma/guard.svh"
 
 /// Legalizes a generic 1D transfer according to the rules given by the
 /// AXI4 protocol. Bursts are cut at 4kiB boundaries and are a maximum of
 /// 256 beats long.
 module idma_legalizer #(
+    /// Protocol used
+    parameter idma_pkg::protocol_e Protocol = idma_pkg::AXI,
     /// Data width
     parameter int unsigned DataWidth = 32'd16,
     /// Address width
@@ -65,13 +69,16 @@ module idma_legalizer #(
     /// Write machine of the legalizer is busy
     output logic w_busy_o
 );
+    /// Maximum number of beats within a burst
+    localparam int unsigned MaxBeatsPerBurst = idma_pkg::determineMaxBeatsPerBurst(Protocol);
 
     /// Stobe width
     localparam int unsigned StrbWidth     = DataWidth / 8;
     /// Offset width
     localparam int unsigned OffsetWidth   = $clog2(StrbWidth);
     /// The size of a page in byte
-    localparam int unsigned PageSize      = (256 * StrbWidth > 4096) ? 4096 :  256 * StrbWidth;
+    localparam int unsigned PageSize      = (MaxBeatsPerBurst * StrbWidth > 4096) ?
+                                            4096 :  MaxBeatsPerBurst * StrbWidth;
     /// The width of page offset byte addresses
     localparam int unsigned PageAddrWidth = $clog2(PageSize);
 
@@ -128,7 +135,7 @@ module idma_legalizer #(
         // smaller chunks than the AXI page size?
         r_page_addr_width = OffsetWidth + (opt_tf_q.src_reduce_len ? opt_tf_q.src_max_llen : 'd8);
         // a page can be a maximum of 4kB (12 bit)
-        r_page_addr_width = r_page_addr_width > 'd12 ? 'd12 : r_page_addr_width;
+        r_page_addr_width = r_page_addr_width > PageAddrWidth ? PageAddrWidth : r_page_addr_width;
     end
     // calculate the page size in byte
     assign r_page_size = (1 << r_page_addr_width);
@@ -158,7 +165,7 @@ module idma_legalizer #(
         // smaller chunks than the AXI page size?
         w_page_addr_width = OffsetWidth + (opt_tf_q.dst_reduce_len ? opt_tf_q.dst_max_llen : 'd8);
         // a page can be a maximum of 4kB (12 bit)
-        w_page_addr_width = w_page_addr_width > 'd12 ? 'd12 : w_page_addr_width;
+        w_page_addr_width = w_page_addr_width > PageAddrWidth ? PageAddrWidth : w_page_addr_width;
     end
     // calculate the page size in byte
     assign w_page_size = (1 << w_page_addr_width);
@@ -304,36 +311,69 @@ module idma_legalizer #(
     //--------------------------------------
     // Connect outputs
     //--------------------------------------
-    // assign the signals for the read meta channel
-    assign r_req_o.ar_req = '{
-        id:     opt_tf_q.axi_id,
-        addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        len:    ((r_num_bytes + r_addr_offset - 'd1) >> OffsetWidth),
-        size:   axi_pkg::size_t'(OffsetWidth),
-        burst:  opt_tf_q.src_axi_opt.burst,
-        lock:   opt_tf_q.src_axi_opt.lock,
-        cache:  opt_tf_q.src_axi_opt.cache,
-        prot:   opt_tf_q.src_axi_opt.prot,
-        qos:    opt_tf_q.src_axi_opt.qos,
-        region: opt_tf_q.src_axi_opt.region,
-        user:   '0
-    };
+    if (Protocol == idma_pkg::AXI) begin : gen_axi_ar_aw_req
+        // assign the signals for the read meta channel
+        assign r_req_o.ar_req = '{
+            id:     opt_tf_q.axi_id,
+            addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+            len:    ((r_num_bytes + r_addr_offset - 'd1) >> OffsetWidth),
+            size:   axi_pkg::size_t'(OffsetWidth),
+            burst:  opt_tf_q.src_axi_opt.burst,
+            lock:   opt_tf_q.src_axi_opt.lock,
+            cache:  opt_tf_q.src_axi_opt.cache,
+            prot:   opt_tf_q.src_axi_opt.prot,
+            qos:    opt_tf_q.src_axi_opt.qos,
+            region: opt_tf_q.src_axi_opt.region,
+            user:   '0
+        };
 
-    // assign the signals for the write meta channel
-    assign w_req_o.aw_req = '{
-        id:     opt_tf_q.axi_id,
-        addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        len:    ((w_num_bytes + w_addr_offset - 'd1) >> OffsetWidth),
-        size:   axi_pkg::size_t'(OffsetWidth),
-        burst:  opt_tf_q.dst_axi_opt.burst,
-        lock:   opt_tf_q.dst_axi_opt.lock,
-        cache:  opt_tf_q.dst_axi_opt.cache,
-        prot:   opt_tf_q.dst_axi_opt.prot,
-        qos:    opt_tf_q.dst_axi_opt.qos,
-        region: opt_tf_q.dst_axi_opt.region,
-        user:   '0,
-        atop:   '0
-    };
+        // assign the signals for the write meta channel
+        assign w_req_o.aw_req = '{
+            id:     opt_tf_q.axi_id,
+            addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+            len:    ((w_num_bytes + w_addr_offset - 'd1) >> OffsetWidth),
+            size:   axi_pkg::size_t'(OffsetWidth),
+            burst:  opt_tf_q.dst_axi_opt.burst,
+            lock:   opt_tf_q.dst_axi_opt.lock,
+            cache:  opt_tf_q.dst_axi_opt.cache,
+            prot:   opt_tf_q.dst_axi_opt.prot,
+            qos:    opt_tf_q.dst_axi_opt.qos,
+            region: opt_tf_q.dst_axi_opt.region,
+            user:   '0,
+            atop:   '0
+        };
+    end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_axi_lite_ar_aw_req
+        // assign the signals for the read meta channel
+        assign r_req_o.ar_req = '{
+            addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+            prot:   opt_tf_q.src_axi_opt.prot
+        };
+
+        // assign the signals for the write meta channel
+        assign w_req_o.aw_req = '{
+            addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+            prot:   opt_tf_q.dst_axi_opt.prot
+        };
+    end else if (Protocol == idma_pkg::OBI) begin : gen_obi_ar_aw_req
+        assign r_req_o.ar_req = '{
+                addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+                be:     '1, //TODO: Placeholder, read everything
+                we:     1'b0,
+                wdata:  '0
+            };
+
+        // assign the signals for the write meta channel
+        assign w_req_o.aw_req = '{
+            addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+            be:     '0,
+            we:     1,
+            wdata: '0
+        };
+    end else begin : gen_ar_aw_req_error
+        `IDMA_NONSYNTH_BLOCK(
+        $fatal(1, "Legalizer: `AR-AW_req` not implemented for requested protocol!");
+        )
+    end
 
     // assign the signals needed to set-up the read data path
     assign r_req_o.r_dp_req = '{
@@ -344,12 +384,26 @@ module idma_legalizer #(
     };
 
     // assign the signals needed to set-up the write data path
-    assign w_req_o.w_dp_req = '{
-        offset:    w_addr_offset,
-        tailer:    OffsetWidth'(w_num_bytes + w_addr_offset),
-        num_beats: w_req_o.aw_req.len,
-        is_single: w_req_o.aw_req.len == '0
-    };
+    if (Protocol == idma_pkg::AXI) begin : gen_axi_w_dp_req
+        assign w_req_o.w_dp_req = '{
+            offset:    w_addr_offset,
+            tailer:    OffsetWidth'(w_num_bytes + w_addr_offset),
+            num_beats: w_req_o.aw_req.len,
+            is_single: w_req_o.aw_req.len == '0
+        };
+    end else if (Protocol == idma_pkg::AXI_LITE | Protocol == idma_pkg::OBI) begin
+      : gen_axi_lite_obi_w_dp_req
+        assign w_req_o.w_dp_req = '{
+            offset:    w_addr_offset,
+            tailer:    OffsetWidth'(w_num_bytes + w_addr_offset),
+            num_beats: 'd0,
+            is_single: 1'b1
+        };
+    end else begin : gen_w_dp_req_error
+        `IDMA_NONSYNTH_BLOCK(
+        $fatal(1, "Legalizer: `W-DP_req` not implemented for requested protocol!");
+        )
+    end
 
     // last burst in generic 1D transfer?
     assign w_req_o.last = w_done;

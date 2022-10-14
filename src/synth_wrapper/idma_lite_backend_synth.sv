@@ -9,7 +9,7 @@
 `include "idma/typedef.svh"
 
 /// Synthesis wrapper for the iDMA backend. Unpacks all the interfaces to simple logic vectors
-module idma_backend_synth #(
+module idma_lite_backend_synth #(
     /// Data width
     parameter int unsigned  DataWidth           = 32'd32,
     /// Address width
@@ -106,67 +106,42 @@ module idma_backend_synth #(
 
     output idma_pkg::idma_busy_t   idma_busy_o,
 
-    output id_t                    axi_aw_id_o,
-    output addr_t                  axi_aw_addr_o,
-    output axi_pkg::len_t          axi_aw_len_o,
-    output axi_pkg::size_t         axi_aw_size_o,
-    output axi_pkg::burst_t        axi_aw_burst_o,
-    output logic                   axi_aw_lock_o,
-    output axi_pkg::cache_t        axi_aw_cache_o,
-    output axi_pkg::prot_t         axi_aw_prot_o,
-    output axi_pkg::qos_t          axi_aw_qos_o,
-    output axi_pkg::region_t       axi_aw_region_o,
-    output axi_pkg::atop_t         axi_aw_atop_o,
-    output user_t                  axi_aw_user_o,
-    output logic                   axi_aw_valid_o,
-    input  logic                   axi_aw_ready_i,
-    output data_t                  axi_w_data_o,
-    output strb_t                  axi_w_strb_o,
-    output logic                   axi_w_last_o,
-    output user_t                  axi_w_user_o,
-    output logic                   axi_w_valid_o,
-    input  logic                   axi_w_ready_i,
-    input  id_t                    axi_b_id_i,
-    input  axi_pkg::resp_t         axi_b_resp_i,
-    input  user_t                  axi_b_user_i,
-    input  logic                   axi_b_valid_i,
-    output logic                   axi_b_ready_o,
-    output id_t                    axi_ar_id_o,
-    output addr_t                  axi_ar_addr_o,
-    output axi_pkg::len_t          axi_ar_len_o,
-    output axi_pkg::size_t         axi_ar_size_o,
-    output axi_pkg::burst_t        axi_ar_burst_o,
-    output logic                   axi_ar_lock_o,
-    output axi_pkg::cache_t        axi_ar_cache_o,
-    output axi_pkg::prot_t         axi_ar_prot_o,
-    output axi_pkg::qos_t          axi_ar_qos_o,
-    output axi_pkg::region_t       axi_ar_region_o,
-    output user_t                  axi_ar_user_o,
-    output logic                   axi_ar_valid_o,
-    input  logic                   axi_ar_ready_i,
-    input  id_t                    axi_r_id_i,
-    input  data_t                  axi_r_data_i,
-    input  axi_pkg::resp_t         axi_r_resp_i,
-    input  logic                   axi_r_last_i,
-    input  user_t                  axi_r_user_i,
-    input  logic                   axi_r_valid_i,
-    output logic                   axi_r_ready_o
+    output addr_t                  axi_lite_aw_addr_o,
+    output axi_pkg::prot_t         axi_lite_aw_prot_o,
+    output logic                   axi_lite_aw_valid_o,
+    input  logic                   axi_lite_aw_ready_i,
+    output data_t                  axi_lite_w_data_o,
+    output strb_t                  axi_lite_w_strb_o,
+    output logic                   axi_lite_w_valid_o,
+    input  logic                   axi_lite_w_ready_i,
+    input  axi_pkg::resp_t         axi_lite_b_resp_i,
+    input  logic                   axi_lite_b_valid_i,
+    output logic                   axi_lite_b_ready_o,
+    output addr_t                  axi_lite_ar_addr_o,
+    output axi_pkg::prot_t         axi_lite_ar_prot_o,
+    output logic                   axi_lite_ar_valid_o,
+    input  logic                   axi_lite_ar_ready_i,
+    input  data_t                  axi_lite_r_data_i,
+    input  axi_pkg::resp_t         axi_lite_r_resp_i,
+    input  logic                   axi_lite_r_valid_i,
+    output logic                   axi_lite_r_ready_o
 );
 
     /// Define the error handling capability
     localparam idma_pkg::error_cap_e ErrorCap = ErrorHandling ? idma_pkg::ERROR_HANDLING :
                                                                 idma_pkg::NO_ERROR_HANDLING;
 
-    // AXI4 types
-    `AXI_TYPEDEF_AW_CHAN_T(axi_aw_chan_t, addr_t, id_t, user_t)
-    `AXI_TYPEDEF_W_CHAN_T(axi_w_chan_t, data_t, strb_t, user_t)
-    `AXI_TYPEDEF_B_CHAN_T(axi_b_chan_t, id_t, user_t)
+    // AXI-Lite types
+    `AXI_LITE_TYPEDEF_AW_CHAN_T(axi_lite_aw_chan_t, addr_t)
+    `AXI_LITE_TYPEDEF_W_CHAN_T(axi_lite_w_chan_t, data_t, strb_t)
+    `AXI_LITE_TYPEDEF_B_CHAN_T(axi_lite_b_chan_t)
 
-    `AXI_TYPEDEF_AR_CHAN_T(axi_ar_chan_t, addr_t, id_t, user_t)
-    `AXI_TYPEDEF_R_CHAN_T(axi_r_chan_t, data_t, id_t, user_t)
+    `AXI_LITE_TYPEDEF_AR_CHAN_T(axi_lite_ar_chan_t, addr_t)
+    `AXI_LITE_TYPEDEF_R_CHAN_T(axi_lite_r_chan_t, data_t)
 
-    `AXI_TYPEDEF_REQ_T(axi_req_t, axi_aw_chan_t, axi_w_chan_t, axi_ar_chan_t)
-    `AXI_TYPEDEF_RESP_T(axi_rsp_t, axi_b_chan_t, axi_r_chan_t)
+    `AXI_LITE_TYPEDEF_REQ_T(axi_lite_req_t, axi_lite_aw_chan_t, axi_lite_w_chan_t,
+        axi_lite_ar_chan_t)
+    `AXI_LITE_TYPEDEF_RESP_T(axi_lite_rsp_t, axi_lite_b_chan_t, axi_lite_r_chan_t)
 
     /// Option struct: AXI4 id as well as AXI and backend options
     /// - `last`: a flag can be set if this transfer is the last of a set of transfers
@@ -191,13 +166,14 @@ module idma_backend_synth #(
     `IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)
 
     // local types
-    axi_req_t               axi_req_o;
-    axi_rsp_t               axi_rsp_i;
+    axi_lite_req_t          axi_lite_req_o;
+    axi_lite_rsp_t          axi_lite_rsp_i;
     idma_req_t              idma_req;
     idma_rsp_t              idma_rsp;
 
     // DUT instantiation
     idma_backend #(
+        .Protocol            ( idma_pkg::AXI_LITE      ),
         .DataWidth           ( DataWidth               ),
         .AddrWidth           ( AddrWidth               ),
         .AxiIdWidth          ( AxiIdWidth              ),
@@ -215,10 +191,10 @@ module idma_backend_synth #(
         .idma_rsp_t          ( idma_rsp_t              ),
         .idma_eh_req_t       ( idma_pkg::idma_eh_req_t ),
         .idma_busy_t         ( idma_pkg::idma_busy_t   ),
-        .protocol_req_t      ( axi_req_t               ),
-        .protocol_rsp_t      ( axi_rsp_t               ),
-        .aw_chan_t           ( axi_aw_chan_t           ),
-        .ar_chan_t           ( axi_ar_chan_t           )
+        .protocol_req_t      ( axi_lite_req_t          ),
+        .protocol_rsp_t      ( axi_lite_rsp_t          ),
+        .aw_chan_t           ( axi_lite_aw_chan_t      ),
+        .ar_chan_t           ( axi_lite_ar_chan_t      )
     ) i_idma_backend (
         .clk_i           ( clk_i          ),
         .rst_ni          ( rst_ni         ),
@@ -232,8 +208,8 @@ module idma_backend_synth #(
         .idma_eh_req_i   ( eh_req_i       ),
         .eh_req_valid_i  ( eh_req_valid_i ),
         .eh_req_ready_o  ( eh_req_ready_o ),
-        .protocol_req_o  ( axi_req_o      ),
-        .protocol_rsp_i  ( axi_rsp_i      ),
+        .protocol_req_o  ( axi_lite_req_o ),
+        .protocol_rsp_i  ( axi_lite_rsp_i ),
         .busy_o          ( idma_busy_o    )
     );
 
@@ -268,51 +244,25 @@ module idma_backend_synth #(
     assign rsp_error_o      = idma_rsp.error;
     assign rsp_last_o       = idma_rsp.last;
 
-    assign axi_aw_id_o     = axi_req_o.aw.id;
-    assign axi_aw_addr_o   = axi_req_o.aw.addr;
-    assign axi_aw_len_o    = axi_req_o.aw.len;
-    assign axi_aw_size_o   = axi_req_o.aw.size;
-    assign axi_aw_burst_o  = axi_req_o.aw.burst;
-    assign axi_aw_lock_o   = axi_req_o.aw.lock;
-    assign axi_aw_cache_o  = axi_req_o.aw.cache;
-    assign axi_aw_prot_o   = axi_req_o.aw.prot;
-    assign axi_aw_qos_o    = axi_req_o.aw.qos;
-    assign axi_aw_region_o = axi_req_o.aw.region;
-    assign axi_aw_atop_o   = axi_req_o.aw.atop;
-    assign axi_aw_user_o   = axi_req_o.aw.user;
-    assign axi_aw_valid_o  = axi_req_o.aw_valid;
-    assign axi_w_data_o    = axi_req_o.w.data;
-    assign axi_w_strb_o    = axi_req_o.w.strb;
-    assign axi_w_last_o    = axi_req_o.w.last;
-    assign axi_w_user_o    = axi_req_o.w.user;
-    assign axi_w_valid_o   = axi_req_o.w_valid;
-    assign axi_b_ready_o   = axi_req_o.b_ready;
-    assign axi_ar_id_o     = axi_req_o.ar.id;
-    assign axi_ar_addr_o   = axi_req_o.ar.addr;
-    assign axi_ar_len_o    = axi_req_o.ar.len;
-    assign axi_ar_size_o   = axi_req_o.ar.size;
-    assign axi_ar_burst_o  = axi_req_o.ar.burst;
-    assign axi_ar_lock_o   = axi_req_o.ar.lock;
-    assign axi_ar_cache_o  = axi_req_o.ar.cache;
-    assign axi_ar_prot_o   = axi_req_o.ar.prot;
-    assign axi_ar_qos_o    = axi_req_o.ar.qos;
-    assign axi_ar_region_o = axi_req_o.ar.region;
-    assign axi_ar_user_o   = axi_req_o.ar.user;
-    assign axi_ar_valid_o  = axi_req_o.ar_valid;
-    assign axi_r_ready_o   = axi_req_o.r_ready;
+    assign axi_lite_aw_addr_o   = axi_lite_req_o.aw.addr;
+    assign axi_lite_aw_prot_o   = axi_lite_req_o.aw.prot;
+    assign axi_lite_aw_valid_o  = axi_lite_req_o.aw_valid;
+    assign axi_lite_w_data_o    = axi_lite_req_o.w.data;
+    assign axi_lite_w_strb_o    = axi_lite_req_o.w.strb;
+    assign axi_lite_w_valid_o   = axi_lite_req_o.w_valid;
+    assign axi_lite_b_ready_o   = axi_lite_req_o.b_ready;
+    assign axi_lite_ar_addr_o   = axi_lite_req_o.ar.addr;
+    assign axi_lite_ar_prot_o   = axi_lite_req_o.ar.prot;
+    assign axi_lite_ar_valid_o  = axi_lite_req_o.ar_valid;
+    assign axi_lite_r_ready_o   = axi_lite_req_o.r_ready;
 
-    assign axi_rsp_i.aw_ready = axi_aw_ready_i;
-    assign axi_rsp_i.w_ready  = axi_w_ready_i;
-    assign axi_rsp_i.b.id     = axi_b_id_i;
-    assign axi_rsp_i.b.resp   = axi_b_resp_i;
-    assign axi_rsp_i.b.user   = axi_b_user_i;
-    assign axi_rsp_i.b_valid  = axi_b_valid_i;
-    assign axi_rsp_i.ar_ready = axi_ar_ready_i;
-    assign axi_rsp_i.r.id     = axi_r_id_i;
-    assign axi_rsp_i.r.data   = axi_r_data_i;
-    assign axi_rsp_i.r.resp   = axi_r_resp_i;
-    assign axi_rsp_i.r.last   = axi_r_last_i;
-    assign axi_rsp_i.r.user   = axi_r_user_i;
-    assign axi_rsp_i.r_valid  = axi_r_valid_i;
+    assign axi_lite_rsp_i.aw_ready = axi_lite_aw_ready_i;
+    assign axi_lite_rsp_i.w_ready  = axi_lite_w_ready_i;
+    assign axi_lite_rsp_i.b.resp   = axi_lite_b_resp_i;
+    assign axi_lite_rsp_i.b_valid  = axi_lite_b_valid_i;
+    assign axi_lite_rsp_i.ar_ready = axi_lite_ar_ready_i;
+    assign axi_lite_rsp_i.r.data   = axi_lite_r_data_i;
+    assign axi_lite_rsp_i.r.resp   = axi_lite_r_resp_i;
+    assign axi_lite_rsp_i.r_valid  = axi_lite_r_valid_i;
 
-endmodule : idma_backend_synth
+endmodule : idma_lite_backend_synth

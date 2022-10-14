@@ -56,13 +56,23 @@ a simulation can be launched using:
 
 ```bash
 make prepare_sim
-vsim -c -do "source scripts/compile_vsim.tcl; quit"
-vsim -c -t 1ps -voptargs=+acc \
-     +job_file=jobs/backend/man_simple.txt \
+export VSIM="questa-2022.3 vsim"
+$VSIM -c -do "source scripts/compile_vsim.tcl; quit"
+$VSIM -c -t 1ps -voptargs=+acc \
+     +job_file=jobs/backend/man_same_dst_simple.txt \
      -logfile logs/backend.simple.vsim.log \
      -wlf logs/backend.simple.wlf \
-     tb_idma_backend \
+     tb_idma_obi_backend \
      -do "source scripts/start_vsim.tcl; run -all"
+```
+with gui:
+```
+$VSIM -t 1ps -voptargs=+acc \
+     +job_file=jobs/backend/man_same_dst_simple.txt \
+     -logfile logs/backend.simple.vsim.log \
+     -wlf logs/backend.simple.wlf \
+     tb_idma_obi_backend \
+     -do "source scripts/start_vsim.tcl; source scripts/waves/vsim_obi_backend.do; run -all"
 ```
 
 Where:

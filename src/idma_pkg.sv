@@ -2,7 +2,8 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Thomas Benz <tbenz@ethz.ch>
+// Thomas Benz  <tbenz@ethz.ch>
+// Tobias Senti <tsenti@student.ethz.ch>
 
 /// iDMA Package
 /// Contains all static type definitions
@@ -78,5 +79,25 @@ package idma_pkg;
         logic       src_reduce_len;
         logic       dst_reduce_len;
     } backend_options_t;
+
+    /// Supported Protocols
+    /// - `AXI`: Full AXI
+    /// - `AXI_LITE`: AXI Lite
+    /// - `OBI`: OBI
+    typedef enum logic[1:0] {
+        AXI,
+        AXI_LITE,
+        OBI
+    } protocol_e;
+
+    /// Determines the maximum number of beats allowed within a burst depending on the protocol
+    /// - `protocol`: The protocol that is used
+    function automatic int unsigned determineMaxBeatsPerBurst(protocol_e protocol);
+        case (protocol)
+        AXI:        return 256;
+        // AXI-Lite and OBI do not have bursts
+        default:    return 1;
+        endcase
+    endfunction
 
 endpackage : idma_pkg

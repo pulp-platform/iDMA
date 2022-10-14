@@ -61,6 +61,26 @@ tiny-dma-run:
         job: prepare-non-free
     strategy: depend
 
+lite-backend-run:
+  stage: iDMA
+  needs:
+    - prepare-non-free
+  trigger:
+    include:
+      - artifact: idma-non-free/ci/gitlab-lite-backend-ci.yml
+        job: prepare-non-free
+    strategy: depend
+
+obi-backend-run:
+  stage: iDMA
+  needs:
+    - prepare-non-free
+  trigger:
+    include:
+      - artifact: idma-non-free/ci/gitlab-obi-backend-ci.yml
+        job: prepare-non-free
+    strategy: depend
+
 4d-ext-run:
   stage: iDMA
   needs:

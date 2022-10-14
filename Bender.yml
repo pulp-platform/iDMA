@@ -11,7 +11,7 @@ package:
 dependencies:
   common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.26.0 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.2 }
-  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.37.0 }
+  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.2 }
   register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: 0.3.1 }
 
 export_include_dirs:
@@ -31,6 +31,8 @@ sources:
   - src/idma_channel_coupler.sv
   # Level 2
   - src/idma_axi_transport_layer.sv
+  - src/idma_axi_lite_transport_layer.sv
+  - src/idma_obi_transport_layer.sv
   - src/idma_legalizer.sv
   # Level 3
   - src/idma_backend.sv
@@ -81,18 +83,27 @@ sources:
   - target: synthesis
     files:
       - src/synth_wrapper/idma_backend_synth.sv
+      - src/synth_wrapper/idma_lite_backend_synth.sv
+      - src/synth_wrapper/idma_obi_backend_synth.sv
       - src/synth_wrapper/idma_nd_backend_synth.sv
 
   - target: test
+    defines:
+      TARGET_SIMULATION: ~
     include_dirs:
       - test
     files:
       # Level 0:
       - test/idma_intf.sv
+      - test/idma_tb_per2axi.sv
+      - test/idma_obi_asserter.sv
       # Level 1:
       - test/idma_test.sv
+      - test/idma_obi2axi_bridge.sv
       # Level 2:
       - test/tb_idma_backend.sv
+      - test/tb_idma_lite_backend.sv
+      - test/tb_idma_obi_backend.sv
       - test/tb_idma_nd_backend.sv
 
   - target: test # 64bit descriptor frontend

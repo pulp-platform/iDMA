@@ -2,16 +2,17 @@
     "backend" : {
         "seed" : 1336,
         "man_jobs" : {
-            "simple"        : "backend/man_simple.txt",
-            "huge"          : "backend/man_huge.txt",
-            "large"         : "backend/man_large.txt",
-            "medium"        : "backend/man_medium.txt",
-            "mixed"         : "backend/man_mixed.txt",
-            "small"         : "backend/man_small.txt",
-            "tiny"          : "backend/man_tiny.txt",
-            "error_simple"  : "backend/man_error_simple.txt",
-            "error_mixed"   : "backend/man_error_mixed.txt",
-            "zero_transfer" : "backend/man_zero_transfer.txt"
+            "simple"          : "backend/man_simple.txt",
+            "same_dst_simple" : "backend/man_same_dst_simple.txt",
+            "huge"            : "backend/man_huge.txt",
+            "large"           : "backend/man_large.txt",
+            "medium"          : "backend/man_medium.txt",
+            "mixed"           : "backend/man_mixed.txt",
+            "small"           : "backend/man_small.txt",
+            "tiny"            : "backend/man_tiny.txt",
+            "error_simple"    : "backend/man_error_simple.txt",
+            "error_mixed"     : "backend/man_error_mixed.txt",
+            "zero_transfer"   : "backend/man_zero_transfer.txt"
         },
         "gen_jobs" : {
         },
@@ -66,6 +67,48 @@
             "HardwareLegalizer"   : 0,
             "RejectZeroTransfers" : 0,
             "ErrorHandling"       : 0
+        }
+    },
+    "lite-backend" : {
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"          : "backend/man_simple.txt",
+            "same_dst_simple" : "backend/man_same_dst_simple.txt",
+            "huge"            : "backend/man_huge.txt",
+            "large"           : "backend/man_large.txt",
+            "medium"          : "backend/man_medium.txt",
+            "mixed"           : "backend/man_mixed.txt",
+            "small"           : "backend/man_small.txt",
+            "tiny"            : "backend/man_tiny.txt",
+            "error_simple"    : "backend/man_error_simple.txt",
+            "error_mixed"     : "backend/man_error_mixed.txt",
+            "zero_transfer"   : "backend/man_zero_transfer.txt"
+        },
+        "gen_jobs" : {
+        },
+        "testbench" : "tb_idma_lite_backend",
+        "synth_top" : "idma_lite_backend_synth",
+        "overrides" : {
+        }
+    },
+    "obi-backend" : {
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"          : "backend/man_simple.txt",
+            "same_dst_simple" : "backend/man_same_dst_simple.txt",
+            "huge"            : "backend/man_huge.txt",
+            "large"           : "backend/man_large.txt",
+            "medium"          : "backend/man_medium.txt",
+            "mixed"           : "backend/man_mixed.txt",
+            "small"           : "backend/man_small.txt",
+            "tiny"            : "backend/man_tiny.txt",
+            "zero_transfer"   : "backend/man_zero_transfer.txt"
+        },
+        "gen_jobs" : {
+        },
+        "testbench" : "tb_idma_obi_backend",
+        "synth_top" : "idma_obi_backend_synth",
+        "overrides" : {
         }
     },
     "4d-ext" : {

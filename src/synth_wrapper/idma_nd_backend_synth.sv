@@ -2,7 +2,8 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Thomas Benz <tbenz@ethz.ch>
+// Thomas Benz  <tbenz@ethz.ch>
+// Tobias Senti <tsenti@student.ethz.ch>
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -249,8 +250,10 @@ module idma_nd_backend_synth #(
         .idma_rsp_t          ( idma_rsp_t              ),
         .idma_eh_req_t       ( idma_pkg::idma_eh_req_t ),
         .idma_busy_t         ( idma_pkg::idma_busy_t   ),
-        .axi_req_t           ( axi_req_t               ),
-        .axi_rsp_t           ( axi_rsp_t               )
+        .protocol_req_t      ( axi_req_t               ),
+        .protocol_rsp_t      ( axi_rsp_t               ),
+        .aw_chan_t           ( axi_aw_chan_t           ),
+        .ar_chan_t           ( axi_ar_chan_t           )
     ) i_idma_backend (
         .clk_i           ( clk_i          ),
         .rst_ni          ( rst_ni         ),
@@ -264,8 +267,8 @@ module idma_nd_backend_synth #(
         .idma_eh_req_i   ( eh_req_i       ),
         .eh_req_valid_i  ( eh_req_valid_i ),
         .eh_req_ready_o  ( eh_req_ready_o ),
-        .axi_req_o       ( axi_req_o      ),
-        .axi_rsp_i       ( axi_rsp_i      ),
+        .protocol_req_o  ( axi_req_o      ),
+        .protocol_rsp_i  ( axi_rsp_i      ),
         .busy_o          ( idma_busy_o    )
     );
 

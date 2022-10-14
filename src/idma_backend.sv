@@ -2,13 +2,16 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Thomas Benz <tbenz@ethz.ch>
+// Thomas Benz  <tbenz@ethz.ch>
+// Tobias Senti <tsenti@student.ethz.ch>
 
 `include "axi/typedef.svh"
 `include "idma/guard.svh"
 
-/// The iDMA backend implements an arbitrary 1D copy engine using the AXI4 protocol.
+/// The iDMA backend implements an arbitrary 1D copy engine
 module idma_backend #(
+    /// Protocol used
+    parameter idma_pkg::protocol_e Protocol = idma_pkg::AXI,
     /// Data width
     parameter int unsigned DataWidth = 32'd16,
     /// Address width
@@ -49,10 +52,14 @@ module idma_backend #(
     parameter type idma_eh_req_t = logic,
     /// iDMA busy signal
     parameter type idma_busy_t = logic,
-    /// AXI4+ATOP request type
-    parameter type axi_req_t = logic,
-    /// AXI4+ATOP response type
-    parameter type axi_rsp_t = logic,
+    /// Protocol request type
+    parameter type protocol_req_t = logic,
+    /// Protocol response type
+    parameter type protocol_rsp_t = logic,
+    /// Address Write Channel type
+    parameter type aw_chan_t = logic,
+    /// Address Read Channel type
+    parameter type ar_chan_t = logic,
     /// Strobe Width (do not override!)
     parameter int unsigned StrbWidth = DataWidth / 8,
     /// Offset Width (do not override!)
@@ -86,10 +93,10 @@ module idma_backend #(
     /// Error handler request ready
     output logic eh_req_ready_o,
 
-    /// AXI4+ATOP manager port request
-    output axi_req_t axi_req_o,
-    /// AXI4+ATOP manager port response
-    input  axi_rsp_t axi_rsp_i,
+    /// Manager port request
+    output protocol_req_t protocol_req_o,
+    /// Manager port response
+    input  protocol_rsp_t protocol_rsp_i,
 
     /// iDMA busy flags
     output idma_busy_t busy_o
@@ -113,10 +120,6 @@ module idma_backend #(
     typedef logic [OffsetWidth-1:0] offset_t;
     /// Transfer length type
     typedef logic [TFLenWidth-1:0]  tf_len_t;
-
-    // AXI4+ATOP define macros for the AX channels
-    `AXI_TYPEDEF_AW_CHAN_T(axi_aw_chan_t, addr_t, id_t, user_t)
-    `AXI_TYPEDEF_AR_CHAN_T(axi_ar_chan_t, addr_t, id_t, user_t)
 
     /// The datapath read request type holds all the information required to configure the read
     /// part of the datapath. The type consists of:
@@ -167,7 +170,7 @@ module idma_backend #(
     /// The iDMA read request bundles an `AR` type and a datapath read response type together.
     typedef struct packed {
         r_dp_req_t    r_dp_req;
-        axi_ar_chan_t ar_req;
+        ar_chan_t     ar_req;
     } idma_r_req_t;
 
     /// The iDMA write request bundles an `AW` type and a datapath write response type together. It
@@ -178,11 +181,16 @@ module idma_backend #(
     /// - `decouple_aw`: indicates this is an R-AW decoupled transfer
     typedef struct packed {
         w_dp_req_t    w_dp_req;
-        axi_aw_chan_t aw_req;
+        aw_chan_t     aw_req;
         logic         last;
         logic         super_last;
         logic         decouple_aw;
     } idma_w_req_t;
+
+    typedef struct packed {
+        w_dp_req_t    w_dp_req;
+        aw_chan_t     aw_req;
+    } w_aw_dp_req_t;
 
     /// The mutable transfer options type holds important information that is mutated by the
     /// `legalizer` block.
@@ -235,6 +243,7 @@ module idma_backend #(
     logic r_dp_req_out_ready, w_dp_req_out_ready;
     r_dp_req_t r_dp_req_out;
     w_dp_req_t w_dp_req_out;
+    w_aw_dp_req_t w_aw_dp_req_out;
 
     // datapah responses
     r_dp_rsp_t r_dp_rsp;
@@ -248,10 +257,10 @@ module idma_backend #(
     logic aw_valid_dp, ar_valid_dp;
 
     // Ax request from R-AW coupler to datapath
-    axi_aw_chan_t aw_req_dp;
+    aw_chan_t aw_req_dp;
 
     // Ax request from the decoupling stage to the datapath
-    axi_ar_chan_t ar_req_dp;
+    ar_chan_t ar_req_dp;
 
     // flush and preemptively empty the legalizer
     logic legalizer_flush, legalizer_kill;
@@ -309,6 +318,7 @@ module idma_backend #(
     if (HardwareLegalizer) begin : gen_hw_legalizer
         // hardware legalizer is present
         idma_legalizer #(
+            .Protocol          ( Protocol          ),
             .DataWidth         ( DataWidth         ),
             .AddrWidth         ( AddrWidth         ),
             .idma_req_t        ( idma_req_t        ),
@@ -353,36 +363,56 @@ module idma_backend #(
         assign len = ((idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0] -
                      'd1) >> OffsetWidth);
 
-        // assemble AR request
-        assign r_req.ar_req = '{
-            id:     idma_req_i.opt.axi_id,
-            addr:   { idma_req_i.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-            len:    len,
-            size:   axi_pkg::size_t'(OffsetWidth),
-            burst:  idma_req_i.opt.src.burst,
-            lock:   idma_req_i.opt.src.lock,
-            cache:  idma_req_i.opt.src.cache,
-            prot:   idma_req_i.opt.src.prot,
-            qos:    idma_req_i.opt.src.qos,
-            region: idma_req_i.opt.src.region,
-            user:   '0
-        };
 
-        // assemble AW request
-        assign w_req.aw_req = '{
-            id:     idma_req_i.opt.axi_id,
-            addr:   { idma_req_i.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-            len:    len,
-            size:   axi_pkg::size_t'(OffsetWidth),
-            burst:  idma_req_i.opt.dst.burst,
-            lock:   idma_req_i.opt.dst.lock,
-            cache:  idma_req_i.opt.dst.cache,
-            prot:   idma_req_i.opt.dst.prot,
-            qos:    idma_req_i.opt.dst.qos,
-            region: idma_req_i.opt.dst.region,
-            user:   '0,
-            atop:   '0
-        };
+        if (Protocol == idma_pkg::AXI) begin : gen_axi_ar_aw_req
+            // assemble AR request
+            assign r_req.ar_req = '{
+                id:     idma_req_i.opt.axi_id,
+                addr:   { idma_req_i.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+                len:    len,
+                size:   axi_pkg::size_t'(OffsetWidth),
+                burst:  idma_req_i.opt.src.burst,
+                lock:   idma_req_i.opt.src.lock,
+                cache:  idma_req_i.opt.src.cache,
+                prot:   idma_req_i.opt.src.prot,
+                qos:    idma_req_i.opt.src.qos,
+                region: idma_req_i.opt.src.region,
+                user:   '0
+            };
+
+            // assemble AW request
+            assign w_req.aw_req = '{
+                id:     idma_req_i.opt.axi_id,
+                addr:   { idma_req_i.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+                len:    len,
+                size:   axi_pkg::size_t'(OffsetWidth),
+                burst:  idma_req_i.opt.dst.burst,
+                lock:   idma_req_i.opt.dst.lock,
+                cache:  idma_req_i.opt.dst.cache,
+                prot:   idma_req_i.opt.dst.prot,
+                qos:    idma_req_i.opt.dst.qos,
+                region: idma_req_i.opt.dst.region,
+                user:   '0,
+                atop:   '0
+            };
+        end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_axi_lite_ar_aw_req
+            // assemble AR request
+            assign r_req.ar_req = '{
+                addr:   { idma_req_i.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+                prot:   idma_req_i.opt.src.prot
+            };
+
+            // assemble AW request
+            assign w_req.aw_req = '{
+                addr:   { idma_req_i.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+                prot:   idma_req_i.opt.dst.prot
+            };
+        end else begin : gen_ar_aw_req_error
+            `IDMA_NONSYNTH_BLOCK(
+            $fatal(1, "Backend: legalizer bypass ar aw req not implemented for requested ",
+                "protocol!");
+            )
+        end
 
         // assemble read datapath request
         assign r_req.r_dp_req = '{
@@ -514,28 +544,48 @@ module idma_backend #(
         .ready_i   ( r_dp_req_out_ready  )
     );
 
-    idma_stream_fifo #(
-        .Depth        ( NumAxInFlight ),
-        .type_t       ( w_dp_req_t    ),
-        .PrintInfo    ( PrintFifoInfo )
-    ) i_w_dp_req (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .flush_i   ( 1'b0                ),
-        .usage_o   ( /* NOT CONNECTED */ ),
-        .data_i    ( w_req.w_dp_req      ),
-        .valid_i   ( w_valid             ),
-        .ready_o   ( w_dp_req_in_ready   ),
-        .data_o    ( w_dp_req_out        ),
-        .valid_o   ( w_dp_req_out_valid  ),
-        .ready_i   ( w_dp_req_out_ready  )
-    );
+    if(Protocol == idma_pkg::OBI) begin : gen_obi_w_aw_dp_req_fifo
+        idma_stream_fifo #(
+            .Depth        ( NumAxInFlight ),
+            .type_t       ( w_aw_dp_req_t ),
+            .PrintInfo    ( PrintFifoInfo )
+        ) i_w_dp_req (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .flush_i   ( 1'b0                             ),
+            .usage_o   ( /* NOT CONNECTED */              ),
+            .data_i    ( { w_req.w_dp_req, w_req.aw_req } ),
+            .valid_i   ( w_valid                          ),
+            .ready_o   ( w_dp_req_in_ready                ),
+            .data_o    ( w_aw_dp_req_out                  ),
+            .valid_o   ( w_dp_req_out_valid               ),
+            .ready_i   ( w_dp_req_out_ready               )
+        );
+    end else begin : gen_w_dp_fifo
+        idma_stream_fifo #(
+            .Depth        ( NumAxInFlight ),
+            .type_t       ( w_dp_req_t    ),
+            .PrintInfo    ( PrintFifoInfo )
+        ) i_w_dp_req (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .flush_i   ( 1'b0                ),
+            .usage_o   ( /* NOT CONNECTED */ ),
+            .data_i    ( w_req.w_dp_req      ),
+            .valid_i   ( w_valid             ),
+            .ready_o   ( w_dp_req_in_ready   ),
+            .data_o    ( w_dp_req_out        ),
+            .valid_o   ( w_dp_req_out_valid  ),
+            .ready_i   ( w_dp_req_out_ready  )
+        );
+    end
 
     // Add fall-through register to allow the input to be ready if the output is not. This
     // does not add a cycle of delay
     fall_through_register #(
-        .T          ( axi_ar_chan_t )
+        .T          ( ar_chan_t )
     ) i_ar_fall_through_register (
         .clk_i,
         .rst_ni,
@@ -553,76 +603,182 @@ module idma_backend #(
     //--------------------------------------
     // Last flag store
     //--------------------------------------
-    idma_stream_fifo #(
-        .Depth        ( MetaFifoDepth ),
-        .type_t       ( logic [1:0]   ),
-        .PrintInfo    ( PrintFifoInfo )
-    ) i_w_last (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .flush_i   ( 1'b0                            ),
-        .usage_o   ( /* NOT CONNECTED */             ),
-        .data_i    ( {w_req.super_last, w_req.last}  ),
-        .valid_i   ( w_valid & w_ready               ),
-        .ready_o   ( w_last_ready                    ),
-        .data_o    ( {w_super_last, w_last_burst}    ),
-        .valid_o   ( /* NOT CONNECTED */             ),
-        .ready_i   ( w_dp_rsp_valid & w_dp_rsp_ready )
-    );
-
+    //if (Protocol == idma_pkg::AXI) begin : gen_last_flag_fifo
+    if (1'b1) begin : gen_last_flag_fifo
+        idma_stream_fifo #(
+            .Depth        ( MetaFifoDepth ),
+            .type_t       ( logic [1:0]   ),
+            .PrintInfo    ( PrintFifoInfo )
+        ) i_w_last (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .flush_i   ( 1'b0                            ),
+            .usage_o   ( /* NOT CONNECTED */             ),
+            .data_i    ( {w_req.super_last, w_req.last}  ),
+            .valid_i   ( w_valid & w_ready               ),
+            .ready_o   ( w_last_ready                    ),
+            .data_o    ( {w_super_last, w_last_burst}    ),
+            .valid_o   ( /* NOT CONNECTED */             ),
+            .ready_i   ( w_dp_rsp_valid & w_dp_rsp_ready )
+        );
+    end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_last_flag_bypass
+        //For AXI-Lite every transfer is last
+        assign w_super_last = 1'b1;
+        assign w_last_burst = 1'b1;
+        assign w_last_ready = 1'b1;
+    end else begin : gen_last_flag_error
+        `IDMA_NONSYNTH_BLOCK(
+        $fatal(1, "Backend: last flag bypass not implemented for requested protocol!");
+        )
+    end
 
     //--------------------------------------
     // Transport Layer / Datapath
     //--------------------------------------
-    idma_axi_transport_layer #(
-        .DataWidth       ( DataWidth       ),
-        .BufferDepth     ( BufferDepth     ),
-        .MaskInvalidData ( MaskInvalidData ),
-        .PrintFifoInfo   ( PrintFifoInfo   ),
-        .r_dp_req_t      ( r_dp_req_t      ),
-        .w_dp_req_t      ( w_dp_req_t      ),
-        .r_dp_rsp_t      ( r_dp_rsp_t      ),
-        .w_dp_rsp_t      ( w_dp_rsp_t      ),
-        .axi_aw_chan_t   ( axi_aw_chan_t   ),
-        .axi_ar_chan_t   ( axi_ar_chan_t   ),
-        .axi_req_t       ( axi_req_t       ),
-        .axi_rsp_t       ( axi_rsp_t       )
-    ) i_idma_axi_transport_layer (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .axi_req_o,
-        .axi_rsp_i,
-        .r_dp_req_i      ( r_dp_req_out       ),
-        .r_dp_valid_i    ( r_dp_req_out_valid ),
-        .r_dp_ready_o    ( r_dp_req_out_ready ),
-        .r_dp_rsp_o      ( r_dp_rsp           ),
-        .r_dp_valid_o    ( r_dp_rsp_valid     ),
-        .r_dp_ready_i    ( r_dp_rsp_ready     ),
-        .w_dp_req_i      ( w_dp_req_out       ),
-        .w_dp_valid_i    ( w_dp_req_out_valid ),
-        .w_dp_ready_o    ( w_dp_req_out_ready ),
-        .w_dp_rsp_o      ( w_dp_rsp           ),
-        .w_dp_valid_o    ( w_dp_rsp_valid     ),
-        .w_dp_ready_i    ( w_dp_rsp_ready     ),
-        .ar_req_i        ( ar_req_dp          ),
-        .ar_valid_i      ( ar_valid_dp        ),
-        .ar_ready_o      ( ar_ready_dp        ),
-        .aw_req_i        ( aw_req_dp          ),
-        .aw_valid_i      ( aw_valid_dp        ),
-        .aw_ready_o      ( aw_ready_dp        ),
-        .dp_poison_i     ( dp_poison          ),
-        .r_dp_busy_o     ( busy_o.r_dp_busy   ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy   ),
-        .buffer_busy_o   ( busy_o.buffer_busy )
-    );
-
+    if (Protocol == idma_pkg::AXI) begin : gen_axi_transport_layer
+        idma_axi_transport_layer #(
+            .DataWidth       ( DataWidth       ),
+            .BufferDepth     ( BufferDepth     ),
+            .MaskInvalidData ( MaskInvalidData ),
+            .PrintFifoInfo   ( PrintFifoInfo   ),
+            .r_dp_req_t      ( r_dp_req_t      ),
+            .w_dp_req_t      ( w_dp_req_t      ),
+            .r_dp_rsp_t      ( r_dp_rsp_t      ),
+            .w_dp_rsp_t      ( w_dp_rsp_t      ),
+            .axi_aw_chan_t   ( aw_chan_t       ),
+            .axi_ar_chan_t   ( ar_chan_t       ),
+            .axi_req_t       ( protocol_req_t  ),
+            .axi_rsp_t       ( protocol_rsp_t  )
+        ) i_idma_axi_transport_layer (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .axi_req_o       ( protocol_req_o     ),
+            .axi_rsp_i       ( protocol_rsp_i     ),
+            .r_dp_req_i      ( r_dp_req_out       ),
+            .r_dp_valid_i    ( r_dp_req_out_valid ),
+            .r_dp_ready_o    ( r_dp_req_out_ready ),
+            .r_dp_rsp_o      ( r_dp_rsp           ),
+            .r_dp_valid_o    ( r_dp_rsp_valid     ),
+            .r_dp_ready_i    ( r_dp_rsp_ready     ),
+            .w_dp_req_i      ( w_dp_req_out       ),
+            .w_dp_valid_i    ( w_dp_req_out_valid ),
+            .w_dp_ready_o    ( w_dp_req_out_ready ),
+            .w_dp_rsp_o      ( w_dp_rsp           ),
+            .w_dp_valid_o    ( w_dp_rsp_valid     ),
+            .w_dp_ready_i    ( w_dp_rsp_ready     ),
+            .ar_req_i        ( ar_req_dp          ),
+            .ar_valid_i      ( ar_valid_dp        ),
+            .ar_ready_o      ( ar_ready_dp        ),
+            .aw_req_i        ( aw_req_dp          ),
+            .aw_valid_i      ( aw_valid_dp        ),
+            .aw_ready_o      ( aw_ready_dp        ),
+            .dp_poison_i     ( dp_poison          ),
+            .r_dp_busy_o     ( busy_o.r_dp_busy   ),
+            .w_dp_busy_o     ( busy_o.w_dp_busy   ),
+            .buffer_busy_o   ( busy_o.buffer_busy )
+        );
+    end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_axi_lite_transport_layer
+        idma_axi_lite_transport_layer #(
+            .DataWidth          ( DataWidth       ),
+            .BufferDepth        ( BufferDepth     ),
+            .MaskInvalidData    ( MaskInvalidData ),
+            .PrintFifoInfo      ( PrintFifoInfo   ),
+            .r_dp_req_t         ( r_dp_req_t      ),
+            .w_dp_req_t         ( w_dp_req_t      ),
+            .r_dp_rsp_t         ( r_dp_rsp_t      ),
+            .w_dp_rsp_t         ( w_dp_rsp_t      ),
+            .axi_lite_aw_chan_t ( aw_chan_t       ),
+            .axi_lite_ar_chan_t ( ar_chan_t       ),
+            .axi_lite_req_t     ( protocol_req_t  ),
+            .axi_lite_rsp_t     ( protocol_rsp_t  )
+        ) i_idma_axi_lite_transport_layer (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .axi_lite_req_o  ( protocol_req_o     ),
+            .axi_lite_rsp_i  ( protocol_rsp_i     ),
+            .r_dp_req_i      ( r_dp_req_out       ),
+            .r_dp_valid_i    ( r_dp_req_out_valid ),
+            .r_dp_ready_o    ( r_dp_req_out_ready ),
+            .r_dp_rsp_o      ( r_dp_rsp           ),
+            .r_dp_valid_o    ( r_dp_rsp_valid     ),
+            .r_dp_ready_i    ( r_dp_rsp_ready     ),
+            .w_dp_req_i      ( w_dp_req_out       ),
+            .w_dp_valid_i    ( w_dp_req_out_valid ),
+            .w_dp_ready_o    ( w_dp_req_out_ready ),
+            .w_dp_rsp_o      ( w_dp_rsp           ),
+            .w_dp_valid_o    ( w_dp_rsp_valid     ),
+            .w_dp_ready_i    ( w_dp_rsp_ready     ),
+            .ar_req_i        ( ar_req_dp          ),
+            .ar_valid_i      ( ar_valid_dp        ),
+            .ar_ready_o      ( ar_ready_dp        ),
+            .aw_req_i        ( aw_req_dp          ),
+            .aw_valid_i      ( aw_valid_dp        ),
+            .aw_ready_o      ( aw_ready_dp        ),
+            .dp_poison_i     ( dp_poison          ),
+            .r_dp_busy_o     ( busy_o.r_dp_busy   ),
+            .w_dp_busy_o     ( busy_o.w_dp_busy   ),
+            .buffer_busy_o   ( busy_o.buffer_busy )
+        );
+    end else if (Protocol == idma_pkg::OBI) begin : gen_obi_transport_layer
+        idma_obi_transport_layer #(
+            .DataWidth          ( DataWidth       ),
+            .BufferDepth        ( BufferDepth     ),
+            .MaskInvalidData    ( MaskInvalidData ),
+            .PrintFifoInfo      ( PrintFifoInfo   ),
+            .r_dp_req_t         ( r_dp_req_t      ),
+            .w_dp_req_t         ( w_aw_dp_req_t   ),
+            .r_dp_rsp_t         ( r_dp_rsp_t      ),
+            .w_dp_rsp_t         ( w_dp_rsp_t      ),
+            .obi_a_chan_t       ( ar_chan_t       ),
+            .obi_req_t          ( protocol_req_t  ),
+            .obi_rsp_t          ( protocol_rsp_t  )
+        ) i_idma_obi_transport_layer (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .obi_req_o         ( protocol_req_o     ),
+            .obi_rsp_i         ( protocol_rsp_i     ),
+            .r_dp_req_i        ( r_dp_req_out       ),
+            .r_dp_valid_i      ( r_dp_req_out_valid ),
+            .r_dp_ready_o      ( r_dp_req_out_ready ),
+            .r_dp_rsp_o        ( r_dp_rsp           ),
+            .r_dp_valid_o      ( r_dp_rsp_valid     ),
+            .r_dp_ready_i      ( r_dp_rsp_ready     ),
+            .w_dp_req_i        ( w_aw_dp_req_out    ),
+            .w_dp_valid_i      ( w_dp_req_out_valid ),
+            .w_dp_ready_o      ( w_dp_req_out_ready ),
+            .w_dp_rsp_o        ( w_dp_rsp           ),
+            .w_dp_valid_o      ( w_dp_rsp_valid     ),
+            .w_dp_ready_i      ( w_dp_rsp_ready     ),
+            .read_meta_req_i   ( ar_req_dp          ),
+            .read_meta_valid_i ( ar_valid_dp        ),
+            .read_meta_ready_o ( ar_ready_dp        ),
+            .dp_poison_i       ( dp_poison          ),
+            .r_dp_busy_o       ( busy_o.r_dp_busy   ),
+            .w_dp_busy_o       ( busy_o.w_dp_busy   ),
+            .buffer_busy_o     ( busy_o.buffer_busy )
+        );
+    end else begin : gen_transport_layer_error
+        `IDMA_NONSYNTH_BLOCK(
+        $fatal(1, "Backend: transport layer not implemented for requested protocol!");
+        )
+    end
 
     //--------------------------------------
     // R-AW channel coupler
     //--------------------------------------
-    if (RAWCouplingAvail) begin : gen_r_aw_coupler
+    if(Protocol == idma_pkg::OBI) begin : gen_obi_coupler
+        //AW Meta Channel not needed
+        assign aw_ready = 1'b1;
+        assign aw_valid_dp = 1'b0;
+        assign aw_req_dp = '0;
+
+        // no unit: not busy
+        assign busy_o.raw_coupler_busy = 1'b0;
+    end else if (RAWCouplingAvail) begin : gen_r_aw_coupler
         // instantiate the channel coupler
         idma_channel_coupler #(
             .NumAxInFlight   ( NumAxInFlight   ),
@@ -630,13 +786,13 @@ module idma_backend #(
             .UserWidth       ( UserWidth       ),
             .AxiIdWidth      ( AxiIdWidth      ),
             .PrintFifoInfo   ( PrintFifoInfo   ),
-            .axi_aw_chan_t   ( axi_aw_chan_t   )
+            .axi_aw_chan_t   ( aw_chan_t       )
         ) i_idma_channel_coupler (
             .clk_i,
             .rst_ni,
             .testmode_i,
-            .r_rsp_valid_i    ( axi_rsp_i.r_valid        ),
-            .r_rsp_ready_i    ( axi_req_o.r_ready        ),
+            .r_rsp_valid_i    ( protocol_rsp_i.r_valid   ),
+            .r_rsp_ready_i    ( protocol_req_o.r_ready   ),
             .r_rsp_first_i    ( r_dp_rsp.first           ),
             .r_decouple_aw_i  ( r_dp_req_out.decouple_aw ),
             .aw_decouple_aw_i ( w_req.decouple_aw        ),
@@ -653,7 +809,7 @@ module idma_backend #(
         // Add fall-through register to allow the input to be ready if the output is not. This
         // does not add a cycle of delay
         fall_through_register #(
-            .T          ( axi_aw_chan_t )
+            .T          ( aw_chan_t )
         ) i_aw_fall_through_register (
             .clk_i,
             .rst_ni,

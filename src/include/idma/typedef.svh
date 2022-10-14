@@ -92,4 +92,43 @@
     `IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+`define IDMA_OBI_TYPEDEF_A_CHAN_T(a_chan_t, addr_t, data_t, strb_t) \
+  typedef struct packed {                                           \
+    addr_t addr;                                                    \
+    logic  we;                                                      \
+    strb_t be;                                                      \
+    data_t wdata;                                                   \
+  } a_chan_t;
+
+`define IDMA_OBI_TYPEDEF_R_CHAN_T(r_chan_t, data_t) \
+  typedef struct packed {                           \
+    data_t rdata;                                   \
+  } r_chan_t;
+
+`define IDMA_OBI_TYPEDEF_REQ_T(req_t, a_chan_t) \
+  typedef struct packed {                       \
+    a_chan_t a;                                 \
+    logic     a_req;                            \
+    logic  r_ready;                             \
+  } req_t;
+
+`define IDMA_OBI_TYPEDEF_RESP_T(resp_t, r_chan_t) \
+  typedef struct packed {                         \
+    logic     a_gnt;                              \
+    r_chan_t r;                                   \
+    logic  r_valid;                               \
+  } resp_t;
+
+`define IDMA_OBI_TYPEDEF_BIDIRECT_REQ_T(bidirect_req_t, req_t) \
+  typedef struct packed {                                      \
+    req_t write;                                               \
+    req_t read;                                                \
+  } bidirect_req_t;
+
+`define IDMA_OBI_TYPEDEF_BIDIRECT_RESP_T(bidirect_resp_t, resp_t) \
+  typedef struct packed {                                         \
+    resp_t write;                                                 \
+    resp_t read;                                                  \
+  } bidirect_resp_t;
+
 `endif
