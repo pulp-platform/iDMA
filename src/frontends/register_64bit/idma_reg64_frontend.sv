@@ -7,8 +7,6 @@
 // Description: DMA frontend module that includes 64bit config and status reg handling
 
 module idma_reg64_frontend #(
-    /// address width of the DMA AXI Master port
-    parameter int  unsigned DmaAddrWidth     = -1,
     /// register_interface request type
     parameter type          dma_regs_req_t   = logic,
     /// register_interface response type
@@ -38,7 +36,7 @@ module idma_reg64_frontend #(
     idma_reg64_frontend_reg_pkg::idma_reg64_frontend_hw2reg_t dma_hw2reg;
 
     // transaction id
-    logic [DmaAddrWidth-1:0] next_id, done_id;
+    logic [DmaRegisterWidth-1:0] next_id, done_id;
     logic issue;
 
     dma_regs_rsp_t dma_ctrl_rsp_tmp;

@@ -57,7 +57,7 @@ module dma_core_wrap #(
 
   `REG_BUS_TYPEDEF_ALL(dma_regs, logic[5:0], logic[63:0], logic[7:0])
 
-  burst_req_t burst_req;
+  idma_req_t burst_req;
   logic be_valid, be_ready, be_trans_complete;
   idma_pkg::idma_busy_t idma_busy;
 
@@ -91,7 +91,7 @@ module dma_core_wrap #(
     .DmaAddrWidth    ( AXI_ADDR_WIDTH ),
     .dma_regs_req_t  ( dma_regs_req_t ),
     .dma_regs_rsp_t  ( dma_regs_rsp_t ),
-    .burst_req_t     ( burst_req_t     )
+    .burst_req_t     ( idma_req_t     )
   ) i_dma_frontend (
     .clk_i,
     .rst_ni,
