@@ -5,7 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## 0.3.0 - 2022-10.28
+
+### Fixed
+- Fix the `Aw`-handshaking in the `channel-coupler` module. [#13](https://github.com/pulp-platform/iDMA/pull/13).
+- Minor fixes in `dma_core_wrap` and `idma_reg64_frontend`. [#15](https://github.com/pulp-platform/iDMA/pull/15).
+
+`dma_core_wrap` has lost the `DmaAddrWidth` parameter rendering `v0.3.0` incompatible to previous
+versions.
 
 ## 0.2.4 - 2022-09-05
 
@@ -25,7 +32,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fix missing python modules in GitHub CI.
 - Fix wrong date format as well as missing indentation in `CHANGELOG.md`.
 
-`v0.2.4` is fully **backward-compatible** to version `v0.2.0` through `v0.2.3`.
+`v0.2.4` is fully **backward-compatible** to versions `v0.2.0` through `v0.2.3`.
 
 ## 0.2.3 - 2022-08-11
 
