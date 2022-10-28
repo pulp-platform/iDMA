@@ -88,7 +88,6 @@ module dma_core_wrap #(
    * DMA Frontend
    */
   idma_reg64_frontend #(
-    .DmaAddrWidth    ( AXI_ADDR_WIDTH ),
     .dma_regs_req_t  ( dma_regs_req_t ),
     .dma_regs_rsp_t  ( dma_regs_rsp_t ),
     .burst_req_t     ( idma_req_t     )
