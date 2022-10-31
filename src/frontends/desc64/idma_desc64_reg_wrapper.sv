@@ -5,12 +5,14 @@
 // Axel Vanoni <axvanoni@student.ethz.ch>
 
 `include "common_cells/registers.svh"
-import idma_desc64_reg_pkg::idma_desc64_reg2hw_t;
-import idma_desc64_reg_pkg::idma_desc64_hw2reg_t;
+
+
 
 /// This module implements backpressure via ready/valid handshakes
 /// for the regbus registers and exposes it to the descriptor fifo
-module idma_desc64_reg_wrapper #(
+module idma_desc64_reg_wrapper
+import idma_desc64_reg_pkg::idma_desc64_reg2hw_t;
+import idma_desc64_reg_pkg::idma_desc64_hw2reg_t; #(
     parameter type reg_req_t  = logic,
     parameter type reg_rsp_t  = logic
 ) (

@@ -232,10 +232,24 @@ module tb_idma_nd_backend import idma_pkg::*; #(
         .ApplDelay         ( TA           ),
         .AcqDelay          ( TT           )
     ) i_axi_sim_mem (
-        .clk_i      ( clk          ),
-        .rst_ni     ( rst_n        ),
-        .axi_req_i  ( axi_req_mem  ),
-        .axi_rsp_o  ( axi_rsp_mem  )
+        .clk_i              ( clk                 ),
+        .rst_ni             ( rst_n               ),
+        .axi_req_i          ( axi_req_mem         ),
+        .axi_rsp_o          ( axi_rsp_mem         ),
+        .mon_r_last_o       ( /* NOT CONNECTED */ ),
+        .mon_r_beat_count_o ( /* NOT CONNECTED */ ),
+        .mon_r_user_o       ( /* NOT CONNECTED */ ),
+        .mon_r_id_o         ( /* NOT CONNECTED */ ),
+        .mon_r_data_o       ( /* NOT CONNECTED */ ),
+        .mon_r_addr_o       ( /* NOT CONNECTED */ ),
+        .mon_r_valid_o      ( /* NOT CONNECTED */ ),
+        .mon_w_last_o       ( /* NOT CONNECTED */ ),
+        .mon_w_beat_count_o ( /* NOT CONNECTED */ ),
+        .mon_w_user_o       ( /* NOT CONNECTED */ ),
+        .mon_w_id_o         ( /* NOT CONNECTED */ ),
+        .mon_w_data_o       ( /* NOT CONNECTED */ ),
+        .mon_w_addr_o       ( /* NOT CONNECTED */ ),
+        .mon_w_valid_o      ( /* NOT CONNECTED */ )
     );
 
 
@@ -257,8 +271,8 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     signal_highlighter #(.T(idma_eh_req_t)) i_eh_hl     (.ready_i(eh_req_ready),    .valid_i(eh_req_valid),     .data_i(idma_eh_req));
 
     // Watchdogs
-    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_w_watchdog (.clk_i(clk), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
-    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_r_watchdog (.clk_i(clk), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
+    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_w_watchdog (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_r_watchdog (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
 
 
     //--------------------------------------

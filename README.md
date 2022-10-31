@@ -54,12 +54,12 @@ We currently do not include any free and open-source simulation setup. However, 
 [*Questa advanced simulator*](https://eda.sw.siemens.com/en-US/ic/questa/simulation/advanced-simulator/),
 a simulation can be launched using:
 
-```
+```bash
 make prepare_sim
 vsim -c -do "source scripts/compile_vsim.tcl; quit"
 vsim -c -t 1ps -voptargs=+acc \
      +job_file=jobs/backend/man_simple.txt \
-     -logfile logs/backend.simple.vsim.log
+     -logfile logs/backend.simple.vsim.log \
      -wlf logs/backend.simple.wlf \
      tb_idma_backend \
      -do "source scripts/start_vsim.tcl; run -all"

@@ -5,6 +5,8 @@
 // Axel Vanoni <axvanoni@student.ethz.ch>
 
 `include "common_cells/registers.svh"
+`include "idma/guard.svh"
+
 /// Hacky register interface to AXI converter
 module dma_reg_to_axi #(
   parameter type            axi_req_t = logic,
@@ -86,13 +88,13 @@ module dma_reg_to_axi #(
   /* Ignore axi_rsp_i.r.last (ever only bursts of size 1) */
   /* Ignore axi_rsp_i.r.user */
   assign reg_rsp_o.error     = '0; /* swallow errors */
+
   /* check that we don't get any errors in the simulation */
-  // pragma translate_off
-`ifndef VERILATOR
+  `IDMA_NONSYNTH_BLOCK(
   assert property (@(posedge clk_i) (axi_rsp_i.r_valid && axi_req_o.r_ready) |-> \
                   (axi_rsp_i.r.resp == axi_pkg::RESP_OKAY));
-`endif
-  // pragma translate_on
+  )
+
   assign reg_rsp_o.ready     = ( reg_req_i.write && axi_rsp_i.w_ready) ||
                                (!reg_req_i.write && axi_rsp_i.r_valid);
 

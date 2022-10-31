@@ -5,6 +5,7 @@
 // Thomas Benz <tbenz@ethz.ch>
 
 `include "axi/typedef.svh"
+`include "idma/guard.svh"
 
 /// The iDMA backend implements an arbitrary 1D copy engine using the AXI4 protocol.
 module idma_backend #(
@@ -478,7 +479,9 @@ module idma_backend #(
         assign busy_o.eh_cnt_busy = 1'b0;
 
     end else begin : gen_param_error
+        `IDMA_NONSYNTH_BLOCK(
         $fatal(1, "Unexpected Error Capability");
+        )
     end
 
 
@@ -672,8 +675,7 @@ module idma_backend #(
     //--------------------------------------
     // Assertions
     //--------------------------------------
-    // pragma translate_off
-    `ifndef VERILATOR
+    `IDMA_NONSYNTH_BLOCK(
     initial begin : proc_assert_params
         axi_addr_width : assert(AddrWidth >= 32'd12) else
             $fatal(1, "Parameter `AddrWidth` has to be >= 12!");
@@ -693,7 +695,6 @@ module idma_backend #(
         tf_len_width_max : assert(TFLenWidth <= AddrWidth) else
             $fatal(1, "Parameter `TFLenWidth` has to be <= `AddrWidth`!");
     end
-    `endif
-    // pragma translate_on
+    )
 
 endmodule : idma_backend

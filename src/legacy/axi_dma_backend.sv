@@ -5,6 +5,7 @@
 // Michael Rogenmoser <michaero@ethz.ch>
 
 `include "idma/typedef.svh"
+`include "idma/guard.svh"
 
 /// This is a wrapper for the new backend to emulate the old one
 module axi_dma_backend #(
@@ -72,13 +73,11 @@ module axi_dma_backend #(
 
     // This wrapper emulates the old (v.0.1.0) backend which is deprecated. Throw a warning here
     // to inform the user in simulation
-    // pragma translate_off
-    `ifndef VERILATOR
+    `IDMA_NONSYNTH_BLOCK(
     initial begin : proc_deprecated_warning
         $warning("You are using the deprecated interface of the backend. Please update ASAP!");
     end
-    `endif
-    // pragma translate_on
+    )
 
     // Parameters unavailable to old backend
     localparam int unsigned TFLenWidth  = AddrWidth;

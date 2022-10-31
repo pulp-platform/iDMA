@@ -138,31 +138,6 @@ module dma_desc_wrap #(
     .busy_o        ( idma_busy          )
   );
 
-  // axi_dma_backend #(
-  //   .DataWidth     (AxiDataWidth),
-  //   .AddrWidth     (AxiAddrWidth),
-  //   .IdWidth       (AxiIdWidth-1),
-  //   .AxReqFifoDepth(4),
-  //   .TransFifoDepth(4),
-  //   .BufferDepth   (4),
-  //   .axi_req_t     (dma_axi_mst_post_mux_req_t),
-  //   .axi_res_t     (dma_axi_mst_post_mux_resp_t),
-  //   .burst_req_t   (burst_req_t),
-  //   .DmaIdWidth    (1),
-  //   .DmaTracing    (0)
-  // ) i_dma_backend (
-  //   .clk_i           (clk_i),
-  //   .rst_ni          (rst_ni),
-  //   .axi_dma_req_o   (axi_be_mst_req),
-  //   .axi_dma_res_i   (axi_be_mst_rsp),
-  //   .burst_req_i     (dma_be_req),
-  //   .valid_i         (dma_be_valid),
-  //   .ready_o         (dma_be_ready),
-  //   .backend_idle_o  (dma_be_idle),
-  //   .trans_complete_o(dma_be_tx_complete),
-  //   .dma_id_i        (1'h1)
-  // );
-
   axi_mux #(
     .SlvAxiIDWidth(AxiIdWidth - 1),
     .slv_aw_chan_t(dma_axi_mst_post_mux_aw_chan_t),

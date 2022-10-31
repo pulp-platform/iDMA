@@ -5,6 +5,7 @@
 // Thomas Benz <tbenz@ethz.ch>
 
 `include "common_cells/registers.svh"
+`include "idma/guard.svh"
 
 /// Handles AXI read and write error on the manager interface.
 /// Currently two modes are supported:
@@ -297,7 +298,9 @@ module idma_error_handler #(
                         // the counter is 0 -> no transfer in the datapath. This is an impossible
                         // state
                         end else begin
+                            `IDMA_NONSYNTH_BLOCK(
                             $fatal(1, "No active transfer to handle!");
+                            )
                         end
                     end
                 end
@@ -330,7 +333,9 @@ module idma_error_handler #(
                     // the counter is 0 -> no transfer in the datapath. This is an impossible
                     // state
                     end else begin
+                        `IDMA_NONSYNTH_BLOCK(
                         $fatal(1, "No active transfer to handle!");
+                        )
                     end
                 end
             end

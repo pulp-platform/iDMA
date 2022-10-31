@@ -76,7 +76,6 @@ sources:
 
   - target: cva6
     files:
-      - src/legacy/axi_dma_backend.sv
       - src/systems/cva6_reg/dma_core_wrap.sv
 
   - target: synthesis

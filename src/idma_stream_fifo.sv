@@ -5,6 +5,7 @@
 // Thomas Benz <tbenz@ethz.ch>
 
 `include "common_cells/assertions.svh"
+`include "idma/guard.svh"
 
 /// Optimal implementation of a stream FIFO based on the common cells modules.
 module idma_stream_fifo #(
@@ -36,13 +37,13 @@ module idma_stream_fifo #(
     // Prevent Depth 0 and 1
     //--------------------------------------
     // Throw an error if depth is 0 or 1
-    // pragma translate off
+    `IDMA_NONSYNTH_BLOCK(
     if (Depth < 32'd2) begin : gen_fatal
         initial begin
             $fatal(1, "FIFO of depth %d does not make any sense!", Depth);
         end
     end
-    // pragma translate on
+    )
 
     //--------------------------------------
     // Spill register (depth 2)
@@ -51,13 +52,13 @@ module idma_stream_fifo #(
     if (Depth == 32'd2) begin : gen_spill
 
         // print info
-        // pragma translate off
+        `IDMA_NONSYNTH_BLOCK(
         if (PrintInfo) begin : gen_info
             initial begin
                 $display("[%m] Instantiate spill register (of depth %d)", Depth);
             end
         end
-        // pragma translate on
+        )
 
         // spill register
         spill_register_flushable #(
@@ -92,13 +93,13 @@ module idma_stream_fifo #(
     if (Depth > 32'd2) begin : gen_fifo
 
         // print info
-        // pragma translate off
+        `IDMA_NONSYNTH_BLOCK(
         if (PrintInfo) begin : gen_info
             initial begin
                 $info("[%m] Instantiate stream FIFO of depth %d", Depth);
             end
         end
-        // pragma translate on
+        )
 
         // stream fifo
         stream_fifo #(

@@ -5,6 +5,7 @@
 // Thomas Benz <tbenz@ethz.ch>
 
 `include "common_cells/registers.svh"
+`include "idma/guard.svh"
 
 /// ND midend for the iDMA. This module takes an n-dimensional transfer and splits it into
 /// individual 1d transfers handed to the backend.
@@ -236,14 +237,12 @@ module idma_nd_midend #(
     //--------------------------------------
     // Assertions
     //--------------------------------------
-    // pragma translate_off
-    `ifndef VERILATOR
+    `IDMA_NONSYNTH_BLOCK(
     initial begin : proc_assert_params
         num_dim : assert(NumDim >= 32'd2) else
             $fatal(1, "Parameter `NumDim` has to be >= 2!");
     end
-    `endif
-    // pragma translate_on
+    )
 
 endmodule : idma_nd_midend
 
