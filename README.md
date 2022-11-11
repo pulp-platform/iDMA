@@ -8,7 +8,11 @@ computing systems. iDMA is part of the [PULP (Parallel Ultra-Low-Power) platform
 where it is used as a cluster level DMA in the [Snitch Cluster](https://github.com/pulp-platform/snitch)
 and in the [PULP Cluster](https://github.com/pulp-platform/pulp).
 
-iDMA currently implements AXI4[+ATOPs from AXI5](https://github.com/pulp-platform/axi).
+iDMA currently implements the following protocols:
+- [AXI4](https://developer.arm.com/documentation/ihi0022/hc/?lang=en)[+ATOPs from AXI5](https://github.com/pulp-platform/axi)
+- [AXI4 Lite](https://developer.arm.com/documentation/ihi0022/hc/?lang=en)
+- [OBI v1.5.0](https://github.com/openhwgroup/programs/blob/master/TGs/cores-task-group/obi/OBI-v1.5.0.pdf)
+
 
 ## Modular Architecture
 iDMA is centered around the idea to split the DMA engine in 3 distinct parts:
@@ -16,7 +20,7 @@ iDMA is centered around the idea to split the DMA engine in 3 distinct parts:
 - **Midend:** Midend(s) transform a transfer request from the frontend to generic 1D transfers,
               which can be handled by the backend.
 - **Bakend:** The backend gets a 1D transfer `(src_addr, dst_addr, length)` and executes it
-              on the AXI4 manager interface.
+              on the transport protocol's manager interface.
 
 The interface between the parts are well-defined, making it easy to adapt to a new system or to add
 new capabilities.
@@ -43,7 +47,8 @@ various tools are required.
 - [`morty >= v0.6.0`](https://github.com/zarubaf/morty)
 - [`Verilator = v4.202`](https://www.veripool.org/verilator)
 - [`Verible >= v0.0-1051-gd4cd328`](https://github.com/chipsalliance/verible)
-- `Python3 >= 3.8` including some the libraries listed in [`requirements.txt`](requirements.txt)
+- [`Python3 >= 3.8`](https://www.python.org/downloads/) including some the libraries listed
+  in [`requirements.txt`](requirements.txt)
 
 ### Building the Documentation
 Use `make doc` to build the documentation. The output is located at `doc/build`.

@@ -4,17 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 0.4.0 - 2022-11-11
 
-## 0.3.1 - 2022-10.28
+### Changed
+- Bump AXI version to [`v.0.39.0-beta.2`](https://github.com/pulp-platform/axi/releases/tag/v0.39.0-beta.2)
+  [#20](https://github.com/pulp-platform/iDMA/pull/20).
+- Add new protocol capabilities introduced by [#20](https://github.com/pulp-platform/iDMA/pull/20) to the `README.md`.
 
 ### Fixed
-- `dma_core_wrap`: Remove parameter `DmaAddrWidth` in `idma_reg64_frontend`. [#16](https://github.com/pulp-platform/iDMA/pull/16).
+- Various fixes; add missing ports in the testbenches, remove stale comments, and remove duplicates
+  in `Bender.yml` [#17](https://github.com/pulp-platform/iDMA/pull/17).
 
-## 0.3.0 - 2022-10.28
+### Added
+- Add `guard.svh`, a simple macro to guard nonsynthesizable code in the iDMA
+  repository [#17](https://github.com/pulp-platform/iDMA/pull/17).
+- Add support for the [OBI v1.5.0](https://github.com/openhwgroup/programs/blob/master/TGs/cores-task-group/obi/OBI-v1.5.0.pdf)
+  protocol [#20](https://github.com/pulp-platform/iDMA/pull/20).
+- Add support for the AXI4 Lite protocol [#20](https://github.com/pulp-platform/iDMA/pull/20).
+
+## 0.3.1 - 2022-10-28
 
 ### Fixed
-- Fix the `Aw`-handshaking in the `channel-coupler` module. [#13](https://github.com/pulp-platform/iDMA/pull/13).
-- Minor fixes in `dma_core_wrap` and `idma_reg64_frontend`. [#15](https://github.com/pulp-platform/iDMA/pull/15).
+- `dma_core_wrap`: Remove parameter `DmaAddrWidth` in `idma_reg64_frontend` [#16](https://github.com/pulp-platform/iDMA/pull/16).
+
+## 0.3.0 - 2022-10-28
+
+### Fixed
+- Fix the `Aw`-handshaking in the `channel-coupler` module [#13](https://github.com/pulp-platform/iDMA/pull/13).
+- Minor fixes in `dma_core_wrap` and `idma_reg64_frontend` [#15](https://github.com/pulp-platform/iDMA/pull/15).
 
 `dma_core_wrap` has lost the `DmaAddrWidth` parameter rendering `v0.3.0` incompatible to previous
 versions.
@@ -30,10 +47,10 @@ versions.
   - `axi` from `v0.35.1` to `v0.37.0`
   - `common_cells` from `1.21.0` to `1.26.0`
   - `common_verification` from `0.2.0` to `0.2.2`
-- Replace local modules with their upstream versions: [#11](https://github.com/pulp-platform/iDMA/pull/11)., [#12](https://github.com/pulp-platform/iDMA/pull/12).
+- Replace local modules with their upstream versions: [#11](https://github.com/pulp-platform/iDMA/pull/11), [#12](https://github.com/pulp-platform/iDMA/pull/12).
 
 ### Fixed
-- Fix the `Aw`-handshaking in the `channel-coupler` module. [#10](https://github.com/pulp-platform/iDMA/pull/10).
+- Fix the `Aw`-handshaking in the `channel-coupler` module [#10](https://github.com/pulp-platform/iDMA/pull/10).
 - Fix missing python modules in GitHub CI.
 - Fix wrong date format as well as missing indentation in `CHANGELOG.md`.
 
