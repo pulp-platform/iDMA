@@ -1,0 +1,13 @@
+# Copyright 2023 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+# Fix this ...
+waive --rule=line-length --location="src/frontends/desc64/idma_desc64.sv"
+
+# Declare zero-based big-endian unpacked dimensions sized as [N] -> legacy PULP code :S
+waive --rule=unpacked-dimensions-range-ordering --location="src/systems/pulpopen/dmac_wrap.sv"
+waive --rule=line-length --location="src/systems/pulpopen/dmac_wrap.sv"

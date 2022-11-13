@@ -3,6 +3,9 @@
 # Solderpad Hardware License, Version 0.51, see LICENSE for details.
 # SPDX-License-Identifier: SHL-0.51
 
+# Authors:
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
 """List the amount of lines every contributor adds, and their files"""
 import sys
 import glob
@@ -51,7 +54,7 @@ for file in flist:
                         if re.search(to_check, line, re.IGNORECASE):
                             todo_present |= True
                             global_todo_present |= True
-                            if not author in num_todos:
+                            if author not in num_todos:
                                 num_todos[author] = 1
                             else:
                                 num_todos[author] += 1

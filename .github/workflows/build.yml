@@ -1,0 +1,68 @@
+# Copyright 2023 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Paul Scheffler <paulsc@iis.ee.ethz.ch>
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+name: build
+
+on: [ push, pull_request, workflow_dispatch ]
+
+jobs:
+
+  build:
+    strategy:
+      matrix:
+        target: [rtl, doc]
+      fail-fast: false
+    runs-on: ubuntu-22.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+          cache: pip
+      -
+        name: Install Python requirements
+        run: pip install -r requirements.txt
+      -
+        name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+      -
+        name: Install RISC-V GCC toolchain
+        uses: pulp-platform/pulp-actions/riscv-gcc-install@v2
+        with:
+          distro: ubuntu-22.04
+          nightly-date: '2023.03.14'
+          target: riscv64-elf
+      -
+        name: Install Bender
+        uses: pulp-platform/pulp-actions/bender-install@v2
+        with:
+          version: 0.27.3
+      -
+        name: Install Morty
+        run: |
+          curl --proto '=https' --tlsv1.2 -sLO https://github.com/pulp-platform/morty/releases/download/v0.9.0/morty-ubuntu.22.04-x86_64.tar.gz
+          tar -xvf morty-ubuntu.22.04-x86_64.tar.gz morty
+          rm -f morty-ubuntu.22.04-x86_64.tar.gz
+          chmod 777 morty
+          echo "PATH=.:$PATH" >> ${GITHUB_ENV}
+      -
+        name: Check clean
+        run: make idma_clean_all
+      -
+        name: Check whether clean
+        run: git status && test -z "$(git status --porcelain --ignore-submodules)"
+      -
+        name: Build target
+        run: make -j9 idma_${{ matrix.target }}_all
+      -
+        name: Check whether stale
+        run: git status && test -z "$(git status --porcelain --ignore-submodules)"

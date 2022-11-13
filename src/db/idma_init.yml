@@ -1,0 +1,102 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Tobias Senti <tsenti@student.ethz.ch>
+
+prefix: "init"
+protocol_enum: "INIT"
+full_name: "Memory Init"
+tb_define: "PROT_INIT"
+bursts: "not_supported"
+legalizer_force_decouple: "false"
+read_meta_channel: "req_chan"
+read_meta_channel_width: "localparam int unsigned init_req_chan_width = $bits(init_req_chan_t);"
+combined_aw_and_w: "false"
+read_slave: "false"
+typedefs: |
+    typedef struct packed {
+        logic [AddrWidth-1:0] cfg;
+    } init_req_chan_t;
+
+    typedef struct packed {
+        init_req_chan_t req_chan;
+        logic           req_valid;
+        logic           rsp_ready;
+    } init_req_t;
+
+    typedef struct packed {
+        logic [DataWidth-1:0] init_value;
+    } init_rsp_chan_t;
+
+    typedef struct packed {
+        init_rsp_chan_t rsp_chan;
+        logic           rsp_valid;
+        logic           req_ready;
+    } init_rsp_t;
+read_bridge_template: |
+    spill_register #(
+        .T      ( logic ),
+        .Bypass ( 1'b0  )
+    ) i_init_read_bridge (
+        .clk_i   ( clk                     ),
+        .rst_ni  ( rst_n                   ), 
+        .valid_i ( init_read_req.req_valid ),
+        .ready_o ( init_read_rsp.req_ready ),
+        .data_i  ( 1'b0                    ),
+        .valid_o ( init_read_rsp.rsp_valid ),
+        .ready_i ( init_read_req.rsp_ready ),
+        .data_o  ( /* NOT CONNECTED */     )
+    );
+
+    assign init_read_rsp.rsp_chan.init_value = {StrbWidth{8'h42}};
+    assign init_axi_read_req = '0;
+legalizer_read_meta_channel: |
+    r_req_o.ar_req.init.req_chan = '{
+        cfg: r_tf_q.base_addr
+    };
+read_template: |
+    idma_init_read #(
+        .StrbWidth        ( StrbWidth           ),
+        .byte_t           ( byte_t              ),
+        .strb_t           ( strb_t              ),
+        .r_dp_req_t       ( r_dp_req_t          ),
+        .r_dp_rsp_t       ( r_dp_rsp_t          ),
+        .read_meta_chan_t ( read_meta_channel_t ),
+        .read_req_t       ( ${req_t}           ),
+        .read_rsp_t       ( ${rsp_t}           )
+    ) i_idma_init_read (
+        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_valid_i      ( ${r_dp_valid_i} ),
+        .r_dp_ready_o      ( ${r_dp_ready_o} ),
+        .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
+        .r_dp_valid_o      ( ${r_dp_valid_o} ),
+        .r_dp_ready_i      ( ${r_dp_ready_i} ),
+        .read_meta_req_i   ( ${read_meta_request} ),
+        .read_meta_valid_i ( ${read_meta_valid} ),
+        .read_meta_ready_o ( ${read_meta_ready} ),
+        .read_req_o        ( ${read_request} ),
+        .read_rsp_i        ( ${read_response} ),
+        .r_chan_valid_o    ( ${r_chan_valid} ),
+        .r_chan_ready_o    ( ${r_chan_ready} ),
+        .buffer_in_o       ( ${buffer_in} ),
+        .buffer_in_valid_o ( ${buffer_in_valid} ),
+        .buffer_in_ready_i ( buffer_in_ready )
+    );
+synth_wrapper_ports_read: |
+    output logic                   init_read_req_valid_o,
+    output addr_t                  init_read_req_config_o,
+    input  logic                   init_read_req_ready_i,
+
+    input  logic                   init_read_rsp_valid_i,
+    input  data_t                  init_read_rsp_init_value_i,
+    output logic                   init_read_rsp_ready_o,
+synth_wrapper_assign_read: |
+    assign init_read_req_valid_o   = init_read_req.req_valid;
+    assign init_read_req_config_o  = init_read_req.req_chan.cfg;
+    assign init_read_rsp.req_ready = init_read_req_ready_i;
+
+    assign init_read_rsp.rsp_valid           = init_read_rsp_valid_i;
+    assign init_read_rsp.rsp_chan.init_value = init_read_rsp_init_value_i;
+    assign init_read_rsp_ready_o             = init_read_req.rsp_ready;

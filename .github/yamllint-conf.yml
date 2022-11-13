@@ -1,0 +1,26 @@
+# Copyright 2023 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+extends: default
+
+rules:
+  # 100 chars should be enough, but don't fail if a line is longer
+  line-length:
+    max: 100
+    level: warning
+  trailing-spaces:
+    level: warning
+  colons:
+    level: warning
+  braces:
+    level: warning
+  brackets:
+    level: warning
+  commas:
+    level: warning
+  indentation:
+    level: warning

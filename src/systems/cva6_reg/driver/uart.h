@@ -22,7 +22,7 @@
 
 void init_uart();
 
-void print_uart(const char* str);
+void print_uart(const char *str);
 
 void print_uart_int(uint32_t addr);
 

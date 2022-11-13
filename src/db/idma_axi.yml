@@ -1,0 +1,226 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Tobias Senti <tsenti@student.ethz.ch>
+
+prefix: "axi"
+protocol_enum: "AXI"
+full_name: "AXI4+ATOP"
+tb_define: "PROT_AXI4"
+bursts: "split_at_page_boundary"
+page_size: 4096
+max_beats_per_burst: 256
+legalizer_force_decouple: "false"
+read_meta_channel: "ar_chan"
+write_meta_channel: "aw_chan"
+combined_aw_and_w: "false"
+read_slave: "false"
+read_meta_channel_width: "localparam int unsigned axi_ar_chan_width = axi_pkg::ar_width(AddrWidth, AxiIdWidth, UserWidth);"
+write_meta_channel_width: "localparam int unsigned axi_aw_chan_width = axi_pkg::aw_width(AddrWidth, AxiIdWidth, UserWidth);"
+typedefs: |
+    `AXI_TYPEDEF_AW_CHAN_T(axi_aw_chan_t, addr_t, id_t, user_t)
+    `AXI_TYPEDEF_W_CHAN_T(axi_w_chan_t, data_t, strb_t, user_t)
+    `AXI_TYPEDEF_B_CHAN_T(axi_b_chan_t, id_t, user_t)
+
+    `AXI_TYPEDEF_AR_CHAN_T(axi_ar_chan_t, addr_t, id_t, user_t)
+    `AXI_TYPEDEF_R_CHAN_T(axi_r_chan_t, data_t, id_t, user_t)
+
+    `AXI_TYPEDEF_REQ_T(axi_req_t, axi_aw_chan_t, axi_w_chan_t, axi_ar_chan_t)
+    `AXI_TYPEDEF_RESP_T(axi_rsp_t, axi_b_chan_t, axi_r_chan_t)
+legalizer_read_meta_channel: |
+    r_req_o.ar_req.axi.ar_chan = '{
+        id: opt_tf_q.axi_id,
+        addr: { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+        len: ((r_num_bytes + r_addr_offset - 'd1) >> OffsetWidth),
+        size: axi_pkg::size_t'(OffsetWidth),
+        burst: opt_tf_q.src_axi_opt.burst,
+        lock: opt_tf_q.src_axi_opt.lock,
+        cache: opt_tf_q.src_axi_opt.cache,
+        prot: opt_tf_q.src_axi_opt.prot,
+        qos: opt_tf_q.src_axi_opt.qos,
+        region: opt_tf_q.src_axi_opt.region,
+        user: '0
+    };
+legalizer_write_meta_channel: |
+    w_req_o.aw_req.axi.aw_chan = '{
+        id: opt_tf_q.axi_id,
+        addr: { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+        len: ((w_num_bytes + w_addr_offset - 'd1) >> OffsetWidth),
+        size: axi_pkg::size_t'(OffsetWidth),
+        burst: opt_tf_q.dst_axi_opt.burst,
+        lock: opt_tf_q.dst_axi_opt.lock,
+        cache: opt_tf_q.dst_axi_opt.cache,
+        prot: opt_tf_q.dst_axi_opt.prot,
+        qos: opt_tf_q.dst_axi_opt.qos,
+        region: opt_tf_q.dst_axi_opt.region,
+        user: '0,
+        atop: '0
+    };
+legalizer_write_data_path: |
+    w_req_o.w_dp_req = '{
+        dst_protocol: opt_tf_q.dst_protocol,
+        offset: w_addr_offset,
+        tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
+        shift: opt_tf_q.write_shift,
+        num_beats: w_req_o.aw_req.axi.aw_chan.len,
+        is_single: w_req_o.aw_req.axi.aw_chan.len == '0
+    };
+read_template: |
+    idma_axi_read #(
+        .StrbWidth  ( StrbWidth           ),
+        .byte_t     ( byte_t              ),
+        .strb_t     ( strb_t              ),
+        .r_dp_req_t ( r_dp_req_t          ),
+        .r_dp_rsp_t ( r_dp_rsp_t          ),
+        .ar_chan_t  ( read_meta_channel_t ),
+        .read_req_t ( ${req_t}           ),
+        .read_rsp_t ( ${rsp_t}           )
+    ) i_idma_axi_read (
+        .clk_i             ( clk_i      ),
+        .rst_ni            ( rst_ni     ),
+        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_valid_i      ( ${r_dp_valid_i} ),
+        .r_dp_ready_o      ( ${r_dp_ready_o} ),
+        .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
+        .r_dp_valid_o      ( ${r_dp_valid_o} ),
+        .r_dp_ready_i      ( ${r_dp_ready_i} ),
+        .ar_req_i          ( ${read_meta_request} ),
+        .ar_valid_i        ( ${read_meta_valid} ),
+        .ar_ready_o        ( ${read_meta_ready} ),
+        .read_req_o        ( ${read_request} ),
+        .read_rsp_i        ( ${read_response} ),
+        .r_chan_valid_o    ( ${r_chan_valid} ),
+        .r_chan_ready_o    ( ${r_chan_ready} ),
+        .buffer_in_o       ( ${buffer_in} ),
+        .buffer_in_valid_o ( ${buffer_in_valid} ),
+        .buffer_in_ready_i ( buffer_in_ready )
+    );
+write_template: |
+    idma_axi_write #(
+        .StrbWidth       ( StrbWidth            ),
+        .MaskInvalidData ( MaskInvalidData      ),
+        .byte_t          ( byte_t               ),
+        .data_t          ( data_t               ),
+        .strb_t          ( strb_t               ),
+        .w_dp_req_t      ( w_dp_req_t           ),
+        .w_dp_rsp_t      ( w_dp_rsp_t           ),
+        .aw_chan_t       ( write_meta_channel_t ),
+        .write_req_t     ( ${req_t} ),
+        .write_rsp_t     ( ${rsp_t} )
+    ) i_idma_axi_write (
+        .clk_i              ( clk_i      ),
+        .rst_ni             ( rst_ni     ),
+        .w_dp_req_i         ( w_dp_req_i ),
+        .w_dp_valid_i       ( ${w_dp_valid_i} ),
+        .w_dp_ready_o       ( ${w_dp_ready_o} ),
+        .dp_poison_i        ( dp_poison_i ),
+        .w_dp_rsp_o         ( ${w_dp_rsp_o} ),
+        .w_dp_valid_o       ( ${w_dp_valid_o} ),
+        .w_dp_ready_i       ( ${w_dp_ready_i} ),
+        .aw_req_i           ( ${write_meta_request} ),
+        .aw_valid_i         ( ${write_meta_valid} ),
+        .aw_ready_o         ( ${write_meta_ready} ),
+        .write_req_o        ( ${write_request} ),
+        .write_rsp_i        ( ${write_response} ),
+        .buffer_out_i       ( buffer_out_shifted ),
+        .buffer_out_valid_i ( buffer_out_valid_shifted ),
+        .buffer_out_ready_o ( ${buffer_out_ready} )
+    );
+synth_wrapper_ports_write: |
+    output id_t                    axi_aw_id_o,
+    output addr_t                  axi_aw_addr_o,
+    output axi_pkg::len_t          axi_aw_len_o,
+    output axi_pkg::size_t         axi_aw_size_o,
+    output axi_pkg::burst_t        axi_aw_burst_o,
+    output logic                   axi_aw_lock_o,
+    output axi_pkg::cache_t        axi_aw_cache_o,
+    output axi_pkg::prot_t         axi_aw_prot_o,
+    output axi_pkg::qos_t          axi_aw_qos_o,
+    output axi_pkg::region_t       axi_aw_region_o,
+    output axi_pkg::atop_t         axi_aw_atop_o,
+    output user_t                  axi_aw_user_o,
+    output logic                   axi_aw_valid_o,
+    input  logic                   axi_aw_ready_i,
+    output data_t                  axi_w_data_o,
+    output strb_t                  axi_w_strb_o,
+    output logic                   axi_w_last_o,
+    output user_t                  axi_w_user_o,
+    output logic                   axi_w_valid_o,
+    input  logic                   axi_w_ready_i,
+    input  id_t                    axi_b_id_i,
+    input  axi_pkg::resp_t         axi_b_resp_i,
+    input  user_t                  axi_b_user_i,
+    input  logic                   axi_b_valid_i,
+    output logic                   axi_b_ready_o,
+synth_wrapper_ports_read: |
+    output id_t                    axi_ar_id_o,
+    output addr_t                  axi_ar_addr_o,
+    output axi_pkg::len_t          axi_ar_len_o,
+    output axi_pkg::size_t         axi_ar_size_o,
+    output axi_pkg::burst_t        axi_ar_burst_o,
+    output logic                   axi_ar_lock_o,
+    output axi_pkg::cache_t        axi_ar_cache_o,
+    output axi_pkg::prot_t         axi_ar_prot_o,
+    output axi_pkg::qos_t          axi_ar_qos_o,
+    output axi_pkg::region_t       axi_ar_region_o,
+    output user_t                  axi_ar_user_o,
+    output logic                   axi_ar_valid_o,
+    input  logic                   axi_ar_ready_i,
+    input  id_t                    axi_r_id_i,
+    input  data_t                  axi_r_data_i,
+    input  axi_pkg::resp_t         axi_r_resp_i,
+    input  logic                   axi_r_last_i,
+    input  user_t                  axi_r_user_i,
+    input  logic                   axi_r_valid_i,
+    output logic                   axi_r_ready_o,
+synth_wrapper_assign_write: |
+    assign axi_aw_id_o     = axi_write_req.aw.id;
+    assign axi_aw_addr_o   = axi_write_req.aw.addr;
+    assign axi_aw_len_o    = axi_write_req.aw.len;
+    assign axi_aw_size_o   = axi_write_req.aw.size;
+    assign axi_aw_burst_o  = axi_write_req.aw.burst;
+    assign axi_aw_lock_o   = axi_write_req.aw.lock;
+    assign axi_aw_cache_o  = axi_write_req.aw.cache;
+    assign axi_aw_prot_o   = axi_write_req.aw.prot;
+    assign axi_aw_qos_o    = axi_write_req.aw.qos;
+    assign axi_aw_region_o = axi_write_req.aw.region;
+    assign axi_aw_atop_o   = axi_write_req.aw.atop;
+    assign axi_aw_user_o   = axi_write_req.aw.user;
+    assign axi_aw_valid_o  = axi_write_req.aw_valid;
+    assign axi_w_data_o    = axi_write_req.w.data;
+    assign axi_w_strb_o    = axi_write_req.w.strb;
+    assign axi_w_last_o    = axi_write_req.w.last;
+    assign axi_w_user_o    = axi_write_req.w.user;
+    assign axi_w_valid_o   = axi_write_req.w_valid;
+    assign axi_b_ready_o   = axi_write_req.b_ready;
+
+    assign axi_write_rsp.aw_ready = axi_aw_ready_i;
+    assign axi_write_rsp.w_ready  = axi_w_ready_i;
+    assign axi_write_rsp.b.id     = axi_b_id_i;
+    assign axi_write_rsp.b.resp   = axi_b_resp_i;
+    assign axi_write_rsp.b.user   = axi_b_user_i;
+    assign axi_write_rsp.b_valid  = axi_b_valid_i;
+synth_wrapper_assign_read: |
+    assign axi_ar_id_o     = axi_read_req.ar.id;
+    assign axi_ar_addr_o   = axi_read_req.ar.addr;
+    assign axi_ar_len_o    = axi_read_req.ar.len;
+    assign axi_ar_size_o   = axi_read_req.ar.size;
+    assign axi_ar_burst_o  = axi_read_req.ar.burst;
+    assign axi_ar_lock_o   = axi_read_req.ar.lock;
+    assign axi_ar_cache_o  = axi_read_req.ar.cache;
+    assign axi_ar_prot_o   = axi_read_req.ar.prot;
+    assign axi_ar_qos_o    = axi_read_req.ar.qos;
+    assign axi_ar_region_o = axi_read_req.ar.region;
+    assign axi_ar_user_o   = axi_read_req.ar.user;
+    assign axi_ar_valid_o  = axi_read_req.ar_valid;
+    assign axi_r_ready_o   = axi_read_req.r_ready;
+
+    assign axi_read_rsp.ar_ready = axi_ar_ready_i;
+    assign axi_read_rsp.r.id     = axi_r_id_i;
+    assign axi_read_rsp.r.data   = axi_r_data_i;
+    assign axi_read_rsp.r.resp   = axi_r_resp_i;
+    assign axi_read_rsp.r.last   = axi_r_last_i;
+    assign axi_read_rsp.r.user   = axi_r_user_i;
+    assign axi_read_rsp.r_valid  = axi_r_valid_i;

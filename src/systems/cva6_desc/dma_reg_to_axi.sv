@@ -2,7 +2,8 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Axel Vanoni <axvanoni@student.ethz.ch>
+// Authors:
+// - Axel Vanoni <axvanoni@student.ethz.ch>
 
 `include "common_cells/registers.svh"
 `include "idma/guard.svh"

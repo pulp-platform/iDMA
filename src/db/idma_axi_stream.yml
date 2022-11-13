@@ -1,0 +1,322 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Tobias Senti <tsenti@student.ethz.ch>
+
+prefix: "axis"
+protocol_enum: "AXI_STREAM"
+full_name: "AXI Stream"
+tb_define: "PROT_AXI4_STREAM"
+bursts: "not_supported"
+legalizer_force_decouple: "false"
+write_meta_channel: "t_chan"
+read_meta_channel: "t_chan"
+combined_aw_and_w: "true"
+read_slave: "true"
+meta_channel_width: "localparam int unsigned axi_stream_t_chan_width = $bits(axi_stream_t_chan_t);"
+typedefs: |
+    `IDMA_AXI_STREAM_TYPEDEF_S_CHAN_T(axi_stream_t_chan_t, data_t, strb_t, strb_t, id_t, id_t, user_t)
+
+    `IDMA_AXI_STREAM_TYPEDEF_REQ_T(axi_stream_req_t, axi_stream_t_chan_t)
+    `IDMA_AXI_STREAM_TYPEDEF_RSP_T(axi_stream_rsp_t)
+read_bridge_template: |
+    // AXI Stream to OBI Read Bridge
+    obi_req_t axi_stream_obi_read_req;
+    obi_rsp_t axi_stream_obi_read_rsp;
+
+    assign axi_stream_obi_read_req.a.we    = 1'b0;
+    assign axi_stream_obi_read_req.a.wdata = '0;
+    assign axi_stream_obi_read_req.a.be    = '1;
+
+    assign axi_stream_obi_read_req.r_ready = axi_stream_read_req.tready;
+    assign axi_stream_read_rsp.tvalid      = axi_stream_obi_read_rsp.r_valid;
+    always_comb begin
+        axi_stream_read_rsp.t      = '0;
+        axi_stream_read_rsp.t.data = axi_stream_obi_read_rsp.r.rdata;
+    end
+
+    int unsigned launched_axis_jobs;
+
+    initial begin
+        launched_axis_jobs = 0;
+        forever begin
+            @(posedge clk);
+            if(req_valid && req_ready && (idma_req.opt.src_protocol == idma_pkg::AXI_STREAM))
+                launched_axis_jobs++;
+        end
+    end
+
+    initial begin
+        string job_file;
+        tb_dma_job_t jobs [$];
+        tb_dma_job_t axis_jobs [$];
+        tb_dma_job_t current_job;
+        addr_t address;
+        bit next_job;
+
+        // Read Job File
+        void'($value$plusargs("job_file=%s", job_file));
+        read_jobs(job_file, jobs);
+
+        // Filter out AXI Stream Jobs
+        while(jobs.size() > 0) begin
+            current_job = jobs.pop_front();
+
+            if (!(current_job.src_protocol inside {\
+    % for index, protocol in enumerate(used_read_protocols):
+    idma_pkg::${database[protocol]['protocol_enum']}\
+        % if index != len(used_read_protocols)-1:
+    ,\
+        % endif
+    % endfor
+    })) begin
+                current_job.src_protocol = idma_pkg::${database[used_read_protocols[-1]]['protocol_enum']};
+            end
+            
+            if(current_job.src_protocol == idma_pkg::AXI_STREAM) 
+                axis_jobs.push_back(current_job);
+        end
+
+        // Handle reads
+        while(axis_jobs.size() > 0) begin
+            current_job = axis_jobs.pop_front();
+            address = { current_job.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
+            axi_stream_obi_read_req.a_req = 1'b0;
+            axi_stream_obi_read_req.a.aid = current_job.id;
+
+            // Wait for launch of job 
+            wait(launched_axis_jobs > 0);
+            launched_axis_jobs--;
+            while(address < (current_job.src_addr + current_job.length)) begin
+                axi_stream_obi_read_req.a.addr = address;
+                axi_stream_obi_read_req.a_req  = 1'b1;
+                @(posedge clk);
+                if(axi_stream_obi_read_rsp.a_gnt && axi_stream_obi_read_req.a_req) begin
+                    address += StrbWidth;
+                end
+            end
+            axi_stream_obi_read_req.a_req  = 1'b0;
+        end
+    end
+
+    // OBI to AXI Bridge
+    idma_obi2axi_bridge #(
+        .DataWidth ( DataWidth    ),
+        .AddrWidth ( AddrWidth    ),
+        .UserWidth ( UserWidth    ),
+        .IdWidth   ( AxiIdWidth   ),
+        .obi_req_t ( obi_req_t    ),
+        .obi_rsp_t ( obi_rsp_t    ),
+        .axi_req_t ( axi_req_t    ),
+        .axi_rsp_t ( axi_rsp_t    )
+    ) i_axi_stream_obi2axi_bridge_read (
+        .clk_i     ( clk ),
+        .rst_ni    ( rst_n ),
+        .obi_req_i ( axi_stream_obi_read_req ),
+        .obi_rsp_o ( axi_stream_obi_read_rsp ),
+        .axi_req_o ( axi_stream_axi_read_req ),
+        .axi_rsp_i ( axi_stream_axi_read_rsp )
+    );
+write_bridge_template: |
+    // AXI Stream to OBI Write Bridge
+    obi_req_t axi_stream_obi_write_req;
+    obi_rsp_t axi_stream_obi_write_rsp;
+
+    assign axi_stream_obi_write_req.a_req   = axi_stream_write_req.tvalid;
+    assign axi_stream_obi_write_req.a.we    = 1'b1;
+    assign axi_stream_obi_write_req.a.wdata = axi_stream_write_req.t.data;
+    assign axi_stream_obi_write_req.a.be    = axi_stream_write_req.t.keep;
+    assign axi_stream_obi_write_req.a.aid   = axi_stream_write_req.t.id;
+    assign axi_stream_obi_write_req.r_ready = 1'b1;
+
+    assign axi_stream_write_rsp.tready = axi_stream_obi_write_rsp.a_gnt;
+
+    initial begin
+        string job_file;
+        tb_dma_job_t jobs [$];
+        tb_dma_job_t axis_jobs [$];
+        tb_dma_job_t current_job;
+        addr_t address;
+        bit next_job;
+
+        // Read Job File
+        void'($value$plusargs("job_file=%s", job_file));
+        read_jobs(job_file, jobs);
+
+        // Filter out AXI Stream Jobs
+        while(jobs.size() > 0) begin
+            current_job = jobs.pop_front();
+
+            if (!(current_job.dst_protocol inside {\
+    % for index, protocol in enumerate(used_write_protocols):
+    idma_pkg::${database[protocol]['protocol_enum']}\
+        % if index != len(used_write_protocols)-1:
+    ,\
+        % endif
+    % endfor
+    })) begin
+                current_job.dst_protocol = idma_pkg::${database[used_write_protocols[-1]]['protocol_enum']};
+            end
+            
+            if(current_job.dst_protocol == idma_pkg::AXI_STREAM) 
+                axis_jobs.push_back(current_job);
+        end
+
+
+        // Handle writes
+        while(axis_jobs.size() > 0) begin
+            current_job = axis_jobs.pop_front();
+            address = { current_job.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
+            axi_stream_obi_write_req.a.addr = address;
+
+            // Wait for first write
+            wait(axi_stream_write_req.tvalid);
+            next_job = 1'b0;
+            while(!next_job) begin
+                @(posedge clk);
+                if(axi_stream_write_req.tvalid && axi_stream_write_rsp.tready) begin
+                    next_job = axi_stream_write_req.t.last;
+
+                    // Increment address
+                    address += StrbWidth;
+                    axi_stream_obi_write_req.a.addr = address;
+                end
+            end
+        end
+    end
+
+    // OBI to AXI Bridge
+    idma_obi2axi_bridge #(
+        .DataWidth ( DataWidth    ),
+        .AddrWidth ( AddrWidth    ),
+        .UserWidth ( UserWidth    ),
+        .IdWidth   ( AxiIdWidth   ),
+        .obi_req_t ( obi_req_t    ),
+        .obi_rsp_t ( obi_rsp_t    ),
+        .axi_req_t ( axi_req_t    ),
+        .axi_rsp_t ( axi_rsp_t    )
+    ) i_axi_stream_obi2axi_bridge_write (
+        .clk_i     ( clk ),
+        .rst_ni    ( rst_n ),
+        .obi_req_i ( axi_stream_obi_write_req ),
+        .obi_rsp_o ( axi_stream_obi_write_rsp ),
+        .axi_req_o ( axi_stream_axi_write_req ),
+        .axi_rsp_i ( axi_stream_axi_write_rsp )
+    );
+legalizer_read_meta_channel: |
+    r_req_o.ar_req = '0;
+legalizer_write_meta_channel: |
+    w_req_o.aw_req.axi_stream.t_chan = '{
+        data: '0,
+        strb: '1,
+        keep: '0,
+        last: w_tf_q.length == w_num_bytes,
+        id: opt_tf_q.axi_id,
+        dest: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.dest)-1:0],
+        user: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.user)-1+:$bits(w_req_o.aw_req.axi_stream.t_chan.dest)]
+    };
+read_template: |
+    idma_axis_read #(
+        .StrbWidth        ( StrbWidth           ),
+        .byte_t           ( byte_t              ),
+        .strb_t           ( strb_t              ),
+        .r_dp_req_t       ( r_dp_req_t          ),
+        .r_dp_rsp_t       ( r_dp_rsp_t          ),
+        .read_meta_chan_t ( read_meta_channel_t ),
+        .read_req_t       ( ${req_t} ),
+        .read_rsp_t       ( ${rsp_t} )
+    ) i_idma_axis_read (
+        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_req_valid_i  ( ${r_dp_valid_i} ),
+        .r_dp_req_ready_o  ( ${r_dp_ready_o} ),
+        .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
+        .r_dp_rsp_valid_o  ( ${r_dp_valid_o} ),
+        .r_dp_rsp_ready_i  ( ${r_dp_ready_i} ),
+        .read_meta_req_i   ( ${read_meta_request} ),
+        .read_meta_valid_i ( ${read_meta_valid} ),
+        .read_meta_ready_o ( ${read_meta_ready} ),
+        .read_req_o        ( ${read_request} ),
+        .read_rsp_i        ( ${read_response} ),
+        .r_chan_valid_o    ( ${r_chan_valid} ),
+        .r_chan_ready_o    ( ${r_chan_ready} ),
+        .buffer_in_o       ( ${buffer_in} ),
+        .buffer_in_valid_o ( ${buffer_in_valid} ),
+        .buffer_in_ready_i ( buffer_in_ready )
+    );
+write_template: |
+    idma_axis_write #(
+        .StrbWidth            ( StrbWidth            ),
+        .MaskInvalidData      ( MaskInvalidData      ),
+        .byte_t               ( byte_t               ),
+        .data_t               ( data_t               ),
+        .strb_t               ( strb_t               ),
+        .w_dp_req_t           ( w_dp_req_t           ),
+        .w_dp_rsp_t           ( w_dp_rsp_t           ),
+        .write_meta_channel_t ( write_meta_channel_t ),
+        .write_req_t          ( ${req_t} ),
+        .write_rsp_t          ( ${rsp_t} )
+    ) i_idma_axis_write (
+        .clk_i              ( clk_i ),
+        .rst_ni             ( rst_ni ),
+        .w_dp_req_i         ( w_dp_req_i ),
+        .w_dp_req_valid_i   ( ${w_dp_valid_i} ),
+        .w_dp_req_ready_o   ( ${w_dp_ready_o} ),
+        .dp_poison_i        ( dp_poison_i ),
+        .w_dp_rsp_o         ( ${w_dp_rsp_o} ),
+        .w_dp_rsp_valid_o   ( ${w_dp_valid_o} ),
+        .w_dp_rsp_ready_i   ( ${w_dp_ready_i} ),
+        .aw_req_i           ( ${write_meta_request} ),
+        .aw_valid_i         ( ${write_meta_valid} ),
+        .aw_ready_o         ( ${write_meta_ready}  ),
+        .write_req_o        ( ${write_request} ),
+        .write_rsp_i        ( ${write_response} ),
+        .buffer_out_i       ( buffer_out_shifted ),
+        .buffer_out_valid_i ( buffer_out_valid_shifted ),
+        .buffer_out_ready_o ( ${buffer_out_ready} )
+    );
+synth_wrapper_ports_read: |
+    input  data_t                  axi_stream_read_data_i,
+    input  strb_t                  axi_stream_read_strb_i,
+    input  strb_t                  axi_stream_read_keep_i,
+    input  logic                   axi_stream_read_last_i,
+    input  id_t                    axi_stream_read_id_i,
+    input  id_t                    axi_stream_read_dest_i,
+    input  user_t                  axi_stream_read_user_i,
+    input  logic                   axi_stream_read_tvalid_i,
+    
+    output logic                   axi_stream_read_tready_o,
+synth_wrapper_ports_write: |
+    output data_t                  axi_stream_write_data_o,
+    output strb_t                  axi_stream_write_strb_o,
+    output strb_t                  axi_stream_write_keep_o,
+    output logic                   axi_stream_write_last_o,
+    output id_t                    axi_stream_write_id_o,
+    output id_t                    axi_stream_write_dest_o,
+    output user_t                  axi_stream_write_user_o,
+    output logic                   axi_stream_write_tvalid_o,
+    
+    input  logic                   axi_stream_write_tready_i,
+synth_wrapper_assign_read: |
+    assign axi_stream_read_rsp.t.data = axi_stream_read_data_i;
+    assign axi_stream_read_rsp.t.strb = axi_stream_read_strb_i;
+    assign axi_stream_read_rsp.t.keep = axi_stream_read_keep_i;
+    assign axi_stream_read_rsp.t.last = axi_stream_read_last_i;
+    assign axi_stream_read_rsp.t.id   = axi_stream_read_id_i;
+    assign axi_stream_read_rsp.t.dest = axi_stream_read_dest_i;
+    assign axi_stream_read_rsp.t.user = axi_stream_read_user_i;
+    assign axi_stream_read_rsp.tvalid = axi_stream_read_tvalid_i;
+
+    assign axi_stream_read_tready_o = axi_stream_read_req.tready;
+synth_wrapper_assign_write: |
+    assign axi_stream_write_data_o   = axi_stream_write_req.t.data; 
+    assign axi_stream_write_strb_o   = axi_stream_write_req.t.strb; 
+    assign axi_stream_write_keep_o   = axi_stream_write_req.t.keep; 
+    assign axi_stream_write_last_o   = axi_stream_write_req.t.last; 
+    assign axi_stream_write_id_o     = axi_stream_write_req.t.id; 
+    assign axi_stream_write_dest_o   = axi_stream_write_req.t.dest; 
+    assign axi_stream_write_user_o   = axi_stream_write_req.t.user; 
+    assign axi_stream_write_tvalid_o = axi_stream_write_req.tvalid;
+
+    assign axi_stream_write_rsp.tready = axi_stream_write_tready_i;

@@ -46,7 +46,8 @@ extern "C" {
 #define IDMA_REG32_2D_FRONTEND_STATUS_BUSY_MASK 0xffff
 #define IDMA_REG32_2D_FRONTEND_STATUS_BUSY_OFFSET 0
 #define IDMA_REG32_2D_FRONTEND_STATUS_BUSY_FIELD \
-  ((bitfield_field32_t) { .mask = IDMA_REG32_2D_FRONTEND_STATUS_BUSY_MASK, .index = IDMA_REG32_2D_FRONTEND_STATUS_BUSY_OFFSET })
+    ((bitfield_field32_t){.mask = IDMA_REG32_2D_FRONTEND_STATUS_BUSY_MASK, \
+                          .index = IDMA_REG32_2D_FRONTEND_STATUS_BUSY_OFFSET})
 
 // Next ID, launches transfer, returns 0 if transfer not set up properly.
 #define IDMA_REG32_2D_FRONTEND_NEXT_ID_REG_OFFSET 0x20
@@ -55,9 +56,9 @@ extern "C" {
 #define IDMA_REG32_2D_FRONTEND_DONE_REG_OFFSET 0x24
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
-#endif  // _IDMA_REG32_2D_FRONTEND_REG_DEFS_
+#endif // _IDMA_REG32_2D_FRONTEND_REG_DEFS_
 // End generated register defines for idma_reg32_2d_frontend
 
 #endif // __ARCHI_IDMA_V1_H__

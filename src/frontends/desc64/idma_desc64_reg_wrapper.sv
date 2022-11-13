@@ -2,11 +2,10 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Axel Vanoni <axvanoni@student.ethz.ch>
+// Authors:
+// - Axel Vanoni <axvanoni@student.ethz.ch>
 
 `include "common_cells/registers.svh"
-
-
 
 /// This module implements backpressure via ready/valid handshakes
 /// for the regbus registers and exposes it to the descriptor fifo

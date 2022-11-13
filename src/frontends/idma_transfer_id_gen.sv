@@ -2,7 +2,8 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Author: Thomas Benz    <tbenz@ethz.ch>
+// Authors:
+// - Thomas Benz <tbenz@ethz.ch>
 
 
 /// DMA transaction id generator. Increases the transaction id on every request.

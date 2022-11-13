@@ -7,12 +7,15 @@ package:
   authors:
     - "Thomas Benz <tbenz@iis.ee.ethz.ch>" # current maintainer
     - "Michael Rogenmoser <michaero@iis.ee.ethz.ch>"
+    - "Tobias Senti <tsenti@student.ethz.ch>"
+    - "Axel Vanoni <axvanoni@student.ethz.ch>"
 
 dependencies:
-  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.26.0 }
-  common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.2 }
-  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.2 }
-  register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: 0.3.1 }
+  common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.32.0 }
+  common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.3  }
+  axi:                 { git: "https://github.com/pulp-platform/axi.git",                 version: 0.39.1 }
+  register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.2  }
+  idma_gen:            { path: "target/rtl" }
 
 export_include_dirs:
   - src/include
@@ -21,100 +24,79 @@ sources:
   # Source files grouped in levels. Files in level 0 have no dependencies on files in this
   # package. Files in level 1 only depend on files in level 0, files in level 2 on files in
   # levels 1 and 0, etc. Files within a level are ordered alphabetically.
-  # Level 0
-  - src/frontends/idma_transfer_id_gen.sv
-  - src/idma_pkg.sv
-  - src/idma_stream_fifo.sv
-  # Level 1
-  - src/idma_buffer.sv
-  - src/idma_error_handler.sv
-  - src/idma_channel_coupler.sv
-  # Level 2
-  - src/idma_axi_transport_layer.sv
-  - src/idma_axi_lite_transport_layer.sv
-  - src/idma_obi_transport_layer.sv
-  - src/idma_legalizer.sv
-  # Level 3
-  - src/idma_backend.sv
-  # Level 4
-  - src/legacy/axi_dma_backend.sv
+  - target: rtl
+    files:
+      # IDMA packet is included through the idma_gen dependency
+      # Level 0
+      - src/backend/idma_axil_read.sv
+      - src/backend/idma_axil_write.sv
+      - src/backend/idma_axi_read.sv
+      - src/backend/idma_axi_write.sv
+      - src/backend/idma_axis_read.sv
+      - src/backend/idma_axis_write.sv
+      - src/backend/idma_channel_coupler.sv
+      - src/backend/idma_dataflow_element.sv
+      - src/backend/idma_error_handler.sv
+      - src/backend/idma_init_read.sv
+      - src/backend/idma_obi_read.sv
+      - src/backend/idma_obi_write.sv
+      - src/backend/idma_tilelink_read.sv
+      - src/backend/idma_tilelink_write.sv
+      - src/future/idma_improved_fifo.sv
+      - src/future/idma_legalizer_page_splitter.sv
+      - src/future/idma_legalizer_pow2_splitter.sv
 
   # Midends
-  # Level 0
-  - src/legacy/midends/idma_2D_midend.sv
-  - src/midends/idma_nd_midend.sv
-
-  # Frontends
-  - files: # 32bit register frontend
-    # Level 0
-    - src/frontends/register_32bit_2d/idma_reg32_2d_frontend_reg_pkg.sv
-    # Level 1
-    - src/frontends/register_32bit_2d/idma_reg32_2d_frontend_reg_top.sv
-    # Level 2
-    - src/frontends/register_32bit_2d/idma_reg32_2d_frontend.sv
-
-  - files: # 64bit register frontend
-    # Level 0
-    - src/frontends/register_64bit/idma_reg64_frontend_reg_pkg.sv
-    # Level 1
-    - src/frontends/register_64bit/idma_reg64_frontend_reg_top.sv
-    # Level 2
-    - src/frontends/register_64bit/idma_reg64_frontend.sv
-
-  - files: # 2D 64bit register frontend
-    # Level 0
-    - src/frontends/register_64bit_2d/idma_reg64_2d_frontend_reg_pkg.sv
-    # Level 1
-    - src/frontends/register_64bit_2d/idma_reg64_2d_frontend_reg_top.sv
-    # Level 2
-    - src/frontends/register_64bit_2d/idma_reg64_2d_frontend.sv
-
-  - files: # 64bit descriptor frontend
-    # Level 0
-    - src/frontends/desc64/idma_desc64_reg_pkg.sv
-    - src/frontends/desc64/idma_desc64_reg_top.sv
-    - src/frontends/desc64/idma_desc64_shared_counter.sv
-    # Level 1
-    - src/frontends/desc64/idma_desc64_reg_wrapper.sv
-    # Level 2
-    - src/frontends/desc64/idma_desc64_top.sv
-
-  # Systems
-  - target: all(pulp, not(mchan))
-    files:
-      - src/systems/pulpopen/dmac_wrap.sv
-
-  - target: cva6
-    files:
-      - src/systems/cva6_reg/dma_core_wrap.sv
-
-  - target: synthesis
-    files:
-      - src/synth_wrapper/idma_backend_synth.sv
-      - src/synth_wrapper/idma_lite_backend_synth.sv
-      - src/synth_wrapper/idma_obi_backend_synth.sv
-      - src/synth_wrapper/idma_nd_backend_synth.sv
-
-  - target: test
-    defines:
-      TARGET_SIMULATION: ~
-    include_dirs:
-      - test
-    files:
-      # Level 0:
-      - test/idma_intf.sv
-      - test/idma_tb_per2axi.sv
-      - test/idma_obi_asserter.sv
-      # Level 1:
-      - test/idma_test.sv
-      - test/idma_obi2axi_bridge.sv
-      # Level 2:
-      - test/tb_idma_backend.sv
-      - test/tb_idma_lite_backend.sv
-      - test/tb_idma_obi_backend.sv
-      - test/tb_idma_nd_backend.sv
-
-  - target: test # 64bit descriptor frontend
+  - target: rtl
     files:
       # Level 0
-      - test/frontends/tb_idma_desc64_top.sv
+      - src/midends/idma_nd_midend.sv
+
+  # Frontends (without inst64)
+  - target: rtl
+    files:
+      # Level 0
+      - src/frontends/desc64/idma_desc64_shared_counter.sv
+      - src/frontends/idma_transfer_id_gen.sv
+      # Level 1
+      - src/frontends/reg32_2d/idma_reg32_2d.sv
+      - src/frontends/reg64/idma_reg64.sv
+      - src/frontends/reg64_2d/idma_reg64_2d.sv
+      - src/frontends/desc64/idma_desc64_reg_wrapper.sv
+      # Level 2
+      - src/frontends/desc64/idma_desc64.sv
+
+
+  # Synthesis wrappers
+  - target: synth
+    files:
+      # Level 0
+      - src/frontends/desc64/idma_desc64_synth_pkg.sv
+      - src/synth/idma_nd_backend_synth.sv
+      # Level 1
+      - src/frontends/desc64/idma_desc64_synth.sv
+
+  # Testbenches
+  - target: test
+    files:
+      # Level 0
+      - test/tb_idma_improved_fifo.sv
+      - test/tb_idma_nd_backend.sv
+      - test/frontends/tb_idma_desc64.sv
+      - test/future/idma_tb_per2axi.sv
+      - test/future/idma_obi_asserter.sv
+      - test/future/TLToAXI4.v
+      # Level 1
+      - test/future/idma_obi2axi_bridge.sv
+      - test/future/idma_tilelink2axi_bridge.sv
+
+# Not yet..
+#  # Systems
+#  - target: all(pulp, not(mchan))
+#    files:
+#      - src/systems/pulpopen/dmac_wrap.sv
+#      - src/systems/pulpopen/synth_dmac_wrap.sv
+#
+#  - target: cva6
+#    files:
+#      - src/systems/cva6_reg/dma_core_wrap.sv

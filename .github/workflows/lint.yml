@@ -1,0 +1,131 @@
+# Copyright 2023 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Paul Scheffler <paulsc@iis.ee.ethz.ch>
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+name: lint
+
+on: [ push, pull_request, workflow_dispatch ]
+
+jobs:
+
+  lint-license:
+    runs-on: ubuntu-latest
+    steps:
+    -
+      name: Checkout
+      uses: actions/checkout@v3
+    -
+      name: Check license
+      uses: pulp-platform/pulp-actions/lint-license@v2
+      with:
+        license: |
+          Copyright (\d{4}(-\d{4})?\s)?(ETH Zurich and University of Bologna|lowRISC contributors).
+          (Solderpad Hardware License, Version 0.51|Licensed under the Apache License, Version 2.0), see LICENSE for details.
+          SPDX-License-Identifier: (SHL-0.51|Apache-2.0)
+        # Exclude generated headers (no license checker support for optional lines)
+        exclude_paths: |
+          src/systems/cva6_reg/driver/*.h
+          target/sim/vsim/wave/tpl/*.do.tpl
+
+  lint-sv:
+    runs-on: ubuntu-latest
+    steps:
+    -
+      name: Checkout
+      uses: actions/checkout@v3
+    -
+      name: Run Verible
+      uses: chipsalliance/verible-linter-action@main
+      with:
+        paths: src
+        extra_args: "--waiver_files .github/verible.waiver"
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        fail_on_error: true
+        reviewdog_reporter: github-check
+
+  lint-cxx:
+    runs-on: ubuntu-latest
+    steps:
+    -
+      name: Checkout
+      uses: actions/checkout@v3
+    -
+      name: Run Clang-format
+      uses: DoozyX/clang-format-lint-action@v0.14
+      with:
+        extensions: 'c,h,cpp'
+        clangFormatVersion: 14
+        style: >
+          {
+          IndentWidth: 4,
+          ColumnLimit: 100,
+          AlignEscapedNewlines: DontAlign,
+          SortIncludes: false,
+          AllowShortFunctionsOnASingleLine: None,
+          AllowShortIfStatementsOnASingleLine: true,
+          AllowShortLoopsOnASingleLine: true
+          }
+        exclude_paths: src/systems/cva6_reg/driver/*.h target/sim/vsim/wave/tpl/*.tpl
+
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      -
+        name: Lint Python
+        uses: py-actions/flake8@v2
+        with:
+          max-line-length: "100"
+          ignore: E128
+
+  lint-yaml:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      -
+        name: Lint Yaml
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: Bender.yml src/db/*.yml
+          config_file: .github/yamllint-conf.yml
+
+  lint-commit:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        uses: actions/checkout@v3
+        if: ${{ github.event_name == 'push' }}
+      -
+        uses: actions/checkout@v3
+        if: ${{ github.event_name == 'pull_request' }}
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      -
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      -
+        name: Python Requirements
+        run: python3 -m pip install -r requirements.txt
+      -
+        name: Lint commits
+        run: python3 util/lint-commits.py HEAD

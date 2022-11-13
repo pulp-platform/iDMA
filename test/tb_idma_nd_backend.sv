@@ -2,12 +2,16 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Thomas Benz  <tbenz@ethz.ch>
-// Tobias Senti <tsenti@student.ethz.ch>
+// Authors:
+// - Thomas Benz  <tbenz@iis.ee.ethz.ch>
+// - Tobias Senti <tsenti@sethz.ch>
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
+
+// Protocol testbench defines
+`define PROT_AXI4
 
 module tb_idma_nd_backend import idma_pkg::*; #(
     parameter int unsigned BufferDepth         = 3,
@@ -24,6 +28,7 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     parameter int unsigned MemNumReqOutst      = 1,
     parameter int unsigned MemLatency          = 0,
     parameter int unsigned WatchDogNumCycles   = 100,
+    parameter bit          CombinedShifter     = 1'b0,
     parameter bit          MaskInvalidData     = 1,
     parameter bit          RAWCouplingAvail    = 1,
     parameter bit          HardwareLegalizer   = 1,
@@ -83,6 +88,23 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     // iDMA ND request
     `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, reps_t, strides_t)
 
+    // Meta channels
+    typedef struct packed {
+        axi_ar_chan_t ar_chan;
+    } axi_read_meta_channel_t;
+
+    typedef struct packed {
+        axi_read_meta_channel_t axi;
+    } read_meta_channel_t;
+
+    typedef struct packed {
+        axi_aw_chan_t aw_chan;
+    } axi_write_meta_channel_t;
+
+    typedef struct packed {
+        axi_write_meta_channel_t axi;
+    } write_meta_channel_t;
+
 
     //--------------------------------------
     // Physical Signals to the DUT
@@ -117,8 +139,8 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     logic eh_req_ready;
 
     // AXI4 master
-    axi_req_t axi_req, axi_req_mem, axi_req_mem_delayed;
-    axi_rsp_t axi_rsp, axi_rsp_mem;
+    axi_req_t axi_req, axi_read_req, axi_write_req, axi_req_mem, axi_req_mem_delayed;
+    axi_rsp_t axi_rsp, axi_read_rsp, axi_write_rsp, axi_rsp_mem;
 
     // busy signal
     idma_busy_t busy;
@@ -356,47 +378,64 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     );
 
     // the backend
-    idma_backend #(
-        .DataWidth           ( DataWidth           ),
-        .AddrWidth           ( AddrWidth           ),
-        .AxiIdWidth          ( AxiIdWidth          ),
-        .UserWidth           ( UserWidth           ),
-        .TFLenWidth          ( TFLenWidth          ),
-        .MaskInvalidData     ( MaskInvalidData     ),
-        .BufferDepth         ( BufferDepth         ),
-        .RAWCouplingAvail    ( RAWCouplingAvail    ),
-        .HardwareLegalizer   ( HardwareLegalizer   ),
-        .RejectZeroTransfers ( RejectZeroTransfers ),
-        .ErrorCap            ( ErrorCap            ),
-        .PrintFifoInfo       ( PrintFifoInfo       ),
-        .NumAxInFlight       ( NumAxInFlight       ),
-        .MemSysDepth         ( MemSysDepth         ),
-        .idma_req_t          ( idma_req_t          ),
-        .idma_rsp_t          ( idma_rsp_t          ),
-        .idma_eh_req_t       ( idma_eh_req_t       ),
-        .idma_busy_t         ( idma_busy_t         ),
-        .protocol_req_t      ( axi_req_t           ),
-        .protocol_rsp_t      ( axi_rsp_t           ),
-        .aw_chan_t           ( axi_aw_chan_t       ),
-        .ar_chan_t           ( axi_ar_chan_t       )
+    idma_backend_rw_axi #(
+        .DataWidth            ( DataWidth            ),
+        .AddrWidth            ( AddrWidth            ),
+        .AxiIdWidth           ( AxiIdWidth           ),
+        .UserWidth            ( UserWidth            ),
+        .TFLenWidth           ( TFLenWidth           ),
+        .MaskInvalidData      ( MaskInvalidData      ),
+        .BufferDepth          ( BufferDepth          ),
+        .CombinedShifter      ( CombinedShifter      ),
+        .RAWCouplingAvail     ( RAWCouplingAvail     ),
+        .HardwareLegalizer    ( HardwareLegalizer    ),
+        .RejectZeroTransfers  ( RejectZeroTransfers  ),
+        .ErrorCap             ( ErrorCap             ),
+        .PrintFifoInfo        ( PrintFifoInfo        ),
+        .NumAxInFlight        ( NumAxInFlight        ),
+        .MemSysDepth          ( MemSysDepth          ),
+        .idma_req_t           ( idma_req_t           ),
+        .idma_rsp_t           ( idma_rsp_t           ),
+        .idma_eh_req_t        ( idma_eh_req_t        ),
+        .idma_busy_t          ( idma_busy_t          ),
+        .axi_req_t            ( axi_req_t            ),
+        .axi_rsp_t            ( axi_rsp_t            ),
+        .read_meta_channel_t  ( read_meta_channel_t  ),
+        .write_meta_channel_t ( write_meta_channel_t )
     ) i_idma_backend  (
-        .clk_i          ( clk             ),
-        .rst_ni         ( rst_n           ),
-        .testmode_i     ( 1'b0            ),
-        .idma_req_i     ( burst_req       ),
-        .req_valid_i    ( burst_req_valid ),
-        .req_ready_o    ( burst_req_ready ),
-        .idma_rsp_o     ( burst_rsp       ),
-        .rsp_valid_o    ( burst_rsp_valid ),
-        .rsp_ready_i    ( burst_rsp_ready ),
-        .idma_eh_req_i  ( idma_eh_req     ),
-        .eh_req_valid_i ( eh_req_valid    ),
-        .eh_req_ready_o ( eh_req_ready    ),
-        .protocol_req_o ( axi_req         ),
-        .protocol_rsp_i ( axi_rsp         ),
-        .busy_o         ( busy            )
+        .clk_i           ( clk             ),
+        .rst_ni          ( rst_n           ),
+        .testmode_i      ( 1'b0            ),
+        .idma_req_i      ( burst_req       ),
+        .req_valid_i     ( burst_req_valid ),
+        .req_ready_o     ( burst_req_ready ),
+        .idma_rsp_o      ( burst_rsp       ),
+        .rsp_valid_o     ( burst_rsp_valid ),
+        .rsp_ready_i     ( burst_rsp_ready ),
+        .idma_eh_req_i   ( idma_eh_req     ),
+        .eh_req_valid_i  ( eh_req_valid    ),
+        .eh_req_ready_o  ( eh_req_ready    ),
+        .axi_read_req_o  ( axi_read_req    ),
+        .axi_read_rsp_i  ( axi_read_rsp    ),
+        .axi_write_req_o ( axi_write_req   ),
+        .axi_write_rsp_i ( axi_write_rsp   ),
+        .busy_o          ( busy            )
     );
 
+    // Read Write Join
+    axi_rw_join #(
+        .axi_req_t        ( axi_req_t ),
+        .axi_resp_t       ( axi_rsp_t )
+    ) i_axi_rw_join (
+        .clk_i            ( clk           ),
+        .rst_ni           ( rst_n         ),
+        .slv_read_req_i   ( axi_read_req  ),
+        .slv_read_resp_o  ( axi_read_rsp  ),
+        .slv_write_req_i  ( axi_write_req ),
+        .slv_write_resp_o ( axi_write_rsp ),
+        .mst_req_o        ( axi_req       ),
+        .mst_resp_i       ( axi_rsp       )
+    );
 
     //--------------------------------------
     // TB connections
@@ -511,13 +550,15 @@ module tb_idma_nd_backend import idma_pkg::*; #(
                 // pop queue
                 automatic tb_dma_job_t now = req_jobs_flat.pop_front();
                 // init mem (model and AXI)
-                init_mem(now);
+                init_mem({idma_pkg::AXI}, now);
             end
             // launch DUT
             drv.launch_nd_tf(
                           now_nd.length,
                           now_nd.src_addr,
                           now_nd.dst_addr,
+                          idma_pkg::AXI,
+                          idma_pkg::AXI,
                           now_nd.aw_decoupled,
                           now_nd.rw_decoupled,
                           $clog2(now_nd.max_src_len),
@@ -557,6 +598,8 @@ module tb_idma_nd_backend import idma_pkg::*; #(
                             now.length,
                             now.src_addr,
                             now.dst_addr,
+                            idma_pkg::AXI,
+                            idma_pkg::AXI,
                             now.max_src_len,
                             now.max_dst_len,
                             now.rw_decoupled,
@@ -565,7 +608,7 @@ module tb_idma_nd_backend import idma_pkg::*; #(
                             now.err_action
                            );
                 // check memory
-                compare_mem(now.length, now.dst_addr, match);
+                compare_mem(now.length, now.dst_addr, idma_pkg::AXI, match);
                 // fail if there is a mismatch
                 if (!match)
                     $fatal(1, "Mismatch!");
@@ -597,4 +640,4 @@ module tb_idma_nd_backend import idma_pkg::*; #(
         end
     end
 
-endmodule : tb_idma_nd_backend
+endmodule

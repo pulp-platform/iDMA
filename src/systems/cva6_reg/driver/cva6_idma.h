@@ -2,10 +2,10 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-//Author: Andreas Kuster <kustera@ethz.ch>
-//
-//Description: Generated register defines for dma_frontend
+// Authors:
+// - Andreas Kuster <kustera@ethz.ch>
 
+// Description: Generated register defines for dma_frontend
 #ifndef _DMA_FRONTEND_REG_DEFS_
 #define _DMA_FRONTEND_REG_DEFS_
 
@@ -48,6 +48,6 @@ extern "C" {
 #define DMA_FRONTEND_DONE_REG_RESVAL 0x0
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
-#endif  // _DMA_FRONTEND_REG_DEFS_
+#endif // _DMA_FRONTEND_REG_DEFS_

@@ -1,18 +1,18 @@
 // Copyright 2022 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
-// Author: Thomas Benz    <tbenz@iis.ee.ethz.ch>
-// Author: Andreas Kuster <kustera@ethz.ch>
-// Author: Paul Scheffler <paulsc@iis.ee.ethz.ch>
-//
-// Description: DMA core wrapper for the CVA6 integration
+
+// Authors:
+// - Thomas Benz    <tbenz@iis.ee.ethz.ch>
+// - Andreas Kuster <kustera@ethz.ch>
+// - Paul Scheffler <paulsc@iis.ee.ethz.ch>
 
 `include "axi/assign.svh"
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
 `include "register_interface/typedef.svh"
 
+/// DMA core wrapper for the CVA6 integration
 module dma_core_wrap #(
   parameter int unsigned AxiAddrWidth     = 32'd0,
   parameter int unsigned AxiDataWidth     = 32'd0,

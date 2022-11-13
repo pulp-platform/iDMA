@@ -1,0 +1,243 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Tobias Senti <tsenti@student.ethz.ch>
+
+prefix: "tilelink"
+protocol_enum: "TILELINK"
+full_name: "TileLink-UH"
+tb_define: "PROT_TILELINK"
+bursts: "only_pow2"
+page_size: 2048                # limited by TLToAXI4 Bridge -> To be AXI compliant -> Less than 256 beats
+tltoaxi4_compatibility_mode: "true" # If this is true burst will never cross a page boundary and only 32 beat write bursts -> Needed for TLToAXI4 Bridge
+legalizer_force_decouple: "true" # Forces the legalizer to decouple
+read_meta_channel: "a_chan"
+write_meta_channel: "a_chan"
+meta_channel_width: "localparam int unsigned tilelink_a_chan_width = $bits(tilelink_a_chan_t);"
+combined_aw_and_w: "true"
+read_slave: "false"
+# logic[3:0] is the size field, is 4 bit as we're limited by the TLToAXI4 Bridge
+typedefs: |
+    `IDMA_TILELINK_TYPEDEF_A_CHAN_T(tilelink_a_chan_t, addr_t, data_t, strb_t, logic[3:0], logic[4:0])
+    `IDMA_TILELINK_TYPEDEF_D_CHAN_T(tilelink_d_chan_t, data_t, logic[3:0], logic[4:0], logic)
+
+    `IDMA_TILELINK_TYPEDEF_REQ_T(tilelink_req_t, tilelink_a_chan_t)
+    `IDMA_TILELINK_TYPEDEF_RSP_T(tilelink_rsp_t, tilelink_d_chan_t)
+bridge_template: |
+    idma_tilelink2axi_bridge #(
+        .DataWidth      ( DataWidth      ),
+        .AddrWidth      ( AddrWidth      ),
+        .IdWidth        ( AxiIdWidth     ),
+        .tilelink_req_t ( tilelink_req_t ),
+        .tilelink_rsp_t ( tilelink_rsp_t ),
+        .axi_req_t      ( axi_req_t      ),
+        .axi_rsp_t      ( axi_rsp_t      )
+    ) i_tilelink_to_axi_${port} (
+        .clk_i          ( clk                      ),
+        .rst_ni         ( rst_n                    ),
+        .tilelink_req_i ( tilelink_${port}_req     ),
+        .tilelink_rsp_o ( tilelink_${port}_rsp     ),
+        .axi_req_o      ( tilelink_axi_${port}_req ),
+        .axi_rsp_i      ( tilelink_axi_${port}_rsp )
+    );
+legalizer_read_meta_channel: |
+    r_req_o.ar_req.tilelink.a_chan = '{
+        opcode: 3'd4,
+        param: 3'd0,
+        size: '0,
+        source: opt_tf_q.axi_id,
+        address: { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+        mask: '1,
+        data: '0,
+        corrupt: 1'b0
+    };
+
+    for (int i = 0; i <= PageAddrWidth; i++) begin
+        if ((1 << i) == r_num_bytes) begin
+            r_req_o.ar_req.tilelink.a_chan.size = i;
+        end
+    end
+legalizer_write_meta_channel: |
+    w_req_o.aw_req.tilelink.a_chan = '{
+        opcode: 3'd1,
+        param: 3'd0,
+        size: '0,
+        source: opt_tf_q.axi_id,
+        address: { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+        mask: '0,
+        data: '0,
+        corrupt: 1'b0
+    };
+
+    for (int i = 0; i < PageAddrWidth; i++) begin
+        if ((1 << i) == w_num_bytes) begin
+            w_req_o.aw_req.tilelink.a_chan.size = i;
+        end
+    end
+legalizer_write_data_path: |
+    w_req_o.w_dp_req = '{
+        dst_protocol: opt_tf_q.dst_protocol,
+        offset: w_addr_offset,
+        tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
+        shift: opt_tf_q.write_shift,
+        num_beats: 'd0,
+        is_single: w_num_bytes <= StrbWidth
+    };
+read_template: |
+    idma_tilelink_read #(
+        .BurstLength      ( ${database['tilelink']['page_size']} ),
+        .StrbWidth        ( StrbWidth           ),
+        .byte_t           ( byte_t              ),
+        .strb_t           ( strb_t              ),
+        .r_dp_req_t       ( r_dp_req_t          ),
+        .r_dp_rsp_t       ( r_dp_rsp_t          ),
+        .read_meta_chan_t ( read_meta_channel_t ),
+        .read_req_t       ( ${req_t}           ),
+        .read_rsp_t       ( ${rsp_t}           )
+    ) i_idma_tilelink_read (
+        .clk_i             ( clk_i ),
+        .rst_ni            ( rst_ni ),
+        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_valid_i      ( ${r_dp_valid_i} ),
+        .r_dp_ready_o      ( ${r_dp_ready_o} ),
+        .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
+        .r_dp_valid_o      ( ${r_dp_valid_o} ),
+        .r_dp_ready_i      ( ${r_dp_ready_i} ),
+        .read_meta_req_i   ( ${read_meta_request} ),
+        .read_meta_valid_i ( ${read_meta_valid} ),
+        .read_meta_ready_o ( ${read_meta_ready} ),
+        .read_req_o        ( ${read_request} ),
+        .read_rsp_i        ( ${read_response} ),
+        .r_chan_valid_o    ( ${r_chan_valid} ),
+        .r_chan_ready_o    ( ${r_chan_ready} ),
+        .buffer_in_o       ( ${buffer_in} ),
+        .buffer_in_valid_o ( ${buffer_in_valid} ),
+        .buffer_in_ready_i ( buffer_in_ready )
+    );
+write_template: |
+    idma_tilelink_write #(
+        .BurstLength       ( \
+    % if database['tilelink']['tltoaxi4_compatibility_mode'] == 'true':
+     32 * StrbWidth ),
+    % else:
+     ${database['tilelink']['page_size']} ),
+    % endif
+        .StrbWidth         ( StrbWidth            ),
+        .MaskInvalidData   ( MaskInvalidData      ),
+        .byte_t            ( byte_t               ),
+        .data_t            ( data_t               ),
+        .strb_t            ( strb_t               ),
+        .w_dp_req_t        ( w_dp_req_t           ),
+        .w_dp_rsp_t        ( w_dp_rsp_t           ),
+        .write_meta_chan_t ( write_meta_channel_t ),
+        .write_req_t       ( ${req_t}       ),
+        .write_rsp_t       ( ${rsp_t}       )
+    ) i_idma_tilelink_write (
+        .clk_i              ( clk_i ),
+        .rst_ni             ( rst_ni ),
+        .w_dp_req_i         ( w_dp_req_i ),
+        .w_dp_valid_i       ( ${w_dp_valid_i} ),
+        .w_dp_ready_o       ( ${w_dp_ready_o} ),
+        .dp_poison_i        ( dp_poison_i ),
+        .w_dp_rsp_o         ( ${w_dp_rsp_o} ),
+        .w_dp_valid_o       ( ${w_dp_valid_o} ),
+        .w_dp_ready_i       ( ${w_dp_ready_i} ),
+        .write_meta_req_i   ( ${write_meta_request} ),
+        .write_meta_valid_i ( ${write_meta_valid} ),
+        .write_meta_ready_o ( ${write_meta_ready} ),
+        .write_req_o        ( ${write_request} ),
+        .write_rsp_i        ( ${write_response} ),
+        .buffer_out_i       ( buffer_out_shifted ),
+        .buffer_out_valid_i ( buffer_out_valid_shifted ),
+        .buffer_out_ready_o ( ${buffer_out_ready} )
+    );
+synth_wrapper_ports_write: |
+    output logic                   tilelink_write_req_a_valid_o,
+    output logic [2:0]             tilelink_write_req_a_opcode_o,
+    output logic [2:0]             tilelink_write_req_a_param_o,
+    output logic [3:0]             tilelink_write_req_a_size_o,
+    output logic [4:0]             tilelink_write_req_a_source_o,
+    output addr_t                  tilelink_write_req_a_address_o,
+    output strb_t                  tilelink_write_req_a_mask_o,
+    output data_t                  tilelink_write_req_a_data_o,
+    output logic                   tilelink_write_req_a_corrupt_o,
+    output logic                   tilelink_write_req_d_ready_o,
+
+    input logic                    tilelink_write_rsp_a_ready_i,
+    input logic                    tilelink_write_rsp_d_valid_i,
+    input logic [2:0]              tilelink_write_rsp_d_opcode_i, 
+    input logic [1:0]              tilelink_write_rsp_d_param_i,
+    input logic [3:0]              tilelink_write_rsp_d_size_i,
+    input logic [4:0]              tilelink_write_rsp_d_source_i,
+    input logic                    tilelink_write_rsp_d_sink_i,
+    input logic                    tilelink_write_rsp_d_denied_i,
+    input data_t                   tilelink_write_rsp_d_data_i, 
+    input logic                    tilelink_write_rsp_d_corrupt_i,
+synth_wrapper_ports_read: |
+    output logic                   tilelink_read_req_a_valid_o,
+    output logic [2:0]             tilelink_read_req_a_opcode_o,
+    output logic [2:0]             tilelink_read_req_a_param_o,
+    output logic [3:0]             tilelink_read_req_a_size_o,
+    output logic [4:0]             tilelink_read_req_a_source_o,
+    output addr_t                  tilelink_read_req_a_address_o,
+    output strb_t                  tilelink_read_req_a_mask_o,
+    output data_t                  tilelink_read_req_a_data_o,
+    output logic                   tilelink_read_req_a_corrupt_o,
+    output logic                   tilelink_read_req_d_ready_o,
+
+    input logic                    tilelink_read_rsp_a_ready_i,
+    input logic                    tilelink_read_rsp_d_valid_i,
+    input logic [2:0]              tilelink_read_rsp_d_opcode_i, 
+    input logic [1:0]              tilelink_read_rsp_d_param_i,
+    input logic [3:0]              tilelink_read_rsp_d_size_i,
+    input logic [4:0]              tilelink_read_rsp_d_source_i,
+    input logic                    tilelink_read_rsp_d_sink_i,
+    input logic                    tilelink_read_rsp_d_denied_i,
+    input data_t                   tilelink_read_rsp_d_data_i, 
+    input logic                    tilelink_read_rsp_d_corrupt_i,
+synth_wrapper_assign_write: |
+    assign tilelink_write_req_a_valid_o   = tilelink_write_req.a_valid;
+    assign tilelink_write_req_a_opcode_o  = tilelink_write_req.a.opcode;
+    assign tilelink_write_req_a_param_o   = tilelink_write_req.a.param;
+    assign tilelink_write_req_a_size_o    = tilelink_write_req.a.size;
+    assign tilelink_write_req_a_source_o  = tilelink_write_req.a.source;
+    assign tilelink_write_req_a_address_o = tilelink_write_req.a.address;
+    assign tilelink_write_req_a_mask_o    = tilelink_write_req.a.mask;
+    assign tilelink_write_req_a_data_o    = tilelink_write_req.a.data;
+    assign tilelink_write_req_a_corrupt_o = tilelink_write_req.a.corrupt;
+    assign tilelink_write_req_d_ready_o   = tilelink_write_req.d_ready;
+
+    assign tilelink_write_rsp.a_ready   = tilelink_write_rsp_a_ready_i;
+    assign tilelink_write_rsp.d_valid   = tilelink_write_rsp_d_valid_i;
+    assign tilelink_write_rsp.d.opcode  = tilelink_write_rsp_d_opcode_i;
+    assign tilelink_write_rsp.d.param   = tilelink_write_rsp_d_param_i;
+    assign tilelink_write_rsp.d.size    = tilelink_write_rsp_d_size_i;
+    assign tilelink_write_rsp.d.source  = tilelink_write_rsp_d_source_i;
+    assign tilelink_write_rsp.d.sink    = tilelink_write_rsp_d_sink_i;
+    assign tilelink_write_rsp.d.denied  = tilelink_write_rsp_d_denied_i;
+    assign tilelink_write_rsp.d.data    = tilelink_write_rsp_d_data_i;
+    assign tilelink_write_rsp.d.corrupt = tilelink_write_rsp_d_corrupt_i;
+synth_wrapper_assign_read: |
+    assign tilelink_read_req_a_valid_o   = tilelink_read_req.a_valid;
+    assign tilelink_read_req_a_opcode_o  = tilelink_read_req.a.opcode;
+    assign tilelink_read_req_a_param_o   = tilelink_read_req.a.param;
+    assign tilelink_read_req_a_size_o    = tilelink_read_req.a.size;
+    assign tilelink_read_req_a_source_o  = tilelink_read_req.a.source;
+    assign tilelink_read_req_a_address_o = tilelink_read_req.a.address;
+    assign tilelink_read_req_a_mask_o    = tilelink_read_req.a.mask;
+    assign tilelink_read_req_a_data_o    = tilelink_read_req.a.data;
+    assign tilelink_read_req_a_corrupt_o = tilelink_read_req.a.corrupt;
+    assign tilelink_read_req_d_ready_o   = tilelink_read_req.d_ready;
+
+    assign tilelink_read_rsp.a_ready   = tilelink_read_rsp_a_ready_i;
+    assign tilelink_read_rsp.d_valid   = tilelink_read_rsp_d_valid_i;
+    assign tilelink_read_rsp.d.opcode  = tilelink_read_rsp_d_opcode_i;
+    assign tilelink_read_rsp.d.param   = tilelink_read_rsp_d_param_i;
+    assign tilelink_read_rsp.d.size    = tilelink_read_rsp_d_size_i;
+    assign tilelink_read_rsp.d.source  = tilelink_read_rsp_d_source_i;
+    assign tilelink_read_rsp.d.sink    = tilelink_read_rsp_d_sink_i;
+    assign tilelink_read_rsp.d.denied  = tilelink_read_rsp_d_denied_i;
+    assign tilelink_read_rsp.d.data    = tilelink_read_rsp_d_data_i;
+    assign tilelink_read_rsp.d.corrupt = tilelink_read_rsp_d_corrupt_i;

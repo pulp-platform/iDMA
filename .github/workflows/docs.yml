@@ -1,0 +1,82 @@
+# Copyright 2023 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Paul Scheffler <paulsc@iis.ee.ethz.ch>
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+name: docs
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+
+  doc:
+    runs-on: ubuntu-22.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+          cache: pip
+      -
+        name: Install Python requirements
+        run: pip install -r requirements.txt
+      -
+        name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+      -
+        name: Install RISC-V GCC toolchain
+        uses: pulp-platform/pulp-actions/riscv-gcc-install@v2
+        with:
+          distro: ubuntu-22.04
+          nightly-date: '2023.03.14'
+          target: riscv64-elf
+      -
+        name: Install Bender
+        uses: pulp-platform/pulp-actions/bender-install@v2
+        with:
+          version: 0.27.3
+      -
+        name: Install Morty
+        run: |
+          curl --proto '=https' --tlsv1.2 -sLO https://github.com/pulp-platform/morty/releases/download/v0.9.0/morty-ubuntu.22.04-x86_64.tar.gz
+          tar -xvf morty-ubuntu.22.04-x86_64.tar.gz morty
+          rm -f morty-ubuntu.22.04-x86_64.tar.gz
+          chmod 777 morty
+          echo "PATH=.:$PATH" >> ${GITHUB_ENV}
+      -
+        name: Build Doc
+        run: make idma_doc_all
+      -
+        name: Create publish docs
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/upload-pages-artifact@main
+        with:
+          path: target/doc/html
+
+  deploy-pages:
+    needs: doc
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.output.page_url }}
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+    steps:
+      -
+        name: Deploy to Github Pages
+        id: deployment
+        uses: actions/deploy-pages@v1

@@ -2,9 +2,10 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Axel Vanoni <axvanoni@student.ethz.ch>
+// Authors:
+// - Axel Vanoni <axvanoni@student.ethz.ch>
 
-// synth package
+/// synth package
 package idma_desc64_synth_pkg;
 
     `include "register_interface/typedef.svh"
@@ -37,4 +38,4 @@ package idma_desc64_synth_pkg;
         logic             serialize;
     } burst_req_t;
 
-endpackage : idma_desc64_synth_pkg
+endpackage

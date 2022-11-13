@@ -1,8 +1,9 @@
 // Copyright 2022 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
-// Thomas Benz <tbenz@ethz.ch>
+
+// Authors:
+// - Thomas Benz <tbenz@ethz.ch>
 
 // Guard macros for non-synthesizable code
 

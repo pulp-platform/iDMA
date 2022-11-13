@@ -2,6 +2,9 @@
 # Copyright 2022 ETH Zurich and University of Bologna.
 # Solderpad Hardware License, Version 0.51, see LICENSE for details.
 # SPDX-License-Identifier: SHL-0.51
+#
+# Authors:
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 """List the amount of lines every contributor adds, and their files"""
 import sys

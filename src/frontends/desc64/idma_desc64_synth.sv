@@ -2,9 +2,10 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Axel Vanoni <axvanoni@student.ethz.ch>
+// Authors:
+// - Axel Vanoni <axvanoni@student.ethz.ch>
 
-// synth wrapper
+/// synth wrapper
 module idma_desc64_synth #(
     parameter int unsigned AddrWidth   = idma_desc64_synth_pkg::AddrWidth,
     parameter type         burst_req_t = idma_desc64_synth_pkg::burst_req_t,
@@ -25,7 +26,7 @@ module idma_desc64_synth #(
     output logic       irq_o
 );
 
-    idma_desc64_top #(
+    idma_desc64 #(
         .AddrWidth   ( AddrWidth   ),
         .burst_req_t ( burst_req_t ),
         .reg_rsp_t   ( reg_rsp_t   ),
@@ -45,4 +46,4 @@ module idma_desc64_synth #(
         .irq_o
     );
 
-endmodule : idma_desc64_synth
+endmodule
