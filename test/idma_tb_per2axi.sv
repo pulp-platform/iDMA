@@ -592,16 +592,8 @@ module idma_tb_per2axi_req_channel #(
   end
   assign axi_master_aw_addr_o = per_slave_add_i;
   assign axi_master_ar_addr_o = per_slave_add_i;
-  always_comb begin
-    axi_master_aw_id_o = '0;
-    axi_master_ar_id_o = '0;
-    for (i = 0; i < PER_ID_WIDTH; i++) begin
-      if (per_slave_id_i[i] == 1'b1) begin
-        axi_master_aw_id_o = i;
-        axi_master_ar_id_o = i;
-      end
-    end
-  end
+  assign axi_master_aw_id_o   = per_slave_id_i;
+  assign axi_master_ar_id_o   = per_slave_id_i;
   assign axi_master_w_data_o = per_slave_wdata_i;
   assign axi_master_w_strb_o = per_slave_be_i;
   assign per_slave_gnt_o = axi_master_aw_ready_i && axi_master_ar_ready_i && axi_master_w_ready_i;
@@ -670,12 +662,12 @@ module idma_tb_per2axi_res_channel #(
     axi_master_b_ready_o = per_slave_r_ready_i;
     if (axi_master_r_valid_i && per_slave_r_ready_i) begin
       per_slave_r_valid_o = 1'b1;
-      per_slave_r_id_o[axi_master_r_id_i] = 1'b1;
+      per_slave_r_id_o = axi_master_r_id_i;
       per_slave_r_rdata_o = axi_master_r_data_i;
       axi_master_b_ready_o = 1'b0;
     end else if (axi_master_b_valid_i && per_slave_r_ready_i) begin
       per_slave_r_valid_o                 = 1'b1;
-      per_slave_r_id_o[axi_master_b_id_i] = 1'b1;
+      per_slave_r_id_o                    = axi_master_b_id_i;
       axi_master_r_ready_o                = 1'b0;
     end
   end

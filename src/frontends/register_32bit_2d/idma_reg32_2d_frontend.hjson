@@ -15,6 +15,30 @@
 
   regwidth: "32",
   registers: [
+    {
+      name: "src_protocol",
+      desc: "Source Protocol",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "1:0",
+          name: "src_protocol",
+          desc: "Source Protocol"
+        }
+      ]
+    },
+    {
+      name: "dst_protocol",
+      desc: "Destination Protocol",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "1:0",
+          name: "dst_protocol",
+          desc: "Destination Protocol"
+        }
+      ]
+    },
     { name: "src_addr",
       desc: "Source Address",
       swaccess: "rw",

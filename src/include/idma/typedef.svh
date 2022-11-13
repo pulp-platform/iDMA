@@ -19,6 +19,8 @@
 // `IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)
 `define IDMA_TYPEDEF_OPTIONS_T(options_t, axi_id_t)                      \
     typedef struct packed {                                              \
+        idma_pkg::protocol_e        src_protocol;                        \
+        idma_pkg::protocol_e        dst_protocol;                        \
         axi_id_t                    axi_id;                              \
         idma_pkg::axi_options_t     src;                                 \
         idma_pkg::axi_options_t     dst;                                 \
@@ -92,43 +94,93 @@
     `IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-`define IDMA_OBI_TYPEDEF_A_CHAN_T(a_chan_t, addr_t, data_t, strb_t) \
+`define IDMA_OBI_TYPEDEF_A_CHAN_T(a_chan_t, addr_t, data_t, strb_t, id_t) \
   typedef struct packed {                                           \
     addr_t addr;                                                    \
     logic  we;                                                      \
     strb_t be;                                                      \
     data_t wdata;                                                   \
+    id_t   aid;                                                     \
   } a_chan_t;
 
-`define IDMA_OBI_TYPEDEF_R_CHAN_T(r_chan_t, data_t) \
+`define IDMA_OBI_TYPEDEF_R_CHAN_T(r_chan_t, data_t, id_t) \
   typedef struct packed {                           \
     data_t rdata;                                   \
+    id_t   rid;                                     \
   } r_chan_t;
 
 `define IDMA_OBI_TYPEDEF_REQ_T(req_t, a_chan_t) \
   typedef struct packed {                       \
     a_chan_t a;                                 \
-    logic     a_req;                            \
-    logic  r_ready;                             \
+    logic    a_req;                             \
+    logic    r_ready;                           \
   } req_t;
 
 `define IDMA_OBI_TYPEDEF_RESP_T(resp_t, r_chan_t) \
   typedef struct packed {                         \
-    logic     a_gnt;                              \
+    logic    a_gnt;                               \
     r_chan_t r;                                   \
-    logic  r_valid;                               \
+    logic    r_valid;                             \
   } resp_t;
 
-`define IDMA_OBI_TYPEDEF_BIDIRECT_REQ_T(bidirect_req_t, req_t) \
-  typedef struct packed {                                      \
-    req_t write;                                               \
-    req_t read;                                                \
-  } bidirect_req_t;
+`define IDMA_TILELINK_TYPEDEF_A_CHAN_T(a_chan_t, addr_t, data_t, mask_t, size_t, source_t) \
+  typedef struct packed { \
+    logic [2:0] opcode;   \
+    logic [2:0] param;    \
+    size_t      size;     \
+    source_t    source;   \
+    addr_t      address;  \
+    mask_t      mask;     \
+    data_t      data;     \
+    logic       corrupt;  \
+  } a_chan_t;
 
-`define IDMA_OBI_TYPEDEF_BIDIRECT_RESP_T(bidirect_resp_t, resp_t) \
-  typedef struct packed {                                         \
-    resp_t write;                                                 \
-    resp_t read;                                                  \
-  } bidirect_resp_t;
+`define IDMA_TILELINK_TYPEDEF_D_CHAN_T(d_chan_t, data_t, size_t, source_t, sink_t) \
+  typedef struct packed { \
+    logic [2:0] opcode;   \
+    logic [1:0] param;    \
+    size_t      size;     \
+    source_t    source;   \
+    sink_t      sink;     \
+    logic       denied;   \
+    data_t      data;     \
+    logic       corrupt;  \
+  } d_chan_t;
+
+`define IDMA_TILELINK_TYPEDEF_REQ_T(req_t, a_chan_t) \
+  typedef struct packed { \
+    a_chan_t a;           \
+    logic    a_valid;     \
+    logic    d_ready;     \
+  } req_t;
+
+`define IDMA_TILELINK_TYPEDEF_RSP_T(rsp_t, d_chan_t) \
+  typedef struct packed { \
+    d_chan_t d;           \
+    logic    d_valid;     \
+    logic    a_ready;     \
+  } rsp_t;
+
+`define IDMA_AXI_STREAM_TYPEDEF_S_CHAN_T(s_chan_t, tdata_t, tstrb_t, tkeep_t, tid_t, tdest_t, tuser_t) \
+  typedef struct packed {                                                                         \
+    tdata_t data;                                                                                 \
+    tstrb_t strb;                                                                                 \
+    tkeep_t keep;                                                                                 \
+    logic   last;                                                                                 \
+    tid_t   id;                                                                                   \
+    tdest_t dest;                                                                                 \
+    tuser_t user;                                                                                 \
+  } s_chan_t;
+
+`define IDMA_AXI_STREAM_TYPEDEF_REQ_T(req_stream_t, s_chan_t) \
+  typedef struct packed {                                \
+    s_chan_t            t;                               \
+    logic               tvalid;                          \
+  } req_stream_t;
+
+`define IDMA_AXI_STREAM_TYPEDEF_RSP_T(rsp_stream_t) \
+  typedef struct packed {                      \
+    logic                tready;               \
+  } rsp_stream_t;
 
 `endif

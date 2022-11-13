@@ -1,7 +1,7 @@
 packages:
   axi:
-    revision: af8b0ce2653997301b1b792c4c6d207b95f63a56
-    version: 0.39.0-beta.2
+    revision: 96f749dc4ae62ed6b90e44aabb5d9460f1b0d858
+    version: 0.39.0-beta.3
     source:
       Git: https://github.com/pulp-platform/axi.git
     dependencies:
@@ -9,8 +9,8 @@ packages:
     - common_verification
     - tech_cells_generic
   common_cells:
-    revision: b59eca3c1747b28022573e37aa91a151808d1db5
-    version: 1.26.0
+    revision: 9c1a1bdbd1a0928340863cad90c6fc0503da43a7
+    version: 1.27.1
     source:
       Git: https://github.com/pulp-platform/common_cells.git
     dependencies:
@@ -22,17 +22,44 @@ packages:
     source:
       Git: https://github.com/pulp-platform/common_verification.git
     dependencies: []
-  register_interface:
-    revision: 9fc63015615acb11111e4bc3e858381e3e72405d
-    version: 0.3.6
+  idma_backend:
+    revision: null
+    version: null
     source:
-      Git: https://github.com/pulp-platform/register_interface.git
+      Path: /home/bsc22h2/bachelor-thesis/mdma/src/backend
     dependencies:
     - axi
     - common_cells
+    - idma_pkg
+    - tb_idma_backend
+  idma_pkg:
+    revision: null
+    version: null
+    source:
+      Path: /home/bsc22h2/bachelor-thesis/mdma/src/package
+    dependencies:
+    - axi
+  register_interface:
+    revision: 4632515363fcb1a8ab7735c996753631abf5c7ef
+    version: null
+    source:
+      Git: https://github.com/TheMightyDuckOfDoom/register_interface.git
+    dependencies:
+    - axi
+    - common_cells
+  tb_idma_backend:
+    revision: null
+    version: null
+    source:
+      Path: /home/bsc22h2/bachelor-thesis/mdma/src/backend/../../test
+    dependencies:
+    - axi
+    - common_cells
+    - idma_pkg
+    - register_interface
   tech_cells_generic:
-    revision: e6226a6f374eb88fed84d4989bb3f066cb470f33
-    version: 0.2.9
+    revision: aef525b2dc7670525fc293dfc55f167e371b8c35
+    version: 0.2.10
     source:
       Git: https://github.com/pulp-platform/tech_cells_generic.git
     dependencies:

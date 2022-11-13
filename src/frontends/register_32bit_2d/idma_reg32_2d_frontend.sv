@@ -84,6 +84,12 @@ module idma_reg32_2d_frontend #(
     always_comb begin : hw_req_conv
       arb_burst_req[i]                                  = '0;
 
+      arb_burst_req[i].burst_req.opt.src_protocol       =
+        idma_pkg::protocol_e'(dma_reg2hw[i].src_protocol.q);
+
+      arb_burst_req[i].burst_req.opt.dst_protocol       =
+        idma_pkg::protocol_e'(dma_reg2hw[i].dst_protocol.q);
+
       arb_burst_req[i].burst_req.length                 = dma_reg2hw[i].num_bytes.q;
       arb_burst_req[i].burst_req.src_addr               = dma_reg2hw[i].src_addr.q;
       arb_burst_req[i].burst_req.dst_addr               = dma_reg2hw[i].dst_addr.q;

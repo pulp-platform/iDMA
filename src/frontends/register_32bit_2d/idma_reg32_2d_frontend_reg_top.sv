@@ -68,6 +68,12 @@ module idma_reg32_2d_frontend_reg_top #(
   // Define SW related signals
   // Format: <reg>_<field>_{wd|we|qs}
   //        or <reg>_{wd|we|qs} if field == 1 or 0
+  logic [1:0] src_protocol_qs;
+  logic [1:0] src_protocol_wd;
+  logic src_protocol_we;
+  logic [1:0] dst_protocol_qs;
+  logic [1:0] dst_protocol_wd;
+  logic dst_protocol_we;
   logic [31:0] src_addr_qs;
   logic [31:0] src_addr_wd;
   logic src_addr_we;
@@ -106,6 +112,60 @@ module idma_reg32_2d_frontend_reg_top #(
   logic done_re;
 
   // Register instances
+  // R[src_protocol]: V(False)
+
+  prim_subreg #(
+    .DW      (2),
+    .SWACCESS("RW"),
+    .RESVAL  (2'h0)
+  ) u_src_protocol (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (src_protocol_we),
+    .wd     (src_protocol_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.src_protocol.q ),
+
+    // to register interface (read)
+    .qs     (src_protocol_qs)
+  );
+
+
+  // R[dst_protocol]: V(False)
+
+  prim_subreg #(
+    .DW      (2),
+    .SWACCESS("RW"),
+    .RESVAL  (2'h0)
+  ) u_dst_protocol (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (dst_protocol_we),
+    .wd     (dst_protocol_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.dst_protocol.q ),
+
+    // to register interface (read)
+    .qs     (dst_protocol_qs)
+  );
+
+
   // R[src_addr]: V(False)
 
   prim_subreg #(
@@ -424,19 +484,21 @@ module idma_reg32_2d_frontend_reg_top #(
 
 
 
-  logic [9:0] addr_hit;
+  logic [11:0] addr_hit;
   always_comb begin
     addr_hit = '0;
-    addr_hit[0] = (reg_addr == IDMA_REG32_2D_FRONTEND_SRC_ADDR_OFFSET);
-    addr_hit[1] = (reg_addr == IDMA_REG32_2D_FRONTEND_DST_ADDR_OFFSET);
-    addr_hit[2] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_BYTES_OFFSET);
-    addr_hit[3] = (reg_addr == IDMA_REG32_2D_FRONTEND_CONF_OFFSET);
-    addr_hit[4] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_SRC_OFFSET);
-    addr_hit[5] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_DST_OFFSET);
-    addr_hit[6] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS_OFFSET);
-    addr_hit[7] = (reg_addr == IDMA_REG32_2D_FRONTEND_STATUS_OFFSET);
-    addr_hit[8] = (reg_addr == IDMA_REG32_2D_FRONTEND_NEXT_ID_OFFSET);
-    addr_hit[9] = (reg_addr == IDMA_REG32_2D_FRONTEND_DONE_OFFSET);
+    addr_hit[ 0] = (reg_addr == IDMA_REG32_2D_FRONTEND_SRC_PROTOCOL_OFFSET);
+    addr_hit[ 1] = (reg_addr == IDMA_REG32_2D_FRONTEND_DST_PROTOCOL_OFFSET);
+    addr_hit[ 2] = (reg_addr == IDMA_REG32_2D_FRONTEND_SRC_ADDR_OFFSET);
+    addr_hit[ 3] = (reg_addr == IDMA_REG32_2D_FRONTEND_DST_ADDR_OFFSET);
+    addr_hit[ 4] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_BYTES_OFFSET);
+    addr_hit[ 5] = (reg_addr == IDMA_REG32_2D_FRONTEND_CONF_OFFSET);
+    addr_hit[ 6] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_SRC_OFFSET);
+    addr_hit[ 7] = (reg_addr == IDMA_REG32_2D_FRONTEND_STRIDE_DST_OFFSET);
+    addr_hit[ 8] = (reg_addr == IDMA_REG32_2D_FRONTEND_NUM_REPETITIONS_OFFSET);
+    addr_hit[ 9] = (reg_addr == IDMA_REG32_2D_FRONTEND_STATUS_OFFSET);
+    addr_hit[10] = (reg_addr == IDMA_REG32_2D_FRONTEND_NEXT_ID_OFFSET);
+    addr_hit[11] = (reg_addr == IDMA_REG32_2D_FRONTEND_DONE_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -444,98 +506,114 @@ module idma_reg32_2d_frontend_reg_top #(
   // Check sub-word write is permitted
   always_comb begin
     wr_err = (reg_we &
-              ((addr_hit[0] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[0] & ~reg_be))) |
-               (addr_hit[1] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[1] & ~reg_be))) |
-               (addr_hit[2] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[2] & ~reg_be))) |
-               (addr_hit[3] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[3] & ~reg_be))) |
-               (addr_hit[4] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[4] & ~reg_be))) |
-               (addr_hit[5] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[5] & ~reg_be))) |
-               (addr_hit[6] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[6] & ~reg_be))) |
-               (addr_hit[7] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[7] & ~reg_be))) |
-               (addr_hit[8] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[8] & ~reg_be))) |
-               (addr_hit[9] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[9] & ~reg_be)))));
+              ((addr_hit[ 0] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 0] & ~reg_be))) |
+               (addr_hit[ 1] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 1] & ~reg_be))) |
+               (addr_hit[ 2] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 2] & ~reg_be))) |
+               (addr_hit[ 3] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 3] & ~reg_be))) |
+               (addr_hit[ 4] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 4] & ~reg_be))) |
+               (addr_hit[ 5] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 5] & ~reg_be))) |
+               (addr_hit[ 6] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 6] & ~reg_be))) |
+               (addr_hit[ 7] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 7] & ~reg_be))) |
+               (addr_hit[ 8] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 8] & ~reg_be))) |
+               (addr_hit[ 9] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[ 9] & ~reg_be))) |
+               (addr_hit[10] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[10] & ~reg_be))) |
+               (addr_hit[11] & (|(IDMA_REG32_2D_FRONTEND_PERMIT[11] & ~reg_be)))));
   end
 
-  assign src_addr_we = addr_hit[0] & reg_we & !reg_error;
+  assign src_protocol_we = addr_hit[0] & reg_we & !reg_error;
+  assign src_protocol_wd = reg_wdata[1:0];
+
+  assign dst_protocol_we = addr_hit[1] & reg_we & !reg_error;
+  assign dst_protocol_wd = reg_wdata[1:0];
+
+  assign src_addr_we = addr_hit[2] & reg_we & !reg_error;
   assign src_addr_wd = reg_wdata[31:0];
 
-  assign dst_addr_we = addr_hit[1] & reg_we & !reg_error;
+  assign dst_addr_we = addr_hit[3] & reg_we & !reg_error;
   assign dst_addr_wd = reg_wdata[31:0];
 
-  assign num_bytes_we = addr_hit[2] & reg_we & !reg_error;
+  assign num_bytes_we = addr_hit[4] & reg_we & !reg_error;
   assign num_bytes_wd = reg_wdata[31:0];
 
-  assign conf_decouple_we = addr_hit[3] & reg_we & !reg_error;
+  assign conf_decouple_we = addr_hit[5] & reg_we & !reg_error;
   assign conf_decouple_wd = reg_wdata[0];
 
-  assign conf_deburst_we = addr_hit[3] & reg_we & !reg_error;
+  assign conf_deburst_we = addr_hit[5] & reg_we & !reg_error;
   assign conf_deburst_wd = reg_wdata[1];
 
-  assign conf_serialize_we = addr_hit[3] & reg_we & !reg_error;
+  assign conf_serialize_we = addr_hit[5] & reg_we & !reg_error;
   assign conf_serialize_wd = reg_wdata[2];
 
-  assign conf_twod_we = addr_hit[3] & reg_we & !reg_error;
+  assign conf_twod_we = addr_hit[5] & reg_we & !reg_error;
   assign conf_twod_wd = reg_wdata[3];
 
-  assign stride_src_we = addr_hit[4] & reg_we & !reg_error;
+  assign stride_src_we = addr_hit[6] & reg_we & !reg_error;
   assign stride_src_wd = reg_wdata[31:0];
 
-  assign stride_dst_we = addr_hit[5] & reg_we & !reg_error;
+  assign stride_dst_we = addr_hit[7] & reg_we & !reg_error;
   assign stride_dst_wd = reg_wdata[31:0];
 
-  assign num_repetitions_we = addr_hit[6] & reg_we & !reg_error;
+  assign num_repetitions_we = addr_hit[8] & reg_we & !reg_error;
   assign num_repetitions_wd = reg_wdata[31:0];
 
-  assign status_re = addr_hit[7] & reg_re & !reg_error;
+  assign status_re = addr_hit[9] & reg_re & !reg_error;
 
-  assign next_id_re = addr_hit[8] & reg_re & !reg_error;
+  assign next_id_re = addr_hit[10] & reg_re & !reg_error;
 
-  assign done_re = addr_hit[9] & reg_re & !reg_error;
+  assign done_re = addr_hit[11] & reg_re & !reg_error;
 
   // Read data return
   always_comb begin
     reg_rdata_next = '0;
     unique case (1'b1)
       addr_hit[0]: begin
-        reg_rdata_next[31:0] = src_addr_qs;
+        reg_rdata_next[1:0] = src_protocol_qs;
       end
 
       addr_hit[1]: begin
-        reg_rdata_next[31:0] = dst_addr_qs;
+        reg_rdata_next[1:0] = dst_protocol_qs;
       end
 
       addr_hit[2]: begin
-        reg_rdata_next[31:0] = num_bytes_qs;
+        reg_rdata_next[31:0] = src_addr_qs;
       end
 
       addr_hit[3]: begin
+        reg_rdata_next[31:0] = dst_addr_qs;
+      end
+
+      addr_hit[4]: begin
+        reg_rdata_next[31:0] = num_bytes_qs;
+      end
+
+      addr_hit[5]: begin
         reg_rdata_next[0] = conf_decouple_qs;
         reg_rdata_next[1] = conf_deburst_qs;
         reg_rdata_next[2] = conf_serialize_qs;
         reg_rdata_next[3] = conf_twod_qs;
       end
 
-      addr_hit[4]: begin
+      addr_hit[6]: begin
         reg_rdata_next[31:0] = stride_src_qs;
       end
 
-      addr_hit[5]: begin
+      addr_hit[7]: begin
         reg_rdata_next[31:0] = stride_dst_qs;
       end
 
-      addr_hit[6]: begin
+      addr_hit[8]: begin
         reg_rdata_next[31:0] = num_repetitions_qs;
       end
 
-      addr_hit[7]: begin
+      addr_hit[9]: begin
         reg_rdata_next[15:0] = status_qs;
       end
 
-      addr_hit[8]: begin
+      addr_hit[10]: begin
         reg_rdata_next[31:0] = next_id_qs;
       end
 
-      addr_hit[9]: begin
+      addr_hit[11]: begin
         reg_rdata_next[31:0] = done_qs;
       end
 

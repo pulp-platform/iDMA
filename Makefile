@@ -4,9 +4,19 @@
 
 # Author: Thomas Benz <tbenz@iis.ee.ethz.ch>
 
-GIT ?= git
+GIT    ?= git
 BENDER ?= bender
 PYTHON ?= python3
+
+RTL_CFGS ?= \
+	gen_rtl_axi.obi.split \
+	gen_rtl_obi.axi.split \
+	gen_rtl_axi.axi.split \
+	gen_rtl_axi-obi.axi-obi.split \
+	gen_rtl_axi.axi.combined
+
+# Extracting word nr. $(1) from $(2)-separated list $(3)
+pw = $(word $(1), $(subst $(2), ,$(3)))
 
 .PHONY: all help prepare_sim
 
@@ -58,7 +68,8 @@ define generate_vsim
 	echo >> $1
 endef
 
-scripts/compile_vsim.tcl: Bender.yml
+scripts/compile_vsim.tcl: Bender.yml src/backend/Bender.yml
+	$(BENDER) update
 	$(call generate_vsim, $@, -t rtl -t test,..)
 
 sim_clean:
@@ -105,7 +116,8 @@ VCS_BIN     ?= vcs
 
 VLOGAN_REL_PATHS ?= | grep -v "ROOT=" | sed '3 i ROOT="."'
 
-scripts/compile_vcs.sh: Bender.yml Bender.lock
+scripts/compile_vcs.sh: Bender.yml Bender.lock src/backend/Bender.yml
+	$(BENDER) update
 	$(BENDER) script vcs -t test -t rtl -t simulation --vlog-arg "\$(VLOGAN_ARGS)" --vlogan-bin "$(VLOGAN_BIN)" $(VLOGAN_REL_PATHS) > $@
 	chmod +x $@
 
@@ -145,7 +157,8 @@ VLT_ARGS  += --no-skip-identical
 
 VLT_TOP   ?=
 
-verilator/files_raw.txt: Bender.yml Bender.lock
+verilator/files_raw.txt: Bender.yml Bender.lock src/backend/Bender.yml
+	$(BENDER) update
 	$(BENDER) script verilator -t synthesis > $@
 
 verilator/files.txt: verilator/scripts/preprocess.py verilator/files_raw.txt
@@ -173,6 +186,7 @@ RELATIVE_PATH_REGEX  = 's/$(PATH_ESCAPED)/./'
 pickle: pickle/idma_pickle.sv pickle/idma_pickle_stripped.sv
 
 sources.txt: Bender.yml Bender.lock
+	$(BENDER) update
 	$(BENDER) script flist -t rtl -t synthesis -t pulp -t cva6 | sed -e $(RELATIVE_PATH_REGEX) > sources.txt
 
 pickle/idma_pickle.sv: sources.txt gen_regs
@@ -211,8 +225,11 @@ doc_clean:
 .PHONY: misc_clean nuke
 
 misc_clean:
+	rm -f  src/backend/Bender.yml
+	rm -rf src/backend/backend_*	
 	rm -rf scripts/__pycache__
 	rm -rf scripts/synth.*.params.tcl
+	rm -f  scripts/waves/vsim_backend_*.do
 	rm -f  sources.txt
 	rm -f  contributions.txt
 	rm -f  open_todos.txt
@@ -269,6 +286,31 @@ endif
 bender-rm:
 	rm -f bender
 
+
+## --------------
+## RTL
+## --------------
+
+.PHONY: gen_rtl rtl_clean
+
+gen_rtl: $(RTL_CFGS)
+
+gen_rtl_%: util/idma_gen.py Makefile
+	$(PYTHON) util/idma_gen.py backend \
+	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
+	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
+	--shifter $(call pw,3,.,$*)
+	$(PYTHON) util/idma_gen.py synth_wrapper \
+	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
+	$(PYTHON) util/idma_gen.py testbench \
+	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
+
+rtl_clean:
+	rm  -f src/backend/Bender.yml
+	rm -rf src/backend/backend_*
+	rm  -f scripts/waves/vsim_backend_*.do
 
 ## --------------
 ## Register
