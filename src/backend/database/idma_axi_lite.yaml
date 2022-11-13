@@ -1,0 +1,141 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+#
+# Tobias Senti <tsenti@student.ethz.ch>
+prefix:         "axi_lite"
+protocol_enum:  "AXI_LITE"
+full_name:      "AXI-Lite"
+bursts:         "not_supported"
+read_meta_channel:  "ar_chan"
+write_meta_channel: "aw_chan"
+read_meta_channel_width: "localparam int unsigned axi_lite_ar_chan_width = $bits(axi_lite_ar_chan_t);"
+write_meta_channel_width: "localparam int unsigned axi_lite_aw_chan_width = $bits(axi_lite_aw_chan_t);"
+typedefs: |
+    `AXI_LITE_TYPEDEF_AW_CHAN_T(axi_lite_aw_chan_t, addr_t)
+    `AXI_LITE_TYPEDEF_W_CHAN_T(axi_lite_w_chan_t, data_t, strb_t)
+    `AXI_LITE_TYPEDEF_B_CHAN_T(axi_lite_b_chan_t)
+
+    `AXI_LITE_TYPEDEF_AR_CHAN_T(axi_lite_ar_chan_t, addr_t)
+    `AXI_LITE_TYPEDEF_R_CHAN_T(axi_lite_r_chan_t, data_t)
+
+    `AXI_LITE_TYPEDEF_REQ_T(axi_lite_req_t, axi_lite_aw_chan_t, axi_lite_w_chan_t, axi_lite_ar_chan_t)
+    `AXI_LITE_TYPEDEF_RESP_T(axi_lite_rsp_t, axi_lite_b_chan_t, axi_lite_r_chan_t)
+bridge_template: |
+    axi_lite_to_axi #(
+        .AxiDataWidth ( DataWidth      ),
+        .req_lite_t   ( axi_lite_req_t ),
+        .resp_lite_t  ( axi_lite_rsp_t ),
+        .axi_req_t    ( axi_req_t      ),
+        .axi_resp_t   ( axi_rsp_t      )
+    ) i_axi_lite_to_axi_${port} (
+        .slv_req_lite_i  ( axi_lite_${port}_req ),
+        .slv_resp_lite_o ( axi_lite_${port}_rsp ),
+        .slv_aw_cache_i  ( axi_pkg::CACHE_MODIFIABLE ),
+        .slv_ar_cache_i  ( axi_pkg::CACHE_MODIFIABLE ),
+        .mst_req_o       ( axi_lite_axi_${port}_req ),
+        .mst_resp_i      ( axi_lite_axi_${port}_rsp )
+    );
+read_template: |
+    idma_axi_lite_read #(
+        .StrbWidth  ( StrbWidth           ),
+        .byte_t     ( byte_t              ),
+        .strb_t     ( strb_t              ),
+        .r_dp_req_t ( r_dp_req_t          ),
+        .r_dp_rsp_t ( r_dp_rsp_t          ),
+        .ar_chan_t  ( read_meta_channel_t ),
+        .read_req_t ( ${req_t}      ),
+        .read_rsp_t ( ${rsp_t}      )
+    ) i_idma_axi_lite_read (
+        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_valid_i      ( ${r_dp_valid_i} ),
+        .r_dp_ready_o      ( ${r_dp_ready_o} ),
+        .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
+        .r_dp_valid_o      ( ${r_dp_valid_o}       ),
+        .r_dp_ready_i      ( ${r_dp_ready_i} ),
+        .ar_req_i          ( ${read_meta_request} ),
+        .ar_valid_i        ( ${read_meta_valid} ),
+        .ar_ready_o        ( ${read_meta_ready}   ),
+        .read_req_o        ( ${read_request}     ),
+        .read_rsp_i        ( ${read_response}     ),
+        .r_chan_valid_o    ( ${r_chan_valid}     ),
+        .r_chan_ready_o    ( ${r_chan_ready}     ),
+        .buffer_in_o       ( ${buffer_in}         ),
+        .buffer_in_valid_o ( ${buffer_in_valid}   ),
+        .buffer_in_ready_i ( buffer_in_ready      )
+    );
+write_template: |
+    idma_axi_lite_write #(
+        .StrbWidth       ( StrbWidth            ),
+        .MaskInvalidData ( MaskInvalidData      ),
+        .byte_t          ( byte_t               ),
+        .data_t          ( data_t               ),
+        .strb_t          ( strb_t               ),
+        .w_dp_req_t      ( w_dp_req_t           ),
+        .w_dp_rsp_t      ( w_dp_rsp_t           ),
+        .aw_chan_t       ( write_meta_channel_t ),
+        .write_req_t     ( ${req_t}       ),
+        .write_rsp_t     ( ${rsp_t}       )
+    ) i_idma_axi_lite_write (
+        .w_dp_req_i         ( w_dp_req_i ),
+        .w_dp_valid_i       ( ${w_dp_valid_i} ),
+        .w_dp_ready_o       ( ${w_dp_ready_o} ),
+        .dp_poison_i        ( dp_poison_i ),
+        .w_dp_rsp_o         ( ${w_dp_rsp_o} ),
+        .w_dp_valid_o       ( ${w_dp_valid_o} ),
+        .w_dp_ready_i       ( ${w_dp_ready_i} ),
+        .aw_req_i           ( ${write_meta_request} ),
+        .aw_valid_i         ( ${write_meta_valid} ),
+        .aw_ready_o         ( ${write_meta_ready} ),
+        .write_req_o        ( ${write_request} ),
+        .write_rsp_i        ( ${write_response} ),
+        .buffer_out_i       ( ${buffer_out} ),
+        .buffer_out_valid_i ( ${buffer_out_valid} ),
+        .buffer_out_ready_o ( ${buffer_out_ready} )
+    );
+synth_wrapper_ports_write: |
+    output addr_t                  axi_lite_aw_addr_o,
+    output axi_pkg::prot_t         axi_lite_aw_prot_o,
+    output logic                   axi_lite_aw_valid_o,
+    input  logic                   axi_lite_aw_ready_i,
+    output data_t                  axi_lite_w_data_o,
+    output strb_t                  axi_lite_w_strb_o,
+    output logic                   axi_lite_w_valid_o,
+    input  logic                   axi_lite_w_ready_i,
+
+    input  axi_pkg::resp_t         axi_lite_b_resp_i,
+    input  logic                   axi_lite_b_valid_i,
+    output logic                   axi_lite_b_ready_o,
+synth_wrapper_ports_read: |
+    output addr_t                  axi_lite_ar_addr_o,
+    output axi_pkg::prot_t         axi_lite_ar_prot_o,
+    output logic                   axi_lite_ar_valid_o,
+    input  logic                   axi_lite_ar_ready_i,
+
+    input  data_t                  axi_lite_r_data_i,
+    input  axi_pkg::resp_t         axi_lite_r_resp_i,
+    input  logic                   axi_lite_r_valid_i,
+    output logic                   axi_lite_r_ready_o,
+synth_wrapper_assign_write: |
+    assign axi_lite_aw_addr_o   = axi_lite_write_req.aw.addr;
+    assign axi_lite_aw_prot_o   = axi_lite_write_req.aw.prot;
+    assign axi_lite_aw_valid_o  = axi_lite_write_req.aw_valid;
+    assign axi_lite_w_data_o    = axi_lite_write_req.w.data;
+    assign axi_lite_w_strb_o    = axi_lite_write_req.w.strb;
+    assign axi_lite_w_valid_o   = axi_lite_write_req.w_valid;
+    assign axi_lite_b_ready_o   = axi_lite_write_req.b_ready;
+    
+    assign axi_lite_write_rsp.aw_ready = axi_lite_aw_ready_i;
+    assign axi_lite_write_rsp.w_ready  = axi_lite_w_ready_i;
+    assign axi_lite_write_rsp.b.resp   = axi_lite_b_resp_i;
+    assign axi_lite_write_rsp.b_valid  = axi_lite_b_valid_i;
+synth_wrapper_assign_read: |
+    assign axi_lite_ar_addr_o   = axi_lite_read_req.ar.addr;
+    assign axi_lite_ar_prot_o   = axi_lite_read_req.ar.prot;
+    assign axi_lite_ar_valid_o  = axi_lite_read_req.ar_valid;
+    assign axi_lite_r_ready_o   = axi_lite_read_req.r_ready;
+
+    assign axi_lite_read_rsp.ar_ready  = axi_lite_ar_ready_i;
+    assign axi_lite_read_rsp.r.data    = axi_lite_r_data_i;
+    assign axi_lite_read_rsp.r.resp    = axi_lite_r_resp_i;
+    assign axi_lite_read_rsp.r_valid   = axi_lite_r_valid_i;

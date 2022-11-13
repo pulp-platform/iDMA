@@ -22,7 +22,7 @@ prepare-non-free:
   script:
     - git clone git@iis-git.ee.ethz.ch:bslk/idma/idma-non-free.git
     - cd idma-non-free
-    - git checkout deploy
+    - git checkout tsenti
     - make -B gen_sub_ci
   artifacts:
       paths:

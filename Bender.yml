@@ -7,12 +7,16 @@ package:
   authors:
     - "Thomas Benz <tbenz@iis.ee.ethz.ch>" # current maintainer
     - "Michael Rogenmoser <michaero@iis.ee.ethz.ch>"
+    - "Tobias Senti <tsenti@student.ethz.ch>"
 
 dependencies:
-  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.26.0 }
+  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.27.1 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.2 }
-  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.2 }
-  register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: 0.3.1 }
+  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.3 }
+  register_interface: { git: "https://github.com/TheMightyDuckOfDoom/register_interface.git", rev: master }
+
+  idma_backend: { path: "src/backend" }
+  idma_pkg: { path: "src/package" }
 
 export_include_dirs:
   - src/include
@@ -23,21 +27,6 @@ sources:
   # levels 1 and 0, etc. Files within a level are ordered alphabetically.
   # Level 0
   - src/frontends/idma_transfer_id_gen.sv
-  - src/idma_pkg.sv
-  - src/idma_stream_fifo.sv
-  # Level 1
-  - src/idma_buffer.sv
-  - src/idma_error_handler.sv
-  - src/idma_channel_coupler.sv
-  # Level 2
-  - src/idma_axi_transport_layer.sv
-  - src/idma_axi_lite_transport_layer.sv
-  - src/idma_obi_transport_layer.sv
-  - src/idma_legalizer.sv
-  # Level 3
-  - src/idma_backend.sv
-  # Level 4
-  - src/legacy/axi_dma_backend.sv
 
   # Midends
   # Level 0
@@ -64,49 +53,24 @@ sources:
   - files: # 64bit descriptor frontend
     # Level 0
     - src/frontends/desc64/idma_desc64_reg_pkg.sv
+    # Level 1
     - src/frontends/desc64/idma_desc64_reg_top.sv
     - src/frontends/desc64/idma_desc64_shared_counter.sv
-    # Level 1
-    - src/frontends/desc64/idma_desc64_reg_wrapper.sv
     # Level 2
+    - src/frontends/desc64/idma_desc64_reg_wrapper.sv
+    # Level 3
     - src/frontends/desc64/idma_desc64_top.sv
 
   # Systems
   - target: all(pulp, not(mchan))
     files:
       - src/systems/pulpopen/dmac_wrap.sv
+      - src/systems/pulpopen/synth_dmac_wrap.sv
 
   - target: cva6
     files:
       - src/systems/cva6_reg/dma_core_wrap.sv
-
-  - target: synthesis
-    files:
-      - src/synth_wrapper/idma_backend_synth.sv
-      - src/synth_wrapper/idma_lite_backend_synth.sv
-      - src/synth_wrapper/idma_obi_backend_synth.sv
-      - src/synth_wrapper/idma_nd_backend_synth.sv
-
+  
   - target: test
-    defines:
-      TARGET_SIMULATION: ~
-    include_dirs:
-      - test
     files:
-      # Level 0:
-      - test/idma_intf.sv
-      - test/idma_tb_per2axi.sv
-      - test/idma_obi_asserter.sv
-      # Level 1:
-      - test/idma_test.sv
-      - test/idma_obi2axi_bridge.sv
-      # Level 2:
-      - test/tb_idma_backend.sv
-      - test/tb_idma_lite_backend.sv
-      - test/tb_idma_obi_backend.sv
-      - test/tb_idma_nd_backend.sv
-
-  - target: test # 64bit descriptor frontend
-    files:
-      # Level 0
-      - test/frontends/tb_idma_desc64_top.sv
+      - test/tb_idma_improved_fifo.sv
