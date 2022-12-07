@@ -75,6 +75,7 @@ sources:
   - target: all(pulp, not(mchan))
     files:
       - src/systems/pulpopen/dmac_wrap.sv
+      - src/systems/pulpopen/synth_dmac_wrap.sv
 
   - target: cva6
     files:
