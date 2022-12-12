@@ -123,8 +123,8 @@ module dma_core_wrap #(
     .idma_rsp_t          ( idma_rsp_t                  ),
     .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
     .idma_busy_t         ( idma_pkg::idma_busy_t       ),
-    .axi_req_t           ( axi_slv_req_t               ),
-    .axi_rsp_t           ( axi_slv_resp_t              )
+    .axi_req_t           ( axi_mst_req_t               ),
+    .axi_rsp_t           ( axi_mst_resp_t              )
   ) i_idma_backend (
     .clk_i,
     .rst_ni,
