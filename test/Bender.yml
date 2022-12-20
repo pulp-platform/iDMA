@@ -1,0 +1,42 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+package:
+  name: tb_idma_backend
+  authors:
+    - "Tobias Senti <tsenti@student.ethz.ch>"
+
+dependencies:
+  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.26.0 }
+  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.3 }
+  register_interface: { git: "https://github.com/TheMightyDuckOfDoom/register_interface.git", rev: master }
+  idma_pkg: { path: ../src/package }
+
+export_include_dirs:
+  - include
+
+sources:
+  - target: test
+    defines:
+      TARGET_SIMULATION: ~
+    include_dirs:
+      - ../src/include
+    files:
+      # Level 0:
+      - idma_intf.sv
+      - idma_tb_per2axi.sv
+      - idma_obi_asserter.sv
+      - TLToAXI4.v
+      # Level 1:
+      - idma_test.sv
+      - idma_obi2axi_bridge.sv
+      - idma_tilelink2axi_bridge.sv
+
+  - target: test # 64bit descriptor frontend
+    include_dirs:
+      - ../src/include
+    files:
+      # Level 0
+      - ../src/frontends/desc64/idma_desc64_reg_pkg.sv
+      # Level 1
+      - frontends/tb_idma_desc64_top.sv

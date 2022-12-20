@@ -1,0 +1,13 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51package:
+package:
+  name: idma_pkg
+  authors:
+    - "Tobias Senti <tsenti@student.ethz.ch>"
+
+dependencies:
+  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.3 }
+
+sources:
+  - idma_pkg.sv

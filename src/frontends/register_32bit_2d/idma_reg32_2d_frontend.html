@@ -3,10 +3,40 @@
 <head>
 <link rel=stylesheet href=reg_html.css>
 </head>
+<table class="regdef" id="Reg_src_protocol">
+ <tr>
+  <th class="regdef" colspan=5>
+   <div>idma_reg32_2d_frontend.src_protocol @ 0x0</div>
+   <div><p>Source Protocol</p></div>
+   <div>Reset default = 0x0, mask 0x3</div>
+  </th>
+ </tr>
+<tr><td colspan=5><table class="regpic"><tr><td class="bitnum">31</td><td class="bitnum">30</td><td class="bitnum">29</td><td class="bitnum">28</td><td class="bitnum">27</td><td class="bitnum">26</td><td class="bitnum">25</td><td class="bitnum">24</td><td class="bitnum">23</td><td class="bitnum">22</td><td class="bitnum">21</td><td class="bitnum">20</td><td class="bitnum">19</td><td class="bitnum">18</td><td class="bitnum">17</td><td class="bitnum">16</td></tr><tr><td class="unused" colspan=16>&nbsp;</td>
+</tr>
+<tr><td class="bitnum">15</td><td class="bitnum">14</td><td class="bitnum">13</td><td class="bitnum">12</td><td class="bitnum">11</td><td class="bitnum">10</td><td class="bitnum">9</td><td class="bitnum">8</td><td class="bitnum">7</td><td class="bitnum">6</td><td class="bitnum">5</td><td class="bitnum">4</td><td class="bitnum">3</td><td class="bitnum">2</td><td class="bitnum">1</td><td class="bitnum">0</td></tr><tr><td class="unused" colspan=14>&nbsp;</td>
+<td class="fname" colspan=2 style="font-size:50.0%">src_protocol</td>
+</tr></table></td></tr>
+<tr><th width=5%>Bits</th><th width=5%>Type</th><th width=5%>Reset</th><th>Name</th><th>Description</th></tr><tr><td class="regbits">1:0</td><td class="regperm">rw</td><td class="regrv">x</td><td class="regfn">src_protocol</td><td class="regde"><p>Source Protocol</p></td></table>
+<br>
+<table class="regdef" id="Reg_dst_protocol">
+ <tr>
+  <th class="regdef" colspan=5>
+   <div>idma_reg32_2d_frontend.dst_protocol @ 0x4</div>
+   <div><p>Destination Protocol</p></div>
+   <div>Reset default = 0x0, mask 0x3</div>
+  </th>
+ </tr>
+<tr><td colspan=5><table class="regpic"><tr><td class="bitnum">31</td><td class="bitnum">30</td><td class="bitnum">29</td><td class="bitnum">28</td><td class="bitnum">27</td><td class="bitnum">26</td><td class="bitnum">25</td><td class="bitnum">24</td><td class="bitnum">23</td><td class="bitnum">22</td><td class="bitnum">21</td><td class="bitnum">20</td><td class="bitnum">19</td><td class="bitnum">18</td><td class="bitnum">17</td><td class="bitnum">16</td></tr><tr><td class="unused" colspan=16>&nbsp;</td>
+</tr>
+<tr><td class="bitnum">15</td><td class="bitnum">14</td><td class="bitnum">13</td><td class="bitnum">12</td><td class="bitnum">11</td><td class="bitnum">10</td><td class="bitnum">9</td><td class="bitnum">8</td><td class="bitnum">7</td><td class="bitnum">6</td><td class="bitnum">5</td><td class="bitnum">4</td><td class="bitnum">3</td><td class="bitnum">2</td><td class="bitnum">1</td><td class="bitnum">0</td></tr><tr><td class="unused" colspan=14>&nbsp;</td>
+<td class="fname" colspan=2 style="font-size:50.0%">dst_protocol</td>
+</tr></table></td></tr>
+<tr><th width=5%>Bits</th><th width=5%>Type</th><th width=5%>Reset</th><th>Name</th><th>Description</th></tr><tr><td class="regbits">1:0</td><td class="regperm">rw</td><td class="regrv">x</td><td class="regfn">dst_protocol</td><td class="regde"><p>Destination Protocol</p></td></table>
+<br>
 <table class="regdef" id="Reg_src_addr">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.src_addr @ 0x0</div>
+   <div>idma_reg32_2d_frontend.src_addr @ 0x8</div>
    <div><p>Source Address</p></div>
    <div>Reset default = 0x0, mask 0xffffffff</div>
   </th>
@@ -20,7 +50,7 @@
 <table class="regdef" id="Reg_dst_addr">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.dst_addr @ 0x4</div>
+   <div>idma_reg32_2d_frontend.dst_addr @ 0xc</div>
    <div><p>Destination Address</p></div>
    <div>Reset default = 0x0, mask 0xffffffff</div>
   </th>
@@ -34,7 +64,7 @@
 <table class="regdef" id="Reg_num_bytes">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.num_bytes @ 0x8</div>
+   <div>idma_reg32_2d_frontend.num_bytes @ 0x10</div>
    <div><p>Number of bytes</p></div>
    <div>Reset default = 0x0, mask 0xffffffff</div>
   </th>
@@ -48,7 +78,7 @@
 <table class="regdef" id="Reg_conf">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.conf @ 0xc</div>
+   <div>idma_reg32_2d_frontend.conf @ 0x14</div>
    <div><p>Configuration Register for DMA settings</p></div>
    <div>Reset default = 0x0, mask 0xf</div>
   </th>
@@ -66,7 +96,7 @@
 <table class="regdef" id="Reg_stride_src">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.stride_src @ 0x10</div>
+   <div>idma_reg32_2d_frontend.stride_src @ 0x18</div>
    <div><p>Source Stride</p></div>
    <div>Reset default = 0x0, mask 0xffffffff</div>
   </th>
@@ -80,7 +110,7 @@
 <table class="regdef" id="Reg_stride_dst">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.stride_dst @ 0x14</div>
+   <div>idma_reg32_2d_frontend.stride_dst @ 0x1c</div>
    <div><p>Destination Stride</p></div>
    <div>Reset default = 0x0, mask 0xffffffff</div>
   </th>
@@ -94,7 +124,7 @@
 <table class="regdef" id="Reg_num_repetitions">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.num_repetitions @ 0x18</div>
+   <div>idma_reg32_2d_frontend.num_repetitions @ 0x20</div>
    <div><p>Number of 2D repetitions</p></div>
    <div>Reset default = 0x1, mask 0xffffffff</div>
   </th>
@@ -108,7 +138,7 @@
 <table class="regdef" id="Reg_status">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.status @ 0x1c</div>
+   <div>idma_reg32_2d_frontend.status @ 0x24</div>
    <div><p>DMA Status</p></div>
    <div>Reset default = 0x0, mask 0xffff</div>
   </th>
@@ -122,7 +152,7 @@
 <table class="regdef" id="Reg_next_id">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.next_id @ 0x20</div>
+   <div>idma_reg32_2d_frontend.next_id @ 0x28</div>
    <div><p>Next ID, launches transfer, returns 0 if transfer not set up properly.</p></div>
    <div>Reset default = 0x0, mask 0xffffffff</div>
   </th>
@@ -136,7 +166,7 @@
 <table class="regdef" id="Reg_done">
  <tr>
   <th class="regdef" colspan=5>
-   <div>idma_reg32_2d_frontend.done @ 0x24</div>
+   <div>idma_reg32_2d_frontend.done @ 0x2c</div>
    <div><p>Get ID of finished transactions.</p></div>
    <div>Reset default = 0x0, mask 0xffffffff</div>
   </th>

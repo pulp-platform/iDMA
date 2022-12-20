@@ -9,7 +9,7 @@
 import sys
 
 WHITE_LIST = ['fifo_v3', 'stream_fifo', 'spill_register', 'popcount', 'stream_fork', 'fifo_v2',
-    'axi_pkg', 'cf_math', 'fall_through_register', 'idma_', '+define+', '+incdir+']
+    'axi_pkg', 'cf_math', 'fall_through_register', 'stream_join', 'idma_', '+define+', '+incdir+']
 
 _, inp_file = sys.argv
 
