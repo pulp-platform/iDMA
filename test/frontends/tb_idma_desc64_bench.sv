@@ -413,18 +413,18 @@ module tb_idma_desc64_bench
     );
 
     // sim memory
-    idma_sim_mem #(
+    axi_sim_mem #(
         .AddrWidth         ( AddrWidth    ),
         .DataWidth         ( DataWidth    ),
         .IdWidth           (AxiIdWidth + 1),
         .UserWidth         ( UserWidth    ),
-        .req_t             ( mem_axi_req_t),
-        .rsp_t             (mem_axi_resp_t),
+        .axi_req_t         (mem_axi_req_t ),
+        .axi_rsp_t         (mem_axi_resp_t),
         .WarnUninitialized ( 1'b0         ),
         .ClearErrOnAccess  ( 1'b1         ),
         .ApplDelay         ( APPL_DELAY   ),
         .AcqDelay          ( ACQ_DELAY    )
-    ) i_idma_sim_mem (
+    ) i_axi_sim_mem (
         .clk_i      ( clk          ),
         .rst_ni     ( rst_n        ),
         .axi_req_i  ( axi_mem_request  ),
@@ -584,14 +584,14 @@ module tb_idma_desc64_bench
     endfunction : generate_stimuli
 
     function automatic void write_mem_64(addr_t base, logic[63:0] data);
-        i_idma_sim_mem.mem[base]     = data[ 7: 0];
-        i_idma_sim_mem.mem[base + 1] = data[15: 8];
-        i_idma_sim_mem.mem[base + 2] = data[23:16];
-        i_idma_sim_mem.mem[base + 3] = data[31:24];
-        i_idma_sim_mem.mem[base + 4] = data[39:32];
-        i_idma_sim_mem.mem[base + 5] = data[47:40];
-        i_idma_sim_mem.mem[base + 6] = data[55:48];
-        i_idma_sim_mem.mem[base + 7] = data[63:56];
+        i_axi_sim_mem.mem[base]     = data[ 7: 0];
+        i_axi_sim_mem.mem[base + 1] = data[15: 8];
+        i_axi_sim_mem.mem[base + 2] = data[23:16];
+        i_axi_sim_mem.mem[base + 3] = data[31:24];
+        i_axi_sim_mem.mem[base + 4] = data[39:32];
+        i_axi_sim_mem.mem[base + 5] = data[47:40];
+        i_axi_sim_mem.mem[base + 6] = data[55:48];
+        i_axi_sim_mem.mem[base + 7] = data[63:56];
     endfunction : write_mem_64
 
     function automatic void load_descriptors_into_memory();
