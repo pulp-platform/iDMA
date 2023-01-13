@@ -9,11 +9,22 @@ BENDER ?= bender
 PYTHON ?= python3
 
 RTL_CFGS ?= \
+	gen_rtl_obi.obi.split \
 	gen_rtl_axi.obi.split \
 	gen_rtl_obi.axi.split \
 	gen_rtl_axi.axi.split \
 	gen_rtl_axi-obi.axi-obi.split \
-	gen_rtl_axi.axi.combined
+	gen_rtl_axi_lite.axi_lite.split \
+	gen_rtl_axi_stream-axi.axi_stream-axi.split \
+	gen_rtl_axi_stream.axi_stream.split \
+	gen_rtl_axi-init.axi.split \
+	gen_rtl_init.obi.split \
+	gen_rtl_tilelink.tilelink.split \
+	gen_rtl_tilelink-axi.tilelink-axi.split \
+	gen_rtl_tilelink-axi-obi-axi_lite-axi_stream-init.obi.split \
+	gen_rtl_obi.tilelink-axi-axi_lite-axi_stream-obi.split \
+	gen_rtl_tilelink-axi-axi_lite-axi_stream-init-obi.tilelink-axi-axi_lite-axi_stream-obi.split
+
 
 # Extracting word nr. $(1) from $(2)-separated list $(3)
 pw = $(word $(1), $(subst $(2), ,$(3)))
@@ -296,6 +307,14 @@ bender-rm:
 gen_rtl: $(RTL_CFGS)
 
 gen_rtl_%: util/idma_gen.py Makefile
+	$(PYTHON) util/idma_gen.py transportlayer \
+	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
+	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
+	--shifter $(call pw,3,.,$*)
+	$(PYTHON) util/idma_gen.py legalizer \
+	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
+	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
+	--shifter $(call pw,3,.,$*)
 	$(PYTHON) util/idma_gen.py backend \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
 	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
@@ -304,6 +323,13 @@ gen_rtl_%: util/idma_gen.py Makefile
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
 	--write-protocols $(subst -, ,$(call pw,2,.,$*))
 	$(PYTHON) util/idma_gen.py testbench \
+	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
+	$(PYTHON) util/idma_gen.py wavefile \
+	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
+	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
+	--shifter $(call pw,3,.,$*)
+	$(PYTHON) util/idma_gen.py bender \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
 	--write-protocols $(subst -, ,$(call pw,2,.,$*))
 

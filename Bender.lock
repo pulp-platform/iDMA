@@ -9,8 +9,8 @@ packages:
     - common_verification
     - tech_cells_generic
   common_cells:
-    revision: 9c1a1bdbd1a0928340863cad90c6fc0503da43a7
-    version: 1.27.1
+    revision: 4dc9413990622dcbf4b37a19f792834c800da5c7
+    version: 1.28.0
     source:
       Git: https://github.com/pulp-platform/common_cells.git
     dependencies:
@@ -26,7 +26,7 @@ packages:
     revision: null
     version: null
     source:
-      Path: /home/bsc22h2/bachelor-thesis/mdma/src/backend
+      Path: /home/tbenz/git/bslk/idma/idma-pd/mDMA/src/backend
     dependencies:
     - axi
     - common_cells
@@ -36,7 +36,7 @@ packages:
     revision: null
     version: null
     source:
-      Path: /home/bsc22h2/bachelor-thesis/mdma/src/package
+      Path: /home/tbenz/git/bslk/idma/idma-pd/mDMA/src/package
     dependencies:
     - axi
   register_interface:
@@ -51,15 +51,15 @@ packages:
     revision: null
     version: null
     source:
-      Path: /home/bsc22h2/bachelor-thesis/mdma/src/backend/../../test
+      Path: /home/tbenz/git/bslk/idma/idma-pd/mDMA/src/backend/../../test
     dependencies:
     - axi
     - common_cells
     - idma_pkg
     - register_interface
   tech_cells_generic:
-    revision: aef525b2dc7670525fc293dfc55f167e371b8c35
-    version: 0.2.10
+    revision: a9cae21902e75b1434328ecf36f85327ba5717de
+    version: 0.2.11
     source:
       Git: https://github.com/pulp-platform/tech_cells_generic.git
     dependencies:
