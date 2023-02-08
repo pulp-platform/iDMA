@@ -70,9 +70,9 @@ sources:
     - src/frontends/desc64/idma_desc64_top.sv
 
   # Systems
-  - target: all(pulp, not(mchan))
-    files:
-      - src/systems/pulpopen/dmac_wrap.sv
+  # - target: all(pulp, not(mchan))
+  #   files:
+  #     - src/systems/pulpopen/dmac_wrap.sv
 
   - target: cva6
     files:
