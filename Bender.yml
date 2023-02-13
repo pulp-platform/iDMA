@@ -43,6 +43,9 @@ sources:
   # Level 0
   - src/legacy/midends/idma_2D_midend.sv
   - src/midends/idma_nd_midend.sv
+  - src/midends/idma_rt_midend_pkg.sv
+  - src/midends/idma_rt_midend.sv
+  - src/midends/tb_idma_rt_midend.sv
 
   # Frontends
   - files: # 32bit register frontend
