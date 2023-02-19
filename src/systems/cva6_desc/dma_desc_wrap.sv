@@ -136,8 +136,10 @@ module dma_desc_wrap #(
     .idma_rsp_t          ( idma_rsp_t                  ),
     .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
     .idma_busy_t         ( idma_pkg::idma_busy_t       ),
-    .axi_req_t           ( dma_axi_mst_post_mux_req_t  ),
-    .axi_rsp_t           ( dma_axi_mst_post_mux_resp_t )
+    .protocol_req_t      ( dma_axi_mst_post_mux_req_t  ),
+    .protocol_rsp_t      ( dma_axi_mst_post_mux_resp_t ),
+    .aw_chan_t           ( dma_axi_mst_post_mux_aw_chan_t),
+    .ar_chan_t           ( dma_axi_mst_post_mux_ar_chan_t)
   ) i_idma_backend (
     .clk_i,
     .rst_ni,
@@ -155,8 +157,8 @@ module dma_desc_wrap #(
     .eh_req_valid_i( 1'b1              ),
     .eh_req_ready_o( /*NOT CONNECTED*/ ),
 
-    .axi_req_o     ( axi_be_mst_req    ),
-    .axi_rsp_i     ( axi_be_mst_rsp    ),
+    .protocol_req_o     ( axi_be_mst_req    ),
+    .protocol_rsp_i     ( axi_be_mst_rsp    ),
     .busy_o        ( idma_busy         )
   );
 
@@ -218,11 +220,11 @@ module dma_desc_wrap #(
         "raw_coupler" : i_idma_backend.busy_o.raw_coupler_busy
       };
       axib = '{
-        "w_valid" : i_idma_backend.axi_req_o.w_valid,
+        "w_valid" : i_idma_backend.protocol_req_o.w_valid,
         "w_ready" : axi_be_mst_rsp.w_ready,
-        "w_strb"  : i_idma_backend.axi_req_o.w.strb,
+        "w_strb"  : i_idma_backend.protocol_req_o.w.strb,
         "r_valid" : axi_be_mst_rsp.r_valid,
-        "r_ready" : i_idma_backend.axi_req_o.r_ready
+        "r_ready" : i_idma_backend.protocol_req_o.r_ready
       };
       if ($isunknown(axib["w_ready"]) || $isunknown(axib["r_valid"])) begin
         $fatal("UNKNOWN AXI STATE, THIS SHOULD NEVER HAPPEN!");

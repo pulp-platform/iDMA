@@ -231,24 +231,26 @@ module tb_idma_desc64_bench
     );
 
     idma_backend #(
-        .DataWidth           ( DataWidth           ),
-        .AddrWidth           ( AddrWidth           ),
-        .AxiIdWidth          ( AxiIdWidth          ),
-        .UserWidth           ( UserWidth           ),
-        .TFLenWidth          ( TFLenWidth          ),
-        .MaskInvalidData     ( MaskInvalidData     ),
-        .BufferDepth         ( BufferDepth         ),
-        .RAWCouplingAvail    ( RAWCouplingAvail    ),
-        .HardwareLegalizer   ( HardwareLegalizer   ),
-        .RejectZeroTransfers ( RejectZeroTransfers ),
-        .NumAxInFlight       ( NumAxInFlight       ),
-        .MemSysDepth         ( MemSysDepth         ),
-        .idma_req_t          ( idma_req_t          ),
-        .idma_rsp_t          ( idma_rsp_t          ),
+        .DataWidth           ( DataWidth               ),
+        .AddrWidth           ( AddrWidth               ),
+        .AxiIdWidth          ( AxiIdWidth              ),
+        .UserWidth           ( UserWidth               ),
+        .TFLenWidth          ( TFLenWidth              ),
+        .MaskInvalidData     ( MaskInvalidData         ),
+        .BufferDepth         ( BufferDepth             ),
+        .RAWCouplingAvail    ( RAWCouplingAvail        ),
+        .HardwareLegalizer   ( HardwareLegalizer       ),
+        .RejectZeroTransfers ( RejectZeroTransfers     ),
+        .NumAxInFlight       ( NumAxInFlight           ),
+        .MemSysDepth         ( MemSysDepth             ),
+        .idma_req_t          ( idma_req_t              ),
+        .idma_rsp_t          ( idma_rsp_t              ),
         .idma_eh_req_t       ( idma_pkg::idma_eh_req_t ),
-        .idma_busy_t         ( idma_pkg::idma_busy_t         ),
-        .axi_req_t           ( axi_req_t           ),
-        .axi_rsp_t           ( axi_resp_t           )
+        .idma_busy_t         ( idma_pkg::idma_busy_t   ),
+        .protocol_req_t      ( axi_req_t               ),
+        .protocol_rsp_t      ( axi_resp_t              ),
+        .aw_chan_t           ( axi_aw_chan_t           ),
+        .ar_chan_t           ( axi_ar_chan_t           )
     ) i_idma_backend  (
         .clk_i          ( clk              ),
         .rst_ni         ( rst_n            ),
@@ -262,8 +264,8 @@ module tb_idma_desc64_bench
         .idma_eh_req_i  ( '0               ),
         .eh_req_valid_i ( '1               ),
         .eh_req_ready_o ( /* unconnected */),
-        .axi_req_o      ( dma_be_master_request   ),
-        .axi_rsp_i      ( dma_be_master_response  ),
+        .protocol_req_o ( dma_be_master_request   ),
+        .protocol_rsp_i ( dma_be_master_response  ),
         .busy_o         ( busy             )
     );
 
@@ -337,11 +339,11 @@ module tb_idma_desc64_bench
         "raw_coupler" : i_idma_backend.busy_o.raw_coupler_busy
       };
       axib = '{
-        "w_valid" : i_idma_backend.axi_req_o.w_valid,
+        "w_valid" : i_idma_backend.protocol_req_o.w_valid,
         "w_ready" : dma_be_master_response.w_ready,
-        "w_strb"  : i_idma_backend.axi_req_o.w.strb,
+        "w_strb"  : i_idma_backend.protocol_req_o.w.strb,
         "r_valid" : dma_be_master_response.r_valid,
-        "r_ready" : i_idma_backend.axi_req_o.r_ready
+        "r_ready" : i_idma_backend.protocol_req_o.r_ready
       };
       if ($isunknown(axib["w_ready"]) || $isunknown(axib["r_valid"])) begin
         $fatal("UNKNOWN AXI STATE, THIS SHOULD NEVER HAPPEN!");
