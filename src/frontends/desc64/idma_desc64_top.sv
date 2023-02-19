@@ -122,8 +122,6 @@ typedef struct packed {
     addr_t       dest_addr;
 } descriptor_t;
 
-typedef logic [$clog2(NSpeculation + 1)-1:0] flush_t;
-
 idma_req_t idma_req;
 logic      idma_req_valid;
 logic      idma_req_ready;
@@ -159,9 +157,6 @@ logic [1:0]                        ws_per_writeback;
 logic [$clog2(MaxAWWPending):0] w_counter_q, w_counter_d;
 logic                           aw_tx;
 logic                           w_tx;
-
-flush_t n_requests_to_flush;
-logic   n_requests_to_flush_valid;
 
 addr_t input_addr;
 logic  input_addr_valid, input_addr_ready;
@@ -269,8 +264,7 @@ idma_desc64_reg_wrapper #(
 );
 
 if (NSpeculation == 0) begin : gen_no_spec
-assign n_requests_to_flush = '0;
-assign n_requests_to_flush_valid = '0;
+
 assign master_req_o.r_ready = gated_r_ready;
 assign gated_r_valid = master_rsp_i.r_valid;
 idma_desc64_ar_gen #(
@@ -298,6 +292,13 @@ idma_desc64_ar_gen #(
     .busy_o                              (ar_busy)
 );
 end else begin : gen_spec
+
+typedef logic [$clog2(NSpeculation + 1)-1:0] flush_t;
+
+flush_t n_requests_to_flush;
+logic   n_requests_to_flush_valid;
+
+
 idma_desc64_ar_gen_prefetch #(
     .DataWidth    (DataWidth),
     .NSpeculation (NSpeculation),
