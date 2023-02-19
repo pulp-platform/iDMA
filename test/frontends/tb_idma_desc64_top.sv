@@ -19,15 +19,23 @@ module tb_idma_desc64_top
     import rand_verif_pkg::rand_wait;
     import axi_pkg::*;
     import reg_test::reg_driver; #(
-    parameter int unsigned NumberOfTests           = 100,
-    parameter int unsigned SimulationTimeoutCycles = 100000,
-    parameter int   signed ChainedDescriptors      = -1,
-    parameter int unsigned MaxChainedDescriptors   = 10,
-    parameter int unsigned MinChainedDescriptors   = 1,
-    parameter int unsigned InputFifoDepth          = 8,
-    parameter int unsigned PendingFifoDepth        = 8,
-    parameter int unsigned BackendDepth            = 5,
-    parameter int unsigned MaxAWWPending           = 8
+    parameter integer NumberOfTests              = 100,
+    parameter integer SimulationTimeoutCycles    = 100000,
+    parameter integer ChainedDescriptors         = -1,
+    parameter int unsigned MaxChainedDescriptors = 10,
+    parameter int unsigned MinChainedDescriptors = 1,
+    parameter integer TransferLength             = 1024,
+    parameter integer AlignmentMask              = 'h0f,
+    parameter integer NumContiguous              = 200000,
+    parameter integer MaxAxInFlight              = 64,
+    parameter bit     DoIRQ                      = 1,
+    parameter integer TransfersToSkip            = 4,
+    // from frontend
+    parameter int unsigned InputFifoDepth        = 8,
+    parameter int unsigned PendingFifoDepth      = 8,
+    parameter int unsigned NSpeculation          = 4,
+    parameter int unsigned BackendDepth          = 5,
+    parameter int unsigned MaxAWWPending         = 8
 ) ();
     localparam time PERIOD     = 10ns;
     localparam time APPL_DELAY = PERIOD / 4;
@@ -61,16 +69,25 @@ module tb_idma_desc64_top
 
         // an entire descriptor of 4 words must fit before the end of memory
         constraint descriptor_fits_in_memory { (64'hffff_ffff_ffff_ffff - base) > 64'd32; }
+        constraint descriptor_is_in_descriptor_area { base > 64'h0000_ffff_ffff_ffff; }
+        constraint descriptor_is_aligned { (base & 64'hf) == 0; }
         constraint no_empty_transfers { burst.length > '0; }
         constraint src_fits_in_memory { 64'hffff_ffff_ffff_ffff - burst.src_addr > burst.length; }
         constraint dst_fits_in_memory { 64'hffff_ffff_ffff_ffff - burst.dst_addr > burst.length; }
         constraint src_burst_valid { burst.opt.src.burst inside { BURST_INCR, BURST_WRAP, BURST_FIXED }; }
         constraint dst_burst_valid { burst.opt.dst.burst inside { BURST_INCR, BURST_WRAP, BURST_FIXED }; }
+        constraint src_is_not_in_descriptor_area { 64'h0000_ffff_ffff_ffff > (burst.src_addr + burst.length); }
+        constraint dst_is_not_in_descriptor_area { 64'h0000_ffff_ffff_ffff > (burst.dst_addr + burst.length); }
+        constraint src_aligned { (burst.src_addr & AlignmentMask) == 64'b0; }
+        constraint dst_aligned { (burst.dst_addr & AlignmentMask) == 64'b0; }
         constraint reduce_len_equal { burst.opt.beo.src_reduce_len == burst.opt.beo.dst_reduce_len; }
         constraint reduce_len_zero { burst.opt.beo.src_reduce_len == 1'b0; }
-        constraint beo_zero { burst.opt.beo.decouple_aw == '0 && burst.opt.beo.src_max_llen == '0 && burst.opt.beo.dst_max_llen == '0 && burst.opt.last == '0; }
+        constraint beo_zero { burst.opt.beo.decouple_aw == '0 && burst.opt.beo.src_max_llen == '0 && burst.opt.beo.dst_max_llen == '0 && burst.opt.last == '0 && burst.opt.beo.decouple_rw == '0; }
         constraint axi_params_zero_src { burst.opt.src.lock == '0 && burst.opt.src.prot == '0 && burst.opt.src.qos == '0 && burst.opt.src.region == '0; }
         constraint axi_params_zero_dst { burst.opt.dst.lock == '0 && burst.opt.dst.prot == '0 && burst.opt.dst.qos == '0 && burst.opt.dst.region == '0; }
+        constraint axi_src_cache_zero { burst.opt.src.cache == '0; }
+        constraint axi_dst_cache_zero { burst.opt.dst.cache == '0; }
+        constraint transfer_length { burst.length == TransferLength; }
     endclass
 
     typedef struct {
@@ -156,7 +173,8 @@ module tb_idma_desc64_top
         .reg_req_t       (reg_req_t),
         .InputFifoDepth  (InputFifoDepth),
         .PendingFifoDepth(PendingFifoDepth),
-        .BackendDepth    (BackendDepth)
+        .BackendDepth    (BackendDepth),
+        .NSpeculation    (NSpeculation)
     ) i_dut (
         .clk_i           (clk),
         .rst_ni          (rst_n),
@@ -176,6 +194,25 @@ module tb_idma_desc64_top
         .irq_o           (irq)
     );
 
+    // sim memory
+    axi_sim_mem #(
+        .AddrWidth         ( 64       ),
+        .DataWidth         ( 64       ),
+        .IdWidth           (3         ),
+        .UserWidth         (1         ),
+        .axi_req_t         (axi_req_t ),
+        .axi_rsp_t         (axi_resp_t),
+        .WarnUninitialized (1'b0      ),
+        .ClearErrOnAccess  (1'b1      ),
+        .ApplDelay         (APPL_DELAY),
+        .AcqDelay          (ACQ_DELAY )
+    ) i_axi_sim_mem (
+        .clk_i      ( clk          ),
+        .rst_ni     ( rst_n        ),
+        .axi_req_i  ( dma_master_request  ),
+        .axi_rsp_o  ( dma_master_response  )
+    );
+
     assign dma_slave_request.addr  = i_reg_iface_bus.addr;
     assign dma_slave_request.write = i_reg_iface_bus.write;
     assign dma_slave_request.wdata = i_reg_iface_bus.wdata;
@@ -186,10 +223,9 @@ module tb_idma_desc64_top
     assign i_reg_iface_bus.error   = dma_slave_response.error;
 
     `AXI_ASSIGN_FROM_REQ(i_axi_iface_bus, dma_master_request);
-    `AXI_ASSIGN_TO_RESP(dma_master_response, i_axi_iface_bus);
+    `AXI_ASSIGN_FROM_RESP(i_axi_iface_bus, dma_master_response);
 
     initial begin
-        i_axi_iface_driver.reset_slave();
         dma_be_rsp_valid = 1'b0;
         dma_be_req_ready = 1'b0;
         backend_busy = 1'b0;
@@ -198,8 +234,11 @@ module tb_idma_desc64_top
     // queues for communication and data transfer
     stimulus_t   generated_stimuli[$][$];
     stimulus_t   inflight_stimuli[$][$];
+    result_t     ar_seen_result[$];
     result_t     inflight_results_after_reads[$];
     result_t     inflight_results_submitted_to_be[$];
+    result_t     aw_seen_result[$];
+    result_t     w_seen_result[$];
     result_t     result_queue[$];
 
     function automatic void generate_stimuli();
@@ -281,11 +320,37 @@ module tb_idma_desc64_top
         golden_queue[$].did_irq = 1'b1;
     endfunction : generate_stimuli
 
+    function automatic void write_mem_64(addr_t base, logic[63:0] data);
+        i_axi_sim_mem.mem[base]     = data[ 7: 0];
+        i_axi_sim_mem.mem[base + 1] = data[15: 8];
+        i_axi_sim_mem.mem[base + 2] = data[23:16];
+        i_axi_sim_mem.mem[base + 3] = data[31:24];
+        i_axi_sim_mem.mem[base + 4] = data[39:32];
+        i_axi_sim_mem.mem[base + 5] = data[47:40];
+        i_axi_sim_mem.mem[base + 6] = data[55:48];
+        i_axi_sim_mem.mem[base + 7] = data[63:56];
+    endfunction : write_mem_64
+
+    function automatic void load_descriptors_into_memory();
+        $display("Loading descriptors");
+        foreach (generated_stimuli[i]) begin
+            foreach (generated_stimuli[i][j]) begin
+                automatic addr_t base       = generated_stimuli[i][j].base;
+                write_mem_64(base, stimulus_to_flag_bits(generated_stimuli[i][j]));
+                if (j == (generated_stimuli[i].size() - 1)) begin
+                    write_mem_64(base + 64'h8, 64'hffff_ffff_ffff_ffff);
+                end else begin
+                    write_mem_64(base + 64'h8, generated_stimuli[i][j+1].base);
+                end
+                write_mem_64(base + 64'h10, generated_stimuli[i][j].burst.src_addr);
+                write_mem_64(base + 64'h18, generated_stimuli[i][j].burst.dst_addr);
+            end
+        end
+    endfunction : load_descriptors_into_memory
+
     task apply_stimuli();
         fork
             regbus_slave_interaction();
-            axi_master_apply_read_channel();
-            axi_master_apply_write_channel();
             backend_tx_done_notifier();
             backend_acceptor();
         join
@@ -293,7 +358,8 @@ module tb_idma_desc64_top
 
     task collect_responses();
         fork
-            axi_master_aquire_ars();
+            axi_master_acquire_ars();
+            axi_master_acquire_rs();
             axi_master_acquire_aw_w_and_irqs();
             acquire_bursts();
         join
@@ -362,73 +428,7 @@ module tb_idma_desc64_top
         return result;
     endfunction
 
-    task axi_master_apply_write_channel();
-        @(posedge rst_n);
-        forever begin
-            automatic ax_beat_t aw_beat;
-            automatic w_beat_t  w_beat;
-            automatic b_beat_t  b_beat;
-            // receive and acknowledge all writes
-            @(posedge clk);
-            i_axi_iface_driver.recv_aw(aw_beat);
-            @(posedge clk);
-            i_axi_iface_driver.recv_w(w_beat);
-            // all writes succeed
-            b_beat = new;
-            b_beat.b_id = aw_beat.ax_id;
-            @(posedge clk);
-            i_axi_iface_driver.send_b(b_beat);
-        end
-    endtask
-
-    // regbus master interaction read and write application (we're acting as slave)
-    task axi_master_apply_read_channel();
-        automatic stimulus_t current_stimulus_group[$];
-        automatic stimulus_t current_stimulus;
-
-        @(posedge rst_n);
-
-        wait (inflight_stimuli.size() > 0);
-        current_stimulus_group = inflight_stimuli.pop_front();
-        current_stimulus       = current_stimulus_group.pop_front();
-
-        forever begin
-            automatic ax_beat_t ar_beat;
-            automatic r_beat_t  r_beat;
-            @(posedge clk);
-            i_axi_iface_driver.recv_ar(ar_beat);
-
-            // send the descriptor
-            r_beat = new;
-            r_beat.r_id = ar_beat.ax_id;
-            r_beat.r_data = stimulus_to_flag_bits(current_stimulus);
-            i_axi_iface_driver.send_r(r_beat);
-
-            if (current_stimulus_group.size() == '0) begin
-                r_beat.r_data = 64'hffff_ffff_ffff_ffff;
-            end else begin
-                r_beat.r_data = current_stimulus_group[0].base;
-            end
-            i_axi_iface_driver.send_r(r_beat);
-
-            r_beat.r_data = current_stimulus.burst.src_addr;
-            i_axi_iface_driver.send_r(r_beat);
-
-            r_beat.r_data = current_stimulus.burst.dst_addr;
-            r_beat.r_last = 'b1;
-            i_axi_iface_driver.send_r(r_beat);
-
-            // get the next transfer group if we are done with the current group
-            if (current_stimulus_group.size() == '0) begin
-                wait (inflight_stimuli.size() > '0);
-                current_stimulus_group = inflight_stimuli.pop_front();
-            end
-
-            current_stimulus = current_stimulus_group.pop_front();
-        end
-    endtask
-
-    task axi_master_aquire_ars();
+    task axi_master_acquire_ars();
         @(posedge rst_n);
         forever begin
             automatic ax_beat_t ar_beat;
@@ -439,62 +439,86 @@ module tb_idma_desc64_top
             current_result.read_address = ar_beat.ax_addr;
             current_result.read_length  = ar_beat.ax_len;
             current_result.read_size    = ar_beat.ax_size;
-            inflight_results_after_reads.push_back(current_result);
+            ar_seen_result.push_back(current_result);
         end
-    endtask
+    endtask : axi_master_acquire_ars
 
-    task axi_master_acquire_aw_w_and_irqs();
-        // set to one to skip first submission of what would be an invalid result
-        automatic bit      captured_irq = '1;
-        automatic result_t current_result;
+    task axi_master_acquire_rs();
         @(posedge rst_n);
-        wait (inflight_results_submitted_to_be.size() > 0);
-        current_result = inflight_results_submitted_to_be.pop_front();
         forever begin
-            automatic ax_beat_t aw_beat;
-            automatic w_beat_t  w_beat;
-            @(posedge clk);
-            // wait for either an irq or an aw_beat
-            fork
-                forever begin
-                    #(ACQ_DELAY);
-                    if (irq) begin
-                        break;
-                    end
-                    @(posedge clk);
-                end
-                i_axi_iface_driver.mon_aw(aw_beat);
-            join_any
-            disable fork;
-
-            if (irq) begin
-                if (captured_irq) begin
-                    $error("Got a duplicate IRQ!");
-                end else begin
-                    current_result.did_irq = irq;
-                    captured_irq = 1'b1;
-                    result_queue.push_back(current_result);
-                    wait (inflight_results_submitted_to_be.size() > 0);
-                    current_result = inflight_results_submitted_to_be.pop_front();
-                end
+            automatic r_beat_t r_beat;
+            automatic result_t current_result;
+            wait (ar_seen_result.size() > 0);
+            current_result = ar_seen_result.pop_front();
+            i_axi_iface_driver.mon_r(r_beat);
+            if ($isunknown(r_beat.r_data)) begin
+                // drop current result
+                // as it is a prefetched one
             end else begin
-                // if we haven't captured an irq, we are still with the last
-                // result, which we now need to submit and get the next one
-                if (!captured_irq) begin
-                    current_result.did_irq = 0;
-                    result_queue.push_back(current_result);
-                    wait (inflight_results_submitted_to_be.size() > 0);
-                    current_result = inflight_results_submitted_to_be.pop_front();
-                end
-                current_result.write_address = aw_beat.ax_addr;
-                current_result.write_length  = aw_beat.ax_len;
-                current_result.write_size    = aw_beat.ax_size;
-                captured_irq                 = 1'b0;
-                i_axi_iface_driver.mon_w(w_beat);
-                current_result.write_data    = w_beat.w_data;
+                inflight_results_after_reads.push_back(current_result);
+            end
+            // four reads per descriptor in the 64-bit case
+            i_axi_iface_driver.mon_r(r_beat);
+            i_axi_iface_driver.mon_r(r_beat);
+            i_axi_iface_driver.mon_r(r_beat);
+            if (!r_beat.r_last) begin
+                $error("R acquisition has come out-of-sync.");
             end
         end
+    endtask : axi_master_acquire_rs
+
+    task axi_master_acquire_aw_w_and_irqs();
+        fork
+            axi_master_acquire_aw();
+            axi_master_acquire_w();
+            axi_master_acquire_irqs();
+        join
+    endtask : axi_master_acquire_aw_w_and_irqs
+
+    task axi_master_acquire_aw();
+        // set to one to skip first submission of what would be an invalid result
+        automatic result_t current_result;
+        @(posedge rst_n);
+        forever begin
+            automatic ax_beat_t aw_beat;
+            i_axi_iface_driver.mon_aw(aw_beat);
+
+            wait (inflight_results_submitted_to_be.size() > 0);
+            current_result = inflight_results_submitted_to_be.pop_front();
+            current_result.write_address = aw_beat.ax_addr;
+            current_result.write_length  = aw_beat.ax_len;
+            current_result.write_size    = aw_beat.ax_size;
+            aw_seen_result.push_back(current_result);
+        end
     endtask
+    task axi_master_acquire_w();
+        automatic result_t current_result;
+        @(posedge rst_n);
+        forever begin
+            automatic w_beat_t  w_beat;
+            i_axi_iface_driver.mon_w(w_beat);
+            wait (aw_seen_result.size() > 0);
+            current_result = aw_seen_result.pop_front();
+            current_result.write_data = w_beat.w_data;
+            w_seen_result.push_back(current_result);
+        end
+    endtask : axi_master_acquire_w
+    task axi_master_acquire_irqs();
+        automatic result_t current_result;
+        @(posedge rst_n);
+        forever begin
+            automatic b_beat_t  b_beat;
+            automatic result_t  current_result;
+
+            // HACK: I'm taking advantage of the knowledge that the irq and
+            // B happen in the same cycle
+            i_axi_iface_driver.mon_b(b_beat);
+            wait(w_seen_result.size() > 0);
+            current_result = w_seen_result.pop_front();
+            current_result.did_irq = irq;
+            result_queue.push_back(current_result);
+        end
+    endtask : axi_master_acquire_irqs
 
     task backend_tx_done_notifier();
         automatic int unsigned rand_success, cycles;
@@ -578,6 +602,7 @@ module tb_idma_desc64_top
         static int irq_errors            = 0;
 
         generate_stimuli();
+	load_descriptors_into_memory();
 
         fork
             apply_stimuli();

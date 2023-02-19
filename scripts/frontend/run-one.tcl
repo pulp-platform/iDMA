@@ -8,8 +8,11 @@
 source scripts/compile_vsim.tcl
 vsim tb_idma_desc64_top -t 1ps -GNumberOfTests=1 \
     -GSimulationTimeoutCycles=200 \
-    -GMaxChainedDescriptors=1 \
+    -GChainedDescriptors=1 \
+    -GNSpeculation=0 \
     -voptargs=+acc
+#   -GMaxChainedDescriptors=1 \
+#   -GMinChainedDescriptors=1 \
 #-voptargs=-pedantic
 
 set StdArithNoWarnings 1

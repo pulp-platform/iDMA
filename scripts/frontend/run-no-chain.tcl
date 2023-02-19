@@ -9,7 +9,8 @@ source scripts/compile_vsim.tcl
 vsim tb_idma_desc64_top -t 1ps \
     -GNumberOfTests=20 \
     -GMaxChainedDescriptors=1 \
-    -GSimulationTimeoutCycles=2000 \
+    -GSimulationTimeoutCycles=6000 \
+    -GNSpeculation=4 \
     -voptargs=+acc
 #-voptargs=-pedantic
 
