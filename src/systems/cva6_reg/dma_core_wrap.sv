@@ -4,6 +4,7 @@
 //
 // Author: Thomas Benz    <tbenz@iis.ee.ethz.ch>
 // Author: Andreas Kuster <kustera@ethz.ch>
+// Author: Paul Scheffler <paulsc@iis.ee.ethz.ch>
 //
 // Description: DMA core wrapper for the CVA6 integration
 
@@ -13,42 +14,33 @@
 `include "register_interface/typedef.svh"
 
 module dma_core_wrap #(
-  parameter int unsigned AXI_ADDR_WIDTH     = -1,
-  parameter int unsigned AXI_DATA_WIDTH     = -1,
-  parameter int unsigned AXI_USER_WIDTH     = -1,
-  parameter int unsigned AXI_ID_WIDTH       = -1,
-  parameter int unsigned AXI_SLV_ID_WIDTH   = -1
+  parameter int unsigned  AxiAddrWidth  = 0,
+  parameter int unsigned  AxiDataWidth  = 0,
+  parameter int unsigned  AxiIdWidth    = 0,
+  parameter int unsigned  AxiUserWidth  = 0,
+  parameter int unsigned  AxiSlvIdWidth = 0,
+  parameter type          axi_mst_req_t = logic,
+  parameter type          axi_mst_rsp_t = logic,
+  parameter type          axi_slv_req_t = logic,
+  parameter type          axi_slv_rsp_t = logic
 ) (
-  input  logic   clk_i,
-  input  logic   rst_ni,
-  input  logic   testmode_i,
-  AXI_BUS.Master axi_master,
-  AXI_BUS.Slave  axi_slave
+  input  logic          clk_i,
+  input  logic          rst_ni,
+  input  logic          testmode_i,
+  output axi_mst_req_t  axi_mst_req_o,
+  input  axi_mst_rsp_t  axi_mst_rsp_i,
+  input  axi_slv_req_t  axi_slv_req_i,
+  output axi_slv_rsp_t  axi_slv_rsp_o
 );
   localparam int unsigned DmaRegisterWidth = 64;
 
-  typedef logic [AXI_ADDR_WIDTH-1:0]     addr_t;
-  typedef logic [AXI_DATA_WIDTH-1:0]     data_t;
-  typedef logic [(AXI_DATA_WIDTH/8)-1:0] strb_t;
-  typedef logic [AXI_USER_WIDTH-1:0]     user_t;
-  typedef logic [AXI_ID_WIDTH-1:0]       axi_id_t;
-  typedef logic [AXI_SLV_ID_WIDTH-1:0]   axi_slv_id_t;
-
-
-  `AXI_TYPEDEF_ALL(axi_mst, addr_t, axi_id_t, data_t, strb_t, user_t)
-  axi_mst_req_t axi_mst_req;
-  axi_mst_resp_t axi_mst_resp;
-  `AXI_ASSIGN_FROM_REQ(axi_master, axi_mst_req)
-  `AXI_ASSIGN_TO_RESP(axi_mst_resp, axi_master)
-
-  `AXI_TYPEDEF_ALL(axi_slv, addr_t, axi_slv_id_t, data_t, strb_t, user_t)
-  axi_slv_req_t axi_slv_req;
-  axi_slv_resp_t axi_slv_resp;
-  `AXI_ASSIGN_TO_REQ(axi_slv_req, axi_slave)
-  `AXI_ASSIGN_FROM_RESP(axi_slave, axi_slv_resp)
+  typedef logic [AxiAddrWidth-1:0]     addr_t;
+  typedef logic [AxiIdWidth-1:0]       axi_id_t;
+  typedef logic [AxiSlvIdWidth-1:0]    axi_slv_id_t;
+  typedef logic [AxiUserWidth-1:0]     axi_user_t;
 
   // iDMA struct definitions
-  localparam int unsigned TFLenWidth  = AXI_ADDR_WIDTH;
+  localparam int unsigned TFLenWidth  = AxiAddrWidth;
   typedef logic [TFLenWidth-1:0]  tf_len_t;
 
   // iDMA request / response types
@@ -65,22 +57,22 @@ module dma_core_wrap #(
   dma_regs_rsp_t dma_regs_rsp;
 
   axi_to_reg #(
-    .ADDR_WIDTH( AXI_ADDR_WIDTH   ),
-    .DATA_WIDTH( AXI_DATA_WIDTH   ),
-    .ID_WIDTH  ( AXI_SLV_ID_WIDTH ),
-    .USER_WIDTH( AXI_USER_WIDTH   ),
+    .ADDR_WIDTH( AxiAddrWidth     ),
+    .DATA_WIDTH( AxiDataWidth     ),
+    .ID_WIDTH  ( AxiSlvIdWidth    ),
+    .USER_WIDTH( AxiUserWidth     ),
     .axi_req_t ( axi_slv_req_t    ),
-    .axi_rsp_t ( axi_slv_resp_t   ),
+    .axi_rsp_t ( axi_slv_rsp_t    ),
     .reg_req_t ( dma_regs_req_t   ),
     .reg_rsp_t ( dma_regs_rsp_t   )
   ) i_axi_translate (
     .clk_i,
     .rst_ni,
-    .testmode_i ( 1'b0         ),
-    .axi_req_i  ( axi_slv_req  ),
-    .axi_rsp_o  ( axi_slv_resp ),
-    .reg_req_o  ( dma_regs_req ),
-    .reg_rsp_i  ( dma_regs_rsp )
+    .testmode_i ( 1'b0          ),
+    .axi_req_i  ( axi_slv_req_i ),
+    .axi_rsp_o  ( axi_slv_rsp_o ),
+    .reg_req_o  ( dma_regs_req  ),
+    .reg_rsp_i  ( dma_regs_rsp  )
   );
 
 
@@ -105,11 +97,14 @@ module dma_core_wrap #(
     .trans_complete_i ( be_trans_complete )
   );
 
+  `AXI_TYPEDEF_AW_CHAN_T(axi_mst_aw_chan_t, addr_t, axi_id_t, axi_user_t)
+  `AXI_TYPEDEF_AR_CHAN_T(axi_mst_ar_chan_t, addr_t, axi_id_t, axi_user_t)
+
   idma_backend #(
-    .DataWidth           ( AXI_DATA_WIDTH              ),
-    .AddrWidth           ( AXI_ADDR_WIDTH              ),
-    .UserWidth           ( AXI_USER_WIDTH              ),
-    .AxiIdWidth          ( AXI_ID_WIDTH                ),
+    .DataWidth           ( AxiDataWidth                ),
+    .AddrWidth           ( AxiAddrWidth                ),
+    .UserWidth           ( AxiUserWidth                ),
+    .AxiIdWidth          ( AxiIdWidth                  ),
     .NumAxInFlight       ( 2                           ),
     .BufferDepth         ( 3                           ),
     .TFLenWidth          ( TFLenWidth                  ),
@@ -124,7 +119,7 @@ module dma_core_wrap #(
     .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
     .idma_busy_t         ( idma_pkg::idma_busy_t       ),
     .protocol_req_t      ( axi_mst_req_t               ),
-    .protocol_rsp_t      ( axi_mst_resp_t              ),
+    .protocol_rsp_t      ( axi_mst_rsp_t               ),
     .aw_chan_t           ( axi_mst_aw_chan_t           ),
     .ar_chan_t           ( axi_mst_ar_chan_t           )
   ) i_idma_backend (
@@ -144,9 +139,64 @@ module dma_core_wrap #(
     .eh_req_valid_i( 1'b1              ),
     .eh_req_ready_o( /*NOT CONNECTED*/ ),
 
-    .protocol_req_o( axi_mst_req       ),
-    .protocol_rsp_i( axi_mst_resp      ),
+    .protocol_req_o( axi_mst_req_o     ),
+    .protocol_rsp_i( axi_mst_rsp_i     ),
     .busy_o        ( idma_busy         )
   );
 
 endmodule : dma_core_wrap
+
+module dma_core_wrap_intf #(
+  parameter int unsigned AXI_ADDR_WIDTH     = -1,
+  parameter int unsigned AXI_DATA_WIDTH     = -1,
+  parameter int unsigned AXI_USER_WIDTH     = -1,
+  parameter int unsigned AXI_ID_WIDTH       = -1,
+  parameter int unsigned AXI_SLV_ID_WIDTH   = -1
+) (
+  input  logic   clk_i,
+  input  logic   rst_ni,
+  input  logic   testmode_i,
+  AXI_BUS.Master axi_master,
+  AXI_BUS.Slave  axi_slave
+);
+
+  typedef logic [AXI_ADDR_WIDTH-1:0]     addr_t;
+  typedef logic [AXI_DATA_WIDTH-1:0]     data_t;
+  typedef logic [(AXI_DATA_WIDTH/8)-1:0] strb_t;
+  typedef logic [AXI_USER_WIDTH-1:0]     user_t;
+  typedef logic [AXI_ID_WIDTH-1:0]       axi_id_t;
+  typedef logic [AXI_SLV_ID_WIDTH-1:0]   axi_slv_id_t;
+
+  `AXI_TYPEDEF_ALL(axi_mst, addr_t, axi_id_t, data_t, strb_t, user_t)
+  axi_mst_req_t axi_mst_req;
+  axi_mst_resp_t axi_mst_resp;
+  `AXI_ASSIGN_FROM_REQ(axi_master, axi_mst_req)
+  `AXI_ASSIGN_TO_RESP(axi_mst_resp, axi_master)
+
+  `AXI_TYPEDEF_ALL(axi_slv, addr_t, axi_slv_id_t, data_t, strb_t, user_t)
+  axi_slv_req_t axi_slv_req;
+  axi_slv_resp_t axi_slv_resp;
+  `AXI_ASSIGN_TO_REQ(axi_slv_req, axi_slave)
+  `AXI_ASSIGN_FROM_RESP(axi_slave, axi_slv_resp)
+
+  dma_core_wrap #(
+    .AxiAddrWidth  ( AXI_ADDR_WIDTH   ),
+    .AxiDataWidth  ( AXI_DATA_WIDTH   ),
+    .AxiIdWidth    ( AXI_USER_WIDTH   ),
+    .AxiUserWidth  ( AXI_ID_WIDTH     ),
+    .AxiSlvIdWidth ( AXI_SLV_ID_WIDTH ),
+    .axi_mst_req_t ( axi_mst_req_t  ),
+    .axi_mst_rsp_t ( axi_mst_resp_t ),
+    .axi_slv_req_t ( axi_slv_req_t  ),
+    .axi_slv_rsp_t ( axi_slv_resp_t )
+  ) i_dma_core_wrap (
+    .clk_i,
+    .rst_ni,
+    .testmode_i,
+    .axi_mst_req_o ( axi_mst_req  ),
+    .axi_mst_rsp_i ( axi_mst_resp ),
+    .axi_slv_req_i ( axi_slv_req  ),
+    .axi_slv_rsp_o ( axi_slv_resp )
+  );
+
+endmodule : dma_core_wrap_intf
