@@ -292,8 +292,10 @@ module dmac_wrap #(
     .idma_rsp_t          ( idma_rsp_t                  ),
     .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
     .idma_busy_t         ( idma_pkg::idma_busy_t       ),
-    .axi_req_t           ( slv_req_t                   ),
-    .axi_rsp_t           ( slv_resp_t                  )
+    .protocol_req_t      ( slv_req_t                   ),
+    .protocol_rsp_t      ( slv_resp_t                  ),
+    .aw_chan_t           ( slv_aw_chan_t               ),
+    .ar_chan_t           ( slv_ar_chan_t               )
   ) i_idma_backend (
     .clk_i,
     .rst_ni,
@@ -311,8 +313,8 @@ module dmac_wrap #(
     .eh_req_valid_i( 1'b1            ),
     .eh_req_ready_o(/*NOT CONNECTED*/),
 
-    .axi_req_o     ( dma_req         ),
-    .axi_rsp_i     ( dma_rsp         ),
+    .protocol_req_o( dma_req         ),
+    .protocol_rsp_i( dma_rsp         ),
     .busy_o        ( idma_busy       )
   );
 
