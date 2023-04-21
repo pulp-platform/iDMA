@@ -63,24 +63,22 @@ module dma_desc_wrap #(
   // iDMA struct definitions
   localparam int unsigned TFLenWidth  = 32;
   typedef logic [TFLenWidth-1:0]  tf_len_t;
-  typedef logic [RepWidth-1:0]    reps_t;
-  typedef logic [StrideWidth-1:0] strides_t;
 
   // iDMA request / response types
   `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, post_mux_id_t, addr_t, tf_len_t)
   `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
 
-  burst_req_t dma_be_req;
+  idma_req_t  dma_be_req;
   logic       dma_be_tx_complete;
   logic       dma_be_valid;
   logic       dma_be_ready;
   idma_pkg::idma_busy_t idma_busy;
 
   idma_desc64_top #(
-    .AddrWidth  (AxiAddrWidth) ,
-    .burst_req_t(burst_req_t)  ,
-    .reg_req_t  (dma_reg_req_t),
-    .reg_rsp_t  (dma_reg_rsp_t)
+    .AddrWidth  ( AxiAddrWidth  ),
+    .burst_req_t( idma_req_t    ),
+    .reg_req_t  ( dma_reg_req_t ),
+    .reg_rsp_t  ( dma_reg_rsp_t )
   ) i_dma_desc64 (
     .clk_i,
     .rst_ni,
@@ -114,8 +112,8 @@ module dma_desc_wrap #(
     .idma_rsp_t          ( idma_rsp_t                  ),
     .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
     .idma_busy_t         ( idma_pkg::idma_busy_t       ),
-    .axi_req_t           ( axi_slv_req_t               ),
-    .axi_rsp_t           ( axi_slv_resp_t              )
+    .protocol_req_t      ( axi_slv_req_t               ),
+    .protocol_rsp_t      ( axi_slv_rsp_t               )
   ) i_idma_backend (
     .clk_i,
     .rst_ni,
@@ -133,8 +131,8 @@ module dma_desc_wrap #(
     .eh_req_valid_i( 1'b1               ),
     .eh_req_ready_o( /*NOT CONNECTED*/  ),
 
-    .axi_req_o     ( axi_be_mst_req     ),
-    .axi_rsp_i     ( axi_be_mst_rsp     ),
+    .protocol_req_o( axi_be_mst_req     ),
+    .protocol_rsp_i( axi_be_mst_rsp     ),
     .busy_o        ( idma_busy          )
   );
 
