@@ -6,6 +6,7 @@
  * dmac_wrap.sv
  * Thomas Benz <tbenz@iis.ee.ethz.ch>
  * Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+ * Alessandro Ottaviano <aottaviano@iis.ee.ethz.ch>
  */
 
 // DMA Core wrapper
@@ -14,20 +15,22 @@
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
 `include "register_interface/typedef.svh"
+`include "register_interface/assign.svh"
 
-module dmac_wrap #(
+module dmac_wrap_fc_idma #(
   parameter int unsigned NB_CORES            = 4,
   parameter int unsigned AXI_ADDR_WIDTH      = 32,
   parameter int unsigned AXI_DATA_WIDTH      = 64,
   parameter int unsigned AXI_USER_WIDTH      = 6,
-  parameter int unsigned AXI_ID_WIDTH        = 4,
+  parameter int unsigned AXI_ID_WIDTH_MST_1  = 4,
+  parameter int unsigned AXI_ID_WIDTH_MST_2  = 4,
   parameter int unsigned PE_ID_WIDTH         = 1,
   parameter int unsigned NB_PE_PORTS         = 1,
   parameter int unsigned DATA_WIDTH          = 32,
   parameter int unsigned ADDR_WIDTH          = 32,
   parameter int unsigned BE_WIDTH            = DATA_WIDTH/8,
   parameter int unsigned NUM_STREAMS         = 1, // Only 1 for now
-  parameter int unsigned TCDM_SIZE           = 0,
+  parameter int unsigned L2_SIZE           = 0,
   parameter int unsigned TwoDMidend          = 1, // Leave this on for now
   parameter int unsigned NB_OUTSND_BURSTS    = 8,
   parameter int unsigned GLOBAL_QUEUE_DEPTH  = 16,
@@ -36,61 +39,18 @@ module dmac_wrap #(
   input logic                      clk_i,
   input logic                      rst_ni,
   input logic                      test_mode_i,
-  XBAR_PERIPH_BUS.Slave            pe_ctrl_slave[NB_PE_PORTS-1:0],
-  XBAR_TCDM_BUS.Slave              ctrl_slave[NB_CORES-1:0],
-  hci_core_intf.master             tcdm_master[3:0],
-  AXI_BUS.Master                   ext_master,
-  output logic [NB_CORES-1:0]      term_event_o,
-  output logic [NB_CORES-1:0]      term_irq_o,
-  output logic [NB_PE_PORTS-1:0]   term_event_pe_o,
-  output logic [NB_PE_PORTS-1:0]   term_irq_pe_o,
+  APB_BUS.Slave                    apb_sdma_cfg_bus, // core->sdma control interface
+  AXI_BUS.Master                   axi_tcdm_master,
+  AXI_BUS.Master                   axi_ext_master,
+  output logic                     term_event_o,
+  output logic                     term_irq_o,
   output logic                     busy_o
 );
 
-  localparam int unsigned NumRegs = NB_CORES+NB_PE_PORTS;
-  localparam int unsigned MstIdxWidth = AXI_ID_WIDTH;
-  localparam int unsigned SlvIdxWidth = AXI_ID_WIDTH - $clog2(NUM_STREAMS);
+  localparam int unsigned MstIdxWidth = AXI_ID_WIDTH_MST_1;
+  localparam int unsigned SlvIdxWidth = AXI_ID_WIDTH_MST_1 - $clog2(NUM_STREAMS);
 
-  // CORE --> MCHAN CTRL INTERFACE BUS SIGNALS
-  logic [NumRegs-1:0][DATA_WIDTH-1:0]  config_wdata;
-  logic [NumRegs-1:0][ADDR_WIDTH-1:0]  config_add;
-  logic [NumRegs-1:0]                  config_req;
-  logic [NumRegs-1:0]                  config_wen;
-  logic [NumRegs-1:0][BE_WIDTH-1:0]    config_be;
-  logic [NumRegs-1:0][PE_ID_WIDTH-1:0] config_id;
-  logic [NumRegs-1:0]                  config_gnt;
-  logic [NumRegs-1:0][DATA_WIDTH-1:0]  config_r_rdata;
-  logic [NumRegs-1:0]                  config_r_valid;
-  logic [NumRegs-1:0]                  config_r_opc;
-  logic [NumRegs-1:0][PE_ID_WIDTH-1:0] config_r_id;
-
-  // tie-off pe control ports
-  for (genvar i = 0; i < NB_CORES; i++) begin : gen_ctrl_registers
-    assign config_add[i]         = ctrl_slave[i].add;
-    assign config_req[i]         = ctrl_slave[i].req;
-    assign config_wdata[i]       = ctrl_slave[i].wdata;
-    assign config_wen[i]         = ctrl_slave[i].wen;
-    assign config_be[i]          = ctrl_slave[i].be;
-    assign config_id[i]          = '0;
-    assign ctrl_slave[i].gnt     = config_gnt[i];
-    assign ctrl_slave[i].r_opc   = config_r_opc[i];
-    assign ctrl_slave[i].r_valid = config_r_valid[i];
-    assign ctrl_slave[i].r_rdata = config_r_rdata[i];
-  end
-
-  for (genvar i = 0; i < NB_PE_PORTS; i++) begin : gen_pe_ctrl_registers
-    assign config_add[NB_CORES+i]         = pe_ctrl_slave[i].add;
-    assign config_req[NB_CORES+i]         = pe_ctrl_slave[i].req;
-    assign config_wdata[NB_CORES+i]       = pe_ctrl_slave[i].wdata;
-    assign config_wen[NB_CORES+i]         = pe_ctrl_slave[i].wen;
-    assign config_be[NB_CORES+i]          = pe_ctrl_slave[i].be;
-    assign config_id[NB_CORES+i]          = pe_ctrl_slave[i].id;
-    assign pe_ctrl_slave[i].gnt     = config_gnt[NB_CORES+i];
-    assign pe_ctrl_slave[i].r_opc   = config_r_opc[NB_CORES+i];
-    assign pe_ctrl_slave[i].r_valid = config_r_valid[NB_CORES+i];
-    assign pe_ctrl_slave[i].r_rdata = config_r_rdata[NB_CORES+i];
-    assign pe_ctrl_slave[i].r_id    = config_r_id[NB_CORES+i];
-  end
+  localparam int unsigned NumRegs = 1;
 
   // AXI4+ATOP types
   typedef logic [AXI_ADDR_WIDTH-1:0]   addr_t;
@@ -118,19 +78,24 @@ module dmac_wrap #(
   `AXI_TYPEDEF_RESP_T(slv_resp_t, slv_b_chan_t, slv_r_chan_t)
   `AXI_TYPEDEF_RESP_T(mst_resp_t, mst_b_chan_t, mst_r_chan_t)
   // BUS definitions
-  mst_req_t  tcdm_req, soc_req;
-  mst_resp_t soc_rsp;
+  mst_req_t  tcdm_req, ext_req;
+  mst_resp_t ext_rsp;
   mst_resp_t tcdm_rsp;
   slv_req_t  [NUM_STREAMS-1:0] dma_req;
   slv_resp_t [NUM_STREAMS-1:0] dma_rsp;
-  // interface to structs
-  `AXI_ASSIGN_FROM_REQ(ext_master, soc_req)
-  `AXI_ASSIGN_TO_RESP(soc_rsp, ext_master)
 
+  // mst1
+  `AXI_ASSIGN_FROM_REQ(axi_ext_master, ext_req)
+  `AXI_ASSIGN_TO_RESP(ext_rsp, axi_ext_master)
+
+  // mst2
+  `AXI_ASSIGN_FROM_REQ(axi_tcdm_master, tcdm_req_iwc)
+  `AXI_ASSIGN_TO_RESP(tcdm_rsp_iwc, axi_tcdm_master)
+  
   // Register BUS definitions
   `REG_BUS_TYPEDEF_ALL(dma_regs, logic[9:0], logic[31:0], logic[3:0])
-  dma_regs_req_t [NumRegs-1:0] dma_regs_req;
-  dma_regs_rsp_t [NumRegs-1:0] dma_regs_rsp;
+  dma_regs_req_t dma_regs_req;
+  dma_regs_rsp_t dma_regs_rsp;
 
   // iDMA struct definitions
   localparam int unsigned TFLenWidth  = AXI_ADDR_WIDTH;
@@ -161,32 +126,28 @@ module dmac_wrap #(
   // FRONTEND
   // ------------------------------------------------------
 
-  for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
-    periph_to_reg #(
-      .AW    ( 10             ),
-      .DW    ( 32             ),
-      .BW    ( 8              ),
-      .IW    ( PE_ID_WIDTH    ),
-      .req_t ( dma_regs_req_t ),
-      .rsp_t ( dma_regs_rsp_t )
-    ) i_pe_translate (
-      .clk_i,
-      .rst_ni,
-      .req_i     ( config_req     [i] ),
-      .add_i     ( config_add     [i][9:0] ),
-      .wen_i     ( config_wen     [i] ),
-      .wdata_i   ( config_wdata   [i] ),
-      .be_i      ( config_be      [i] ),
-      .id_i      ( config_id      [i] ),
-      .gnt_o     ( config_gnt     [i] ),
-      .r_rdata_o ( config_r_rdata [i] ),
-      .r_opc_o   ( config_r_opc   [i] ),
-      .r_id_o    ( config_r_id    [i] ),
-      .r_valid_o ( config_r_valid [i] ),
-      .reg_req_o ( dma_regs_req   [i] ),
-      .reg_rsp_i ( dma_regs_rsp   [i] )
-    );
-  end
+  // SDMA control from core
+
+  // regbus interface
+  REG_BUS #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH)) regbus_sdma_cfg(clk_i);
+  // apb to reg conversion
+  apb_to_reg i_apb_to_regbus_sdma (
+    .clk_i,
+    .rst_ni,
+    .penable_i ( apb_sdma_cfg_bus.penable  ),
+    .pwrite_i  ( apb_sdma_cfg_bus.pwrite   ),
+    .paddr_i   ( apb_sdma_cfg_bus.paddr    ),
+    .psel_i    ( apb_sdma_cfg_bus.psel     ),
+    .pwdata_i  ( apb_sdma_cfg_bus.pwdata   ),
+    .prdata_o  ( apb_sdma_cfg_bus.prdata   ),
+    .pready_o  ( apb_sdma_cfg_bus.pready   ),
+    .pslverr_o ( apb_sdma_cfg_bus.pslverr  ),
+    .reg_o     ( regbus_sdma_cfg )
+  );
+
+  // regbus to req/rsp
+  `REG_BUS_ASSIGN_TO_REQ(dma_regs_req, regbus_sdma_cfg)
+  `REG_BUS_ASSIGN_FROM_RSP(regbus_sdma_cfg, dma_regs_rsp)
 
   idma_reg32_2d_frontend #(
     .NumRegs        ( NumRegs        ),
@@ -207,8 +168,6 @@ module dmac_wrap #(
   );
 
   // interrupts and events (currently broadcast tx_cplt event only)
-  assign term_event_pe_o = |trans_complete ? '1 : '0;
-  assign term_irq_pe_o   = '0;
   assign term_event_o    = |trans_complete ? '1 : '0;
   assign term_irq_o      = '0;
 
@@ -275,10 +234,11 @@ module dmac_wrap #(
   // ------------------------------------------------------
 
   idma_backend #(
+    .Protocol            ( idma_pkg::AXI               ),
     .DataWidth           ( AXI_DATA_WIDTH              ),
     .AddrWidth           ( AXI_ADDR_WIDTH              ),
     .UserWidth           ( AXI_USER_WIDTH              ),
-    .AxiIdWidth          ( AXI_ID_WIDTH                ),
+    .AxiIdWidth          ( AXI_ID_WIDTH_MST_1          ),
     .NumAxInFlight       ( NB_OUTSND_BURSTS            ),
     .BufferDepth         ( 3                           ),
     .TFLenWidth          ( TFLenWidth                  ),
@@ -292,8 +252,10 @@ module dmac_wrap #(
     .idma_rsp_t          ( idma_rsp_t                  ),
     .idma_eh_req_t       ( idma_pkg::idma_eh_req_t     ),
     .idma_busy_t         ( idma_pkg::idma_busy_t       ),
-    .axi_req_t           ( slv_req_t                   ),
-    .axi_rsp_t           ( slv_resp_t                  )
+    .protocol_req_t      ( slv_req_t                   ),
+    .protocol_rsp_t      ( slv_resp_t                  ),
+    .aw_chan_t           ( slv_aw_chan_t               ),
+    .ar_chan_t           ( slv_ar_chan_t               )
   ) i_idma_backend (
     .clk_i,
     .rst_ni,
@@ -311,9 +273,9 @@ module dmac_wrap #(
     .eh_req_valid_i( 1'b1            ),
     .eh_req_ready_o(/*NOT CONNECTED*/),
 
-    .axi_req_o     ( dma_req         ),
-    .axi_rsp_i     ( dma_rsp         ),
-    .busy_o        ( idma_busy       )
+    .protocol_req_o ( dma_req         ),
+    .protocol_rsp_i ( dma_rsp         ),
+    .busy_o         ( idma_busy       )
   );
 
   // ------------------------------------------------------
@@ -328,21 +290,21 @@ module dmac_wrap #(
     logic [AXI_ADDR_WIDTH-1:0] end_addr;
   } xbar_rule_t;
   xbar_rule_t [NumRules-1:0] addr_map;
-  logic [AXI_ADDR_WIDTH-1:0] cluster_base_addr;
-  assign cluster_base_addr = 32'h1000_0000; /* + (cluster_id_i << 22);*/
+  logic [AXI_ADDR_WIDTH-1:0] tcdm_base_addr;
+  assign tcdm_base_addr = 32'h1C00_0000; //`SOC_MEM_MAP_PRIVATE_BANK0_START_ADDR
   assign addr_map = '{
     '{ // SoC low
       start_addr: '0,
-      end_addr:   cluster_base_addr,
+      end_addr:   tcdm_base_addr,
       idx:        0
     },
     '{ // TCDM
-      start_addr: cluster_base_addr,
-      end_addr:   cluster_base_addr + TCDM_SIZE,
+      start_addr: tcdm_base_addr,
+      end_addr:   tcdm_base_addr + L2_SIZE,
       idx:        1
     },
     '{ // SoC high
-      start_addr: cluster_base_addr + TCDM_SIZE,
+      start_addr: tcdm_base_addr + L2_SIZE,
       end_addr:   '1,
       idx:        0
     }
@@ -358,6 +320,7 @@ module dmac_wrap #(
     MaxSlvTrans:              NB_OUTSND_BURSTS,
     FallThrough:                          1'b0,
     LatencyMode:        axi_pkg::CUT_ALL_PORTS,
+    PipelineStages:                          0,
     AxiIdWidthSlvPorts:            SlvIdxWidth,
     AxiIdUsedSlvPorts:             SlvIdxWidth,
     UniqueIds:                            1'b0,
@@ -389,68 +352,53 @@ module dmac_wrap #(
     .test_i                 ( test_mode_i           ),
     .slv_ports_req_i        ( dma_req               ),
     .slv_ports_resp_o       ( dma_rsp               ),
-    .mst_ports_req_o        ( { tcdm_req, soc_req } ),
-    .mst_ports_resp_i       ( { tcdm_rsp, soc_rsp } ),
+    .mst_ports_req_o        ( { tcdm_req, ext_req } ),
+    .mst_ports_resp_i       ( { tcdm_rsp, ext_rsp } ),
     .addr_map_i             ( addr_map              ),
     .en_default_mst_port_i  ( '0                    ),
     .default_mst_port_i     ( '0                    )
   );
 
-  localparam int unsigned TcdmFifoDepth = 1;
+  // AXI ID oup width conversion
+  typedef logic [AXI_ID_WIDTH_MST_2-1:0] mst_id_iwc_t;
 
-  axi_to_mem_split #(
-    .axi_req_t    ( mem_req_t           ),
-    .axi_resp_t   ( mst_resp_t          ),
-    .AddrWidth    ( ADDR_WIDTH          ),
-    .AxiDataWidth ( AXI_DATA_WIDTH      ),
-    .IdWidth      ( MstIdxWidth         ),
-    .MemDataWidth ( DATA_WIDTH          ),
-    .BufDepth     ( TcdmFifoDepth       ),
-    .HideStrb     ( 1'b1                )
-  ) i_axi_to_mem (
+  `AXI_TYPEDEF_AW_CHAN_T(mst_aw_chan_iwc_t, addr_t, mst_id_iwc_t, user_t);
+  `AXI_TYPEDEF_B_CHAN_T(mst_b_chan_iwc_t, mst_id_iwc_t, user_t);
+  `AXI_TYPEDEF_AR_CHAN_T(mst_ar_chan_iwc_t, addr_t, mst_id_iwc_t, user_t);
+  `AXI_TYPEDEF_R_CHAN_T(mst_r_chan_iwc_t, data_t, mst_id_iwc_t, user_t);
+
+  `AXI_TYPEDEF_REQ_T(mst_req_iwc_t, mst_aw_chan_iwc_t, w_chan_t, mst_ar_chan_iwc_t);
+  `AXI_TYPEDEF_RESP_T(mst_resp_iwc_t, mst_b_chan_iwc_t, mst_r_chan_iwc_t);
+
+  mst_req_iwc_t      tcdm_req_iwc;
+  mst_resp_iwc_t     tcdm_rsp_iwc;
+
+  // Convert AXI req/rsp widths as necessary
+  // One AXI has all the widths already correct (
+
+  // ID width converter
+  axi_iw_converter #(
+    .AxiSlvPortIdWidth      ( AXI_ID_WIDTH_MST_1     ),
+    .AxiMstPortIdWidth      ( AXI_ID_WIDTH_MST_2     ),
+    .AxiSlvPortMaxUniqIds   ( 16                     ),
+    .AxiSlvPortMaxTxnsPerId ( 13                     ),
+    .AxiSlvPortMaxTxns      (                        ),
+    .AxiMstPortMaxUniqIds   (                        ),
+    .AxiMstPortMaxTxnsPerId (                        ),
+    .AxiAddrWidth           ( AXI_ADDR_WIDTH         ),
+    .AxiDataWidth           ( AXI_DATA_WIDTH         ),
+    .AxiUserWidth           ( AXI_USER_WIDTH         ),
+    .slv_req_t              ( mst_req_t              ),
+    .slv_resp_t             ( mst_resp_t             ),
+    .mst_req_t              ( mst_req_iwc_t          ),
+    .mst_resp_t             ( mst_resp_iwc_t         )
+  ) i_axi_iwc_fc_idma (
     .clk_i,
     .rst_ni,
-    .busy_o       (),
-    .axi_req_i    ( tcdm_req ),
-    .axi_resp_o   ( tcdm_rsp ),
-    .mem_req_o    ( { tcdm_master[0].req,     tcdm_master[1].req,
-                        tcdm_master[2].req,     tcdm_master[3].req     } ),
-    .mem_gnt_i    ( { tcdm_master[0].gnt,     tcdm_master[1].gnt,
-                        tcdm_master[2].gnt,     tcdm_master[3].gnt     } ),
-    .mem_addr_o   ( { tcdm_master[0].add,     tcdm_master[1].add,
-                        tcdm_master[2].add,     tcdm_master[3].add     } ),
-    .mem_wdata_o  ( { tcdm_master[0].data,    tcdm_master[1].data,
-                        tcdm_master[2].data,    tcdm_master[3].data    } ),
-    .mem_strb_o   ( { tcdm_master[0].be,      tcdm_master[1].be,
-                        tcdm_master[2].be,      tcdm_master[3].be      } ),
-    .mem_atop_o   ( ),
-    .mem_we_o     ( { tcdm_master_we_0,       tcdm_master_we_1,
-                        tcdm_master_we_2,       tcdm_master_we_3       } ),
-    .mem_rvalid_i ( { tcdm_master[0].r_valid, tcdm_master[1].r_valid,
-                        tcdm_master[2].r_valid, tcdm_master[3].r_valid } ),
-    .mem_rdata_i  ( { tcdm_master[0].r_data,  tcdm_master[1].r_data,
-                        tcdm_master[2].r_data,  tcdm_master[3].r_data  } )
+    .slv_req_i  ( tcdm_req      ),
+    .slv_resp_o ( tcdm_rsp      ),
+    .mst_req_o  ( tcdm_req_iwc  ),
+    .mst_resp_i ( tcdm_rsp_iwc  )
   );
 
-  // flip we polarity
-  assign tcdm_master[0].wen = !tcdm_master_we_0;
-  assign tcdm_master[1].wen = !tcdm_master_we_1;
-  assign tcdm_master[2].wen = !tcdm_master_we_2;
-  assign tcdm_master[3].wen = !tcdm_master_we_3;
-
-  assign tcdm_master[0].boffs = '0;
-  assign tcdm_master[1].boffs = '0;
-  assign tcdm_master[2].boffs = '0;
-  assign tcdm_master[3].boffs = '0;
-
-  assign tcdm_master[0].lrdy  = '1;
-  assign tcdm_master[1].lrdy  = '1;
-  assign tcdm_master[2].lrdy  = '1;
-  assign tcdm_master[3].lrdy  = '1;
-
-  assign tcdm_master[0].user  = '0;
-  assign tcdm_master[1].user  = '0;
-  assign tcdm_master[2].user  = '0;
-  assign tcdm_master[3].user  = '0;
-
-endmodule : dmac_wrap
+endmodule : dmac_wrap_fc_idma

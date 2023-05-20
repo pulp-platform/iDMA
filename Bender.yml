@@ -74,7 +74,8 @@ sources:
   # Systems
   - target: all(pulp, not(mchan))
     files:
-      - src/systems/pulpopen/dmac_wrap.sv
+      - src/systems/pulpopen/dmac_wrap_cl_idma.sv
+      - src/systems/pulpopen/dmac_wrap_fc_idma.sv
 
   - target: cva6
     files:
