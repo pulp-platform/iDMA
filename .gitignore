@@ -29,7 +29,7 @@ gmon.out
 *non-free*
 bender
 morty
-src/backend/Bender.yml
+src/**/Bender.yml
 src/backend/backend_*
 test/tb_idma_backend_*.sv
 scripts/waves/vsim_backend_*.do
