@@ -20,18 +20,21 @@ sources:
   # Source files grouped in levels. Files in level 0 have no dependencies on files in this
   # package. Files in level 1 only depend on files in level 0, files in level 2 on files in
   # levels 1 and 0, etc. Files within a level are ordered alphabetically.
+
   # Level 0
-  - src/idma_axi_lite_read.sv
-  - src/idma_axi_lite_write.sv
-  - src/idma_axi_read.sv
-  - src/idma_axi_write.sv
-  - src/idma_obi_read.sv
-  - src/idma_obi_write.sv
-  - src/idma_tilelink_read.sv
-  - src/idma_tilelink_write.sv
-  - src/idma_init_read.sv
-  - src/idma_axi_stream_read.sv
-  - src/idma_axi_stream_write.sv
+  # Protocol Managers
+  - src/protocol_managers/axi_lite/idma_axi_lite_read.sv
+  - src/protocol_managers/axi_lite/idma_axi_lite_write.sv
+  - src/protocol_managers/axi/idma_axi_read.sv
+  - src/protocol_managers/axi/idma_axi_write.sv
+  - src/protocol_managers/obi/idma_obi_read.sv
+  - src/protocol_managers/obi/idma_obi_write.sv
+  - src/protocol_managers/tilelink/idma_tilelink_read.sv
+  - src/protocol_managers/tilelink/idma_tilelink_write.sv
+  - src/protocol_managers/init/idma_init_read.sv
+  - src/protocol_managers/axi_stream/idma_axi_stream_read.sv
+  - src/protocol_managers/axi_stream/idma_axi_stream_write.sv
+
   - src/idma_stream_fifo.sv
   - src/idma_improved_fifo.sv
   - src/idma_legalizer_page_splitter.sv
