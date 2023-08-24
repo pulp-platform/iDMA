@@ -7,10 +7,11 @@ package:
     - "Tobias Senti <tsenti@student.ethz.ch>"
 
 dependencies:
-  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.26.0 }
-  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.2 }
+  common_cells:    { git: "https://github.com/pulp-platform/common_cells.git", version: 1.31.1 }
+  axi:             { git: "https://github.com/pulp-platform/axi.git",          version: 0.39.0 }
+
   tb_idma_backend: { path: "../../test" }
-  idma_pkg: { path: "../package" } 
+  idma_pkg:        { path: "../package" } 
 
 export_include_dirs:
   - ../include

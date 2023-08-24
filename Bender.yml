@@ -10,13 +10,13 @@ package:
     - "Tobias Senti <tsenti@student.ethz.ch>"
 
 dependencies:
-  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.27.1 }
-  common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.2 }
-  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.3 }
-  register_interface: { git: "https://github.com/TheMightyDuckOfDoom/register_interface.git", rev: master }
+  common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.31.1 }
+  common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.2  }
+  axi:                 { git: "https://github.com/pulp-platform/axi.git",                 version: 0.39.0 }
+  register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.1  }
 
   idma_backend: { path: "src/backend" }
-  idma_pkg: { path: "src/package" }
+  idma_pkg:     { path: "src/package" }
 
 export_include_dirs:
   - src/include
