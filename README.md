@@ -60,6 +60,7 @@ We currently do not include any free and open-source simulation setup. However, 
 a simulation can be launched using:
 
 ```bash
+make gen_rtl_axi.obi.split
 make prepare_sim
 export VSIM="questa-2022.3 vsim"
 $VSIM -c -do "source scripts/compile_vsim.tcl; quit"
@@ -67,17 +68,21 @@ $VSIM -c -t 1ps -voptargs=+acc \
      +job_file=jobs/multiprotocol/man_mixed.txt \
      -logfile logs/multiprotocol.simple.vsim.log \
      -wlf logs/multiprotocol.simple.wlf \
-     tb_idma_backend_r_axi_w_obi \
+     tb_idma_backend_r_axi_w_obi_split \
      -do "source scripts/start_vsim.tcl; run -all"
 ```
 with gui:
-```
+```bash
+make gen_rtl_axi.tilelink.split
+make prepare_sim
+export VSIM="questa-2022.3 vsim"
+$VSIM -c -do "source scripts/compile_vsim.tcl; quit"
 $VSIM -t 1ps -voptargs=+acc \
      +job_file=jobs/backend/man_tiny.txt \
      -logfile logs/backend.simple.vsim.log \
      -wlf logs/backend.simple.wlf \
-     tb_idma_backend_r_axi_w_tilelink \
-     -do "source scripts/start_vsim.tcl; source scripts/waves/vsim_backend_r_axi_w_tilelink.do; run -all"
+     tb_idma_backend_r_axi_w_tilelink_split \
+     -do "source scripts/start_vsim.tcl; source scripts/waves/vsim_backend_r_axi_w_tilelink_split.do; run -all"
 ```
 
 Where:
