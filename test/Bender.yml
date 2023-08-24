@@ -7,9 +7,10 @@ package:
     - "Tobias Senti <tsenti@student.ethz.ch>"
 
 dependencies:
-  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.26.0 }
-  axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0-beta.3 }
-  register_interface: { git: "https://github.com/TheMightyDuckOfDoom/register_interface.git", rev: master }
+  common_cells:       { git: "https://github.com/pulp-platform/common_cells.git",       version: 1.26.0 }
+  axi:                { git: "https://github.com/pulp-platform/axi.git",                version: 0.39.0 }
+  register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: 0.4.1  }
+
   idma_pkg: { path: ../src/package }
 
 export_include_dirs:

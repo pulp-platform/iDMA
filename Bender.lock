@@ -1,7 +1,14 @@
 packages:
+  apb:
+    revision: 77ddf073f194d44b9119949d2421be59789e69ae
+    version: 0.2.4
+    source:
+      Git: https://github.com/pulp-platform/apb.git
+    dependencies:
+    - common_cells
   axi:
-    revision: 96f749dc4ae62ed6b90e44aabb5d9460f1b0d858
-    version: 0.39.0-beta.3
+    revision: bfee21757bf090ec8e358456314b0b0fd3c90809
+    version: 0.39.0
     source:
       Git: https://github.com/pulp-platform/axi.git
     dependencies:
@@ -9,8 +16,8 @@ packages:
     - common_verification
     - tech_cells_generic
   common_cells:
-    revision: 4dc9413990622dcbf4b37a19f792834c800da5c7
-    version: 1.28.0
+    revision: 53b0b58af2db5bd3c850a7038fae170ed78326bb
+    version: 1.31.1
     source:
       Git: https://github.com/pulp-platform/common_cells.git
     dependencies:
@@ -26,7 +33,7 @@ packages:
     revision: null
     version: null
     source:
-      Path: /home/tbenz/git/bslk/idma/idma-pd/mDMA/src/backend
+      Path: /home/bsc22h2/bachelor-thesis/iDMA/src/backend
     dependencies:
     - axi
     - common_cells
@@ -36,30 +43,32 @@ packages:
     revision: null
     version: null
     source:
-      Path: /home/tbenz/git/bslk/idma/idma-pd/mDMA/src/package
+      Path: /home/bsc22h2/bachelor-thesis/iDMA/src/package
     dependencies:
     - axi
   register_interface:
-    revision: 4632515363fcb1a8ab7735c996753631abf5c7ef
-    version: null
+    revision: 3b2bf592100b769977c76e51812c55cd742882f6
+    version: 0.4.1
     source:
-      Git: https://github.com/TheMightyDuckOfDoom/register_interface.git
+      Git: https://github.com/pulp-platform/register_interface.git
     dependencies:
+    - apb
     - axi
     - common_cells
+    - common_verification
   tb_idma_backend:
     revision: null
     version: null
     source:
-      Path: /home/tbenz/git/bslk/idma/idma-pd/mDMA/src/backend/../../test
+      Path: /home/bsc22h2/bachelor-thesis/iDMA/src/backend/../../test
     dependencies:
     - axi
     - common_cells
     - idma_pkg
     - register_interface
   tech_cells_generic:
-    revision: a9cae21902e75b1434328ecf36f85327ba5717de
-    version: 0.2.11
+    revision: 298b7297d220ba2601d0f24f684f97ff32f61123
+    version: 0.2.12
     source:
       Git: https://github.com/pulp-platform/tech_cells_generic.git
     dependencies:
