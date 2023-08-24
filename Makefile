@@ -321,17 +321,20 @@ gen_rtl_%: util/idma_gen.py Makefile
 	--shifter $(call pw,3,.,$*)
 	$(PYTHON) util/idma_gen.py synth_wrapper \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*))
+	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
+	--shifter $(call pw,3,.,$*)
 	$(PYTHON) util/idma_gen.py testbench \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*))
+	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
+	--shifter $(call pw,3,.,$*)
 	$(PYTHON) util/idma_gen.py wavefile \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
 	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
 	--shifter $(call pw,3,.,$*)
 	$(PYTHON) util/idma_gen.py bender \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*))
+	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
+	--shifter $(call pw,3,.,$*)
 
 rtl_clean:
 	rm  -f src/backend/Bender.yml

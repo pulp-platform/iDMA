@@ -538,23 +538,22 @@ for up in used_protocols:
         name_uniqueifier += 'w'
     name_uniqueifier += '_' + up
 name_uniqueifier += '_'
+combined_shifter = False
 if ('shifter' in args) and ('split' in args.shifter):
     name_uniqueifier += 'split'
 else:
+    combined_shifter = True
     name_uniqueifier += 'combined'     
 
 if args.command == 'transportlayer':
-    combined_shifter=args.shifter == 'combined'
     generate_folder()
     generate_transport_layer()
 
 if args.command == 'legalizer':
-    combined_shifter=args.shifter == 'combined'
     generate_folder()
     generate_legalizer()
 
 if args.command == 'backend':
-    combined_shifter=args.shifter == 'combined'
     generate_folder()
     generate_backend()
 
@@ -562,7 +561,6 @@ if args.command == 'wavefile':
     generate_wave_file()
 
 if args.command == 'testbench':
-    combined_shifter=args.shifter == 'combined'
     generate_folder()
     generate_testbench()
 
@@ -571,11 +569,9 @@ if args.command == 'synth_wrapper':
     generate_synth_wrapper()
 
 if args.command == 'bender':
-    combined_shifter=args.shifter == 'combined'
     generate_bender()
 
 if args.command == 'debug':
-    combined_shifter=args.shifter == 'combined'
     generate_bender()
     generate_folder()
     generate_transport_layer()
