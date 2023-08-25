@@ -4,8 +4,8 @@
 //
 // Tobias Senti <tsenti@student.ethz.ch>
 module idma_legalizer_pow2_splitter #(
-    parameter int unsigned PageAddrWidth = 3,
     parameter int unsigned OffsetWidth = 2,
+    parameter int unsigned PageAddrWidth = 3,
     parameter type addr_t = logic,
     parameter type len_t  = logic
 )(

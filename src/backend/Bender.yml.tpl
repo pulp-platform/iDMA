@@ -10,8 +10,9 @@ dependencies:
   common_cells:    { git: "https://github.com/pulp-platform/common_cells.git", version: 1.31.1 }
   axi:             { git: "https://github.com/pulp-platform/axi.git",          version: 0.39.0 }
 
-  tb_idma_backend: { path: "../../test" }
-  idma_pkg:        { path: "../package" } 
+  tb_idma_backend: { path: "../../test"       }
+  idma_pkg:        { path: "../package"       }
+  idma_future:     { path: "../../src_future" }
 
 export_include_dirs:
   - ../include
@@ -22,26 +23,6 @@ sources:
   # levels 1 and 0, etc. Files within a level are ordered alphabetically.
 
   # Level 0
-  # Protocol Managers
-  - src/protocol_managers/axi_lite/idma_axi_lite_read.sv
-  - src/protocol_managers/axi_lite/idma_axi_lite_write.sv
-  - src/protocol_managers/axi/idma_axi_read.sv
-  - src/protocol_managers/axi/idma_axi_write.sv
-  - src/protocol_managers/obi/idma_obi_read.sv
-  - src/protocol_managers/obi/idma_obi_write.sv
-  - src/protocol_managers/tilelink/idma_tilelink_read.sv
-  - src/protocol_managers/tilelink/idma_tilelink_write.sv
-  - src/protocol_managers/init/idma_init_read.sv
-  - src/protocol_managers/axi_stream/idma_axi_stream_read.sv
-  - src/protocol_managers/axi_stream/idma_axi_stream_write.sv
-
-  - src/idma_stream_fifo.sv
-  - src/idma_improved_fifo.sv
-  - src/idma_legalizer_page_splitter.sv
-  - src/idma_legalizer_pow2_splitter.sv
-  # Level 1
   - src/idma_dataflow_element.sv
   - src/idma_error_handler.sv
   - src/idma_channel_coupler.sv
-
-  # Backends

@@ -1,0 +1,21 @@
+# Copyright 2022 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Modules that should at some point be moved to the common_cells repo
+package:
+  name: idma_future
+  authors:
+    - "Tobias Senti <tsenti@student.ethz.ch>"
+
+dependencies:
+  common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.31.1 }
+
+sources:
+  - include_dirs:
+    - ../include
+    files:
+      - idma_stream_fifo.sv
+      - idma_improved_fifo.sv
+      - idma_legalizer_page_splitter.sv
+      - idma_legalizer_pow2_splitter.sv

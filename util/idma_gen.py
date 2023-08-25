@@ -45,6 +45,7 @@ for filename in os.listdir(database_directory):
             # Check if required fields are available
             if 'prefix' not in file:
                 raise Exception(filename, ': "prefix" not found!')
+            prefix = file['prefix']
 
             if 'protocol_enum' not in file:
                 raise Exception(filename, ': "protocol_enum" not found!')
@@ -73,40 +74,49 @@ for filename in os.listdir(database_directory):
                 raise Exception(filename, 'Database must atleast include a\
  "read_template" or a "write_template"')
 
-            if ('read_template' in file) and ('read_meta_channel' not in file):
-                raise Exception(filename, ': "read_meta_channel" not found!')
+            if ('read_template' in file):
+                if ('read_meta_channel' not in file):
+                    raise Exception(filename, ': "read_meta_channel" not found!')
 
-            if ('read_template' in file) and ('meta_channel_width' not in file) and ('read_meta_channel_width' not in file):
-                raise Exception(filename, ': "read_meta_channel_width" not found!')
+                if ('meta_channel_width' not in file) and ('read_meta_channel_width' not in file):
+                    raise Exception(filename, ': "read_meta_channel_width" not found!')
 
-            if ('read_template' in file) and ('synth_wrapper_ports_read' not in file):
-                raise Exception(filename, ': "synth_wrapper_ports_read" not found!')
+                if ('synth_wrapper_ports_read' not in file):
+                    raise Exception(filename, ': "synth_wrapper_ports_read" not found!')
 
-            if ('read_template' in file) and ('synth_wrapper_assign_read' not in file):
-                raise Exception(filename, ': "synth_wrapper_assign_read" not found!')
+                if ('synth_wrapper_assign_read' not in file):
+                    raise Exception(filename, ': "synth_wrapper_assign_read" not found!')
 
-            if ('read_template' in file) and ('legalizer_read_meta_channel' not in file):
-                raise Exception(filename, ': "legalizer_read_meta_channel" not found!')
+                if ('legalizer_read_meta_channel' not in file):
+                    raise Exception(filename, ': "legalizer_read_meta_channel" not found!')
 
-            if ('write_template' in file) and ('write_meta_channel' not in file):
-                raise Exception(filename, ': "write_meta_channel" not found!')
+                read_manager_path = 'src/backend/src/protocol_managers/' + prefix + '/idma_' + prefix + '_read.sv'
+                if not os.path.isfile(read_manager_path):
+                    raise Exception(filename, ': Read manager file "' + read_manager_path + '" cannot be found!')
 
-            if ('write_template' in file) and ('meta_channel_width' not in file) and ('write_meta_channel_width' not in file):
-                raise Exception(filename, ': "write_meta_channel_width" not found!')
+            if ('write_template' in file):
+                if ('write_meta_channel' not in file):
+                    raise Exception(filename, ': "write_meta_channel" not found!')
 
-            if ('write_template' in file) and ('synth_wrapper_ports_write' not in file):
-                raise Exception(filename, ': "synth_wrapper_ports_write" not found!')
+                if ('meta_channel_width' not in file) and ('write_meta_channel_width' not in file):
+                    raise Exception(filename, ': "write_meta_channel_width" not found!')
 
-            if ('write_template' in file) and ('synth_wrapper_assign_write' not in file):
-                raise Exception(filename, ': "synth_wrapper_assign_write" not found!')
+                if ('synth_wrapper_ports_write' not in file):
+                    raise Exception(filename, ': "synth_wrapper_ports_write" not found!')
 
-            if ('write_template' in file) and ('legalizer_write_meta_channel' not in file):
-                raise Exception(filename, ': "legalizer_write_meta_channel" not found!')
+                if ('synth_wrapper_assign_write' not in file):
+                    raise Exception(filename, ': "synth_wrapper_assign_write" not found!')
 
-            if ('write_template' in file) and ('legalizer_write_data_path' not in file):
-                raise Exception(filename, ': "legalizer_write_data_path" not found!')
+                if ('legalizer_write_meta_channel' not in file):
+                    raise Exception(filename, ': "legalizer_write_meta_channel" not found!')
 
-            prefix = file['prefix']
+                if ('legalizer_write_data_path' not in file):
+                    raise Exception(filename, ': "legalizer_write_data_path" not found!')
+
+                write_manager_path = 'src/backend/src/protocol_managers/' + prefix + '/idma_' + prefix + '_write.sv'
+                if not os.path.isfile(write_manager_path):
+                    raise Exception(filename, ': Write manager file "' + write_manager_path + '" cannot be found!')
+
 
             if (prefix != 'axi') and ('write_template' in file) and ('bridge_template' not in file) and ('write_bridge_template' not in file):
                 raise Exception(filename, ': "write_bridge_template" or "bridge_template" not found!')
@@ -431,6 +441,16 @@ def generate_bender():
         # If not -> Write template into it
         with open('src/backend/Bender.yml.tpl', 'r', encoding='utf-8') as template_file:
             content = template_file.read()
+
+        content += '\n  # Protocol Managers\n'
+        for protocol in available_protocols:
+            content += '\n  # ' + database[protocol]['full_name'] + '\n'
+            if protocol in available_read_protocols:
+                content += '  - src/protocol_managers/' + protocol + '/idma_' + protocol + '_read.sv\n'
+            if protocol in available_write_protocols:
+                content += '  - src/protocol_managers/' + protocol + '/idma_' + protocol + '_write.sv\n'
+        
+        content += '\n  # Backends\n'
     else:
         # Read contents of bender file
         with open('src/backend/Bender.yml', 'r', encoding='utf-8') as bender_file:

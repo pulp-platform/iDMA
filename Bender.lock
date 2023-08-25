@@ -37,8 +37,16 @@ packages:
     dependencies:
     - axi
     - common_cells
+    - idma_future
     - idma_pkg
     - tb_idma_backend
+  idma_future:
+    revision: null
+    version: null
+    source:
+      Path: /home/bsc22h2/bachelor-thesis/iDMA/src/backend/../../src_future
+    dependencies:
+    - common_cells
   idma_pkg:
     revision: null
     version: null
