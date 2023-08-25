@@ -576,6 +576,8 @@ w_tf_q.length[PageAddrWidth:0] ),
     //--------------------------------------
     // Connect outputs
     //--------------------------------------
+
+    // Read meta channel
 % if one_read_port:
     always_comb begin
 ${database[used_read_protocols[0]]['legalizer_read_meta_channel']}
@@ -590,7 +592,7 @@ ${database[used_read_protocols[0]]['legalizer_read_meta_channel']}
             r_req_o.ar_req.tilelink.a_chan = '{
                 opcode:  3'd4,
                 param:   3'd0,
-                size:    OffsetWidth, // Why is this different than one_read_port version?
+                size:    OffsetWidth, // TODO: Why is this different than one_read_port version?
                 source:  opt_tf_q.axi_id,
                 address: { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
                 mask:    '1,
@@ -608,112 +610,22 @@ ${database[protocol]['legalizer_read_meta_channel']}
     end
 % endif
 
+    // assign the signals needed to set-up the read data path
+    assign r_req_o.r_dp_req = '{
+        src_protocol: opt_tf_q.src_protocol,
+        offset:       r_addr_offset,
+        tailer:       OffsetWidth'(r_num_bytes + r_addr_offset),
+        shift:        opt_tf_q.read_shift,
+        decouple_aw:  opt_tf_q.decouple_aw,
+        is_single:    r_num_bytes <= StrbWidth
+    };
+
+    // Write meta channel and data path
 % if one_write_port:
-    % if 'axi' in used_write_protocols: 
-    assign w_req_o.aw_req.axi.aw_chan = '{
-        id:     opt_tf_q.axi_id,
-        addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        len:    ((w_num_bytes + w_addr_offset - 'd1) >> OffsetWidth),
-        size:   axi_pkg::size_t'(OffsetWidth),
-        burst:  opt_tf_q.dst_axi_opt.burst,
-        lock:   opt_tf_q.dst_axi_opt.lock,
-        cache:  opt_tf_q.dst_axi_opt.cache,
-        prot:   opt_tf_q.dst_axi_opt.prot,
-        qos:    opt_tf_q.dst_axi_opt.qos,
-        region: opt_tf_q.dst_axi_opt.region,
-        user:   '0,
-        atop:   '0
-    };
-    assign w_req_o.w_dp_req = '{
-        dst_protocol: opt_tf_q.dst_protocol,
-        offset:       w_addr_offset,
-        tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-        shift:        opt_tf_q.write_shift,
-        num_beats:    w_req_o.aw_req.axi.aw_chan.len,
-        is_single:    w_req_o.aw_req.axi.aw_chan.len == '0
-    };
-    % elif 'axi_lite' in used_write_protocols:
-    assign w_req_o.aw_req.axi_lite.aw_chan = '{
-        addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        prot:   opt_tf_q.dst_axi_opt.prot
-    };
-
-    assign w_req_o.w_dp_req = '{
-        dst_protocol: opt_tf_q.dst_protocol,
-        offset:       w_addr_offset,
-        tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-        shift:        opt_tf_q.write_shift,
-        num_beats:    'd0,
-        is_single:    1'b1
-    };
-    % elif 'obi' in used_write_protocols:
-    assign w_req_o.aw_req.obi.a_chan = '{
-        addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        be:     '0,
-        we:     1,
-        wdata: '0,
-        aid:    opt_tf_q.axi_id
-    };
-
-    assign w_req_o.w_dp_req = '{
-        dst_protocol: opt_tf_q.dst_protocol,
-        offset:       w_addr_offset,
-        tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-        shift:        opt_tf_q.write_shift,
-        num_beats:    'd0,
-        is_single:    1'b1
-    };
-    % elif 'tilelink' in used_write_protocols:
     always_comb begin
-        w_req_o.aw_req.tilelink.a_chan.size = '0;
-        for (int i = 0; i < PageAddrWidth; i++) begin
-            if ((1 << i) == w_num_bytes) begin
-                w_req_o.aw_req.tilelink.a_chan.size = i;
-            end
-        end
-        w_req_o.aw_req.tilelink.a_chan.opcode  = 3'd1;
-        w_req_o.aw_req.tilelink.a_chan.param   = 3'd0;
-        w_req_o.aw_req.tilelink.a_chan.source  = opt_tf_q.axi_id;
-        w_req_o.aw_req.tilelink.a_chan.address = { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
-        w_req_o.aw_req.tilelink.a_chan.mask    = '0;
-        w_req_o.aw_req.tilelink.a_chan.data    = '0;
-        w_req_o.aw_req.tilelink.a_chan.corrupt = 1'b0;
+${database[used_write_protocols[0]]['legalizer_write_meta_channel']}
+${database[used_write_protocols[0]]['legalizer_write_data_path']}
     end
-
-    assign w_req_o.w_dp_req = '{
-        dst_protocol: opt_tf_q.dst_protocol,
-        offset:       w_addr_offset,
-        tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-        shift:        opt_tf_q.write_shift,
-        num_beats:    'd0,
-        is_single:    w_num_bytes <= StrbWidth
-    };
-    % elif 'axi_stream' in used_write_protocols:
-    assign w_req_o.aw_req.axi_stream.t_chan = '{
-        data: '0,
-        strb: '1,
-        keep: '0,
-        last: w_tf_q.length == w_num_bytes,
-        id:   opt_tf_q.axi_id,
-        dest: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.dest)-1:0],
-        user: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.user)-1+:$bits(w_req_o.aw_req.axi_stream.t_chan.dest)]
-    };
-
-    assign w_req_o.w_dp_req = '{
-        dst_protocol: opt_tf_q.dst_protocol,
-        offset:       w_addr_offset,
-        tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-        shift:        opt_tf_q.write_shift,
-        num_beats:    'd0,
-        is_single:    1'b1
-    };
-    % else:
-    `IDMA_NONSYNTH_BLOCK(
-    initial begin
-        $fatal(1, "Single write protocol not implemented!");
-    end
-    )
-    % endif
 % else:
     always_comb begin : gen_write_meta_channel
         w_req_o.aw_req = '0;
@@ -817,15 +729,6 @@ ${database[protocol]['legalizer_read_meta_channel']}
     % endif
 
 % endif
-    // assign the signals needed to set-up the read data path
-    assign r_req_o.r_dp_req = '{
-        src_protocol: opt_tf_q.src_protocol,
-        offset:       r_addr_offset,
-        tailer:       OffsetWidth'(r_num_bytes + r_addr_offset),
-        shift:        opt_tf_q.read_shift,
-        decouple_aw:  opt_tf_q.decouple_aw,
-        is_single:    r_num_bytes <= StrbWidth
-    };
 
     // last burst in generic 1D transfer?
     assign w_req_o.last = w_done;

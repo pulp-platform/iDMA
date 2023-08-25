@@ -43,6 +43,23 @@ legalizer_read_meta_channel: |
         wdata:  '0,
         aid:    opt_tf_q.axi_id
     };
+legalizer_write_meta_channel: |
+    w_req_o.aw_req.obi.a_chan = '{
+        addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+        be:     '0,
+        we:     1,
+        wdata: '0,
+        aid:    opt_tf_q.axi_id
+    };
+legalizer_write_data_path: |
+    w_req_o.w_dp_req = '{
+        dst_protocol: opt_tf_q.dst_protocol,
+        offset:       w_addr_offset,
+        tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
+        shift:        opt_tf_q.write_shift,
+        num_beats:    'd0,
+        is_single:    1'b1
+    };
 read_template: |
     idma_obi_read #(
         .StrbWidth        ( StrbWidth           ),

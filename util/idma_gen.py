@@ -85,6 +85,9 @@ for filename in os.listdir(database_directory):
             if ('read_template' in file) and ('synth_wrapper_assign_read' not in file):
                 raise Exception(filename, ': "synth_wrapper_assign_read" not found!')
 
+            if ('read_template' in file) and ('legalizer_read_meta_channel' not in file):
+                raise Exception(filename, ': "legalizer_read_meta_channel" not found!')
+
             if ('write_template' in file) and ('write_meta_channel' not in file):
                 raise Exception(filename, ': "write_meta_channel" not found!')
 
@@ -96,6 +99,12 @@ for filename in os.listdir(database_directory):
 
             if ('write_template' in file) and ('synth_wrapper_assign_write' not in file):
                 raise Exception(filename, ': "synth_wrapper_assign_write" not found!')
+
+            if ('write_template' in file) and ('legalizer_write_meta_channel' not in file):
+                raise Exception(filename, ': "legalizer_write_meta_channel" not found!')
+
+            if ('write_template' in file) and ('legalizer_write_data_path' not in file):
+                raise Exception(filename, ': "legalizer_write_data_path" not found!')
 
             prefix = file['prefix']
 
@@ -210,9 +219,13 @@ def generate_transport_layer():
 
 def generate_legalizer():
     """Generate Legalizer"""
+    # Indent read meta channel
     for protocol in used_read_protocols:
-        if 'legalizer_read_meta_channel' in database[protocol]:
-            database[protocol]['legalizer_read_meta_channel'] = indent_block(database[protocol]['legalizer_read_meta_channel'], 2 if one_read_port else 3)
+        database[protocol]['legalizer_read_meta_channel'] = indent_block(database[protocol]['legalizer_read_meta_channel'], 2 if one_read_port else 3)
+    # Indent write meta channel and data path
+    for protocol in used_write_protocols:
+        database[protocol]['legalizer_write_meta_channel'] = indent_block(database[protocol]['legalizer_write_meta_channel'], 2 if one_write_port else 3)
+        database[protocol]['legalizer_write_data_path'] = indent_block(database[protocol]['legalizer_write_data_path'], 2 if one_write_port else 3)
     # Render Legalizer
     print('Generating Legalizer...')
     le_context={
