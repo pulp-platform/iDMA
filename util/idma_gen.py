@@ -210,8 +210,7 @@ def generate_transport_layer():
         'one_read_port':        one_read_port,
         'one_write_port':       one_write_port,
         'rendered_read_ports':  rendered_read_ports,
-        'rendered_write_ports': rendered_write_ports,
-        'combined_shifter':     combined_shifter
+        'rendered_write_ports': rendered_write_ports
     }
     tl_template = Template(filename=template_directory + 'idma_transport_layer.sv.tpl')
     rendered_tl = tl_template.render(**tl_context)

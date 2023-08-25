@@ -187,12 +187,7 @@ _rsp_t ${protocol}_write_rsp_i,
 
     strb_t buffer_in_ready;
     // outbound control signals of the buffer: controlled by the write process
-    strb_t buffer_out_valid\
-% if combined_shifter:
-;
-% else:
-    , buffer_out_valid_shifted;
-% endif
+    strb_t buffer_out_valid, buffer_out_valid_shifted;
     strb_t\
 % if not one_write_port:
     % for p in used_write_protocols:
@@ -200,12 +195,7 @@ _rsp_t ${protocol}_write_rsp_i,
     % endfor
 % endif
 
-        buffer_out_ready\
-% if combined_shifter:
-;
-% else:
-, buffer_out_ready_shifted;
-% endif
+        buffer_out_ready, buffer_out_ready_shifted;
 
     // shifted data flowing into the buffer
     byte_t [StrbWidth-1:0]\
@@ -217,12 +207,7 @@ _rsp_t ${protocol}_write_rsp_i,
 
         buffer_in, buffer_in_shifted;
     // aligned and coalesced data leaving the buffer
-    byte_t [StrbWidth-1:0] buffer_out\
-% if combined_shifter:
-;
-% else:
-, buffer_out_shifted;
-% endif
+    byte_t [StrbWidth-1:0] buffer_out, buffer_out_shifted;
 % if not one_read_port:
 
     // Read multiplexed signals
@@ -413,23 +398,17 @@ ${rendered_read_ports[read_port]}
         .strb_t        ( strb_t        ),
         .byte_t        ( byte_t        )
     ) i_dataflow_element (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .data_i      ( buffer_in_shifted ),
-        .valid_i     ( buffer_in_valid   ),
-        .ready_o     ( buffer_in_ready   ),
-        .data_o      ( buffer_out        ),
-        .valid_o     ( buffer_out_valid  ),
-        .ready_i     ( \
-% if combined_shifter:
-buffer_out_ready  )
-% else:
-buffer_out_ready_shifted )
-% endif
+        .clk_i       ( clk_i                    ),
+        .rst_ni      ( rst_ni                   ),
+        .testmode_i  ( testmode_i               ),
+        .data_i      ( buffer_in_shifted        ),
+        .valid_i     ( buffer_in_valid          ),
+        .ready_o     ( buffer_in_ready          ),
+        .data_o      ( buffer_out               ),
+        .valid_o     ( buffer_out_valid         ),
+        .ready_i     ( buffer_out_ready_shifted )
     );
 
-% if not combined_shifter:    
     //--------------------------------------
     // Write Barrel shifter
     //--------------------------------------
@@ -438,7 +417,6 @@ buffer_out_ready_shifted )
     assign buffer_out_valid_shifted = {buffer_out_valid, buffer_out_valid} >>   w_dp_req_i.shift;
     assign buffer_out_ready_shifted = {buffer_out_ready, buffer_out_ready} >> - w_dp_req_i.shift;
 
-% endif
 % if not one_write_port:
     //--------------------------------------
     // Write Request Demultiplexer
@@ -448,10 +426,10 @@ buffer_out_ready_shifted )
     stream_fork #(
         .N_OUP ( 2 )
     ) i_write_stream_fork (
-        .clk_i   ( clk_i ),
-        .rst_ni  ( rst_ni ),
-        .valid_i ( w_dp_valid_i ),
-        .ready_o ( w_dp_ready_o ),
+        .clk_i   ( clk_i                                    ),
+        .rst_ni  ( rst_ni                                   ),
+        .valid_i ( w_dp_valid_i                             ),
+        .ready_o ( w_dp_ready_o                             ),
         .valid_o ( { w_resp_fifo_in_valid, w_dp_req_valid } ),
         .ready_i ( { w_resp_fifo_in_ready, w_dp_req_ready } )
     );
@@ -504,16 +482,16 @@ ${rendered_write_ports[write_port]}
         .type_t       ( idma_pkg::protocol_e ),
         .PrintInfo    ( PrintFifoInfo        )
     ) i_write_response_fifo (
-        .clk_i      ( clk_i                        ),
-        .rst_ni     ( rst_ni                       ),
-        .testmode_i ( testmode_i                   ),
-        .flush_i    ( 1'b0                         ),
-        .usage_o    ( /* NOT CONNECTED */          ),
-        .data_i     ( w_dp_req_i.dst_protocol      ),
-        .valid_i    ( w_resp_fifo_in_valid && w_resp_fifo_in_ready ),
-        .ready_o    ( w_resp_fifo_in_ready         ),
-        .data_o     ( w_resp_fifo_out_protocol     ),
-        .valid_o    ( w_resp_fifo_out_valid        ),
+        .clk_i      ( clk_i                                          ),
+        .rst_ni     ( rst_ni                                         ),
+        .testmode_i ( testmode_i                                     ),
+        .flush_i    ( 1'b0                                           ),
+        .usage_o    ( /* NOT CONNECTED */                            ),
+        .data_i     ( w_dp_req_i.dst_protocol                        ),
+        .valid_i    ( w_resp_fifo_in_valid && w_resp_fifo_in_ready   ),
+        .ready_o    ( w_resp_fifo_in_ready                           ),
+        .data_o     ( w_resp_fifo_out_protocol                       ),
+        .valid_o    ( w_resp_fifo_out_valid                          ),
         .ready_i    ( w_resp_fifo_out_ready && w_resp_fifo_out_valid )
     );
 
@@ -549,18 +527,18 @@ ${rendered_write_ports[write_port]}
     fall_through_register #(
         .T ( w_dp_rsp_t )
     ) i_write_rsp_channel_reg (
-        .clk_i ( clk_i ),
-        .rst_ni ( rst_ni ),
-        .clr_i ( 1'b0 ),
+        .clk_i      ( clk_i      ),
+        .rst_ni     ( rst_ni     ),
+        .clr_i      ( 1'b0       ),
         .testmode_i ( testmode_i ),
 
         .valid_i ( w_dp_rsp_mux_valid ),
         .ready_o ( w_dp_rsp_mux_ready ),
-        .data_i  ( w_dp_rsp_mux ),
+        .data_i  ( w_dp_rsp_mux       ),
      
         .valid_o ( w_dp_rsp_valid ),
         .ready_i ( w_dp_rsp_ready ),
-        .data_o  ( w_dp_rsp_o )
+        .data_o  ( w_dp_rsp_o     )
     );
 
     // Join write response fifo and write port responses
