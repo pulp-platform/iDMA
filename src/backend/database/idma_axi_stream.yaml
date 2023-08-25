@@ -201,6 +201,8 @@ write_bridge_template: |
         .axi_req_o ( axi_stream_axi_write_req ),
         .axi_rsp_i ( axi_stream_axi_write_rsp )
     );
+legalizer_read_meta_channel: |
+    r_req_o.ar_req = '0;
 read_template: |
     idma_axi_stream_read #(
         .StrbWidth        ( StrbWidth           ),

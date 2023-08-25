@@ -46,6 +46,10 @@ read_bridge_template: |
 
     assign init_read_rsp.rsp_chan.init_value = {StrbWidth{8'h42}};
     assign init_axi_read_req = '0;
+legalizer_read_meta_channel: |
+    r_req_o.ar_req.init.req_chan = '{
+        cfg: r_tf_q.base_addr
+    };
 read_template: |
     idma_init_read #(
         .StrbWidth        ( StrbWidth           ),

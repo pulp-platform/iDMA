@@ -577,86 +577,31 @@ w_tf_q.length[PageAddrWidth:0] ),
     // Connect outputs
     //--------------------------------------
 % if one_read_port:
-    % if 'axi' in used_read_protocols:
     always_comb begin
 ${database[used_read_protocols[0]]['legalizer_read_meta_channel']}
     end
-    % elif 'axi_lite' in used_read_protocols:
-    assign r_req_o.ar_req.axi_lite.ar_chan = '{
-        addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        prot:   opt_tf_q.src_axi_opt.prot
-    };
-    % elif 'obi' in used_read_protocols:
-    always_comb begin
-${database[used_read_protocols[0]]['legalizer_read_meta_channel']}
-    end
-    % elif 'tilelink' in used_read_protocols:
-    always_comb begin
-        r_req_o.ar_req.tilelink.a_chan.size = '0;
-        for (int i = 0; i <= PageAddrWidth; i++) begin
-            if ((1 << i) == r_num_bytes) begin
-                r_req_o.ar_req.tilelink.a_chan.size = i;
-            end
-        end
-        r_req_o.ar_req.tilelink.a_chan.opcode  = 3'd4;
-        r_req_o.ar_req.tilelink.a_chan.param   = 3'd0;
-        r_req_o.ar_req.tilelink.a_chan.source  = opt_tf_q.axi_id; 
-        r_req_o.ar_req.tilelink.a_chan.address = { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
-        r_req_o.ar_req.tilelink.a_chan.mask    = '1;
-        r_req_o.ar_req.tilelink.a_chan.data    = '0;
-        r_req_o.ar_req.tilelink.a_chan.corrupt = 1'b0;
-    end
-    % elif 'init' in used_read_protocols:
-    assign r_req_o.ar_req.init.req_chan = '{
-        cfg: r_tf_q.base_addr
-    };
-    % elif 'axi_stream' in used_read_protocols:
-    assign r_req_o.ar_req = '0;
-    % else:
-    `IDMA_NONSYNTH_BLOCK(
-    initial begin
-        $fatal(1, "One Read Port not implemented for ${used_read_protocols[0]}");
-    end
-    )
-    % endif
 % else:
     always_comb begin : gen_read_meta_channel
         r_req_o.ar_req = '0;
         case(opt_tf_q.src_protocol)
-    % if 'axi' in used_read_protocols:
-        idma_pkg::AXI:
-${database['axi']['legalizer_read_meta_channel']}
-    % endif
-    % if 'axi_lite' in used_read_protocols:
-        idma_pkg::AXI_LITE:
-            r_req_o.ar_req.axi_lite.ar_chan = '{
-                addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                prot:   opt_tf_q.src_axi_opt.prot
-            };
-    % endif
-    % if 'obi' in used_read_protocols:
-        idma_pkg::OBI:
-${database['obi']['legalizer_read_meta_channel']}
-    % endif
-    % if 'tilelink' in used_read_protocols:
-        idma_pkg::TILELINK:
+    % for protocol in used_read_protocols:
+        idma_pkg::${database[protocol]['protocol_enum']}:
+        % if protocol == 'tilelink':
             r_req_o.ar_req.tilelink.a_chan = '{
                 opcode:  3'd4,
                 param:   3'd0,
-                size:    OffsetWidth,
+                size:    OffsetWidth, // Why is this different than one_read_port version?
                 source:  opt_tf_q.axi_id,
                 address: { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
                 mask:    '1,
                 data:    '0,
                 corrupt: 1'b0
             };
-    % endif
-    % if 'init' in used_read_protocols:
-        idma_pkg::INIT: 
-            r_req_o.ar_req.init.req_chan = '{\
-                cfg: r_tf_q.base_addr
-            };
-    % endif
+
+        % else:
+${database[protocol]['legalizer_read_meta_channel']}
+        % endif
+    % endfor
         default:
             r_req_o.ar_req = '0;
         endcase
