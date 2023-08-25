@@ -578,32 +578,18 @@ w_tf_q.length[PageAddrWidth:0] ),
     //--------------------------------------
 % if one_read_port:
     % if 'axi' in used_read_protocols:
-    assign r_req_o.ar_req.axi.ar_chan = '{
-            id:     opt_tf_q.axi_id,
-            addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-            len:    ((r_num_bytes + r_addr_offset - 'd1) >> OffsetWidth),
-            size:   axi_pkg::size_t'(OffsetWidth),
-            burst:  opt_tf_q.src_axi_opt.burst,
-            lock:   opt_tf_q.src_axi_opt.lock,
-            cache:  opt_tf_q.src_axi_opt.cache,
-            prot:   opt_tf_q.src_axi_opt.prot,
-            qos:    opt_tf_q.src_axi_opt.qos,
-            region: opt_tf_q.src_axi_opt.region,
-            user:   '0
-    };
+    always_comb begin
+${database[used_read_protocols[0]]['legalizer_read_meta_channel']}
+    end
     % elif 'axi_lite' in used_read_protocols:
     assign r_req_o.ar_req.axi_lite.ar_chan = '{
         addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
         prot:   opt_tf_q.src_axi_opt.prot
     };
     % elif 'obi' in used_read_protocols:
-    assign r_req_o.ar_req.obi.a_chan = '{
-        addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        be:     '1,
-        we:     1'b0,
-        wdata:  '0,
-        aid:    opt_tf_q.axi_id
-    };
+    always_comb begin
+${database[used_read_protocols[0]]['legalizer_read_meta_channel']}
+    end
     % elif 'tilelink' in used_read_protocols:
     always_comb begin
         r_req_o.ar_req.tilelink.a_chan.size = '0;
@@ -639,19 +625,7 @@ w_tf_q.length[PageAddrWidth:0] ),
         case(opt_tf_q.src_protocol)
     % if 'axi' in used_read_protocols:
         idma_pkg::AXI:
-            r_req_o.ar_req.axi.ar_chan = '{
-                id:     opt_tf_q.axi_id,
-                addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                len:    ((r_num_bytes + r_addr_offset - 'd1) >> OffsetWidth),
-                size:   axi_pkg::size_t'(OffsetWidth),
-                burst:  opt_tf_q.src_axi_opt.burst,
-                lock:   opt_tf_q.src_axi_opt.lock,
-                cache:  opt_tf_q.src_axi_opt.cache,
-                prot:   opt_tf_q.src_axi_opt.prot,
-                qos:    opt_tf_q.src_axi_opt.qos,
-                region: opt_tf_q.src_axi_opt.region,
-                user:   '0
-            };
+${database['axi']['legalizer_read_meta_channel']}
     % endif
     % if 'axi_lite' in used_read_protocols:
         idma_pkg::AXI_LITE:
@@ -662,13 +636,7 @@ w_tf_q.length[PageAddrWidth:0] ),
     % endif
     % if 'obi' in used_read_protocols:
         idma_pkg::OBI:
-            r_req_o.ar_req.obi.a_chan = '{
-                addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                be:     '1,
-                we:     1'b0,
-                wdata:  '0,
-                aid:    opt_tf_q.axi_id
-            };
+${database['obi']['legalizer_read_meta_channel']}
     % endif
     % if 'tilelink' in used_read_protocols:
         idma_pkg::TILELINK:

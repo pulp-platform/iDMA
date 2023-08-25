@@ -35,6 +35,14 @@ bridge_template: |
         .axi_req_o ( obi_axi_${port}_req ),
         .axi_rsp_i ( obi_axi_${port}_rsp )
     );
+legalizer_read_meta_channel: |
+    r_req_o.ar_req.obi.a_chan = '{
+        addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+        be:     '1,
+        we:     1'b0,
+        wdata:  '0,
+        aid:    opt_tf_q.axi_id
+    };
 read_template: |
     idma_obi_read #(
         .StrbWidth        ( StrbWidth           ),

@@ -16,6 +16,19 @@ from mako.template import Template
 database_directory='src/backend/database/'
 template_directory='src/backend/src/'
 
+def indent_block(block, indentation):
+    indented_block = ''
+    split_block = block.split('\n')
+
+    for line in split_block:
+        if indented_block != '':
+            indented_block += '\n'
+        for i in range(indentation):
+            indented_block += "    "
+        indented_block += line
+
+    return indented_block
+
 # Parse Databases
 # yaml=YAML()
 database={}
@@ -197,6 +210,9 @@ def generate_transport_layer():
 
 def generate_legalizer():
     """Generate Legalizer"""
+    for protocol in used_read_protocols:
+        if 'legalizer_read_meta_channel' in database[protocol]:
+            database[protocol]['legalizer_read_meta_channel'] = indent_block(database[protocol]['legalizer_read_meta_channel'], 2 if one_read_port else 3)
     # Render Legalizer
     print('Generating Legalizer...')
     le_context={
