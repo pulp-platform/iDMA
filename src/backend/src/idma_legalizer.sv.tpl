@@ -573,8 +573,8 @@ w_tf_q.length[PageAddrWidth:0] ),
                 opt_tf_d.read_shift  = req_i.src_addr[OffsetWidth-1:0] - req_i.dst_addr[OffsetWidth-1:0];
                 opt_tf_d.write_shift = '0;
             end else begin
-                opt_tf_d.read_shift  =   req_i.src_addr[OffsetWidth-1:0],
-                opt_tf_d.write_shift = - req_i.dst_addr[OffsetWidth-1:0],
+                opt_tf_d.read_shift  =   req_i.src_addr[OffsetWidth-1:0];
+                opt_tf_d.write_shift = - req_i.dst_addr[OffsetWidth-1:0];
             end
         end
     end
