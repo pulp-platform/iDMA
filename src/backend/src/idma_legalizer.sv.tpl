@@ -624,7 +624,18 @@ ${database[protocol]['legalizer_read_meta_channel']}
 % if one_write_port:
     always_comb begin
 ${database[used_write_protocols[0]]['legalizer_write_meta_channel']}
+    % if 'legalizer_write_data_path' in database[used_write_protocols[0]]:
 ${database[used_write_protocols[0]]['legalizer_write_data_path']}
+    % else:
+        w_req_o.w_dp_req = '{
+            dst_protocol: opt_tf_q.dst_protocol,
+            offset:       w_addr_offset,
+            tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
+            shift:        opt_tf_q.write_shift,
+            num_beats:    'd0,
+            is_single:    1'b1
+        };
+    % endif
     end
 % else:
     always_comb begin : gen_write_meta_channel
