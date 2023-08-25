@@ -10,6 +10,10 @@
 
 /// Synthesis wrapper for the iDMA backend. Unpacks all the interfaces to simple logic vectors
 module idma_backend_synth${name_uniqueifier} #(
+    /// Should both data shifts be done before the dataflow element?
+    /// If this is enabled, then the data inserted into the dataflow element
+    /// will no longer be word aligned, but only a single shifter is needed
+    parameter bit           CombinedShifter     = 1'b0,
     /// Data width
     parameter int unsigned  DataWidth           = 32'd32,
     /// Address width
@@ -31,7 +35,7 @@ module idma_backend_synth${name_uniqueifier} #(
     /// Mask invalid data on the manager interface
     parameter bit           MaskInvalidData     = 1'b1,
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
-    parameter bit          RAWCouplingAvail      = \
+    parameter bit          RAWCouplingAvail     = \
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
 1,
 % else:
@@ -276,6 +280,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     idma_rsp_t idma_rsp;
 
     idma_backend${name_uniqueifier} #(
+        .CombinedShifter      ( CombinedShifter         ),
         .DataWidth            ( DataWidth               ),
         .AddrWidth            ( AddrWidth               ),
         .AxiIdWidth           ( AxiIdWidth              ),

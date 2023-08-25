@@ -187,9 +187,6 @@ def generate_transport_layer():
             'write_meta_ready':      'aw_ready_o' if one_write_port else wp + '_aw_ready',
             'write_request':     wp + '_write_req_o',
             'write_response':    wp + '_write_rsp_i',
-            'buffer_out':   'buffer_out' if combined_shifter else 'buffer_out_shifted',
-            'buffer_out_valid':   'buffer_out_valid' if combined_shifter
-                else 'buffer_out_valid_shifted',
             'buffer_out_ready':    'buffer_out_ready' if one_write_port
                 else wp + '_buffer_out_ready'
         }
@@ -250,8 +247,7 @@ def generate_legalizer():
         'used_non_bursting_write_protocols' : list(filter(
             lambda a: database[a]['bursts'] == 'not_supported', used_write_protocols)),
         'used_non_bursting_read_protocols'  : list(filter(
-            lambda a: database[a]['bursts'] == 'not_supported', used_read_protocols)),
-        'combined_shifter':     combined_shifter
+            lambda a: database[a]['bursts'] == 'not_supported', used_read_protocols))
     }
     le_template = Template(filename=template_directory + 'idma_legalizer.sv.tpl')
     rendered_le = le_template.render(**le_context)
@@ -376,7 +372,8 @@ def generate_testbench():
         'one_read_port':        one_read_port,
         'one_write_port':       one_write_port,
         'rendered_read_bridges':    rendered_read_bridges,
-        'rendered_write_bridges':   rendered_write_bridges
+        'rendered_write_bridges':   rendered_write_bridges,
+        'combined_shifter':     combined_shifter
     }
     tb_template = Template(filename='test/tb_idma_backend.sv.tpl')
     rendered_tb = tb_template.render(**tb_context)

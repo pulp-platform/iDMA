@@ -33,6 +33,12 @@ module tb_idma_backend${name_uniqueifier} import idma_pkg::*; #(
     parameter int unsigned ${database[protocol]['protocol_enum']}_MemNumReqOutst    = 1,
     parameter int unsigned ${database[protocol]['protocol_enum']}_MemLatency        = 0,
 % endfor
+    parameter bit          CombinedShifter       = 1'b\
+% if combined_shifter:
+1,
+% else:
+0,
+% endif
     parameter int unsigned WatchDogNumCycles     = 100,
     parameter bit          MaskInvalidData       = 1,
     parameter bit          RAWCouplingAvail      = \
@@ -511,6 +517,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     //--------------------------------------
 
     idma_backend${name_uniqueifier} #(
+        .CombinedShifter      ( CombinedShifter      ),
         .DataWidth            ( DataWidth            ),
         .AddrWidth            ( AddrWidth            ),
         .AxiIdWidth           ( AxiIdWidth           ),

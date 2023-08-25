@@ -104,8 +104,8 @@ write_template: |
         .aw_ready_o         ( ${write_meta_ready}  ),
         .write_req_o        ( ${write_request} ),
         .write_rsp_i        ( ${write_response} ),
-        .buffer_out_i       ( ${buffer_out} ),
-        .buffer_out_valid_i ( ${buffer_out_valid} ),
+        .buffer_out_i       ( buffer_out_shifted ),
+        .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} )
     );
 synth_wrapper_ports_write: |

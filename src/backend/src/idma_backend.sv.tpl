@@ -10,26 +10,30 @@
 
 /// The iDMA backend implements an arbitrary 1D copy engine
 module idma_backend${name_uniqueifier} #(
+    /// Should both data shifts be done before the dataflow element?
+    /// If this is enabled, then the data inserted into the dataflow element
+    /// will no longer be word aligned, but only a single shifter is needed
+    parameter bit          CombinedShifter = 1'b0,
     /// Data width
-    parameter int unsigned DataWidth = 32'd16,
+    parameter int unsigned DataWidth        = 32'd16,
     /// Address width
-    parameter int unsigned AddrWidth = 32'd24,
+    parameter int unsigned AddrWidth        = 32'd24,
     /// AXI user width
-    parameter int unsigned UserWidth = 32'd1,
+    parameter int unsigned UserWidth        = 32'd1,
     /// AXI ID width
-    parameter int unsigned AxiIdWidth = 32'd1,
+    parameter int unsigned AxiIdWidth       = 32'd1,
     /// Number of transaction that can be in-flight concurrently
-    parameter int unsigned NumAxInFlight = 32'd2,
+    parameter int unsigned NumAxInFlight    = 32'd2,
     /// The depth of the internal reorder buffer:
     /// - '2': minimal possible configuration
     /// - '3': efficiently handle misaligned transfers (recommended)
-    parameter int unsigned BufferDepth = 32'd2,
+    parameter int unsigned BufferDepth      = 32'd2,
     /// With of a transfer: max transfer size is `2**TFLenWidth` bytes
-    parameter int unsigned TFLenWidth = 32'd24,
+    parameter int unsigned TFLenWidth       = 32'd24,
     /// The depth of the memory system the backend is attached to
-    parameter int unsigned MemSysDepth = 32'd0,
+    parameter int unsigned MemSysDepth      = 32'd0,
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
-    parameter bit RAWCouplingAvail = 1'b\
+    parameter bit          RAWCouplingAvail = 1'b\
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
 1,
 % else:
@@ -398,6 +402,7 @@ _rsp_t ${protocol}_write_rsp_i,
     if (HardwareLegalizer) begin : gen_hw_legalizer
         // hardware legalizer is present
         idma_legalizer${name_uniqueifier} #(
+            .CombinedShifter        ( CombinedShifter   ),
             .DataWidth              ( DataWidth         ),
             .AddrWidth              ( AddrWidth         ),
             .idma_req_t             ( idma_req_t        ),

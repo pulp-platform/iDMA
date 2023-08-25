@@ -12,21 +12,25 @@
 /// Legalizes a generic 1D transfer according to the rules given by the
 /// used protocol.
 module idma_legalizer${name_uniqueifier} #(
+    /// Should both data shifts be done before the dataflow element?
+    /// If this is enabled, then the data inserted into the dataflow element
+    /// will no longer be word aligned, but only a single shifter is needed
+    parameter bit          CombinedShifter = 1'b0,
     /// Data width
-    parameter int unsigned DataWidth = 32'd16,
+    parameter int unsigned DataWidth       = 32'd16,
     /// Address width
-    parameter int unsigned AddrWidth = 32'd24,
+    parameter int unsigned AddrWidth       = 32'd24,
     /// 1D iDMA request type:
     /// - `length`: the length of the transfer in bytes
     /// - `*_addr`: the source / target byte addresses of the transfer
     /// - `opt`: the options field
-    parameter type idma_req_t = logic,
+    parameter type idma_req_t        = logic,
     /// Read request type
-    parameter type idma_r_req_t = logic,
+    parameter type idma_r_req_t      = logic,
     /// Write request type
-    parameter type idma_w_req_t = logic,
+    parameter type idma_w_req_t      = logic,
     /// Mutable transfer type
-    parameter type idma_mut_tf_t = logic,
+    parameter type idma_mut_tf_t     = logic,
     /// Mutable options type
     parameter type idma_mut_tf_opt_t = logic
 )(
@@ -551,13 +555,8 @@ w_tf_q.length[PageAddrWidth:0] ),
             opt_tf_d = '{
                 src_protocol:   req_i.opt.src_protocol,
                 dst_protocol:   req_i.opt.dst_protocol,
-% if combined_shifter:
-                read_shift:     req_i.src_addr[OffsetWidth-1:0] - req_i.dst_addr[OffsetWidth-1:0],
+                read_shift:     '0,
                 write_shift:    '0,
-% else:
-                read_shift:     req_i.src_addr[OffsetWidth-1:0],
-                write_shift:  - req_i.dst_addr[OffsetWidth-1:0],
-% endif
                 decouple_rw:    req_i.opt.beo.decouple_rw,
                 decouple_aw:    req_i.opt.beo.decouple_aw,
                 src_max_llen:   req_i.opt.beo.src_max_llen,
@@ -569,6 +568,14 @@ w_tf_q.length[PageAddrWidth:0] ),
                 dst_axi_opt:    req_i.opt.dst,
                 super_last:     req_i.opt.last
             };
+            // determine shift amount
+            if (CombinedShifter) begin
+                opt_tf_d.read_shift  = req_i.src_addr[OffsetWidth-1:0] - req_i.dst_addr[OffsetWidth-1:0];
+                opt_tf_d.write_shift = '0;
+            end else begin
+                opt_tf_d.read_shift  =   req_i.src_addr[OffsetWidth-1:0],
+                opt_tf_d.write_shift = - req_i.dst_addr[OffsetWidth-1:0],
+            end
         end
     end
 
