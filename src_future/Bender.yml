@@ -13,7 +13,7 @@ dependencies:
 
 sources:
   - include_dirs:
-    - ../include
+    - ../src/include
     files:
       - idma_stream_fifo.sv
       - idma_improved_fifo.sv
