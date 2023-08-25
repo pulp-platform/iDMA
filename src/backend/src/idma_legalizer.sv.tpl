@@ -695,18 +695,15 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
     end
 
     // assign the signals needed to set-up the write data path
-    % if 'axi' in used_write_protocols:
     always_comb begin : gen_write_data_path
-        if (opt_tf_q.dst_protocol == idma_pkg::AXI) begin
-            w_req_o.w_dp_req = '{
-                dst_protocol: opt_tf_q.dst_protocol,
-                offset:       w_addr_offset,
-                tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-                shift:        opt_tf_q.write_shift,
-                num_beats:    w_req_o.aw_req.axi.aw_chan.len,
-                is_single:    w_req_o.aw_req.axi.aw_chan.len == '0
-            };
-        end else begin
+        case (opt_tf_q.dst_protocol)
+        % for protocol in used_write_protocols:
+            % if 'legalizer_write_data_path' in database[protocol]:
+        idma_pkg::${database[protocol]['protocol_enum']}:
+${database[protocol]['legalizer_write_data_path']}
+            % endif
+        % endfor
+        default:
             w_req_o.w_dp_req = '{
                 dst_protocol: opt_tf_q.dst_protocol,
                 offset:       w_addr_offset,
@@ -715,18 +712,8 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
                 num_beats:    'd0,
                 is_single:    1'b1
             };
-        end
+        endcase
     end
-    % else:
-    assign w_req_o.w_dp_req = '{
-        dst_protocol: opt_tf_q.dst_protocol,
-        offset:       w_addr_offset,
-        tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-        shift:        opt_tf_q.write_shift,
-        num_beats:    'd0,
-        is_single:    1'b1
-    };
-    % endif
 
 % endif
 

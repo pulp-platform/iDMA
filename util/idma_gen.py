@@ -110,9 +110,6 @@ for filename in os.listdir(database_directory):
                 if ('legalizer_write_meta_channel' not in file):
                     raise Exception(filename, ': "legalizer_write_meta_channel" not found!')
 
-                if ('legalizer_write_data_path' not in file):
-                    raise Exception(filename, ': "legalizer_write_data_path" not found!')
-
                 write_manager_path = 'src/backend/src/protocol_managers/' + prefix + '/idma_' + prefix + '_write.sv'
                 if not os.path.isfile(write_manager_path):
                     raise Exception(filename, ': Write manager file "' + write_manager_path + '" cannot be found!')
@@ -235,7 +232,8 @@ def generate_legalizer():
     # Indent write meta channel and data path
     for protocol in used_write_protocols:
         database[protocol]['legalizer_write_meta_channel'] = indent_block(database[protocol]['legalizer_write_meta_channel'], 2 if one_write_port else 3)
-        database[protocol]['legalizer_write_data_path'] = indent_block(database[protocol]['legalizer_write_data_path'], 2 if one_write_port else 3)
+        if 'legalizer_write_data_path' in database[protocol]:
+            database[protocol]['legalizer_write_data_path'] = indent_block(database[protocol]['legalizer_write_data_path'], 2 if one_write_port else 3)
     # Render Legalizer
     print('Generating Legalizer...')
     le_context={
