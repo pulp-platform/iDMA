@@ -641,65 +641,24 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
     always_comb begin : gen_write_meta_channel
         w_req_o.aw_req = '0;
         case(opt_tf_q.dst_protocol)
-    % if 'axi' in used_write_protocols:
-        idma_pkg::AXI:
-            w_req_o.aw_req.axi.aw_chan = '{
-                id:     opt_tf_q.axi_id,
-                addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                len:    ((w_num_bytes + w_addr_offset - 'd1) >> OffsetWidth),
-                size:   axi_pkg::size_t'(OffsetWidth),
-                burst:  opt_tf_q.dst_axi_opt.burst,
-                lock:   opt_tf_q.dst_axi_opt.lock,
-                cache:  opt_tf_q.dst_axi_opt.cache,
-                prot:   opt_tf_q.dst_axi_opt.prot,
-                qos:    opt_tf_q.dst_axi_opt.qos,
-                region: opt_tf_q.dst_axi_opt.region,
-                user:   '0,
-                atop:   '0
-            };
-    % endif
-    % if 'axi_lite' in used_write_protocols:
-        idma_pkg::AXI_LITE:
-            w_req_o.aw_req.axi_lite.aw_chan = '{
-                addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                prot:   opt_tf_q.dst_axi_opt.prot
-            };
-    % endif
-    % if 'obi' in used_write_protocols:
-        idma_pkg::OBI:
-            w_req_o.aw_req.obi.a_chan = '{
-                addr:   { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                be:     '0,
-                we:     1,
-                wdata: '0,
-                aid:    opt_tf_q.axi_id
-            };
-    % endif
-    % if 'tilelink' in used_write_protocols:
+    % for protocol in used_write_protocols:
+        idma_pkg::${database[protocol]['protocol_enum']}:
+        % if protocol == 'tilelink':
         idma_pkg::TILELINK:
             w_req_o.aw_req.tilelink.a_chan = '{
                 opcode:  3'd1,
                 param:   3'd0,
-                size:    OffsetWidth,
+                size:    OffsetWidth, // TODO: Why is this different than one_write_port version?
                 source:  opt_tf_q.axi_id,
                 address: { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
                 mask:    '0,
                 data:    '0,
                 corrupt: 1'b0
             };
-    % endif
-    % if 'axi_stream' in used_write_protocols:
-        idma_pkg::AXI_STREAM: 
-            w_req_o.aw_req.axi_stream.t_chan = '{
-                data: '0,
-                strb: '1,
-                keep: '0,
-                last: w_tf_q.length == w_num_bytes,
-                id:   opt_tf_q.axi_id,
-                dest: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.dest)-1:0],
-                user: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.user)-1+:$bits(w_req_o.aw_req.axi_stream.t_chan.dest)]
-            };
-    % endif
+        % else:
+${database[protocol]['legalizer_write_meta_channel']}
+        % endif
+    % endfor
         default:
             w_req_o.aw_req = '0;
         endcase
