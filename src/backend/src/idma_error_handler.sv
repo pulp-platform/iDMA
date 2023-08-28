@@ -55,13 +55,13 @@ module idma_error_handler #(
     input  logic req_ready_i,
 
     /// The current read address (burst address) injected into the datapath
-    input  addr_t   r_addr_i,
+    input  addr_t r_addr_i,
     /// The address is consumed by the datapath
-    input  logic    r_consume_i,
+    input  logic  r_consume_i,
     /// The current write address (burst address) injected into the datapath
-    input  addr_t   w_addr_i,
+    input  addr_t w_addr_i,
     /// The address is consumed by the datapath
-    input  logic    w_consume_i,
+    input  logic  w_consume_i,
 
     /// Invalidate the current burst transfer, stops emission of requests
     output logic legalizer_flush_o,
@@ -230,9 +230,9 @@ module idma_error_handler #(
 
                 // a proper write response (lowest priority)
                 if (w_dp_rsp_i.resp == axi_pkg::RESP_OKAY & w_dp_valid_i & w_last_burst_i) begin
-                    rsp_o        =  '0;
-                    rsp_o.last   = w_super_last_i;
-                    rsp_valid_o  = 1'b1;
+                    rsp_o       =  '0;
+                    rsp_o.last  = w_super_last_i;
+                    rsp_valid_o = 1'b1;
                     //rb_out_ready = 1'b1; // pop buffer
                 end
 
@@ -250,9 +250,9 @@ module idma_error_handler #(
                     r_dp_ready_o         = 1'b0;
                     // go to one of the wait states
                     if (w_last_burst_i) begin
-                        state_d              = WAIT_LAST_W;
+                        state_d = WAIT_LAST_W;
                     end else begin
-                        state_d              = WAIT;
+                        state_d  = WAIT;
                     end
                 end
 
@@ -279,8 +279,8 @@ module idma_error_handler #(
                 if (eh_valid_i) begin
                     // continue case (~error reporting)
                     if (eh_i == idma_pkg::CONTINUE) begin
-                        eh_ready_o   = 1'b1;
-                        state_d      = IDLE;
+                        eh_ready_o = 1'b1;
+                        state_d    = IDLE;
                     end
                     // abort
                     if (eh_i == idma_pkg::ABORT) begin
@@ -289,13 +289,13 @@ module idma_error_handler #(
                         // - some transfers might complete properly so no flush allowed!
                         // in this case just continue
                         if (num_outst_q > 'd1) begin
-                            eh_ready_o   = 1'b1;
-                            state_d      = IDLE;
+                            eh_ready_o = 1'b1;
+                            state_d    = IDLE;
                         // we are aborting a long transfer (it is still in the legalizer and
                         // therefore the only active transfer in the datapath)
                         end else if (num_outst_q == 'd1) begin
-                            eh_ready_o   = 1'b1;
-                            state_d      = LEG_FLUSH;
+                            eh_ready_o = 1'b1;
+                            state_d    = LEG_FLUSH;
                         // the counter is 0 -> no transfer in the datapath. This is an impossible
                         // state
                         end else begin
@@ -312,7 +312,7 @@ module idma_error_handler #(
             WAIT_LAST_W : begin
                 // continue case (~error reporting)
                 if (eh_i == idma_pkg::CONTINUE) begin
-                    eh_ready_o   = 1'b1;
+                    eh_ready_o = 1'b1;
                     state_d = EMIT_EXTRA_RSP;
                 end
                 // abort
@@ -322,13 +322,13 @@ module idma_error_handler #(
                     // - some transfers might complete properly so no flush allowed!
                     // in this case just continue
                     if (num_outst_q > 'd1) begin
-                        eh_ready_o   = 1'b1;
-                        state_d      = EMIT_EXTRA_RSP;
+                        eh_ready_o = 1'b1;
+                        state_d    = EMIT_EXTRA_RSP;
                     // we are aborting a long transfer (it is still in the legalizer and
                     // therefore the only active transfer in the datapath)
                     end else if (num_outst_q == 'd1) begin
-                        eh_ready_o   = 1'b1;
-                        state_d      = LEG_FLUSH;
+                        eh_ready_o = 1'b1;
+                        state_d    = LEG_FLUSH;
                     // the counter is 0 -> no transfer in the datapath. This is an impossible
                     // state
                     end else begin
@@ -356,8 +356,8 @@ module idma_error_handler #(
                 r_dp_ready_o = 1'b1;
                 // once the datapath is idle return to idle
                 if (!dp_busy_i) begin
-                    state_d           = EMIT_EXTRA_RSP;
-                    legalizer_kill_o  = 1'b1;
+                    state_d          = EMIT_EXTRA_RSP;
+                    legalizer_kill_o = 1'b1;
                 end
             end
 

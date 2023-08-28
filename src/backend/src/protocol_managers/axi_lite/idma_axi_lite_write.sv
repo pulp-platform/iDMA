@@ -99,7 +99,6 @@ module idma_axi_lite_write #(
     assign mask_out = ('1 << w_dp_req_i.offset) &
         ((w_dp_req_i.tailer != '0) ? ('1 >> (StrbWidth - w_dp_req_i.tailer)) : '1);
 
-
     //--------------------------------------
     // Write control
     //--------------------------------------
@@ -133,8 +132,8 @@ module idma_axi_lite_write #(
         // always_comb process implements masking of invalid data
         always_comb begin : proc_mask
             // defaults
-            write_req_o.w.data   = '0;
-            write_req_o.w.strb   = '0;
+            write_req_o.w.data = '0;
+            write_req_o.w.strb = '0;
             buffer_data_masked = '0;
             // control the write to the bus apply data to the bus only if data should be written
             if (ready_to_write == 1'b1 & !dp_poison_i) begin
@@ -153,13 +152,12 @@ module idma_axi_lite_write #(
         // not used signal
         assign buffer_data_masked = '0;
         // simpler: direct connection
-        assign write_req_o.w.data   = buffer_out_i;
-        assign write_req_o.w.strb   = dp_poison_i ? '0 : mask_out;
+        assign write_req_o.w.data = buffer_out_i;
+        assign write_req_o.w.strb = dp_poison_i ? '0 : mask_out;
     end
 
     // we are ready for the next transfer internally, once the w last signal is applied
     assign w_dp_ready_o = write_happening;
-
 
     //--------------------------------------
     // Write response
@@ -174,13 +172,11 @@ module idma_axi_lite_write #(
     // write responses
     assign write_req_o.b_ready = w_dp_ready_i;
 
-
     //--------------------------------------
     // Unused AXI Lite signals
     //--------------------------------------
+    assign write_req_o.ar       = '0;
     assign write_req_o.ar_valid = 1'b0;
-    assign write_req_o.r_ready = 1'b0;
-
-    assign write_req_o.ar = '0;
+    assign write_req_o.r_ready  = 1'b0;
 
 endmodule : idma_axi_lite_write

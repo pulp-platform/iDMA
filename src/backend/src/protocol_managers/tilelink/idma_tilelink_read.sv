@@ -57,9 +57,9 @@ module idma_tilelink_read #(
     output logic read_meta_ready_o,
 
     /// TileLink read manager port request
-    output read_req_t  read_req_o,
+    output read_req_t read_req_o,
     /// TileLink read manager port response
-    input  read_rsp_t  read_rsp_i,
+    input  read_rsp_t read_rsp_i,
 
     /// Response channel valid and ready
     output logic r_chan_ready_o,
@@ -189,7 +189,7 @@ module idma_tilelink_read #(
 
     // once valid data is applied, it can be pushed in all the selected (mask_in) buffers
     // be sure the response channel is ready
-    assign in_valid        = read_rsp_i.d_valid & in_ready & r_dp_ready_i;
+    assign in_valid          = read_rsp_i.d_valid & in_ready & r_dp_ready_i;
     assign buffer_in_valid_o = in_valid ? mask_in : '0;
 
     // r_dp_ready_o is triggered by the last element arriving from the read

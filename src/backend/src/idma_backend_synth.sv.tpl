@@ -13,29 +13,29 @@ module idma_backend_synth${name_uniqueifier} #(
     /// Should both data shifts be done before the dataflow element?
     /// If this is enabled, then the data inserted into the dataflow element
     /// will no longer be word aligned, but only a single shifter is needed
-    parameter bit           CombinedShifter     = 1'b0,
+    parameter bit          CombinedShifter     = 1'b0,
     /// Data width
-    parameter int unsigned  DataWidth           = 32'd32,
+    parameter int unsigned DataWidth           = 32'd32,
     /// Address width
-    parameter int unsigned  AddrWidth           = 32'd32,
+    parameter int unsigned AddrWidth           = 32'd32,
     /// AXI user width
-    parameter int unsigned  UserWidth           = 32'd1,
+    parameter int unsigned UserWidth           = 32'd1,
     /// AXI ID width
-    parameter int unsigned  AxiIdWidth          = 32'd1,
+    parameter int unsigned AxiIdWidth          = 32'd1,
     /// Number of transaction that can be in-flight concurrently
-    parameter int unsigned  NumAxInFlight       = 32'd3,
+    parameter int unsigned NumAxInFlight       = 32'd3,
     /// The depth of the internal reorder buffer:
     /// - '2': minimal possible configuration
     /// - '3': efficiently handle misaligned transfers (recommended)
-    parameter int unsigned  BufferDepth         = 32'd3,
+    parameter int unsigned BufferDepth         = 32'd3,
     /// With of a transfer: max transfer size is `2**TFLenWidth` bytes
-    parameter int unsigned  TFLenWidth          = 32'd32,
+    parameter int unsigned TFLenWidth          = 32'd32,
     /// The depth of the memory system the backend is attached to
-    parameter int unsigned  MemSysDepth         = 32'd0,
+    parameter int unsigned MemSysDepth         = 32'd0,
     /// Mask invalid data on the manager interface
-    parameter bit           MaskInvalidData     = 1'b1,
+    parameter bit          MaskInvalidData     = 1'b1,
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
-    parameter bit          RAWCouplingAvail     = \
+    parameter bit          RAWCouplingAvail    = \
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
 1,
 % else:
@@ -44,11 +44,11 @@ module idma_backend_synth${name_uniqueifier} #(
     /// Should hardware legalization be present? (recommended)
     /// If not, software legalization is required to ensure the transfers are
     /// AXI4-conformal
-    parameter bit           HardwareLegalizer   = 1'b1,
+    parameter bit          HardwareLegalizer   = 1'b1,
     /// Reject zero-length transfers
-    parameter bit           RejectZeroTransfers = 1'b1,
+    parameter bit          RejectZeroTransfers = 1'b1,
     /// Should the error handler be present?
-    parameter bit           ErrorHandling       = 1'b\
+    parameter bit          ErrorHandling       = 1'b\
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
 1,
 % else:
@@ -56,23 +56,23 @@ module idma_backend_synth${name_uniqueifier} #(
 %endif
     // Dependent parameters; do not override!
     /// Strobe Width (do not override!)
-    parameter int unsigned StrbWidth       = DataWidth / 8,
+    parameter int unsigned StrbWidth           = DataWidth / 8,
     /// Offset Width (do not override!)
-    parameter int unsigned OffsetWidth     = $clog2(StrbWidth),
+    parameter int unsigned OffsetWidth         = $clog2(StrbWidth),
     /// Address type (do not override!)
-    parameter type addr_t                  = logic[AddrWidth-1:0],
+    parameter type addr_t                      = logic[AddrWidth-1:0],
     /// Data type (do not override!)
-    parameter type data_t                  = logic[DataWidth-1:0],
+    parameter type data_t                      = logic[DataWidth-1:0],
     /// Strobe type (do not override!)
-    parameter type strb_t                  = logic[StrbWidth-1:0],
+    parameter type strb_t                      = logic[StrbWidth-1:0],
     /// User type (do not override!)
-    parameter type user_t                  = logic[UserWidth-1:0],
+    parameter type user_t                      = logic[UserWidth-1:0],
     /// ID type (do not override!)
-    parameter type id_t                    = logic[AxiIdWidth-1:0],
+    parameter type id_t                        = logic[AxiIdWidth-1:0],
     /// Transfer length type (do not override!)
-    parameter type tf_len_t                = logic[TFLenWidth-1:0],
+    parameter type tf_len_t                    = logic[TFLenWidth-1:0],
     /// Offset type (do not override!)
-    parameter type offset_t                = logic[OffsetWidth-1:0]
+    parameter type offset_t                    = logic[OffsetWidth-1:0]
 )(
     input  logic                   clk_i,
     input  logic                   rst_ni,

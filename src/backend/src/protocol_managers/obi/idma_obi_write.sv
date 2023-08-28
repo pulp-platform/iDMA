@@ -145,7 +145,7 @@ module idma_obi_write #(
 
     // we are ready for the next transfer internally, once the w last signal is applied
     assign w_dp_ready_o = write_happening;
-    assign aw_ready_o = write_happening;
+    assign aw_ready_o   = write_happening;
 
     //--------------------------------------
     // Write response

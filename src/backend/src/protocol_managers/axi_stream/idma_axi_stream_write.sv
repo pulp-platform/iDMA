@@ -122,7 +122,7 @@ module idma_axi_stream_write #(
         // always_comb process implements masking of invalid data
         always_comb begin : proc_mask
             // defaults
-            write_req_o.t = aw_req_i.axi_stream.t_chan;
+            write_req_o.t      = aw_req_i.axi_stream.t_chan;
             buffer_data_masked = '0;
             // control the write to the bus apply data to the bus only if data should be written
             if (ready_to_write == 1'b1 & !dp_poison_i) begin
@@ -148,7 +148,7 @@ module idma_axi_stream_write #(
 
     // we are ready for the next transfer internally, once the w last signal is applied
     assign w_dp_req_ready_o = write_happening;
-    assign aw_ready_o = write_happening;
+    assign aw_ready_o       = write_happening;
 
     //--------------------------------------
     // Write response
@@ -170,4 +170,5 @@ module idma_axi_stream_write #(
         .valid_o ( { w_dp_rsp_valid_o, write_req_o.tvalid } ),
         .ready_i ( { w_dp_rsp_ready_i, write_rsp_i.tready } )
     );
+
 endmodule : idma_axi_stream_write

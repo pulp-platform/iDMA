@@ -120,7 +120,7 @@ module idma_channel_coupler #(
     assign aw_req_in.decoupled = aw_decouple_aw_i;
 
     // aw payload is just connected to fifo
-    assign aw_req_o   = aw_req_out.aw;
+    assign aw_req_o = aw_req_out.aw;
 
     // use a credit counter to keep track of AWs to send
     always_comb begin : proc_credit_cnt
@@ -129,7 +129,7 @@ module idma_channel_coupler #(
         aw_to_send_d = aw_to_send_q;
 
         // if we bypass the logic
-        aw_sent      = aw_req_out.decoupled & aw_valid;
+        aw_sent = aw_req_out.decoupled & aw_valid;
 
         // first is asserted and aw is ready -> just send AW out
         // without changing the credit counter value

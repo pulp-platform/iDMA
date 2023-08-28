@@ -143,9 +143,9 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     logic w_tf_ena;
 
     // page boundaries
-    page_len_t  r_num_bytes_to_pb;
-    page_len_t  w_num_bytes_to_pb;
-    page_len_t  c_num_bytes_to_pb;
+    page_len_t r_num_bytes_to_pb;
+    page_len_t w_num_bytes_to_pb;
+    page_len_t c_num_bytes_to_pb;
 
     // read process
     page_len_t r_num_bytes_possible;
@@ -524,9 +524,9 @@ w_tf_q.length[PageAddrWidth:0] ),
         //--------------------------------------
         if (kill_i) begin
             // kill the current state
-            r_tf_d =  '0;
+            r_tf_d = '0;
+            w_tf_d = '0;
             r_done = 1'b1;
-            w_tf_d =  '0;
             w_done = 1'b1;
         end
 
@@ -790,9 +790,9 @@ ${database[protocol]['legalizer_write_data_path']}
     //--------------------------------------
     // State
     //--------------------------------------
-    `FF(opt_tf_q, opt_tf_d, '0, clk_i, rst_ni)
-    `FFL(r_tf_q, r_tf_d, r_tf_ena, '0, clk_i, rst_ni)
-    `FFL(w_tf_q, w_tf_d, w_tf_ena, '0, clk_i, rst_ni)
+    `FF (opt_tf_q, opt_tf_d,           '0, clk_i, rst_ni)
+    `FFL(r_tf_q,   r_tf_d,   r_tf_ena, '0, clk_i, rst_ni)
+    `FFL(w_tf_q,   w_tf_d,   w_tf_ena, '0, clk_i, rst_ni)
 
 
     //--------------------------------------

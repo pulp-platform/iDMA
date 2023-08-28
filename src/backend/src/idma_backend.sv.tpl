@@ -40,25 +40,25 @@ module idma_backend${name_uniqueifier} #(
 0,
 %endif
     /// Mask invalid data on the manager interface
-    parameter bit MaskInvalidData = 1'b1,
+    parameter bit MaskInvalidData            = 1'b1,
     /// Should hardware legalization be present? (recommended)
     /// If not, software legalization is required to ensure the transfers are
     /// AXI4-conformal
-    parameter bit HardwareLegalizer = 1'b1,
+    parameter bit HardwareLegalizer          = 1'b1,
     /// Reject zero-length transfers
-    parameter bit RejectZeroTransfers = 1'b1,
+    parameter bit RejectZeroTransfers        = 1'b1,
     /// Should the error handler be present?
     parameter idma_pkg::error_cap_e ErrorCap = idma_pkg::NO_ERROR_HANDLING,
     /// Print the info of the FIFO configuration
-    parameter bit PrintFifoInfo = 1'b0,
+    parameter bit PrintFifoInfo              = 1'b0,
     /// 1D iDMA request type
-    parameter type idma_req_t = logic,
+    parameter type idma_req_t                = logic,
     /// iDMA response type
-    parameter type idma_rsp_t = logic,
+    parameter type idma_rsp_t                = logic,
     /// Error Handler request type
-    parameter type idma_eh_req_t = logic,
+    parameter type idma_eh_req_t             = logic,
     /// iDMA busy signal
-    parameter type idma_busy_t = logic\
+    parameter type idma_busy_t               = logic\
 % for protocol in used_protocols:
 ,
     /// ${database[protocol]['full_name']} Request and Response channel type
@@ -85,11 +85,11 @@ module idma_backend${name_uniqueifier} #(
     /// Address Write Channel type
     parameter type write_meta_channel_t = logic,
     /// Address Read Channel type
-    parameter type read_meta_channel_t = logic,
+    parameter type read_meta_channel_t  = logic,
     /// Strobe Width (do not override!)
-    parameter int unsigned StrbWidth = DataWidth / 8,
+    parameter int unsigned StrbWidth    = DataWidth / 8,
     /// Offset Width (do not override!)
-    parameter int unsigned OffsetWidth = $clog2(StrbWidth)
+    parameter int unsigned OffsetWidth  = $clog2(StrbWidth)
 )(
     /// Clock
     input  logic clk_i,
@@ -278,10 +278,10 @@ _rsp_t ${protocol}_write_rsp_i,
     /// The mutable transfer type holds important information that is mutated by the
     /// `legalizer` block.
     typedef struct packed {
-        tf_len_t  length;
-        addr_t    addr;
-        logic     valid;
-        addr_t    base_addr;
+        tf_len_t length;
+        addr_t   addr;
+        logic    valid;
+        addr_t   base_addr;
     } idma_mut_tf_t;
 
 
@@ -312,7 +312,7 @@ _rsp_t ${protocol}_write_rsp_i,
     logic w_super_last;
 
     // Datapath FIFO signals -> used to decouple legalizer and datapath
-    logic r_dp_req_in_ready , w_dp_req_in_ready;
+    logic r_dp_req_in_ready,  w_dp_req_in_ready;
     logic r_dp_req_out_valid, w_dp_req_out_valid;
     logic r_dp_req_out_ready, w_dp_req_out_ready;
     r_dp_req_t r_dp_req_out;
@@ -325,8 +325,8 @@ _rsp_t ${protocol}_write_rsp_i,
     logic r_dp_rsp_ready, w_dp_rsp_ready;
 
     // Ax handshaking
-    logic ar_ready, ar_ready_dp;
-    logic aw_ready, aw_ready_dp;
+    logic ar_ready,    ar_ready_dp;
+    logic aw_ready,    aw_ready_dp;
     logic aw_valid_dp, ar_valid_dp;
 
     // Ax request from R-AW coupler to datapath
@@ -402,30 +402,30 @@ _rsp_t ${protocol}_write_rsp_i,
     if (HardwareLegalizer) begin : gen_hw_legalizer
         // hardware legalizer is present
         idma_legalizer${name_uniqueifier} #(
-            .CombinedShifter        ( CombinedShifter   ),
-            .DataWidth              ( DataWidth         ),
-            .AddrWidth              ( AddrWidth         ),
-            .idma_req_t             ( idma_req_t        ),
-            .idma_r_req_t           ( idma_r_req_t      ),
-            .idma_w_req_t           ( idma_w_req_t      ),
-            .idma_mut_tf_t          ( idma_mut_tf_t     ),
-            .idma_mut_tf_opt_t      ( idma_mut_tf_opt_t )
+            .CombinedShifter   ( CombinedShifter   ),
+            .DataWidth         ( DataWidth         ),
+            .AddrWidth         ( AddrWidth         ),
+            .idma_req_t        ( idma_req_t        ),
+            .idma_r_req_t      ( idma_r_req_t      ),
+            .idma_w_req_t      ( idma_w_req_t      ),
+            .idma_mut_tf_t     ( idma_mut_tf_t     ),
+            .idma_mut_tf_opt_t ( idma_mut_tf_opt_t )
         ) i_idma_legalizer (
-            .clk_i,
-            .rst_ni,
-            .req_i             ( idma_req_i         ),
-            .valid_i           ( req_valid          ),
-            .ready_o           ( req_ready_o        ),
-            .r_req_o           ( r_req              ),
-            .w_req_o           ( w_req              ),
-            .r_valid_o         ( r_valid            ),
-            .w_valid_o         ( w_valid            ),
-            .r_ready_i         ( r_ready            ),
-            .w_ready_i         ( w_ready            ),
-            .flush_i           ( legalizer_flush    ),
-            .kill_i            ( legalizer_kill     ),
-            .r_busy_o          ( busy_o.r_leg_busy  ),
-            .w_busy_o          ( busy_o.w_leg_busy  )
+            .clk_i     ( clk_i             ),
+            .rst_ni    ( rst_ni            ),
+            .req_i     ( idma_req_i        ),
+            .valid_i   ( req_valid         ),
+            .ready_o   ( req_ready_o       ),
+            .r_req_o   ( r_req             ),
+            .w_req_o   ( w_req             ),
+            .r_valid_o ( r_valid           ),
+            .w_valid_o ( w_valid           ),
+            .r_ready_i ( r_ready           ),
+            .w_ready_i ( w_ready           ),
+            .flush_i   ( legalizer_flush   ),
+            .kill_i    ( legalizer_kill    ),
+            .r_busy_o  ( busy_o.r_leg_busy ),
+            .w_busy_o  ( busy_o.w_leg_busy )
         );
 
     end else begin : gen_no_hw_legalizer
@@ -434,8 +434,8 @@ _rsp_t ${protocol}_write_rsp_i,
         stream_fork #(
             .N_OUP   ( 32'd2 )
         ) i_stream_fork (
-            .clk_i,
-            .rst_ni,
+            .clk_i   ( clk_i                ),
+            .rst_ni  ( rst_ni               ),
             .valid_i ( req_valid            ),
             .ready_o ( req_ready_o          ),
             .valid_o ( { r_valid, w_valid } ),
@@ -446,68 +446,6 @@ _rsp_t ${protocol}_write_rsp_i,
         axi_pkg::len_t len;
         assign len = ((idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0] -
                      'd1) >> OffsetWidth);
-
-
-        // if (Protocol1 == idma_pkg::AXI) begin : gen_axi_ar_req
-        //     // assemble AR request
-        //     assign r_req.ar_req = '{
-        //         id:     idma_req_i.opt.axi_id,
-        //         addr:   { idma_req_i.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        //         len:    len,
-        //         size:   axi_pkg::size_t'(OffsetWidth),
-        //         burst:  idma_req_i.opt.src.burst,
-        //         lock:   idma_req_i.opt.src.lock,
-        //         cache:  idma_req_i.opt.src.cache,
-        //         prot:   idma_req_i.opt.src.prot,
-        //         qos:    idma_req_i.opt.src.qos,
-        //         region: idma_req_i.opt.src.region,
-        //         user:   '0
-        //     };
-        // end else if (Protocol1 == idma_pkg::AXI_LITE) begin : gen_axi_lite_ar_req
-        //     // assemble AR request
-        //     assign r_req.ar_req = '{
-        //         addr:   { idma_req_i.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        //         prot:   idma_req_i.opt.src.prot
-        //     };
-        // end else begin : gen_ar_req_error
-        //     `IDMA_NONSYNTH_BLOCK(
-        //     initial begin
-        //         $fatal(1, "Backend: legalizer bypass ar req not implemented for requested ",
-        //             "protocol!");
-        //     end
-        //     )
-        // end
-
-        // if (Protocol2 == idma_pkg::AXI) begin : gen_axi_aw_req
-        //     // assemble AW request
-        //     assign w_req.aw_req = '{
-        //         id:     idma_req_i.opt.axi_id,
-        //         addr:   { idma_req_i.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        //         len:    len,
-        //         size:   axi_pkg::size_t'(OffsetWidth),
-        //         burst:  idma_req_i.opt.dst.burst,
-        //         lock:   idma_req_i.opt.dst.lock,
-        //         cache:  idma_req_i.opt.dst.cache,
-        //         prot:   idma_req_i.opt.dst.prot,
-        //         qos:    idma_req_i.opt.dst.qos,
-        //         region: idma_req_i.opt.dst.region,
-        //         user:   '0,
-        //         atop:   '0
-        //     };
-        // end else if (Protocol2 == idma_pkg::AXI_LITE) begin : gen_axi_lite_aw_req
-        //     // assemble AW request
-        //     assign w_req.aw_req = '{
-        //         addr:   { idma_req_i.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        //         prot:   idma_req_i.opt.dst.prot
-        //     };
-        // end else begin : gen_aw_req_error
-        //     `IDMA_NONSYNTH_BLOCK(
-        //     initial begin
-        //         $fatal(1, "Backend: legalizer bypass aw req not implemented for requested ",
-        //             "protocol!");
-        //     end
-        //     )
-        // end
 
         // assemble read datapath request
         assign r_req.r_dp_req = '{
@@ -551,43 +489,43 @@ _rsp_t ${protocol}_write_rsp_i,
     if (ErrorCap == idma_pkg::ERROR_HANDLING) begin : gen_error_handler
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
         idma_error_handler #(
-            .MetaFifoDepth ( MetaFifoDepth      ),
-            .PrintFifoInfo ( PrintFifoInfo      ),
-            .idma_rsp_t    ( idma_rsp_t         ),
-            .idma_eh_req_t ( idma_eh_req_t      ),
-            .addr_t        ( addr_t             ),
-            .r_dp_rsp_t    ( r_dp_rsp_t         ),
-            .w_dp_rsp_t    ( w_dp_rsp_t         )
+            .MetaFifoDepth ( MetaFifoDepth ),
+            .PrintFifoInfo ( PrintFifoInfo ),
+            .idma_rsp_t    ( idma_rsp_t    ),
+            .idma_eh_req_t ( idma_eh_req_t ),
+            .addr_t        ( addr_t        ),
+            .r_dp_rsp_t    ( r_dp_rsp_t    ),
+            .w_dp_rsp_t    ( w_dp_rsp_t    )
         ) i_idma_error_handler (
-            .clk_i,
-            .rst_ni,
-            .testmode_i,
-            .rsp_o              ( idma_rsp           ),
-            .rsp_valid_o        ( rsp_valid          ),
-            .rsp_ready_i        ( rsp_ready          ),
-            .req_valid_i        ( req_valid          ),
-            .req_ready_i        ( req_ready_o        ),
-            .eh_i               ( idma_eh_req_i      ),
-            .eh_valid_i         ( eh_req_valid_i     ),
-            .eh_ready_o         ( eh_req_ready_o     ),
-            .r_addr_i           ( r_req.ar_req.axi.ar_chan.addr ),
-            .r_consume_i        ( r_valid & r_ready  ),
-            .w_addr_i           ( w_req.aw_req.axi.aw_chan.addr ),
-            .w_consume_i        ( w_valid & w_ready  ),
-            .legalizer_flush_o  ( legalizer_flush    ),
-            .legalizer_kill_o   ( legalizer_kill     ),
-            .dp_busy_i          ( dp_busy            ),
-            .dp_poison_o        ( dp_poison          ),
-            .r_dp_rsp_i         ( r_dp_rsp           ),
-            .r_dp_valid_i       ( r_dp_rsp_valid     ),
-            .r_dp_ready_o       ( r_dp_rsp_ready     ),
-            .w_dp_rsp_i         ( w_dp_rsp           ),
-            .w_dp_valid_i       ( w_dp_rsp_valid     ),
-            .w_dp_ready_o       ( w_dp_rsp_ready     ),
-            .w_last_burst_i     ( w_last_burst       ),
-            .w_super_last_i     ( w_super_last       ),
-            .fsm_busy_o         ( busy_o.eh_fsm_busy ),
-            .cnt_busy_o         ( busy_o.eh_cnt_busy )
+            .clk_i             ( clk_i              ),
+            .rst_ni            ( rst_ni             ),
+            .testmode_i        ( testmode_i         ),
+            .rsp_o             ( idma_rsp           ),
+            .rsp_valid_o       ( rsp_valid          ),
+            .rsp_ready_i       ( rsp_ready          ),
+            .req_valid_i       ( req_valid          ),
+            .req_ready_i       ( req_ready_o        ),
+            .eh_i              ( idma_eh_req_i      ),
+            .eh_valid_i        ( eh_req_valid_i     ),
+            .eh_ready_o        ( eh_req_ready_o     ),
+            .r_addr_i          ( r_req.ar_req.axi.ar_chan.addr ),
+            .w_addr_i          ( w_req.aw_req.axi.aw_chan.addr ),
+            .r_consume_i       ( r_valid & r_ready  ),
+            .w_consume_i       ( w_valid & w_ready  ),
+            .legalizer_flush_o ( legalizer_flush    ),
+            .legalizer_kill_o  ( legalizer_kill     ),
+            .dp_busy_i         ( dp_busy            ),
+            .dp_poison_o       ( dp_poison          ),
+            .r_dp_rsp_i        ( r_dp_rsp           ),
+            .r_dp_valid_i      ( r_dp_rsp_valid     ),
+            .r_dp_ready_o      ( r_dp_rsp_ready     ),
+            .w_dp_rsp_i        ( w_dp_rsp           ),
+            .w_dp_valid_i      ( w_dp_rsp_valid     ),
+            .w_dp_ready_o      ( w_dp_rsp_ready     ),
+            .w_last_burst_i    ( w_last_burst       ),
+            .w_super_last_i    ( w_super_last       ),
+            .fsm_busy_o        ( busy_o.eh_fsm_busy ),
+            .cnt_busy_o        ( busy_o.eh_cnt_busy )
         );
 % else:
         `IDMA_NONSYNTH_BLOCK(
@@ -632,39 +570,39 @@ _rsp_t ${protocol}_write_rsp_i,
     // Datapath decoupling
     //--------------------------------------
     idma_stream_fifo #(
-        .Depth        ( NumAxInFlight ),
-        .type_t       ( r_dp_req_t    ),
-        .PrintInfo    ( PrintFifoInfo )
+        .Depth     ( NumAxInFlight ),
+        .type_t    ( r_dp_req_t    ),
+        .PrintInfo ( PrintFifoInfo )
     ) i_r_dp_req (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .flush_i   ( 1'b0                ),
-        .usage_o   ( /* NOT CONNECTED */ ),
-        .data_i    ( r_req.r_dp_req      ),
-        .valid_i   ( r_valid             ),
-        .ready_o   ( r_dp_req_in_ready   ),
-        .data_o    ( r_dp_req_out        ),
-        .valid_o   ( r_dp_req_out_valid  ),
-        .ready_i   ( r_dp_req_out_ready  )
+        .clk_i      ( clk_i               ),
+        .rst_ni     ( rst_ni              ),
+        .testmode_i ( testmode_i          ),
+        .flush_i    ( 1'b0                ),
+        .usage_o    ( /* NOT CONNECTED */ ),
+        .data_i     ( r_req.r_dp_req      ),
+        .valid_i    ( r_valid             ),
+        .ready_o    ( r_dp_req_in_ready   ),
+        .data_o     ( r_dp_req_out        ),
+        .valid_o    ( r_dp_req_out_valid  ),
+        .ready_i    ( r_dp_req_out_ready  )
     );
 
     idma_stream_fifo #(
-        .Depth        ( NumAxInFlight ),
-        .type_t       ( w_dp_req_t    ),
-        .PrintInfo    ( PrintFifoInfo )
+        .Depth     ( NumAxInFlight ),
+        .type_t    ( w_dp_req_t    ),
+        .PrintInfo ( PrintFifoInfo )
     ) i_w_dp_req (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .flush_i   ( 1'b0                ),
-        .usage_o   ( /* NOT CONNECTED */ ),
-        .data_i    ( w_req.w_dp_req      ),
-        .valid_i   ( w_valid             ),
-        .ready_o   ( w_dp_req_in_ready   ),
-        .data_o    ( w_dp_req_out        ),
-        .valid_o   ( w_dp_req_out_valid  ),
-        .ready_i   ( w_dp_req_out_ready  )
+        .clk_i      ( clk_i               ),
+        .rst_ni     ( rst_ni              ),
+        .testmode_i ( testmode_i          ),
+        .flush_i    ( 1'b0                ),
+        .usage_o    ( /* NOT CONNECTED */ ),
+        .data_i     ( w_req.w_dp_req      ),
+        .valid_i    ( w_valid             ),
+        .ready_o    ( w_dp_req_in_ready   ),
+        .data_o     ( w_dp_req_out        ),
+        .valid_o    ( w_dp_req_out_valid  ),
+        .ready_i    ( w_dp_req_out_ready  )
     );
 
     // Add fall-through register to allow the input to be ready if the output is not. This
@@ -685,9 +623,9 @@ _rsp_t ${protocol}_write_rsp_i,
 % endif
  )
     ) i_ar_fall_through_register (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
+        .clk_i      ( clk_i             ),
+        .rst_ni     ( rst_ni            ),
+        .testmode_i ( testmode_i        ),
         .clr_i      ( 1'b0              ),
         .valid_i    ( r_valid           ),
         .ready_o    ( ar_ready          ),
@@ -712,17 +650,17 @@ _rsp_t ${protocol}_write_rsp_i,
         .type_t       ( logic [1:0]   ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_w_last (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .flush_i   ( 1'b0                            ),
-        .usage_o   ( /* NOT CONNECTED */             ),
-        .data_i    ( {w_req.super_last, w_req.last}  ),
-        .valid_i   ( w_valid & w_ready               ),
-        .ready_o   ( w_last_ready                    ),
-        .data_o    ( {w_super_last, w_last_burst}    ),
-        .valid_o   ( /* NOT CONNECTED */             ),
-        .ready_i   ( w_dp_rsp_valid & w_dp_rsp_ready )
+        .clk_i      ( clk_i                           ),
+        .rst_ni     ( rst_ni                          ),
+        .testmode_i ( testmode_i                      ),
+        .flush_i    ( 1'b0                            ),
+        .usage_o    ( /* NOT CONNECTED */             ),
+        .data_i     ( {w_req.super_last, w_req.last}  ),
+        .valid_i    ( w_valid & w_ready               ),
+        .ready_o    ( w_last_ready                    ),
+        .data_o     ( {w_super_last, w_last_burst}    ),
+        .valid_o    ( /* NOT CONNECTED */             ),
+        .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 
     //--------------------------------------

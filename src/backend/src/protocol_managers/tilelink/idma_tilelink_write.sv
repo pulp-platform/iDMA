@@ -192,8 +192,8 @@ module idma_tilelink_write #(
         // not used signal
         assign buffer_data_masked = '0;
         // simpler: direct connection
-        assign write_req_o.a.data   = buffer_out_i;
-        assign write_req_o.a.mask   = dp_poison_i ? '0 : mask_out;
+        assign write_req_o.a.data = buffer_out_i;
+        assign write_req_o.a.mask = dp_poison_i ? '0 : mask_out;
     end
 
     // the w last signal should only be applied to the bus if an actual transfer happens
@@ -207,11 +207,11 @@ module idma_tilelink_write #(
     always_comb begin : proc_write_control
         // defaults:
         // beat counter
-        w_num_beats_d   = w_num_beats_q;
-        w_cnt_valid_d   = w_cnt_valid_q;
+        w_num_beats_d = w_num_beats_q;
+        w_cnt_valid_d = w_cnt_valid_q;
         // mask control
-        first_w      = 1'b0;
-        last_w       = 1'b0;
+        first_w = 1'b0;
+        last_w  = 1'b0;
 
         // differentiate between the burst and non-burst case. If a transfer
         // consists just of one beat the counters are disabled

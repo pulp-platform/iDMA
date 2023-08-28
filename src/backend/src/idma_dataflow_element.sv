@@ -41,15 +41,14 @@ module idma_dataflow_element #(
             .clk_i,
             .rst_ni,
             .testmode_i,
-            .flush_i      ( 1'b0                ),
-            .data_i       ( data_i  [i]         ),
-            .valid_i      ( valid_i [i]         ),
-            .ready_o      ( ready_o [i]         ),
-            .data_o       ( data_o  [i]         ),
-            .valid_o      ( valid_o [i]         ),
-            .ready_i      ( ready_i [i]         )
+            .flush_i      ( 1'b0        ),
+            .data_i       ( data_i  [i] ),
+            .valid_i      ( valid_i [i] ),
+            .ready_o      ( ready_o [i] ),
+            .data_o       ( data_o  [i] ),
+            .valid_o      ( valid_o [i] ),
+            .ready_i      ( ready_i [i] )
         );
     end : gen_fifo_buffer
 
 endmodule : idma_dataflow_element 
-
