@@ -13,7 +13,12 @@ module idma_backend_synth${name_uniqueifier} #(
     /// Should both data shifts be done before the dataflow element?
     /// If this is enabled, then the data inserted into the dataflow element
     /// will no longer be word aligned, but only a single shifter is needed
-    parameter bit          CombinedShifter     = 1'b0,
+    parameter bit          CombinedShifter     = 1'b\
+% if combined_shifter:
+1,
+% else:
+0,
+% endif
     /// Data width
     parameter int unsigned DataWidth           = 32'd32,
     /// Address width

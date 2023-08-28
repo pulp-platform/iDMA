@@ -397,7 +397,8 @@ def generate_synth_wrapper():
         'used_write_protocols': used_write_protocols,
         'used_protocols':       used_protocols,
         'one_read_port':        one_read_port,
-        'one_write_port':       one_write_port
+        'one_write_port':       one_write_port,
+        'combined_shifter':     combined_shifter
     }
     for protocol in used_protocols:
         if protocol in used_read_protocols:
@@ -487,32 +488,24 @@ gen_tl.add_argument('-r', '--read-protocols', choices=available_read_protocols,
     type=str, required=True, nargs='+', dest='read_protocols')
 gen_tl.add_argument('-w', '--write-protocols', choices=available_write_protocols,
     type=str, required=True, nargs='+', dest='write_protocols')
-gen_tl.add_argument('-s', '--shifter', choices=['combined', 'split'],
-    type=str, required=False, default='split', dest='shifter')
 
 gen_le = subparser.add_parser('legalizer', description='Generates the legalizer')
 gen_le.add_argument('-r', '--read-protocols', choices=available_read_protocols,
     type=str, required=True, nargs='+', dest='read_protocols')
 gen_le.add_argument('-w', '--write-protocols', choices=available_write_protocols,
     type=str, required=True, nargs='+', dest='write_protocols')
-gen_le.add_argument('-s', '--shifter', choices=['combined', 'split'],
-    type=str, required=False, default='split', dest='shifter')
 
 gen_be = subparser.add_parser('backend', description='Generates the backend')
 gen_be.add_argument('-r', '--read-protocols', choices=available_read_protocols,
     type=str, required=True, nargs='+', dest='read_protocols')
 gen_be.add_argument('-w', '--write-protocols', choices=available_write_protocols,
     type=str, required=True, nargs='+', dest='write_protocols')
-gen_be.add_argument('-s', '--shifter', choices=['combined', 'split'],
-    type=str, required=False, default='split', dest='shifter')
 
 gen_wf = subparser.add_parser('wavefile', description='Generates a .do wavefile for debugging in vsim')
 gen_wf.add_argument('-r', '--read-protocols', choices=available_read_protocols,
     type=str, required=True, nargs='+', dest='read_protocols')
 gen_wf.add_argument('-w', '--write-protocols', choices=available_write_protocols,
     type=str, required=True, nargs='+', dest='write_protocols')
-gen_wf.add_argument('-s', '--shifter', choices=['combined', 'split'],
-    type=str, required=False, default='split', dest='shifter')
 
 gen_tb = subparser.add_parser('testbench', description='Generates the testbench')
 gen_tb.add_argument('-r', '--read-protocols', choices=available_read_protocols,
@@ -535,10 +528,8 @@ gen_bd.add_argument('-r', '--read-protocols', choices=available_read_protocols,
     type=str, required=True, nargs='+', dest='read_protocols')
 gen_bd.add_argument('-w', '--write-protocols', choices=available_write_protocols,
     type=str, required=True, nargs='+', dest='write_protocols')
-gen_bd.add_argument('-s', '--shifter', choices=['combined', 'split'],
-    type=str, required=False, default='split', dest='shifter')
 
-gen_all = subparser.add_parser('debug', description='Generates all required file for debugging: TransportLayer, Legalizer, Backend, Testbench, Bender, Wavefile')
+gen_all = subparser.add_parser('debug', description='Generates all required files for debugging: TransportLayer, Legalizer, Backend, Testbench, Bender, Wavefile')
 gen_all.add_argument('-r', '--read-protocols', choices=available_read_protocols,
     type=str, required=True, nargs='+', dest='read_protocols')
 gen_all.add_argument('-w', '--write-protocols', choices=available_write_protocols,
@@ -580,13 +571,9 @@ for up in used_protocols:
     if up in used_write_protocols:
         name_uniqueifier += 'w'
     name_uniqueifier += '_' + up
-name_uniqueifier += '_'
 combined_shifter = False
-if ('shifter' in args) and ('split' in args.shifter):
-    name_uniqueifier += 'split'
-else:
+if ('shifter' in args) and ('combined' in args.shifter):
     combined_shifter = True
-    name_uniqueifier += 'combined'     
 
 if args.command == 'transportlayer':
     generate_folder()

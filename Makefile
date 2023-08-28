@@ -309,16 +309,13 @@ gen_rtl: $(RTL_CFGS)
 gen_rtl_%: util/idma_gen.py Makefile
 	$(PYTHON) util/idma_gen.py transportlayer \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
-	--shifter $(call pw,3,.,$*)
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
 	$(PYTHON) util/idma_gen.py legalizer \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
-	--shifter $(call pw,3,.,$*)
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
 	$(PYTHON) util/idma_gen.py backend \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
-	--shifter $(call pw,3,.,$*)
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
 	$(PYTHON) util/idma_gen.py synth_wrapper \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
 	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
@@ -329,12 +326,10 @@ gen_rtl_%: util/idma_gen.py Makefile
 	--shifter $(call pw,3,.,$*)
 	$(PYTHON) util/idma_gen.py wavefile \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
-	--shifter $(call pw,3,.,$*)
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
 	$(PYTHON) util/idma_gen.py bender \
 	--read-protocols $(subst -, ,$(call pw,1,.,$*)) \
-	--write-protocols $(subst -, ,$(call pw,2,.,$*)) \
-	--shifter $(call pw,3,.,$*)
+	--write-protocols $(subst -, ,$(call pw,2,.,$*))
 
 rtl_clean:
 	rm  -f src/backend/Bender.yml
