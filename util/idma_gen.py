@@ -556,7 +556,7 @@ used_write_protocols.sort()
 used_protocols.sort()
 
 print('Read Protocols: ', used_read_protocols)
-print('Write Protocols: ', used_write_protocols)
+print('Write Protocols:', used_write_protocols)
 print('Used Protocols: ', used_protocols)
 
 one_read_port = len(used_read_protocols) == 1
