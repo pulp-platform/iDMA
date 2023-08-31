@@ -248,6 +248,9 @@ r_tf_q.length[PageAddrWidth:0] ),
         .page_len_t    ( page_len_t  ),
         .page_addr_t   ( page_addr_t )
     ) i_read_page_splitter (
+    %if len(used_non_bursting_read_protocols) == 0:
+        .not_bursting_i    ( 1'b0 ),
+    %else:
         .not_bursting_i    ( opt_tf_q.src_protocol inside {\
     % for index, protocol in enumerate(used_non_bursting_read_protocols):
  idma_pkg::${database[protocol]['protocol_enum']}\
@@ -256,6 +259,7 @@ r_tf_q.length[PageAddrWidth:0] ),
         % endif
     % endfor       
 } ),
+    % endif
 
         .reduce_len_i      ( opt_tf_q.src_reduce_len ),
         .max_llen_i        ( opt_tf_q.src_max_llen   ),
@@ -594,22 +598,9 @@ ${database[used_read_protocols[0]]['legalizer_read_meta_channel']}
         r_req_o.ar_req = '0;
         case(opt_tf_q.src_protocol)
     % for protocol in used_read_protocols:
-        idma_pkg::${database[protocol]['protocol_enum']}:
-        % if protocol == 'tilelink':
-            r_req_o.ar_req.tilelink.a_chan = '{
-                opcode:  3'd4,
-                param:   3'd0,
-                size:    OffsetWidth, // TODO: Why is this different than one_read_port version?
-                source:  opt_tf_q.axi_id,
-                address: { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                mask:    '1,
-                data:    '0,
-                corrupt: 1'b0
-            };
-
-        % else:
+        idma_pkg::${database[protocol]['protocol_enum']}: begin
 ${database[protocol]['legalizer_read_meta_channel']}
-        % endif
+        end
     % endfor
         default:
             r_req_o.ar_req = '0;
@@ -649,22 +640,9 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
         w_req_o.aw_req = '0;
         case(opt_tf_q.dst_protocol)
     % for protocol in used_write_protocols:
-        idma_pkg::${database[protocol]['protocol_enum']}:
-        % if protocol == 'tilelink':
-        idma_pkg::TILELINK:
-            w_req_o.aw_req.tilelink.a_chan = '{
-                opcode:  3'd1,
-                param:   3'd0,
-                size:    OffsetWidth, // TODO: Why is this different than one_write_port version?
-                source:  opt_tf_q.axi_id,
-                address: { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-                mask:    '0,
-                data:    '0,
-                corrupt: 1'b0
-            };
-        % else:
+        idma_pkg::${database[protocol]['protocol_enum']}: begin
 ${database[protocol]['legalizer_write_meta_channel']}
-        % endif
+        end
     % endfor
         default:
             w_req_o.aw_req = '0;

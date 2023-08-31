@@ -41,27 +41,36 @@ legalizer_read_meta_channel: |
     r_req_o.ar_req.tilelink.a_chan = '{
         opcode:  3'd4,
         param:   3'd0,
-        size:    OffsetWidth, // TODO: Why is this different than one_read_port version?
+        size:    '0,
         source:  opt_tf_q.axi_id,
         address: { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
         mask:    '1,
         data:    '0,
         corrupt: 1'b0
     };
+
+    for (int i = 0; i <= PageAddrWidth; i++) begin
+        if ((1 << i) == r_num_bytes) begin
+            r_req_o.ar_req.tilelink.a_chan.size = i;
+        end
+    end
 legalizer_write_meta_channel: |
-    w_req_o.aw_req.tilelink.a_chan.size = '0;
+    w_req_o.aw_req.tilelink.a_chan = '{
+        opcode:  3'd1,
+        param:   3'd0,
+        size:    '0,
+        source:  opt_tf_q.axi_id,
+        address: { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
+        mask:    '0,
+        data:    '0,
+        corrupt: 1'b0
+    };
+
     for (int i = 0; i < PageAddrWidth; i++) begin
         if ((1 << i) == w_num_bytes) begin
             w_req_o.aw_req.tilelink.a_chan.size = i;
         end
     end
-    w_req_o.aw_req.tilelink.a_chan.opcode  = 3'd1;
-    w_req_o.aw_req.tilelink.a_chan.param   = 3'd0;
-    w_req_o.aw_req.tilelink.a_chan.source  = opt_tf_q.axi_id;
-    w_req_o.aw_req.tilelink.a_chan.address = { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
-    w_req_o.aw_req.tilelink.a_chan.mask    = '0;
-    w_req_o.aw_req.tilelink.a_chan.data    = '0;
-    w_req_o.aw_req.tilelink.a_chan.corrupt = 1'b0;
 legalizer_write_data_path: |
     w_req_o.w_dp_req = '{
         dst_protocol: opt_tf_q.dst_protocol,
