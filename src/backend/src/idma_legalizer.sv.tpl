@@ -692,61 +692,118 @@ ${database[protocol]['legalizer_write_data_path']}
     // only advance to next state if:
     // * rw_coupled: both machines advance
     // * rw_decoupled: either machine advances
-% if one_read_port and one_write_port:
-    % if (no_read_bursting != no_write_bursting) or 'tilelink' in used_protocols:
-    always_comb begin : proc_legalizer_flow_control
-        //Onesided bursting -> decouple
-        r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
-        w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
+##  // Decouple Logic
+##  // if 1R1W:
+##  //      if onesided_bursting OR tilelink:
+##  //          -> force decouple
+##  //      else:
+##  //          -> optional decouple
+##  // else: // Multiport DMA
+##  //      -> optional decouple
+##  //
+##  //      if protocol IS nonbursting:
+##  //          -> force decouple
 
-        r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
-        w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
-    end
-    % else:
-    always_comb begin : proc_legalizer_flow_control
-        if ( opt_tf_q.decouple_rw ) begin
-            r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
-            w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
+##  // Single Read / Single Write Port DMA
+##% if one_read_port and one_write_port:
+##  // Check if onesided bursting
+##    % if (no_read_bursting != no_write_bursting) or 'tilelink' in used_protocols:
+##  // Onesided bursting -> force decouple
+##    always_comb begin : proc_legalizer_flow_control
+##        // Onesided bursting -> decouple
+##        r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
+##        w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
 
-            r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
-            w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
-        end else begin
-            r_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
-            w_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
+##        r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
+##        w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
+##    end
+##    % else:
+##  // Read and Write Port have same bursting behaviour -> Optional decouple
+##    always_comb begin : proc_legalizer_flow_control
+##        // Both Protocols have same bursting behaviour -> Optional decouple
+##        if ( opt_tf_q.decouple_rw ) begin
+##            r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
+##            w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
 
-            r_valid_o = r_tf_q.valid & w_ready_i & r_ready_i & !flush_i;
-            w_valid_o = w_tf_q.valid & r_ready_i & w_ready_i & !flush_i;
-        end
-    end
-    % endif
-% else:
+##            r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
+##            w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
+##        end else begin
+##            r_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
+##            w_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
+
+##            r_valid_o = r_tf_q.valid & w_ready_i & r_ready_i & !flush_i;
+##            w_valid_o = w_tf_q.valid & r_ready_i & w_ready_i & !flush_i;
+##        end
+##    end
+##    % endif
+##% else:
+##    always_comb begin : proc_legalizer_flow_control
+##        if ( opt_tf_q.decouple_rw\
+##    % if (not one_read_port) or (not one_write_port):
+##        % if len(used_non_bursting_read_protocols) != 0:
+
+##            || (opt_tf_q.src_protocol inside {\
+##            % for index, protocol in enumerate(used_non_bursting_read_protocols):
+## idma_pkg::${database[protocol]['protocol_enum']}\
+##                % if index != len(used_non_bursting_read_protocols)-1:
+##,\
+##                % endif
+##            % endfor 
+## })\
+##        % endif
+##        % if len(used_non_bursting_write_protocols) != 0:
+
+##            || (opt_tf_q.dst_protocol inside {\
+##            % for index, protocol in enumerate(used_non_bursting_write_protocols):
+## idma_pkg::${database[protocol]['protocol_enum']}\
+##                % if index != len(used_non_bursting_write_protocols)-1:
+##,\
+##                % endif
+##            % endfor 
+## })\
+##        % endif       
+##    % endif
+##        ) begin
+##            r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
+##            w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
+
+##            r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
+##            w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
+##        end else begin
+##            r_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
+##            w_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
+
+##            r_valid_o = r_tf_q.valid & w_ready_i & r_ready_i & !flush_i;
+##            w_valid_o = w_tf_q.valid & r_ready_i & w_ready_i & !flush_i;
+##        end
+##    end
+##% endif
+    
     always_comb begin : proc_legalizer_flow_control
         if ( opt_tf_q.decouple_rw\
-% if (not one_read_port) or (not one_write_port):
-% if len(used_non_bursting_read_protocols) != 0:
+        % if len(used_non_bursting_or_force_decouple_read_protocols) != 0:
 
             || (opt_tf_q.src_protocol inside {\
-    % for index, protocol in enumerate(used_non_bursting_read_protocols):
+            % for index, protocol in enumerate(used_non_bursting_or_force_decouple_read_protocols):
  idma_pkg::${database[protocol]['protocol_enum']}\
-        % if index != len(used_non_bursting_read_protocols)-1:
+                % if index != len(used_non_bursting_or_force_decouple_read_protocols)-1:
 ,\
-        % endif
-    % endfor 
+                % endif
+            % endfor 
  })\
-% endif
-% if len(used_non_bursting_write_protocols) != 0:
+        % endif
+        % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
 
             || (opt_tf_q.dst_protocol inside {\
-    % for index, protocol in enumerate(used_non_bursting_write_protocols):
+            % for index, protocol in enumerate(used_non_bursting_or_force_decouple_write_protocols):
  idma_pkg::${database[protocol]['protocol_enum']}\
-        % if index != len(used_non_bursting_write_protocols)-1:
+                % if index != len(used_non_bursting_or_force_decouple_write_protocols)-1:
 ,\
-        % endif
-    % endfor 
+                % endif
+            % endfor 
  })\
-% endif       
-% endif
-        ) begin
+        % endif       
+) begin
             r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
             w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
 
@@ -760,7 +817,7 @@ ${database[protocol]['legalizer_write_data_path']}
             w_valid_o = w_tf_q.valid & r_ready_i & w_ready_i & !flush_i;
         end
     end
-% endif
+    
     // load next idma request: if both machines are done!
     assign ready_o = r_done & w_done & r_ready_i & w_ready_i & !flush_i;
 

@@ -247,7 +247,11 @@ def generate_legalizer():
         'used_non_bursting_write_protocols' : list(filter(
             lambda a: database[a]['bursts'] == 'not_supported', used_write_protocols)),
         'used_non_bursting_read_protocols'  : list(filter(
-            lambda a: database[a]['bursts'] == 'not_supported', used_read_protocols))
+            lambda a: database[a]['bursts'] == 'not_supported', used_read_protocols)),
+        'used_non_bursting_or_force_decouple_write_protocols' : list(filter(
+            lambda a: database[a]['bursts'] == 'not_supported' or ('legalizer_force_decouple' in database[a] and database[a]['legalizer_force_decouple']), used_write_protocols)),
+        'used_non_bursting_or_force_decouple_read_protocols'  : list(filter(
+            lambda a: database[a]['bursts'] == 'not_supported' or ('legalizer_force_decouple' in database[a] and database[a]['legalizer_force_decouple']), used_read_protocols))
     }
     le_template = Template(filename=template_directory + 'idma_legalizer.sv.tpl')
     rendered_le = le_template.render(**le_context)

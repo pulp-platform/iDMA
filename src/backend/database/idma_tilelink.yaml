@@ -7,8 +7,9 @@ prefix:         "tilelink"
 protocol_enum:  "TILELINK"
 full_name:      "TileLink-UH"
 bursts:         "only_pow2"
-page_size: 2048 # limited by TLToAXI4 Bridge -> To be AXI compliant -> Less than 256 beats
+page_size:      2048                # limited by TLToAXI4 Bridge -> To be AXI compliant -> Less than 256 beats
 tltoaxi4_compatibility_mode: "true" # If this is true burst will never cross a page boundary and only 32 beat write bursts -> Needed for TLToAXI4 Bridge
+legalizer_force_decouple:    "true" # Forces the legalizer to decouple
 read_meta_channel:  "a_chan"
 write_meta_channel: "a_chan"
 meta_channel_width: "localparam int unsigned tilelink_a_chan_width = $bits(tilelink_a_chan_t);"
