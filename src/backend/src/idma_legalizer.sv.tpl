@@ -391,6 +391,22 @@ w_tf_q.length[PageAddrWidth:0] ),
     //--------------------------------------
     // Synchronized R/W process
     //--------------------------------------
+## if 1R1W
+##      if no_read_bursting or no_write_bursting or tilelink
+##          -> decouple both
+##      else
+##          -> optional decouple
+##  else // Multiport
+##      if no_bursting
+##          -> optional decouple
+##      else if only_write_bursts:
+##          -> optional decouple write and force if non_bursting_write_protocol
+##      else if only_read_bursts:
+##          -> optional decouple read and force if non_bursting_read_protocol
+##      else: // Both can burst
+##          -> optional decouple both and force if non_bursting_protocol
+##      
+##
 ##% if one_read_port and one_write_port:
 ##    % if (no_read_bursting or no_write_bursting) or ('tilelink' in used_protocols):
 ##    assign r_num_bytes_possible = r_num_bytes_to_pb;
@@ -486,10 +502,6 @@ w_tf_q.length[PageAddrWidth:0] ),
         % endfor 
  })\
     % endif
-)
-            r_num_bytes_possible = r_num_bytes_to_pb;
-
-        if (opt_tf_q.decouple_rw\
     % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
 
             || (opt_tf_q.dst_protocol inside {\
@@ -501,8 +513,10 @@ w_tf_q.length[PageAddrWidth:0] ),
         % endfor 
  })\
     % endif
-)
+) begin
+            r_num_bytes_possible = r_num_bytes_to_pb;
             w_num_bytes_possible = w_num_bytes_to_pb;
+        end
     end
 
     assign r_addr_offset = r_tf_q.addr[OffsetWidth-1:0];
