@@ -250,6 +250,11 @@ def generate_legalizer():
 
         'no_write_bursting':    reduce(lambda a, b: a and b,
             map(lambda p: database[p]['bursts'] == 'not_supported', used_write_protocols)),
+        'has_page_write_bursting':   reduce(lambda a, b: a or b,
+            map(lambda p: database[p]['bursts'] == 'split_at_page_boundary', used_write_protocols)),
+        'has_pow2_write_bursting':   reduce(lambda a, b: a or b,
+            map(lambda p: database[p]['bursts'] == 'only_pow2', used_write_protocols)),
+
         'used_non_bursting_write_protocols' : list(filter(
             lambda a: database[a]['bursts'] == 'not_supported', used_write_protocols)),
         'used_non_bursting_read_protocols'  : list(filter(

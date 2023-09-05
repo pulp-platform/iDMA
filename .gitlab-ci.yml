@@ -121,6 +121,26 @@ tilelink_backend-run:
         job: prepare-non-free
     strategy: depend
 
+tilelink_axi_backend-run:
+  stage: iDMA
+  needs:
+    - prepare-non-free
+  trigger:
+    include:
+      - artifact: idma-non-free/ci/gitlab-tilelink_axi_backend-ci.yml
+        job: prepare-non-free
+    strategy: depend
+
+tilelink_obi_backend-run:
+  stage: iDMA
+  needs:
+    - prepare-non-free
+  trigger:
+    include:
+      - artifact: idma-non-free/ci/gitlab-tilelink_obi_backend-ci.yml
+        job: prepare-non-free
+    strategy: depend
+
 axi_to_tilelink_backend-run:
   stage: iDMA
   needs:

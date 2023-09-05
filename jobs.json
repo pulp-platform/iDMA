@@ -186,6 +186,46 @@
         "overrides" : {
         }
     },
+    "tilelink_axi_backend" : {
+        "read" : ["tilelink", "axi"],
+        "write": ["tilelink", "axi"],
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"          : "backend/man_simple.txt",
+            "same_dst_simple" : "backend/man_same_dst_simple.txt",
+            "huge"            : "backend/man_huge.txt",
+            "large"           : "backend/man_large.txt",
+            "medium"          : "backend/man_medium.txt",
+            "mixed"           : "backend/man_mixed.txt",
+            "small"           : "backend/man_small.txt",
+            "tiny"            : "backend/man_tiny.txt",
+            "zero_transfer"   : "backend/man_zero_transfer.txt"
+        },
+        "gen_jobs" : {
+        },
+        "overrides" : {
+        }
+    },
+    "tilelink_obi_backend" : {
+        "read" : ["tilelink", "obi"],
+        "write": ["tilelink", "obi"],
+        "seed" : 1336,
+        "man_jobs" : {
+            "simple"          : "backend/man_simple.txt",
+            "same_dst_simple" : "backend/man_same_dst_simple.txt",
+            "huge"            : "backend/man_huge.txt",
+            "large"           : "backend/man_large.txt",
+            "medium"          : "backend/man_medium.txt",
+            "mixed"           : "backend/man_mixed.txt",
+            "small"           : "backend/man_small.txt",
+            "tiny"            : "backend/man_tiny.txt",
+            "zero_transfer"   : "backend/man_zero_transfer.txt"
+        },
+        "gen_jobs" : {
+        },
+        "overrides" : {
+        }
+    },
     "axi_to_tilelink_backend" : {
         "read" : ["axi"],
         "write": ["tilelink"],

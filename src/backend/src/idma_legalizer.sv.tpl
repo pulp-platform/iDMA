@@ -152,6 +152,14 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     % endif
 % endfor
     page_len_t r_num_bytes_to_pb;
+% if no_write_bursting or has_page_write_bursting:
+    page_len_t w_page_num_bytes_to_pb;
+% endif
+% for write_protocol in used_write_protocols:
+    % if database[write_protocol]['bursts'] == 'only_pow2':
+    page_len_t w_${database[write_protocol]['prefix']}_num_bytes_to_pb;
+    % endif
+% endfor
     page_len_t w_num_bytes_to_pb;
     page_len_t c_num_bytes_to_pb;
 
@@ -248,116 +256,10 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
     end
 % endif
 
-##% if one_read_port:
-##    % if database[used_read_protocols[0]]['bursts'] == 'not_supported':
-##    idma_legalizer_page_splitter #(
-##        .OffsetWidth   ( OffsetWidth ),
-##        .PageAddrWidth ( PageSize    ),
-##        .addr_t        ( addr_t      ),
-##        .page_len_t    ( page_len_t  ),
-##        .page_addr_t   ( page_addr_t )
-##    ) i_read_page_splitter (
-##        .not_bursting_i    ( 1'b1                    ),
-
-##        .reduce_len_i      ( opt_tf_q.src_reduce_len ),
-##        .max_llen_i        ( opt_tf_q.src_max_llen   ),
-        
-##        .addr_i            ( r_tf_q.addr             ),
-##        .num_bytes_to_pb_o ( r_num_bytes_to_pb       )
-##    );
-##    % elif database[used_read_protocols[0]]['bursts'] == 'split_at_page_boundary':
-##    idma_legalizer_page_splitter #(
-##        .OffsetWidth   ( OffsetWidth ),
-##        .PageAddrWidth ( $clog2((${database[used_read_protocols[0]]['max_beats_per_burst']} * StrbWidth\
-## > ${database[used_read_protocols[0]]['page_size']}) ?\
-## ${database[used_read_protocols[0]]['page_size']} :\
-## ${database[used_read_protocols[0]]['max_beats_per_burst']} * StrbWidth) ),
-##        .addr_t        ( addr_t      ),
-##        .page_len_t    ( page_len_t  ),
-##        .page_addr_t   ( page_addr_t )
-##    ) i_read_page_splitter (
-##        .not_bursting_i    ( 1'b0                    ),
-##        .reduce_len_i      ( opt_tf_q.src_reduce_len ),
-##        .max_llen_i        ( opt_tf_q.src_max_llen   ),
-        
-##        .addr_i            ( r_tf_q.addr             ),
-##        .num_bytes_to_pb_o ( r_num_bytes_to_pb       )
-##    );
-##    % elif database[used_read_protocols[0]]['bursts'] == 'only_pow2':
-##    idma_legalizer_pow2_splitter #(
-##        .PageAddrWidth ( $clog2(${database[used_read_protocols[0]]['page_size']}) ),
-##        .OffsetWidth   ( OffsetWidth   ),
-##        .addr_t        ( addr_t        ),
-##        .len_t         ( page_len_t    )
-##    ) i_read_pow2_splitter ( 
-##        .addr_i              ( r_tf_q.addr       ),
-##        .length_i            ( \
-##% if database[used_read_protocols[0]]['tltoaxi4_compatibility_mode'] == "true":
-##|r_tf_q.length[$bits(r_tf_q.length)-1:PageAddrWidth] ? page_len_t'('d${database[used_read_protocols[0]]['page_size']} - r_tf_q.addr[PageAddrWidth-1:0]) : r_tf_q.length[PageAddrWidth:0] ),
-##        .length_larger_i     ( 1'b0 ),
-##% else:
-##r_tf_q.length[PageAddrWidth:0] ),
-##        .length_larger_i     ( |r_tf_q.length[$bits(r_tf_q.length)-1:PageAddrWidth+1] ),
-##% endif
-##        .bytes_to_transfer_o ( r_num_bytes_to_pb )
-##    );
-##    % else:
-##    `IDMA_NONSYNTH_BLOCK(
-##    initial begin
-##        $fatal(1, "bursts value '${database[used_read_protocols[0]]['bursts']}' for read protocol ${database[used_read_protocols[0]]['full_name']} not implemented in template!");
-##    end
-##    )
-##    % endif
-##% elif no_read_bursting:
-##    idma_legalizer_page_splitter #(
-##        .OffsetWidth   ( OffsetWidth ),
-##        .PageAddrWidth ( PageSize    ),
-##        .addr_t        ( addr_t      ),
-##        .page_len_t    ( page_len_t  ),
-##        .page_addr_t   ( page_addr_t )
-##    ) i_read_page_splitter (
-##        .not_bursting_i    ( 1'b1                    ),
-
-##        .reduce_len_i      ( opt_tf_q.src_reduce_len ),
-##        .max_llen_i        ( opt_tf_q.src_max_llen   ),
-        
-##        .addr_i            ( r_tf_q.addr             ),
-##        .num_bytes_to_pb_o ( r_num_bytes_to_pb       )
-##    );
-##% else:
-##    idma_legalizer_page_splitter #(
-##        .OffsetWidth   ( OffsetWidth ),
-##        .PageAddrWidth ( PageSize    ),
-##        .addr_t        ( addr_t      ),
-##        .page_len_t    ( page_len_t  ),
-##        .page_addr_t   ( page_addr_t )
-##    ) i_read_page_splitter (
-##    %if len(used_non_bursting_read_protocols) == 0:
-##        .not_bursting_i    ( 1'b0 ),
-##    %else:
-##        .not_bursting_i    ( opt_tf_q.src_protocol inside {\
-##    % for index, protocol in enumerate(used_non_bursting_read_protocols):
-## idma_pkg::${database[protocol]['protocol_enum']}\
-##        % if index != len(used_non_bursting_read_protocols)-1:
-##,\
-##        % endif
-##    % endfor       
-##} ),
-##    % endif
-
-##        .reduce_len_i      ( opt_tf_q.src_reduce_len ),
-##        .max_llen_i        ( opt_tf_q.src_max_llen   ),
-        
-##        .addr_i            ( r_tf_q.addr             ),
-##        .num_bytes_to_pb_o ( r_num_bytes_to_pb       )
-##    );
-##% endif
-
     //--------------------------------------
     // write boundary check
     //--------------------------------------
-% if one_write_port:
-    % if database[used_write_protocols[0]]['bursts'] == 'not_supported':
+% if no_write_bursting or has_page_write_bursting:
     idma_legalizer_page_splitter #(
         .OffsetWidth   ( OffsetWidth ),
         .PageAddrWidth ( PageSize    ),
@@ -365,101 +267,73 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
         .page_len_t    ( page_len_t  ),
         .page_addr_t   ( page_addr_t )
     ) i_write_page_splitter (
-        .not_bursting_i    ( 1'b1                    ),
+    % if no_write_bursting:
+        .not_bursting_i    ( 1'b1 ),
+    % elif len(used_non_bursting_write_protocols) == 0:
+        .not_bursting_i    ( 1'b0 ),
+    % else:
+        .not_bursting_i    ( opt_tf_q.dst_protocol inside {\
+        % for index, protocol in enumerate(used_non_bursting_write_protocols):
+ idma_pkg::${database[protocol]['protocol_enum']}\
+            % if index != len(used_non_bursting_write_protocols)-1:
+,\
+            % endif
+        % endfor       
+} ),
+    % endif
 
         .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
         .max_llen_i        ( opt_tf_q.dst_max_llen   ),
-        
+      
         .addr_i            ( w_tf_q.addr             ),
-        .num_bytes_to_pb_o ( w_num_bytes_to_pb       )
+        .num_bytes_to_pb_o ( w_page_num_bytes_to_pb  )
     );
-    % elif database[used_write_protocols[0]]['bursts'] == 'split_at_page_boundary':
-    idma_legalizer_page_splitter #(
-        .OffsetWidth   ( OffsetWidth ),
-        .PageAddrWidth ( $clog2((${database[used_write_protocols[0]]['max_beats_per_burst']} * StrbWidth\
- > ${database[used_write_protocols[0]]['page_size']}) ?\
- ${database[used_write_protocols[0]]['page_size']} :\
- ${database[used_write_protocols[0]]['max_beats_per_burst']} * StrbWidth) ),
-        .addr_t        ( addr_t      ),
-        .page_len_t    ( page_len_t  ),
-        .page_addr_t   ( page_addr_t )
-    ) i_write_page_splitter (
-        .not_bursting_i    ( 1'b0                    ),
-        .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
-        .max_llen_i        ( opt_tf_q.dst_max_llen   ),
-        
-        .addr_i            ( w_tf_q.addr             ),
-        .num_bytes_to_pb_o ( w_num_bytes_to_pb       )
-    );
-    % elif database[used_write_protocols[0]]['bursts'] == 'only_pow2':
-    idma_legalizer_pow2_splitter #(
-        .PageAddrWidth ( \
-% if database[used_write_protocols[0]]['tltoaxi4_compatibility_mode'] == "true":
-$clog2((32 * StrbWidth) > ${database[used_write_protocols[0]]['page_size']} ? ${database[used_write_protocols[0]]['page_size']} : (32 * StrbWidth)) ),
-% else:
-$clog2(${database[used_write_protocols[0]]['page_size']}) ),
+
 % endif
-        .OffsetWidth   ( OffsetWidth   ),
-        .addr_t        ( addr_t        ),
-        .len_t         ( page_len_t    )
+% for write_protocol in used_write_protocols:
+    % if database[write_protocol]['bursts'] == 'only_pow2':
+    idma_legalizer_pow2_splitter #(
+        .PageAddrWidth ( $clog2(${database[write_protocol]['page_size']}) ),
+        .OffsetWidth   ( OffsetWidth ),
+        .addr_t        ( addr_t      ),
+        .len_t         ( page_len_t  )
     ) i_write_pow2_splitter ( 
-        .addr_i              ( w_tf_q.addr       ),
+        .addr_i              ( w_tf_q.addr ),
         .length_i            ( \
-% if database[used_write_protocols[0]]['tltoaxi4_compatibility_mode'] == "true":
-|w_tf_q.length[$bits(w_tf_q.length)-1:PageAddrWidth] ? page_len_t'('d${database[used_write_protocols[0]]['page_size']} - w_tf_q.addr[PageAddrWidth-1:0]) : w_tf_q.length[PageAddrWidth:0] ),
+        % if database[write_protocol]['tltoaxi4_compatibility_mode'] == "true":
+|w_tf_q.length[$bits(w_tf_q.length)-1:PageAddrWidth] ? page_len_t'('d${database[write_protocol]['page_size']} - w_tf_q.addr[PageAddrWidth-1:0]) : w_tf_q.length[PageAddrWidth:0] ),
         .length_larger_i     ( 1'b0 ),
-% else:
+        % else:
 w_tf_q.length[PageAddrWidth:0] ),
         .length_larger_i     ( |w_tf_q.length[$bits(w_tf_q.length)-1:PageAddrWidth+1] ),
-% endif
-        .bytes_to_transfer_o ( w_num_bytes_to_pb )
-    ); 
-    % else:
-    `IDMA_NONSYNTH_BLOCK(
-    initial begin
-        $fatal(1, "bursts value '${database[used_write_protocols[0]]['bursts']}' for write protocol ${database[used_write_protocols[0]]['full_name']} not implemented in template!");
-    end
-    )
-    % endif
-% elif no_write_bursting:
-    idma_legalizer_page_splitter #(
-        .OffsetWidth   ( OffsetWidth ),
-        .PageAddrWidth ( PageSize    ),
-        .addr_t        ( addr_t      ),
-        .page_len_t    ( page_len_t  ),
-        .page_addr_t   ( page_addr_t )
-    ) i_write_page_splitter (
-        .not_bursting_i    ( 1'b1                    ),
-
-        .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
-        .max_llen_i        ( opt_tf_q.dst_max_llen   ),
-        
-        .addr_i            ( w_tf_q.addr             ),
-        .num_bytes_to_pb_o ( w_num_bytes_to_pb       )
-    );
-% else:
-    idma_legalizer_page_splitter #(
-        .OffsetWidth   ( OffsetWidth ),
-        .PageAddrWidth ( PageSize    ),
-        .addr_t        ( addr_t      ),
-        .page_len_t    ( page_len_t  ),
-        .page_addr_t   ( page_addr_t )
-    ) i_write_page_splitter (
-        .not_bursting_i    ( opt_tf_q.dst_protocol inside {\
-    % for index, protocol in enumerate(used_non_bursting_write_protocols):
- idma_pkg::${database[protocol]['protocol_enum']}\
-        % if index != len(used_non_bursting_write_protocols)-1:
-,\
         % endif
-    % endfor       
-} ),
-
-        .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
-        .max_llen_i        ( opt_tf_q.dst_max_llen   ),
-        
-        .addr_i            ( w_tf_q.addr             ),
-        .num_bytes_to_pb_o ( w_num_bytes_to_pb       )
+        .bytes_to_transfer_o ( w_${database[write_protocol]['prefix']}_num_bytes_to_pb )
     );
+
+    % endif
+% endfor
+% if no_write_bursting:
+    assign w_num_bytes_to_pb = w_page_num_bytes_to_pb;
+% elif one_write_port:
+    % if has_pow2_write_bursting:
+    assign w_num_bytes_to_pb = w_${database[used_write_protocols[0]]['prefix']}_num_bytes_to_pb;
+    % else:
+    assign w_num_bytes_to_pb = w_page_num_bytes_to_pb;
+    % endif
+% else:
+    always_comb begin : gen_write_num_bytes_to_pb_logic
+        case (opt_tf_q.dst_protocol)
+    % for write_protocol in used_write_protocols:
+        idma_pkg::${database[write_protocol]['protocol_enum']}: \
+        % if database[write_protocol]['bursts'] == 'only_pow2':
+w_num_bytes_to_pb = w_${database[write_protocol]['prefix']}_num_bytes_to_pb;
+        % else:
+w_num_bytes_to_pb = w_page_num_bytes_to_pb;
+        % endif
+    % endfor
+        default: w_num_bytes_to_pb = '0;
+        endcase
+    end
 % endif
 
     //--------------------------------------
