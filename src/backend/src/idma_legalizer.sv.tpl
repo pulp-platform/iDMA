@@ -232,9 +232,7 @@ r_tf_q.length[PageAddrWidth:0] ),
 
     % endif
 % endfor
-% if no_read_bursting:
-    assign r_num_bytes_to_pb = r_page_num_bytes_to_pb;
-% elif one_read_port:
+% if one_read_port:
     % if has_pow2_read_bursting:
     assign r_num_bytes_to_pb = r_${database[used_read_protocols[0]]['prefix']}_num_bytes_to_pb;
     % else:
@@ -317,9 +315,7 @@ w_tf_q.length[PageAddrWidth:0] ),
 
     % endif
 % endfor
-% if no_write_bursting:
-    assign w_num_bytes_to_pb = w_page_num_bytes_to_pb;
-% elif one_write_port:
+% if one_write_port:
     % if has_pow2_write_bursting:
     assign w_num_bytes_to_pb = w_${database[used_write_protocols[0]]['prefix']}_num_bytes_to_pb;
     % else:

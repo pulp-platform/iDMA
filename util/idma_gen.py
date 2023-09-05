@@ -241,14 +241,14 @@ def generate_legalizer():
         'one_read_port':        one_read_port,
         'one_write_port':       one_write_port,
 
-        'no_read_bursting':     reduce(lambda a, b: a and b,
+        'no_read_bursting':     reduce(lambda a, b: a or b,
             map(lambda p: database[p]['bursts'] == 'not_supported', used_read_protocols)),
         'has_page_read_bursting':   reduce(lambda a, b: a or b,
             map(lambda p: database[p]['bursts'] == 'split_at_page_boundary', used_read_protocols)),
         'has_pow2_read_bursting':   reduce(lambda a, b: a or b,
             map(lambda p: database[p]['bursts'] == 'only_pow2', used_read_protocols)),
 
-        'no_write_bursting':    reduce(lambda a, b: a and b,
+        'no_write_bursting':    reduce(lambda a, b: a or b,
             map(lambda p: database[p]['bursts'] == 'not_supported', used_write_protocols)),
         'has_page_write_bursting':   reduce(lambda a, b: a or b,
             map(lambda p: database[p]['bursts'] == 'split_at_page_boundary', used_write_protocols)),
