@@ -293,7 +293,12 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
 % for write_protocol in used_write_protocols:
     % if database[write_protocol]['bursts'] == 'only_pow2':
     idma_legalizer_pow2_splitter #(
-        .PageAddrWidth ( $clog2(${database[write_protocol]['page_size']}) ),
+        .PageAddrWidth ( \
+% if database[write_protocol]['tltoaxi4_compatibility_mode'] == "true":
+$clog2((32 * StrbWidth) > ${database[write_protocol]['page_size']} ? ${database[write_protocol]['page_size']} : (32 * StrbWidth)) ),
+% else:
+$clog2(${database[write_protocol]['page_size']}) ),
+% endif
         .OffsetWidth   ( OffsetWidth ),
         .addr_t        ( addr_t      ),
         .len_t         ( page_len_t  )
