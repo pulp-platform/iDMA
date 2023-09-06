@@ -146,9 +146,9 @@
         "overrides" : {
         }
     },
-    "axi_axi_lite_axi_stream_obi_init_backend" : {
-        "read" : ["axi", "axi_lite", "axi_stream", "obi", "init"],
-        "write": ["axi", "axi_lite", "axi_stream", "obi"],
+    "monster_backend" : {
+        "read" : ["axi", "axi_lite", "axi_stream", "obi", "tilelink", "init"],
+        "write": ["axi", "axi_lite", "axi_stream", "obi", "tilelink"],
         "seed" : 1336,
         "man_jobs" : {
             "simple"          : "backend/man_simple.txt",

@@ -527,8 +527,8 @@ module idma_tb_per2axi_req_channel #(
     input  logic                      per_slave_req_i,
     input  logic [PER_ADDR_WIDTH-1:0] per_slave_add_i,
     input  logic                      per_slave_we_i,
-    input  logic [              31:0] per_slave_wdata_i,
-    input  logic [               3:0] per_slave_be_i,
+    input  logic [AXI_DATA_WIDTH-1:0] per_slave_wdata_i,
+    input  logic [AXI_STRB_WIDTH-1:0] per_slave_be_i,
     input  logic [  PER_ID_WIDTH-1:0] per_slave_id_i,
     output logic                      per_slave_gnt_o,
     output logic                      axi_master_aw_valid_o,
@@ -590,22 +590,20 @@ module idma_tb_per2axi_req_channel #(
       axi_master_ar_valid_o = 1'b1;
     end
   end
-  assign axi_master_aw_addr_o = per_slave_add_i;
-  assign axi_master_ar_addr_o = per_slave_add_i;
-  assign axi_master_aw_id_o   = per_slave_id_i;
-  assign axi_master_ar_id_o   = per_slave_id_i;
-  assign axi_master_w_data_o = per_slave_wdata_i;
-  assign axi_master_w_strb_o = per_slave_be_i;
-  assign per_slave_gnt_o = axi_master_aw_ready_i && axi_master_ar_ready_i && axi_master_w_ready_i;
-  always_comb begin
-    axi_master_ar_size_o = 3'b010;
-    axi_master_aw_size_o = 3'b010;
-  end
-  assign axi_master_aw_burst_o = 2'b01;
-  assign axi_master_ar_burst_o = 2'b01;
-  assign trans_req_o = axi_master_ar_valid_o;
-  assign trans_id_o  = axi_master_ar_id_o;
-  assign trans_add_o = axi_master_ar_addr_o;
+  assign axi_master_aw_addr_o   = per_slave_add_i;
+  assign axi_master_ar_addr_o   = per_slave_add_i;
+  assign axi_master_aw_id_o     = per_slave_id_i;
+  assign axi_master_ar_id_o     = per_slave_id_i;
+  assign axi_master_w_data_o    = per_slave_wdata_i;
+  assign axi_master_w_strb_o    = per_slave_be_i;
+  assign per_slave_gnt_o        = axi_master_aw_ready_i && axi_master_ar_ready_i && axi_master_w_ready_i;
+  assign axi_master_ar_size_o   = $clog2(AXI_STRB_WIDTH);
+  assign axi_master_aw_size_o   = $clog2(AXI_STRB_WIDTH);
+  assign axi_master_aw_burst_o  = 2'b01;
+  assign axi_master_ar_burst_o  = 2'b01;
+  assign trans_req_o            = axi_master_ar_valid_o;
+  assign trans_id_o             = axi_master_ar_id_o;
+  assign trans_add_o            = axi_master_ar_addr_o;
   assign axi_master_aw_prot_o   = '0;
   assign axi_master_aw_region_o = '0;
   assign axi_master_aw_len_o    = '0;
@@ -630,13 +628,13 @@ module idma_tb_per2axi_res_channel #(
     parameter AXI_USER_WIDTH = 6,
     parameter AXI_ID_WIDTH   = 3
 ) (
-    input logic clk_i,
-    input logic rst_ni,
-    output logic                    per_slave_r_valid_o,
-    output logic                    per_slave_r_opc_o,
-    output logic [PER_ID_WIDTH-1:0] per_slave_r_id_o,
-    output logic [            31:0] per_slave_r_rdata_o,
-    input  logic                    per_slave_r_ready_i,
+    input  logic clk_i,
+    input  logic rst_ni,
+    output logic                      per_slave_r_valid_o,
+    output logic                      per_slave_r_opc_o,
+    output logic [  PER_ID_WIDTH-1:0] per_slave_r_id_o,
+    output logic [AXI_DATA_WIDTH-1:0] per_slave_r_rdata_o,
+    input  logic                      per_slave_r_ready_i,
     input  logic                      axi_master_r_valid_i,
     input  logic [AXI_DATA_WIDTH-1:0] axi_master_r_data_i,
     input  logic [               1:0] axi_master_r_resp_i,
@@ -649,9 +647,9 @@ module idma_tb_per2axi_res_channel #(
     input  logic [  AXI_ID_WIDTH-1:0] axi_master_b_id_i,
     input  logic [AXI_USER_WIDTH-1:0] axi_master_b_user_i,
     output logic                      axi_master_b_ready_o,
-    input logic                      trans_req_i,
-    input logic [  AXI_ID_WIDTH-1:0] trans_id_i,
-    input logic [AXI_ADDR_WIDTH-1:0] trans_add_i
+    input  logic                      trans_req_i,
+    input  logic [  AXI_ID_WIDTH-1:0] trans_id_i,
+    input  logic [AXI_ADDR_WIDTH-1:0] trans_add_i
 );
   always_comb begin
     per_slave_r_valid_o  = '0;
@@ -688,15 +686,15 @@ module idma_tb_per2axi #(
     input  logic                      per_slave_req_i,
     input  logic [PER_ADDR_WIDTH-1:0] per_slave_add_i,
     input  logic                      per_slave_we_i,
-    input  logic [              31:0] per_slave_wdata_i,
-    input  logic [               3:0] per_slave_be_i,
+    input  logic [AXI_DATA_WIDTH-1:0] per_slave_wdata_i,
+    input  logic [AXI_STRB_WIDTH-1:0] per_slave_be_i,
     input  logic [  PER_ID_WIDTH-1:0] per_slave_id_i,
     output logic                      per_slave_gnt_o,
-    output logic                    per_slave_r_valid_o,
-    output logic                    per_slave_r_opc_o,
-    output logic [PER_ID_WIDTH-1:0] per_slave_r_id_o,
-    output logic [            31:0] per_slave_r_rdata_o,
-    input  logic                    per_slave_r_ready_i,
+    output logic                      per_slave_r_valid_o,
+    output logic                      per_slave_r_opc_o,
+    output logic [  PER_ID_WIDTH-1:0] per_slave_r_id_o,
+    output logic [AXI_DATA_WIDTH-1:0] per_slave_r_rdata_o,
+    input  logic                      per_slave_r_ready_i,
     output logic                      axi_master_aw_valid_o,
     output logic [AXI_ADDR_WIDTH-1:0] axi_master_aw_addr_o,
     output logic [               2:0] axi_master_aw_prot_o,

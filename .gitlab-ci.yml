@@ -101,13 +101,13 @@ axi_lite_backend-run:
         job: prepare-non-free
     strategy: depend
 
-axi_axi_lite_axi_stream_obi_init_backend-run:
+monster_backend-run:
   stage: iDMA
   needs:
     - prepare-non-free
   trigger:
     include:
-      - artifact: idma-non-free/ci/gitlab-axi_axi_lite_axi_stream_obi_init_backend-ci.yml
+      - artifact: idma-non-free/ci/gitlab-monster_backend-ci.yml
         job: prepare-non-free
     strategy: depend
 
