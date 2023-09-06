@@ -283,12 +283,14 @@ REG32_2D_FE_DIR = src/frontends/register_32bit_2d/
 REG32_2D_HJSON = $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.hjson
 REG64_FE_DIR = src/frontends/register_64bit/
 REG64_HJSON = $(REG64_FE_DIR)/idma_reg64_frontend.hjson
+REG64_2D_FE_DIR = src/frontends/register_64bit_2d/
+REG64_2D_HJSON = $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend.hjson
 DESC64_FE_DIR = src/frontends/desc64/
 DESC64_HJSON = $(DESC64_FE_DIR)/idma_desc64_frontend.hjson
 
 REG_HTML_STRING = "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n"
 
-gen_regs: reg32_2d_regs reg64_regs desc64_regs
+gen_regs: reg32_2d_regs reg64_regs desc64_regs reg64_2d_regs
 
 reg32_2d_regs:
 	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -t $(REG32_2D_FE_DIR) -r
@@ -306,6 +308,14 @@ reg64_regs:
 	printf "</html>\n" >> $(REG64_FE_DIR)/idma_reg64_frontend.html
 	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG64_FE_DIR)
 
+reg64_2d_regs:
+	$(PYTHON) $(REG_TOOL) $(REG64_2D_HJSON) -t $(REG64_2D_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(REG64_2D_HJSON) -D > $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend.h
+	printf $(REG_HTML_STRING) > $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend.html
+	$(PYTHON) $(REG_TOOL) $(REG64_2D_HJSON) -d >> $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend.html
+	printf "</html>\n" >> $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend.html
+	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG64_2D_FE_DIR)
+
 desc64_regs:
 	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -t $(DESC64_FE_DIR) -r
 	$(PYTHON) $(REG_TOOL) $(DESC64_HJSON) -D > $(DESC64_FE_DIR)/idma_desc64_frontend.h
@@ -318,12 +328,20 @@ regs_clean:
 	rm -f $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.h
 	rm -f $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend_reg_pkg.sv
 	rm -f $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend_reg_top.sv
+	rm -f $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
 	rm -f $(REG32_2D_FE_DIR)/reg_html.css
 	rm -f $(REG64_FE_DIR)/idma_reg64_frontend.h
-	rm -f $(REG64_FE_DIR)/idma_reg32_frontend_reg_pkg.sv
-	rm -f $(REG64_FE_DIR)/idma_reg32_frontend_reg_top.sv
+	rm -f $(REG64_FE_DIR)/idma_reg64_frontend_reg_pkg.sv
+	rm -f $(REG64_FE_DIR)/idma_reg64_frontend_reg_top.sv
+	rm -f $(REG64_FE_DIR)/idma_reg64_frontend.html
 	rm -f $(REG64_FE_DIR)/reg_html.css
+	rm -f $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend.h
+	rm -f $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend_reg_pkg.sv
+	rm -f $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend_reg_top.sv
+	rm -f $(REG64_2D_FE_DIR)/idma_reg64_2d_frontend.html
+	rm -f $(REG64_2D_FE_DIR)/reg_html.css
 	rm -f $(DESC64_FE_DIR)/idma_desc64_frontend.h
 	rm -f $(DESC64_FE_DIR)/idma_desc64_reg_pkg.sv
 	rm -f $(DESC64_FE_DIR)/idma_desc64_reg_top.sv
+	rm -f $(DESC64_FE_DIR)/idma_desc64_frontend.html
 	rm -f $(DESC64_FE_DIR)/reg_html.css

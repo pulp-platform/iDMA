@@ -19,6 +19,7 @@
         'src/frontends/register_32bit_2d/idma_reg32_2d_frontend.sv',
         'src/frontends/register_64bit/idma_reg64_frontend.h',
         'src/frontends/register_64bit/idma_reg64_frontend.sv',
+        'src/frontends/register_64bit_2d/idma_reg64_2d_frontend.h',
         'src/frontends/desc64/idma_desc64_frontend.h',
         'src/systems/cva6_reg/driver/encoding.h',
         'scripts/waves/*'

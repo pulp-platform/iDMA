@@ -61,6 +61,14 @@ sources:
     # Level 2
     - src/frontends/register_64bit/idma_reg64_frontend.sv
 
+  - files: # 2D 64bit register frontend
+    # Level 0
+    - src/frontends/register_64bit_2d/idma_reg64_2d_frontend_reg_pkg.sv
+    # Level 1
+    - src/frontends/register_64bit_2d/idma_reg64_2d_frontend_reg_top.sv
+    # Level 2
+    - src/frontends/register_64bit_2d/idma_reg64_2d_frontend.sv
+
   - files: # 64bit descriptor frontend
     # Level 0
     - src/frontends/desc64/idma_desc64_reg_pkg.sv
