@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 0.5.0 - 2023-10-14
+
+### Changed
+- Add a struct variant to CVA6's `dma_core_wrap` [#25](https://github.com/pulp-platform/iDMA/pull/25).
+- Expose all important back-end parameters in `dma_core_wrap` [#27](https://github.com/pulp-platform/iDMA/pull/27).
+
+### Added
+- Add a 2D version of the 64-bit register-based front-end intended to be used with CVA6 and enable
+  it in the `dma_core_wrap` [#27](https://github.com/pulp-platform/iDMA/pull/27).
+
+
 ## 0.4.2 - 2023-02-09
 
 ### Fixed
