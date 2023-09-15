@@ -195,7 +195,7 @@ module dma_core_wrap #(
       .idma_req_t    ( idma_req_t      ),
       .idma_rsp_t    ( idma_rsp_t      ),
       .idma_nd_req_t ( idma_nd_req_t   ),
-      .RepWidths     ( '{default: AxiAddrWidth} )
+      .RepWidths     ( {AxiAddrWidth, AxiAddrWidth} )
     ) i_idma_nd_midend (
       .clk_i,
       .rst_ni,
