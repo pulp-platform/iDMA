@@ -33,6 +33,9 @@ sources:
   - src/legacy/midends/idma_2D_midend.sv
   - src/midends/idma_nd_midend.sv
 
+  - test_future/idma_proto_test.sv
+  - test_future/tb_new_idma_backend_rw_axi.sv
+
   # Frontends
   - files: # 32bit register frontend
     # Level 0

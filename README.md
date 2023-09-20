@@ -81,8 +81,8 @@ $VSIM -t 1ps -voptargs=+acc \
      +job_file=jobs/backend/man_tiny.txt \
      -logfile logs/backend.simple.vsim.log \
      -wlf logs/backend.medium.wlf \
-     tb_idma_backend_rw_axi_r_tilelink \
-     -do "source scripts/start_vsim.tcl; source scripts/waves/vsim_backend_rw_axi_r_tilelink.do; run -all"
+     tb_new_idma_backend_rw_axi \
+     -do "source scripts/start_vsim.tcl; source scripts/waves/vsim_new_backend_rw_axi.do; run -all"
 ```
 
 Where:
