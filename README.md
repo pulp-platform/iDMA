@@ -29,6 +29,228 @@ new capabilities.
 The [latest documentation](https://pulp-platform.github.io/iDMA) can be accessed pre-built.
 The [Morty docs](https://pulp-platform.github.io/iDMA/morty/index.html) provide the generated description of the SystemVerilog files within this repository.
 
+## Publications
+If you use iDMA in your work or research, you can cite us:
+
+```
+@misc{benz2023highperformance,
+      title={A High-performance, Energy-efficient Modular {DMA} Engine Architecture},
+      author={Thomas Benz and Michael Rogenmoser and Paul Scheffler and Samuel Riedel and Alessandro Ottaviano and Andreas Kurth and Torsten Hoefler and Luca Benini},
+      year={2023},
+      eprint={2305.05240},
+      archivePrefix={arXiv},
+      primaryClass={cs.AR}
+}
+```
+
+The following systems/publications make use of iDMA:
+
+<details>
+<summary><b>An Open-Source Platform for High-Performance Non-Coherent On-Chip Communication</b></summary>
+<p>
+
+```
+@article{Kurth2020AnOP,
+  title={An Open-Source Platform for High-Performance Non-Coherent On-Chip Communication},
+  author={Andreas Kurth and Wolfgang R{\"o}nninger and Thomas Emanuel Benz and Matheus A. Cavalcante and Fabian Schuiki and Florian Zaruba and Luca Benini},
+  journal={IEEE Transactions on Computers},
+  year={2020},
+  volume={71},
+  pages={1794-1809},
+  url={https://api.semanticscholar.org/CorpusID:221640945}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>PsPIN: A high-performance low-power architecture for flexible in-network compute</b></summary>
+<p>
+
+```
+@article{Girolamo2020PsPINAH,
+  title={PsPIN: A high-performance low-power architecture for flexible in-network compute},
+  author={Salvatore Di Girolamo and Andreas Kurth and Alexandru Calotoiu and Thomas Emanuel Benz and Timo Schneider and Jakub Ber{\'a}nek and Luca Benini and Torsten Hoefler},
+  journal={ArXiv},
+  year={2020},
+  volume={abs/2010.03536},
+  url={https://api.semanticscholar.org/CorpusID:222177442}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>Indirection Stream Semantic Register Architecture for Efficient Sparse-Dense Linear Algebra</b></summary>
+<p>
+
+```
+@article{Scheffler2020IndirectionSS,
+  title={Indirection Stream Semantic Register Architecture for Efficient Sparse-Dense Linear Algebra},
+  author={Paul Scheffler and Florian Zaruba and Fabian Schuiki and Torsten Hoefler and Luca Benini},
+  journal={2021 Design, Automation \& Test in Europe Conference \& Exhibition (DATE)},
+  year={2020},
+  pages={1787-1792},
+  url={https://api.semanticscholar.org/CorpusID:226964339}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>A RISC-V in-network accelerator for flexible high-performance low-power packet processing</b></summary>
+<p>
+
+```
+@article{Girolamo2021ARI,
+  title={A RISC-V in-network accelerator for flexible high-performance low-power packet processing},
+  author={Salvatore Di Girolamo and Andreas Kurth and Alexandru Calotoiu and Thomas Emanuel Benz and Timo Schneider and Jakub Ber{\'a}nek and Luca Benini and Torsten Hoefler},
+  journal={2021 ACM/IEEE 48th Annual International Symposium on Computer Architecture (ISCA)},
+  year={2021},
+  pages={958-971},
+  url={https://api.semanticscholar.org/CorpusID:235416184}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>A 10-core SoC with 20 Fine-Grain Power Domains for Energy-Proportional Data-Parallel Processing over a Wide Voltage and Temperature Range</b></summary>
+<p>
+
+```
+@article{Benz2021A1S,
+  title={A 10-core SoC with 20 Fine-Grain Power Domains for Energy-Proportional Data-Parallel Processing over a Wide Voltage and Temperature Range},
+  author={Thomas Emanuel Benz and Luca Bertaccini and Florian Zaruba and Fabian Schuiki and Frank K. G{\"u}rkaynak and Luca Benini},
+  journal={ESSCIRC 2021 - IEEE 47th European Solid State Circuits Conference (ESSCIRC)},
+  year={2021},
+  pages={263-266},
+  url={https://api.semanticscholar.org/CorpusID:240003121}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>PATRONoC: Parallel AXI Transport Reducing Overhead for Networks-on-Chip targeting Multi-Accelerator DNN Platforms at the Edge</b></summary>
+<p>
+
+```
+@article{Jain2023PATRONoCPA,
+  title={PATRONoC: Parallel AXI Transport Reducing Overhead for Networks-on-Chip targeting Multi-Accelerator DNN Platforms at the Edge},
+  author={Vikram Jain and Matheus A. Cavalcante and Nazareno Bruschi and Michael Rogenmoser and Thomas Emanuel Benz and Andreas Kurth and Davide Rossi and Luca Benini and Marian Verhelst},
+  journal={2023 60th ACM/IEEE Design Automation Conference (DAC)},
+  year={2023},
+  pages={1-6},
+  url={https://api.semanticscholar.org/CorpusID:260351087}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>Sparse Stream Semantic Registers: A Lightweight ISA Extension Accelerating General Sparse Linear Algebra</b></summary>
+<p>
+
+```
+@article{Scheffler2023SparseSS,
+  title={Sparse Stream Semantic Registers: A Lightweight ISA Extension Accelerating General Sparse Linear Algebra},
+  author={Paul Scheffler and Florian Zaruba and Fabian Schuiki and Torsten Hoefler and Luca Benini},
+  journal={ArXiv},
+  year={2023},
+  volume={abs/2305.05559},
+  url={https://api.semanticscholar.org/CorpusID:258564420}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>Iguana: An End-to-End Open-Source Linux-capable RISC-V SoC in 130nm CMOS</b></summary>
+<p>
+
+```
+@article{benziguana,
+  title={Iguana: An End-to-End Open-Source Linux-capable RISC-V SoC in 130nm CMOS},
+  author={Benz, Thomas and Scheffler, Paul and Sch{\"o}nleber, Jannis and Benini, Luca}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>Cheshire: A Lightweight, Linux-Capable RISC-V Host Platform for Domain-Specific Accelerator Plug-In</b></summary>
+<p>
+
+```
+@article{Ottaviano2023CheshireAL,
+  title={Cheshire: A Lightweight, Linux-Capable RISC-V Host Platform for Domain-Specific Accelerator Plug-In},
+  author={Alessandro Ottaviano and Thomas Emanuel Benz and Paul Scheffler and Luca Benini},
+  journal={ArXiv},
+  year={2023},
+  volume={abs/2305.04760},
+  url={https://api.semanticscholar.org/CorpusID:258557988}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>MemPool: A Scalable Manycore Architecture with a Low-Latency Shared L1 Memory</b></summary>
+<p>
+
+```
+@article{Riedel2023MemPoolAS,
+  title={MemPool: A Scalable Manycore Architecture with a Low-Latency Shared L1 Memory},
+  author={Samuel Riedel and Matheus A. Cavalcante and Renzo Andri and Luca Benini},
+  journal={ArXiv},
+  year={2023},
+  volume={abs/2303.17742},
+  url={https://api.semanticscholar.org/CorpusID:257900957}
+}
+```
+
+</p>
+</details>
+
+
+<details>
+<summary><b>OSMOSIS: Enabling Multi-Tenancy in Datacenter SmartNICs</b></summary>
+<p>
+
+```
+@article{Khalilov2023OSMOSISEM,
+  title={OSMOSIS: Enabling Multi-Tenancy in Datacenter SmartNICs},
+  author={Mikhail Khalilov and Marcin Chrapek and Siyuan Shen and Alessandro Vezzu and Thomas Emanuel Benz and Salvatore Di Girolamo and Timo Schneider and Daniele Di Sensi and Luca Benini and Torsten Hoefler},
+  journal={ArXiv},
+  year={2023},
+  volume={abs/2309.03628},
+  url={https://api.semanticscholar.org/CorpusID:261582327}
+}
+```
+
+</p>
+</details>
+
+
 ## License
 iDMA is released under Solderpad v0.51 (SHL-0.51) see [`LICENSE`](LICENSE):
 
