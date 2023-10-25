@@ -106,8 +106,8 @@
     },
     "4d_extension" : {
         "jobs" : {
-            "simple"          : "4d_extension/simple.txt",
-            "linear_2d"       : "4d_extension/linear_2D.txt"
+            "simple"    : "4d_extension/simple.txt",
+            "linear_2d" : "4d_extension/linear_2D.txt"
         },
         "params" : {
             "DataWidth"           : 32,

@@ -50,31 +50,28 @@ sources:
   - target: rtl
     files:
       # Level 0
-      - src/midends/idma_nd_midend.sv
+      - src/midend/idma_nd_midend.sv
 
   # Frontends (without inst64)
   - target: rtl
     files:
       # Level 0
-      - src/frontends/desc64/idma_desc64_shared_counter.sv
-      - src/frontends/idma_transfer_id_gen.sv
+      - src/frontend/desc64/idma_desc64_shared_counter.sv
+      - src/frontend/idma_transfer_id_gen.sv
       # Level 1
-      - src/frontends/reg32_2d/idma_reg32_2d.sv
-      - src/frontends/reg64/idma_reg64.sv
-      - src/frontends/reg64_2d/idma_reg64_2d.sv
-      - src/frontends/desc64/idma_desc64_reg_wrapper.sv
+      - src/frontend/desc64/idma_desc64_reg_wrapper.sv
       # Level 2
-      - src/frontends/desc64/idma_desc64.sv
+      - src/frontend/desc64/idma_desc64.sv
 
 
   # Synthesis wrappers
   - target: synth
     files:
       # Level 0
-      - src/frontends/desc64/idma_desc64_synth_pkg.sv
+      - src/frontend/desc64/idma_desc64_synth_pkg.sv
       - src/synth/idma_nd_backend_synth.sv
       # Level 1
-      - src/frontends/desc64/idma_desc64_synth.sv
+      - src/frontend/desc64/idma_desc64_synth.sv
 
   # Testbenches
   - target: test
@@ -82,21 +79,10 @@ sources:
       # Level 0
       - test/tb_idma_improved_fifo.sv
       - test/tb_idma_nd_backend.sv
-      - test/frontends/tb_idma_desc64.sv
+      - test/frontend/tb_idma_desc64.sv
       - test/future/idma_tb_per2axi.sv
       - test/future/idma_obi_asserter.sv
       - test/future/TLToAXI4.v
       # Level 1
       - test/future/idma_obi2axi_bridge.sv
       - test/future/idma_tilelink2axi_bridge.sv
-
-# Not yet..
-#  # Systems
-#  - target: all(pulp, not(mchan))
-#    files:
-#      - src/systems/pulpopen/dmac_wrap.sv
-#      - src/systems/pulpopen/synth_dmac_wrap.sv
-#
-#  - target: cva6
-#    files:
-#      - src/systems/cva6_reg/dma_core_wrap.sv

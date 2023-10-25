@@ -8,6 +8,7 @@
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 """Util functions for MARIO"""
+import re
 import sys
 
 
@@ -43,6 +44,11 @@ def prot_key(used_prots: list, key: str, feature: str, db: dict) -> list:
 
 def prepare_ids(id_strs: list) -> dict:
     """Parses and validates the IDs """
+
+    # check if empty list
+    if not id_strs:
+        return {}
+
     # resulting dict
     res = {}
     # go over all IDs
@@ -111,5 +117,21 @@ def prepare_ids(id_strs: list) -> dict:
         # append protocols
         res[id_str] = {'r': r_prots, 'w': w_prots, 'rw': rw_prots, 'ar': sorted(ar_prots),
             'aw': sorted(aw_prots), 'used': sorted(list(set(used_prots)))}
+
+    return res
+
+
+def prepare_fids(fe_strs: list) -> dict:
+    """Parses and validates the frontend IDs """
+
+    # check if empty list
+    if not fe_strs:
+        return {}
+
+    # resulting dict
+    res = {}
+    # assemble info
+    for reg in re.findall(r'reg([0-9]+)_([0-9]+)d', ' '.join(fe_strs)):
+        res[f'reg{reg[0]}_{reg[1]}d'] = reg
 
     return res

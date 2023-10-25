@@ -8,8 +8,7 @@
 // - Tobias Senti <tsenti@student.ethz.ch>
 
 /// Synthesis wrapper for DMAC
-module synth_dmac_wrap #(
-  parameter int unsigned DualBackend = 0,
+module dmac_wrap_synth #(
   parameter int unsigned NumAx = 2,
   parameter int unsigned FifoDepth = 2
 )(
@@ -227,12 +226,8 @@ module synth_dmac_wrap #(
     .DATA_WIDTH          ( 32          ),
     .ADDR_WIDTH          ( 32          ),
     .BE_WIDTH            ( 4           ),
-    .TCDM_SIZE           ( 0           ),
-    .TwoDMidend          ( 1           ),
     .NB_OUTSND_BURSTS    ( NumAx       ),
-    .GLOBAL_QUEUE_DEPTH  ( FifoDepth   ),
-    .BACKEND_QUEUE_DEPTH ( 0           ),
-    .DUAL_BACKEND        ( DualBackend )
+    .GLOBAL_QUEUE_DEPTH  ( FifoDepth   )
   ) i_dmac_wrap (
     .clk_i            ( clk_i             ),
     .rst_ni           ( rst_ni            ),

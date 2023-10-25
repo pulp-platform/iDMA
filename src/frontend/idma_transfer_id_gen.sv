@@ -1,10 +1,9 @@
-// Copyright 2022 ETH Zurich and University of Bologna.
+// Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
 // - Thomas Benz <tbenz@ethz.ch>
-
 
 /// DMA transaction id generator. Increases the transaction id on every request.
 module idma_transfer_id_gen #(

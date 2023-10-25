@@ -16,8 +16,14 @@ VCS         ?= vcs
 VERILATOR   ?= verilator
 VLOGAN      ?= vlogan
 
+# Shell
+SHELL := /bin/bash
+
 # iDMA Variants
 IDMA_BACKEND_IDS ?= rw_axi r_obi_w_axi r_axi_w_obi
+
+# generated frontends
+IDMA_FE_IDS ?= reg32_3d reg64_2d
 
 # iDMA paths
 IDMA_ROOT     ?= $(shell $(BENDER) path idma)
@@ -44,32 +50,6 @@ IDMA_RELATIVE_PATH_REGEX := 's/$(IDMA_PATH_ESCAPED)/./'
 
 # Ensure half-built targets are purged
 .DELETE_ON_ERROR:
-
-
-# --------------
-# Help
-# --------------
-
-.PHONY: idma_all idma_help
-
-idma_all: idma_help
-
-idma_help:
-	@echo ""
-	@echo "iDMA Makefile"
-	@echo "-------------"
-	@echo ""
-	@echo "prepare_sim:                       uses bender to generate the analyze scripts needed for simulating the iDMA"
-	@echo "bin/iDMA.vcs VCS_TP=**YOUR_TB**:   creates the VCS executable"
-	@echo "obj_iDMA VLT_TOP=**YOUR_TOP_LVL**: elaborates the hardware using verilator"
-	@echo "pickle:                            uses morty to generate a pickled version of the hardware"
-	@echo "doc:                               generates the documentation in doc/build"
-	@echo "gen_ci:                            regenerates the gitlab CI (only ETH internal used)"
-	@echo "gen_regs:                          regenerates the registers using reggen"
-	@echo ""
-	@echo "clean:                             cleans generated files"
-	@echo "nuke:                              cleans all generated file, also almost all files checked in"
-	@echo ""
 
 
 # --------------
@@ -108,29 +88,29 @@ IDMA_RTL_FILES  := $(IDMA_RTL_DIR)/idma_transport_layer \
 IDMA_VSIM_DIR   := $(IDMA_ROOT)/target/sim/vsim
 
 define idma_gen
-	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 > $5
+	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 > $6
 endef
 
 $(IDMA_GEN_BENDER): $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/tpl/Bender.yml.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk
-	  $(call idma_gen,bender,$(IDMA_RTL_DIR)/tpl/Bender.yml.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$@)
+	$(call idma_gen,bender,$(IDMA_RTL_DIR)/tpl/Bender.yml.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
 
 $(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_BENDER) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl
-	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,$@)
+	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_BENDER) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl
-	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,$@)
+	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl
-	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,$@)
+	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl
-	$(call idma_gen,synth_wrapper,$(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl,$(IDMA_DB_FILES),$*,$@)
+	$(call idma_gen,synth_wrapper,$(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl
-	$(call idma_gen,testbench,$(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,$@)
+	$(call idma_gen,testbench,$(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_RTL_DIR)/tb_idma_backend_%.sv $(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl
-	$(call idma_gen,vsim_wave,$(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl,$(IDMA_DB_FILES),$*,$@)
+	$(call idma_gen,vsim_wave,$(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 idma_rtl_clean:
 	rm -f $(IDMA_RTL_DIR)/Bender.yml
@@ -153,30 +133,54 @@ IDMA_DOC_SRC_DIR := $(IDMA_ROOT)/doc/src
 IDMA_DOC_FIG_DIR := $(IDMA_ROOT)/doc/fig
 IDMA_DOC_OUT_DIR := $(IDMA_ROOT)/target/doc
 IDMA_HTML_DIR    := $(IDMA_DOC_OUT_DIR)/html
-IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontends
-IDMA_FE_REGS     := desc64 reg32_2d reg64 reg64_2d
+IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontend
+IDMA_FE_REGS     := desc64
+IDMA_FE_REGS     += $(IDMA_FE_IDS)
+
+# customize the HJSON
+$(IDMA_RTL_DIR)/idma_%.hjson: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.hjson.tpl $(IDMA_GEN_BENDER)
+	$(call idma_gen,reg_hjson,$(IDMA_FE_DIR)/reg/tpl/idma_reg.hjson.tpl,,,$*,$@)
+
+IDMA_REG_CUST_ALL += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_RTL_DIR)/idma_$Y.hjson)
+
+# ----
 
 $(IDMA_HTML_DIR)/regs/reg_html.css:
 	mkdir -p $(IDMA_HTML_DIR)/regs
 	cp $(IDMA_REG_DIR)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $@
 
-$(IDMA_RTL_DIR)/idma_%_reg_pkg.sv $(IDMA_RTL_DIR)/idma_%_reg_top.sv: $(IDMA_GEN_BENDER)
-	$(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -t $(IDMA_RTL_DIR) -r
+$(IDMA_RTL_DIR)/idma_%_reg_pkg.sv $(IDMA_RTL_DIR)/idma_%_reg_top.sv: $(IDMA_GEN_BENDER) $(IDMA_REG_CUST_ALL)
+	if [ -a "$(IDMA_FE_DIR)/$*/idma_$*.hjson" ]; then \
+	    $(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -t $(IDMA_RTL_DIR) -r; \
+	else \
+	    $(PYTHON) $(IDMA_REGTOOL) $(IDMA_RTL_DIR)/idma_$*.hjson -t $(IDMA_RTL_DIR) -r; \
+	fi
 
-$(IDMA_HTML_DIR)/regs/idma_%.html: $(IDMA_HTML_DIR)/regs/reg_html.css
-	$(PRINTF) "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n" > $@
-	$(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -d >> $@
-	$(PRINTF) "</html>\n" >> $@
+$(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl $(IDMA_GEN_BENDER)
+	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@)
+
+$(IDMA_HTML_DIR)/regs/idma_%.html: $(IDMA_HTML_DIR)/regs/reg_html.css $(IDMA_REG_CUST_ALL)
+	if [ -a "$(IDMA_FE_DIR)/$*/idma_$*.hjson" ]; then \
+		$(PRINTF) "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n" > $@; \
+		$(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -d >> $@; \
+		$(PRINTF) "</html>\n" >> $@; \
+	else \
+		$(PRINTF) "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n" > $@; \
+		$(PYTHON) $(IDMA_REGTOOL) $(IDMA_RTL_DIR)/idma_$*.hjson -d >> $@; \
+		$(PRINTF) "</html>\n" >> $@; \
+	fi
 
 idma_reg_clean:
 	rm -rf $(IDMA_HTML_DIR)/regs
 	rm -f  $(IDMA_RTL_DIR)/*_reg_top.sv
 	rm -f  $(IDMA_RTL_DIR)/*_reg_pkg.sv
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
+	rm -f  $(IDMA_REG_CUST_ALL)
 
 # assemble the required files
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
+IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
 IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y.html)
 
 
@@ -193,7 +197,7 @@ $(IDMA_PICKLE_DIR)/sources.json: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_
 	$(BENDER) update
 	$(BENDER) checkout
 	mkdir -p $(IDMA_PICKLE_DIR)
-	$(BENDER) sources -f -t rtl -t synthesis -t synth -t pulp -t asic | sed -e $(IDMA_RELATIVE_PATH_REGEX) > $@
+	$(BENDER) sources -f -t rtl -t synthesis -t synth -t asic | sed -e $(IDMA_RELATIVE_PATH_REGEX) > $@
 
 $(IDMA_PICKLE_DIR)/%.sv: $(IDMA_PICKLE_DIR)/sources.json
 	$(MORTY) -f $< -i --top $* $(IDMA_MORTY_ARGS) --propagate_defines -o $@
@@ -392,7 +396,7 @@ idma_nuke: idma_clean idma_nonfree_clean
 # Phony Targets
 # --------------
 
-.PHONY: idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
+.PHONY: idma_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
 
 idma_doc_all: idma_spinx_doc
 
@@ -401,3 +405,5 @@ idma_pickle_all: $(IDMA_PICKLE_ALL)
 idma_hw_all: $(IDMA_RTL_ALL)
 
 idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl
+
+idma_all: idma_hw_all idma_sim_all idma_doc_all idma_pickle_all

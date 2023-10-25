@@ -25,15 +25,11 @@ sources:
     files:
       # Level 0
       - ../../src/idma_pkg.sv
-      # Level 1
       - idma_desc64_reg_pkg.sv
-      - idma_reg32_2d_reg_pkg.sv
-      - idma_reg64_reg_pkg.sv
-      - idma_reg64_2d_reg_pkg.sv
+${fe_packages}
+      # Level 1
       - idma_desc64_reg_top.sv
-      - idma_reg32_2d_reg_top.sv
-      - idma_reg64_reg_top.sv
-      - idma_reg64_2d_reg_top.sv
+${fe_sources}
 ${rtl_sources}
   - target: test
     files:

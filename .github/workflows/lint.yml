@@ -28,7 +28,6 @@ jobs:
           SPDX-License-Identifier: (SHL-0.51|Apache-2.0)
         # Exclude generated headers (no license checker support for optional lines)
         exclude_paths: |
-          src/systems/cva6_reg/driver/*.h
           target/sim/vsim/wave/tpl/*.do.tpl
 
   lint-sv:
@@ -47,29 +46,28 @@ jobs:
         fail_on_error: true
         reviewdog_reporter: github-check
 
-  lint-cxx:
-    runs-on: ubuntu-latest
-    steps:
-    -
-      name: Checkout
-      uses: actions/checkout@v3
-    -
-      name: Run Clang-format
-      uses: DoozyX/clang-format-lint-action@v0.14
-      with:
-        extensions: 'c,h,cpp'
-        clangFormatVersion: 14
-        style: >
-          {
-          IndentWidth: 4,
-          ColumnLimit: 100,
-          AlignEscapedNewlines: DontAlign,
-          SortIncludes: false,
-          AllowShortFunctionsOnASingleLine: None,
-          AllowShortIfStatementsOnASingleLine: true,
-          AllowShortLoopsOnASingleLine: true
-          }
-        exclude_paths: src/systems/cva6_reg/driver/*.h target/sim/vsim/wave/tpl/*.tpl
+#  lint-cxx:
+#    runs-on: ubuntu-latest
+#    steps:
+#    -
+#      name: Checkout
+#      uses: actions/checkout@v3
+#    -
+#      name: Run Clang-format
+#      uses: DoozyX/clang-format-lint-action@v0.14
+#      with:
+#        extensions: 'c,h,cpp'
+#        clangFormatVersion: 14
+#        style: >
+#          {
+#          IndentWidth: 4,
+#          ColumnLimit: 100,
+#          AlignEscapedNewlines: DontAlign,
+#          SortIncludes: false,
+#          AllowShortFunctionsOnASingleLine: None,
+#          AllowShortIfStatementsOnASingleLine: true,
+#          AllowShortLoopsOnASingleLine: true
+#          }
 
   lint-python:
     runs-on: ubuntu-latest

@@ -12,7 +12,7 @@
 import argparse
 import sys
 
-from mario.util import prepare_ids
+from mario.util import prepare_ids, prepare_fids
 from mario.database import read_database
 from mario.bender import render_bender
 from mario.transport_layer import render_transport_layer
@@ -21,9 +21,10 @@ from mario.backend import render_backend
 from mario.wave import render_vsim_wave
 from mario.synth import render_synth_wrapper
 from mario.testbench import render_testbench
+from mario.frontend import render_reg_hjson, render_reg_top
 
 GENABLE_ENTITIES = ['transport', 'legalizer', 'backend', 'vsim_wave', 'testbench', 'synth_wrapper',
-    'bender']
+    'bender', 'reg_top', 'reg_hjson']
 
 EPILOG = '''
 The iDMA configuration ID is composed of a underscore-separated list of specifiers and protocols.
@@ -37,23 +38,25 @@ def main():
     # Parse Arguments
     parser = argparse.ArgumentParser(
         prog='gen_idma',
-        description='Mario, our trusty plumber: creates parts of the iDMA given a configuration ID',
+        description='Mario, our trusty plumber: creates parts of the iDMA given configuration IDs',
         epilog=EPILOG
     )
     parser.add_argument('--entity', choices=sorted(GENABLE_ENTITIES), dest='entity', required=True,
         help='The entity to generate from a given configuration.')
     parser.add_argument('--ids', dest='ids', nargs='*', help='configuration IDs')
-    parser.add_argument('--db', dest='db', nargs='*', required=True, help='Database files')
+    parser.add_argument('--fids', dest='fids', nargs='*', help='frontend IDs')
+    parser.add_argument('--db', dest='db', nargs='*', help='Database files')
     parser.add_argument('--tpl', dest='tpl', required=True, help='Template file')
     args = parser.parse_args()
 
     # prepare database and ids
     protocol_ids = prepare_ids(args.ids)
+    frontend_ids = prepare_fids(args.fids)
     protocol_db = read_database(args.db)
 
     # decide what to render
     if args.entity == 'bender':
-        print(render_bender(protocol_ids, protocol_db, args.tpl))
+        print(render_bender(protocol_ids, frontend_ids, args.tpl))
     elif args.entity == 'transport':
         print(render_transport_layer(protocol_ids, protocol_db, args.tpl))
     elif args.entity == 'legalizer':
@@ -66,6 +69,10 @@ def main():
         print(render_synth_wrapper(protocol_ids, protocol_db, args.tpl))
     elif args.entity == 'testbench':
         print(render_testbench(protocol_ids, protocol_db, args.tpl))
+    elif args.entity == 'reg_hjson':
+        print(render_reg_hjson(frontend_ids, args.tpl))
+    elif args.entity == 'reg_top':
+        print(render_reg_top(frontend_ids, args.tpl))
     else:
         return 1
 

@@ -11,8 +11,9 @@ and in the [PULP Cluster](https://github.com/pulp-platform/pulp).
 iDMA currently implements the following protocols:
 - [AXI4](https://developer.arm.com/documentation/ihi0022/hc/?lang=en)[+ATOPs from AXI5](https://github.com/pulp-platform/axi)
 - [AXI4 Lite](https://developer.arm.com/documentation/ihi0022/hc/?lang=en)
+- [AXI4 Stream](https://developer.arm.com/documentation/ihi0051/b/?lang=en)
 - [OBI v1.5.0](https://github.com/openhwgroup/programs/blob/master/TGs/cores-task-group/obi/OBI-v1.5.0.pdf)
-
+- [TileLink UH v1.8.1](https://starfivetech.com/uploads/tilelink_spec_1.8.1.pdf)
 
 ## Modular Architecture
 iDMA is centered around the idea to split the DMA engine in 3 distinct parts:
@@ -27,7 +28,6 @@ new capabilities.
 
 ## Documentation
 The [latest documentation](https://pulp-platform.github.io/iDMA) can be accessed pre-built.
-The [Morty docs](https://pulp-platform.github.io/iDMA/morty/index.html) provide the generated description of the SystemVerilog files within this repository.
 
 ## Publications
 If you use iDMA in your work or research, you can cite us:
@@ -282,33 +282,31 @@ We currently do not include any free and open-source simulation setup. However, 
 a simulation can be launched using:
 
 ```bash
-make gen_rtl_axi.obi.split
-make prepare_sim
-export VSIM="questa-2022.3 vsim"
-$VSIM -c -do "source scripts/compile_vsim.tcl; quit"
+make idma_sim_all
+cd target/sim/vsim
+$VSIM -c -do "source compile.tcl; quit"
 $VSIM -c -t 1ps -voptargs=+acc \
-     +job_file=jobs/multiprotocol/man_mixed.txt \
-     -logfile logs/multiprotocol.simple.vsim.log \
-     -wlf logs/multiprotocol.simple.wlf \
-     tb_idma_backend_r_axi_w_obi \
-     -do "source scripts/start_vsim.tcl; run -all"
+     +job_file=jobs/backend_rw_axi/simple.txt \
+     -logfile rw_axi_simple.log \
+     -wlf rw_axi_simple.wlf \
+     tb_idma_backend_rw_axi \
+     -do "source start.tcl; run -all"
 ```
 with gui:
 ```bash
-make gen_rtl_axi-tilelink.axi.split
-make prepare_sim
-export VSIM="questa-2022.3 vsim"
-$VSIM -c -do "source scripts/compile_vsim.tcl; quit"
+make idma_sim_all
+cd target/sim/vsim
+$VSIM -c -do "source compile.tcl; quit"
 $VSIM -t 1ps -voptargs=+acc \
-     +job_file=jobs/backend/man_tiny.txt \
-     -logfile logs/backend.simple.vsim.log \
-     -wlf logs/backend.medium.wlf \
-     tb_idma_backend_rw_axi_r_tilelink \
-     -do "source scripts/start_vsim.tcl; source scripts/waves/vsim_backend_rw_axi_r_tilelink.do; run -all"
+     +job_file=jobs/backend_rw_axi/simple.txt \
+     -logfile rw_axi_simple.log \
+     -wlf rw_axi_simple.wlf \
+     tb_idma_backend_rw_axi \
+     -do "source start.tcl; source wave/backend_rw_axi.do; run -all"
 ```
 
 Where:
-- `+job_file=jobs/backend/man_simple.txt` can point to any valid [job file](jobs/README.md)
-- `-logfile logs/backend.simple.vsim.log` denotes the log file
-- `-wlf logs/backend.simple.wlf` specifies a wave file
-- `tb_idma_backend` can be any of the supplied testbenches \(`test/tb_idma_*`\)
+- `job_file=jobs/backend_rw_axi/simple.txt` can point to any valid [job file](jobs/README.md)
+- `-logfile rw_axi_simple.log` denotes the log file
+- `-wlf rw_axi_simple.wlf` specifies a wave file
+- `tb_idma_backend_rw_axi` can be any of the supplied testbenches

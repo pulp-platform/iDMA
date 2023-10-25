@@ -13,6 +13,11 @@ import yaml
 
 def read_database(db_files: list) -> dict:
     """ Read the protocol database"""
+
+    # if no db is specified, escape
+    if not db_files:
+        return {}
+
     prot_db = {}
 
     # get database entries

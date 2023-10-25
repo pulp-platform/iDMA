@@ -43,17 +43,22 @@ The morty docs provide the generated description of the SystemVerilog files with
 
 .. only:: html
 
-  `R_AXI_W_OBI <idma_backend_r_axi_w_obi/index.html>`_
+  `R_AXI_W_OBI Backend <idma_backend_synth_r_axi_w_obi/index.html>`_
 
-  `R_OBI_W_AXI <idma_backend_r_obi_w_axi/index.html>`_
+  `R_OBI_W_AXI Backend <idma_backend_synth_r_obi_w_axi/index.html>`_
 
-  `RW_AXI <idma_backend_rw_axi/index.html>`_
+  `RW_AXI Backend <idma_backend_synth_rw_axi/index.html>`_
 
-.. image:: ../fig/graph/idma_backend_r_axi_w_obi.png
+  `ND Backend <idma_nd_backend_synth/index.html>`_
+
+.. image:: ../fig/graph/idma_backend_synth_r_axi_w_obi.png
   :width: 600
 
-.. image:: ../fig/graph/idma_backend_r_obi_w_axi.png
+.. image:: ../fig/graph/idma_backend_synth_r_obi_w_axi.png
   :width: 600
 
-.. image:: ../fig/graph/idma_backend_rw_axi.png
+.. image:: ../fig/graph/idma_backend_synth_rw_axi.png
+  :width: 600
+
+.. image:: ../fig/graph/idma_nd_backend_synth.png
   :width: 600
