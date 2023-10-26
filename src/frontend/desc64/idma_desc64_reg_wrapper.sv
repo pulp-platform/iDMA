@@ -1,9 +1,9 @@
-// Copyright 2022 ETH Zurich and University of Bologna.
+// Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
-// - Axel Vanoni <axvanoni@student.ethz.ch>
+// - Axel Vanoni <axvanoni@ethz.ch>
 
 `include "common_cells/registers.svh"
 
@@ -15,22 +15,22 @@ import idma_desc64_reg_pkg::idma_desc64_hw2reg_t; #(
     parameter type reg_req_t  = logic,
     parameter type reg_rsp_t  = logic
 ) (
-    input  logic                clk_i                  ,
-    input  logic                rst_ni                 ,
-    input  reg_req_t            reg_req_i              ,
-    output reg_rsp_t            reg_rsp_o              ,
-    output idma_desc64_reg2hw_t reg2hw_o               ,
-    input  idma_desc64_hw2reg_t hw2reg_i               ,
-    input  logic                devmode_i              ,
-    input  logic                descriptor_fifo_ready_i,
-    output logic                descriptor_fifo_valid_o
+    input  logic                clk_i             ,
+    input  logic                rst_ni            ,
+    input  reg_req_t            reg_req_i         ,
+    output reg_rsp_t            reg_rsp_o         ,
+    output idma_desc64_reg2hw_t reg2hw_o          ,
+    input  idma_desc64_hw2reg_t hw2reg_i          ,
+    input  logic                devmode_i         ,
+    output logic                input_addr_valid_o,
+    input  logic                input_addr_ready_i
 );
 
     import idma_desc64_reg_pkg::IDMA_DESC64_DESC_ADDR_OFFSET;
 
     reg_req_t request;
     reg_rsp_t response;
-    logic     descriptor_fifo_valid_q, descriptor_fifo_valid_d;
+    logic     input_addr_valid_q, input_addr_valid_d;
 
     idma_desc64_reg_top #(
         .reg_req_t (reg_req_t),
@@ -54,7 +54,7 @@ import idma_desc64_reg_pkg::idma_desc64_hw2reg_t; #(
 
     always_comb begin
         if (reg_req_i.addr == IDMA_DESC64_DESC_ADDR_OFFSET) begin
-            request.valid = reg_req_i.valid && descriptor_fifo_ready_i;
+            request.valid = reg_req_i.valid && input_addr_ready_i;
         end else begin
             request.valid = reg_req_i.valid;
         end
@@ -63,22 +63,22 @@ import idma_desc64_reg_pkg::idma_desc64_hw2reg_t; #(
     always_comb begin
         // only take into account the fifo if a write is going to it
         if (reg_req_i.addr == IDMA_DESC64_DESC_ADDR_OFFSET) begin
-            reg_rsp_o.ready = response.ready && descriptor_fifo_ready_i;
-            descriptor_fifo_valid_o = descriptor_fifo_valid_q;
+            reg_rsp_o.ready = response.ready && input_addr_ready_i;
+            input_addr_valid_o = reg2hw_o.desc_addr.qe || input_addr_valid_q;
         end else begin
             reg_rsp_o.ready = response.ready;
-            descriptor_fifo_valid_o = '0;
+            input_addr_valid_o = '0;
         end
     end
 
     always_comb begin
-        descriptor_fifo_valid_d = descriptor_fifo_valid_q;
-        if (reg2hw_o.desc_addr.qe) begin
-            descriptor_fifo_valid_d = 1'b1;
-        end else if (descriptor_fifo_ready_i) begin
-            descriptor_fifo_valid_d = '0;
+        input_addr_valid_d = input_addr_valid_q;
+        if (reg2hw_o.desc_addr.qe && !input_addr_ready_i) begin
+            input_addr_valid_d = 1'b1;
+        end else if (input_addr_ready_i) begin
+            input_addr_valid_d = '0;
         end
     end
-    `FF(descriptor_fifo_valid_q, descriptor_fifo_valid_d, '0);
+    `FF(input_addr_valid_q, input_addr_valid_d, '0);
 
 endmodule

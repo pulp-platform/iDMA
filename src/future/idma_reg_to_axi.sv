@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
-// - Axel Vanoni <axvanoni@student.ethz.ch>
+// - Axel Vanoni <axvanoni@ethz.ch>
 
 `include "common_cells/registers.svh"
 `include "idma/guard.svh"
 
 /// Hacky register interface to AXI converter
-module dma_reg_to_axi #(
+module idma_reg_to_axi #(
   parameter type            axi_req_t = logic,
   parameter type            axi_rsp_t = logic,
   parameter type            reg_req_t = logic,
@@ -92,7 +92,7 @@ module dma_reg_to_axi #(
 
   /* check that we don't get any errors in the simulation */
   `IDMA_NONSYNTH_BLOCK(
-  assert property (@(posedge clk_i) (axi_rsp_i.r_valid && axi_req_o.r_ready) |-> \
+  assert property (@(posedge clk_i) (axi_rsp_i.r_valid && axi_req_o.r_ready) |->
                   (axi_rsp_i.r.resp == axi_pkg::RESP_OKAY));
   )
 
@@ -102,4 +102,4 @@ module dma_reg_to_axi #(
   `FF(a_acked_q, a_acked_d, '0);
   `FF(d_acked_q, d_acked_d, '0);
 
-endmodule : dma_reg_to_axi
+endmodule

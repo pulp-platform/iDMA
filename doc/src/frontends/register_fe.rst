@@ -11,6 +11,5 @@ Currently supported are:
 
 .. only:: html
 
-- `32bit 2D register frontend <../regs/idma_reg32_2d.html>`_
-- `64bit register frontend <../regs/idma_reg64.html>`_
+- `32bit 3D register frontend <../regs/idma_reg32_3d.html>`_
 - `64bit 2D register frontend <../regs/idma_reg64_2d.html>`_

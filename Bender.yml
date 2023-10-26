@@ -45,6 +45,7 @@ sources:
       - src/future/idma_improved_fifo.sv
       - src/future/idma_legalizer_page_splitter.sv
       - src/future/idma_legalizer_pow2_splitter.sv
+      - src/future/idma_reg_to_axi.sv
 
   # Midends
   - target: rtl
@@ -56,22 +57,28 @@ sources:
   - target: rtl
     files:
       # Level 0
-      - src/frontend/desc64/idma_desc64_shared_counter.sv
+      - src/frontend/desc64/idma_desc64_ar_gen.sv
+      - src/frontend/desc64/idma_desc64_ar_gen_prefetch.sv
+      - src/frontend/desc64/idma_desc64_reader.sv
+      - src/frontend/desc64/idma_desc64_reader_gater.sv
+      - src/frontend/desc64/idma_desc64_reshaper.sv
       - src/frontend/idma_transfer_id_gen.sv
       # Level 1
       - src/frontend/desc64/idma_desc64_reg_wrapper.sv
       # Level 2
-      - src/frontend/desc64/idma_desc64.sv
-
+      - src/frontend/desc64/idma_desc64_top.sv
+      - src/frontend/desc64/idma_desc64_cva6_wrap.sv
 
   # Synthesis wrappers
   - target: synth
     files:
       # Level 0
       - src/frontend/desc64/idma_desc64_synth_pkg.sv
+      - src/frontend/desc64/idma_desc64_cva6_synth_pkg.sv
       - src/synth/idma_nd_backend_synth.sv
       # Level 1
       - src/frontend/desc64/idma_desc64_synth.sv
+      - src/frontend/desc64/idma_desc64_cva6_synth.sv
 
   # Testbenches
   - target: test
@@ -79,7 +86,8 @@ sources:
       # Level 0
       - test/tb_idma_improved_fifo.sv
       - test/tb_idma_nd_backend.sv
-      - test/frontend/tb_idma_desc64.sv
+      - test/frontend/tb_idma_desc64_top.sv
+      - test/frontend/tb_idma_desc64_bench.sv
       - test/future/idma_tb_per2axi.sv
       - test/future/idma_obi_asserter.sv
       - test/future/TLToAXI4.v

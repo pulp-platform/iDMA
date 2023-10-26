@@ -131,5 +131,25 @@
         "proc_id" : "rw_axi",
         "testbench": "tb_idma_nd_backend",
         "synth_top": "idma_nd_backend_synth"
+    },
+    "desc64": {
+        "jobs" : {
+            "simple" : "jobs.json"
+        },
+        "params" : {
+        },
+        "proc_id" : "rw_axi",
+        "testbench" : "tb_idma_desc64_top",
+        "synth_top" : "idma_desc64_synth"
+    },
+    "desc64_dma": {
+        "jobs" : {
+            "simple" : "jobs.json"
+        },
+        "params" : {
+        },
+        "proc_id" : "rw_axi",
+        "testbench" : "tb_idma_desc64_bench",
+        "synth_top" : "idma_desc64_synth"
     }
 }
