@@ -64,7 +64,7 @@ module tb_idma_desc64_top
 
     // set seed
     initial begin
-        int drop = $urandom(Seed);
+        automatic int drop = $urandom(Seed);
     end
 
     class stimulus_t;

@@ -157,3 +157,13 @@ synth_wrapper_assign_read: |
     assign axi_lite_read_rsp.r.data    = axi_lite_r_data_i;
     assign axi_lite_read_rsp.r.resp    = axi_lite_r_resp_i;
     assign axi_lite_read_rsp.r_valid   = axi_lite_r_valid_i;
+trace_signals:
+    read:
+        rsp:
+            valid: axi_lite_read_rsp_i.r_valid
+            ready: axi_lite_read_req_o.r_ready
+    write:
+        req:
+            valid: axi_lite_write_req_o.w_valid
+            ready: axi_lite_write_rsp_i.w_ready
+            strobe: axi_lite_write_req_o.w.strb

@@ -224,3 +224,13 @@ synth_wrapper_assign_read: |
     assign axi_read_rsp.r.last   = axi_r_last_i;
     assign axi_read_rsp.r.user   = axi_r_user_i;
     assign axi_read_rsp.r_valid  = axi_r_valid_i;
+trace_signals:
+    read:
+        rsp:
+            valid: axi_read_rsp_i.r_valid
+            ready: axi_read_req_o.r_ready
+    write:
+        req:
+            valid: axi_write_req_o.w_valid
+            ready: axi_write_rsp_i.w_ready
+            strobe: axi_write_req_o.w.strb

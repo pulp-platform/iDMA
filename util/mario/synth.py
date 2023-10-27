@@ -36,7 +36,7 @@ def render_synth_wrapper(prot_ids: dict, db: dict, tpl_file: str) -> str:
             db[rp]['synth_wrapper_assign_read'] =\
                 '    ' + db[rp]['synth_wrapper_assign_read'].replace('\n', '\n    ')
 
-        for wp in used_read_prots:
+        for wp in used_write_prots:
             db[wp]['synth_wrapper_ports_write'] =\
                 '    ' + db[wp]['synth_wrapper_ports_write'].replace('\n', '\n    ')
             db[wp]['synth_wrapper_assign_write'] =\

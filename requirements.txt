@@ -8,3 +8,4 @@ sphinx-rtd-theme
 recommonmark
 sphinxcontrib-svg2pdfconverter
 pylint
+flatdict

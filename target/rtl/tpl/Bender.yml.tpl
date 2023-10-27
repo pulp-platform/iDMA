@@ -16,6 +16,7 @@ dependencies:
 export_include_dirs:
   - ../../src/include
   - ../../test
+  - include
 
 sources:
   # Source files grouped in levels. Files in level 0 have no dependencies on files in this

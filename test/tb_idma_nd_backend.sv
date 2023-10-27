@@ -8,6 +8,7 @@
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
+`include "idma/tracer.svh"
 `include "idma/typedef.svh"
 
 // Protocol testbench defines
@@ -34,7 +35,8 @@ module tb_idma_nd_backend import idma_pkg::*; #(
     parameter bit          HardwareLegalizer   = 1,
     parameter bit          RejectZeroTransfers = 1,
     parameter bit          ErrorHandling       = 1,
-    parameter bit          IdealMemory         = 1
+    parameter bit          IdealMemory         = 1,
+    parameter bit          DmaTracing          = 1
 );
 
     // timing parameters
@@ -422,6 +424,26 @@ module tb_idma_nd_backend import idma_pkg::*; #(
         .busy_o          ( busy            )
     );
 
+
+    //--------------------------------------
+    // DMA Tracer
+    //--------------------------------------
+    // only activate tracer if requested
+    if (DmaTracing) begin
+        // fetch the name of the trace file from CMD line
+        string trace_file;
+        initial begin
+            void'($value$plusargs("trace_file=%s", trace_file));
+        end
+        // attach the tracer
+        `IDMA_TRACER_RW_AXI(i_idma_backend, trace_file);
+    end
+
+
+    //--------------------------------------
+    // TB connections
+    //--------------------------------------
+
     // Read Write Join
     axi_rw_join #(
         .axi_req_t        ( axi_req_t ),
@@ -437,9 +459,6 @@ module tb_idma_nd_backend import idma_pkg::*; #(
         .mst_resp_i       ( axi_rsp       )
     );
 
-    //--------------------------------------
-    // TB connections
-    //--------------------------------------
     // connect virtual driver interface to structs
     assign nd_req                   = idma_nd_dv.req;
     assign nd_req_valid             = idma_nd_dv.req_valid;

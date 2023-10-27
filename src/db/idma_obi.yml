@@ -161,3 +161,15 @@ synth_wrapper_assign_read: |
     assign obi_read_rsp.r_valid = obi_read_rsp_r_valid_i;
     assign obi_read_rsp.r.rdata = obi_read_rsp_r_rdata_i;
     assign obi_read_rsp.r.rid   = obi_read_rsp_r_rid_i;
+trace_signals:
+    read:
+        rsp:
+            valid: obi_read_req_o.a_req
+            ready: obi_read_rsp_i.a_gnt
+            write_en: obi_read_req_o.a.we
+    write:
+        req:
+            valid: obi_write_req_o.a_req
+            ready: obi_write_rsp_i.a_gnt
+            strobe: obi_write_req_o.a.be
+            write_en: obi_write_req_o.a.we

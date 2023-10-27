@@ -241,3 +241,13 @@ synth_wrapper_assign_read: |
     assign tilelink_read_rsp.d.denied  = tilelink_read_rsp_d_denied_i;
     assign tilelink_read_rsp.d.data    = tilelink_read_rsp_d_data_i;
     assign tilelink_read_rsp.d.corrupt = tilelink_read_rsp_d_corrupt_i;
+trace_signals:
+    read:
+        rsp:
+            valid: tilelink_read_rsp_i.d_valid
+            ready: tilelink_read_req_o.d_ready
+    write:
+        req:
+            valid: tilelink_write_req_o.a_valid
+            ready: tilelink_write_rsp_i.a_ready
+            strobe: tilelink_write_req_o.a.mask

@@ -123,10 +123,10 @@ module idma_tb_fifo_v2 #(
     input  logic pop_i
 );
   logic [ADDR_DEPTH-1:0] usage;
-  if (DEPTH == 0) begin
+  if (DEPTH == 0) begin : proc_depth_zero
     assign alm_full_o  = 1'b0;
     assign alm_empty_o = 1'b0;
-  end else begin
+  end else begin : proc_depth_larger_zero
     assign alm_full_o  = (usage >= ALM_FULL_TH[ADDR_DEPTH-1:0]);
     assign alm_empty_o = (usage <= ALM_EMPTY_TH[ADDR_DEPTH-1:0]);
   end

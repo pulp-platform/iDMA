@@ -7,6 +7,7 @@
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
+`include "idma/tracer.svh"
 `include "idma/typedef.svh"
 
 // Protocol testbench defines
@@ -53,7 +54,8 @@ module tb_idma_backend_${name_uniqueifier} import idma_pkg::*; #(
 %endif
     parameter bit          HardwareLegalizer     = 1,
     parameter bit          RejectZeroTransfers   = 1,
-    parameter bit          ErrorHandling         = 0
+    parameter bit          ErrorHandling         = 0,
+    parameter bit          DmaTracing            = 1
 );
 
     // timing parameters
@@ -589,6 +591,22 @@ ${p}_${database[p]['write_meta_channel']}_width\
 ,
         .busy_o               ( busy            )
     );
+
+
+    //--------------------------------------
+    // DMA Tracer
+    //--------------------------------------
+    // only activate tracer if requested
+    if (DmaTracing) begin
+        // fetch the name of the trace file from CMD line
+        string trace_file;
+        initial begin
+            void'($value$plusargs("trace_file=%s", trace_file));
+        end
+        // attach the tracer
+        `IDMA_TRACER_${name_uniqueifier.upper()}(i_idma_backend, trace_file);
+    end
+
 
     //--------------------------------------
     // TB connections

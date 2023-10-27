@@ -320,3 +320,14 @@ synth_wrapper_assign_write: |
     assign axi_stream_write_tvalid_o = axi_stream_write_req.tvalid;
 
     assign axi_stream_write_rsp.tready = axi_stream_write_tready_i;
+trace_signals:
+    read:
+        rsp:
+            valid: axi_stream_read_rsp_i.tvalid
+            ready: axi_stream_read_req_o.tready
+            strobe: axi_stream_read_rsp_i.t.strb
+    write:
+        req:
+            valid: axi_stream_write_req_o.tvalid
+            ready: axi_stream_write_rsp_i.tready
+            strobe: axi_stream_write_req_o.t.strb

@@ -68,9 +68,11 @@ IDMA_GEN        := $(IDMA_UTIL_DIR)/gen_idma.py
 IDMA_GEN_SRC    := $(IDMA_UTIL_DIR)/mario/backend.py \
 				   $(IDMA_UTIL_DIR)/mario/bender.py \
 				   $(IDMA_UTIL_DIR)/mario/database.py \
+				   $(IDMA_UTIL_DIR)/mario/frontend.py \
 				   $(IDMA_UTIL_DIR)/mario/legalizer.py \
 				   $(IDMA_UTIL_DIR)/mario/synth.py \
 				   $(IDMA_UTIL_DIR)/mario/testbench.py \
+				   $(IDMA_UTIL_DIR)/mario/tracer.py \
 				   $(IDMA_UTIL_DIR)/mario/transport_layer.py \
 				   $(IDMA_UTIL_DIR)/mario/util.py \
 				   $(IDMA_UTIL_DIR)/mario/wave.py
@@ -112,12 +114,18 @@ $(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_RTL_DIR)/idma_backend_%
 $(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_RTL_DIR)/tb_idma_backend_%.sv $(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl
 	$(call idma_gen,vsim_wave,$(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl,$(IDMA_DB_FILES),$*,,$@)
 
+$(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk
+	mkdir -p $(IDMA_RTL_DIR)/include/idma
+	$(call idma_gen,tracer,$(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
+
 idma_rtl_clean:
 	rm -f $(IDMA_RTL_DIR)/Bender.yml
 	rm -f $(IDMA_RTL_DIR)/*.sv
 	rm -f $(IDMA_VSIM_DIR)/wave/*.do
+	rm -f $(IDMA_RTL_DIR)/include/idma/tracer.svh
 
 # assemble the required files
+IDMA_RTL_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
 IDMA_RTL_ALL += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
 IDMA_TB_ALL  += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
 IDMA_TB_ALL  += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
@@ -263,12 +271,12 @@ idma_sim_clean:
 	rm -f  $(IDMA_VSIM_DIR)/dma_transfers.txt
 	rm -f  $(IDMA_VSIM_DIR)/transcript
 	rm -f  $(IDMA_VSIM_DIR)/wlf*
-	rm -f  $(IDMA_VSIM_DIR)/logs/wlf*
-	rm -f  $(IDMA_VSIM_DIR)/logs/*.wlf
+	rm -f  $(IDMA_VSIM_DIR)/*.wlf
 	rm -f  $(IDMA_VSIM_DIR)/*.vstf
 	rm -f  $(IDMA_VSIM_DIR)/*.vcd
 	rm -f  $(IDMA_VSIM_DIR)/modelsim.ini
-	rm -f  $(IDMA_VSIM_DIR)/logs/*vsim.log
+	rm -f  $(IDMA_VSIM_DIR)/*.log
+	rm -f  $(IDMA_VSIM_DIR)/*.txt
 
 
 # --------------
@@ -312,7 +320,8 @@ idma_vcs_clean:
 	rm -rf $(IDMA_VCS_DIR)/bin
 	rm -f  $(IDMA_VCS_DIR)/ucli.key
 	rm -f  $(IDMA_VCS_DIR)/vc_hdrs.h
-	rm -f  $(IDMA_VCS_DIR)/logs/*.vcs.log
+	rm -f  $(IDMA_VCS_DIR)/*.log
+	rm -f  $(IDMA_VCS_DIR)/*.txt
 
 
 # --------------
@@ -344,6 +353,22 @@ $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
 
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
+
+
+# ---------------
+# Trace
+# ---------------
+
+.PHONY: idma_trace_clean
+
+IDMA_TRACE := $(IDMA_UTIL_DIR)/trace_idma.py
+
+%_trace.rpt: $(IDMA_TRACE) $(IDMA_DB_FILES) %.txt
+	$(PYTHON) $(IDMA_TRACE) --db $(IDMA_DB_FILES) --trace $*.txt > $@
+
+idma_trace_clean:
+	rm -f $(IDMA_VSIM_DIR)/*_trace.rpt
+	rm -f $(IDMA_VCS_DIR)/*_trace.rpt
 
 
 # ---------------
@@ -385,7 +410,7 @@ idma_nonfree_clean:
 
 .PHONY: idma_clean_all idma_clean idma_misc_clean
 
-idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_morty_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_spinx_doc_clean
+idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_morty_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_spinx_doc_clean idma_trace_clean
 
 idma_misc_clean:
 	rm -rf scripts/__pycache__

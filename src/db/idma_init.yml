@@ -100,3 +100,12 @@ synth_wrapper_assign_read: |
     assign init_read_rsp.rsp_valid           = init_read_rsp_valid_i;
     assign init_read_rsp.rsp_chan.init_value = init_read_rsp_init_value_i;
     assign init_read_rsp_ready_o             = init_read_req.rsp_ready;
+trace_signals:
+    read:
+        req:
+            valid: init_read_req_o.req_valid
+            config: init_read_req_o.req_chan.cfg
+            ready: init_read_rsp_i.req_ready
+        rsp:
+            valid: init_read_rsp_i.rsp_valid
+            ready: init_read_req_o.rsp_ready

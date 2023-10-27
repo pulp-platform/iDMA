@@ -47,6 +47,7 @@ module tb_idma_desc64_bench
     parameter bit          RejectZeroTransfers = 1,
     parameter bit          ErrorHandling       = 1,
     parameter bit          IdealMemory         = 1,
+    parameter bit          DmaTracing          = 1,
     parameter int unsigned Seed                = 1337
 ) ();
     localparam time PERIOD     = 10ns;
@@ -97,7 +98,7 @@ module tb_idma_desc64_bench
 
     // set seed
     initial begin
-        int drop = $urandom(Seed);
+        automatic int drop = $urandom(Seed);
     end
 
     class stimulus_t;
@@ -296,131 +297,40 @@ module tb_idma_desc64_bench
         .busy_o               ( busy              )
     );
 
-  // Read Write Join
-  axi_rw_join #(
-    .axi_req_t        ( axi_req_t  ),
-    .axi_resp_t       ( axi_resp_t )
-  ) i_axi_rw_join (
-    .clk_i            ( clk                    ),
-    .rst_ni           ( rst_n                  ),
-    .slv_read_req_i   ( axi_read_req           ),
-    .slv_read_resp_o  ( axi_read_rsp           ),
-    .slv_write_req_i  ( axi_write_req          ),
-    .slv_write_resp_o ( axi_write_rsp          ),
-    .mst_req_o        ( dma_be_master_request  ),
-    .mst_resp_i       ( dma_be_master_response )
-  );
 
-  string trace_file;
-  initial begin
-    void'($value$plusargs("trace_file=%s", trace_file));
-  end
-  `ifndef SYNTHESYS
-  `ifndef VERILATOR
-  initial begin : inital_tracer
-    automatic bit first_iter                 = 1'b1;
-    automatic int unsigned skipped_transfers = 0;
-    automatic int unsigned recorded_transfers = 0;
-    automatic integer tf;
-    automatic `IDMA_TRACER_MAX_TYPE cnst [string];
-    automatic `IDMA_TRACER_MAX_TYPE meta [string];
-    automatic `IDMA_TRACER_MAX_TYPE busy [string];
-    automatic `IDMA_TRACER_MAX_TYPE axib [string];
-    automatic string trace;
-    #0;
-    tf = $fopen(trace_file, "w");
-    $display("[Tracer] Logging iDMA backend %s to %s", "i_idma_backend", trace_file);
-    forever begin
-      @(posedge i_idma_backend.clk_i);
-      if (i_idma_backend.rst_ni & irq) begin
-        skipped_transfers += 1;
-        if (skipped_transfers > TransfersToSkip) begin
-          break;
+    //--------------------------------------
+    // DMA Tracer
+    //--------------------------------------
+    // only activate tracer if requested
+    if (DmaTracing) begin
+        // fetch the name of the trace file from CMD line
+        string trace_file;
+        initial begin
+            void'($value$plusargs("trace_file=%s", trace_file));
         end
-      end
+        // attach the tracer
+        `IDMA_TRACER_RW_AXI(i_idma_backend, trace_file);
     end
-    forever begin
-      @(posedge i_idma_backend.clk_i);
-      if (irq) begin
-        recorded_transfers += 1;
-        if (recorded_transfers >= TransfersToSkip / 2) begin
-          break;
-        end
-      end
-      /* Trace */
-      trace = "{";
-      /* Constants */
-      cnst = '{
-        "inst"                  : "i_idma_backend",
-        "data_width"            : i_idma_backend.DataWidth,
-        "addr_width"            : i_idma_backend.AddrWidth,
-        "user_width"            : i_idma_backend.UserWidth,
-        "axi_id_width"          : i_idma_backend.AxiIdWidth,
-        "num_ax_in_flight"      : i_idma_backend.NumAxInFlight,
-        "buffer_depth"          : i_idma_backend.BufferDepth,
-        "tf_len_width"          : i_idma_backend.TFLenWidth,
-        "mem_sys_depth"         : i_idma_backend.MemSysDepth,
-        "rw_coupling_avail"     : i_idma_backend.RAWCouplingAvail,
-        "mask_invalid_data"     : i_idma_backend.MaskInvalidData,
-        "hardware_legalizer"    : i_idma_backend.HardwareLegalizer,
-        "reject_zero_transfers" : i_idma_backend.RejectZeroTransfers,
-        "error_cap"             : i_idma_backend.ErrorCap,
-        "print_fifo_info"       : i_idma_backend.PrintFifoInfo
-      };
-      meta = '{
-        "time" : $time()
-      };
-      busy = '{
-        "buffer"      : i_idma_backend.busy_o.buffer_busy,
-        "r_dp"        : i_idma_backend.busy_o.r_dp_busy,
-        "w_dp"        : i_idma_backend.busy_o.w_dp_busy,
-        "r_leg"       : i_idma_backend.busy_o.r_leg_busy,
-        "w_leg"       : i_idma_backend.busy_o.w_leg_busy,
-        "eh_fsm"      : i_idma_backend.busy_o.eh_fsm_busy,
-        "eh_cnt"      : i_idma_backend.busy_o.eh_cnt_busy,
-        "raw_coupler" : i_idma_backend.busy_o.raw_coupler_busy
-      };
-      axib = '{
-        "w_valid" : i_idma_backend.axi_write_req_o.w_valid,
-        "w_ready" : i_idma_backend.axi_write_rsp_i.w_ready,
-        "w_strb"  : i_idma_backend.axi_write_req_o.w.strb,
-        "r_valid" : i_idma_backend.axi_read_rsp_i.r_valid,
-        "r_ready" : i_idma_backend.axi_read_req_o.r_ready
-      };
-      if ($isunknown(axib["w_ready"]) || $isunknown(axib["r_valid"])) begin
-        $fatal("UNKNOWN AXI STATE, THIS SHOULD NEVER HAPPEN!");
-      end
-      /* Assembly */
-      `IDMA_TRACER_STR_ASSEMBLY(cnst, first_iter);
-      `IDMA_TRACER_STR_ASSEMBLY(meta, 1);
-      `IDMA_TRACER_STR_ASSEMBLY(busy, 1);
-      `IDMA_TRACER_STR_ASSEMBLY(axib, 1);
-      `IDMA_TRACER_CLEAR_COND(first_iter);
-      /* Commit */
-      $fwrite(tf, $sformatf("%s}\n", trace));
-    end
-  end
-`endif
-`endif
 
-    /*
-    axi_cut #(
-        .aw_chan_t (axi_aw_chan_t),
-        .w_chan_t  (axi_w_chan_t),
-        .b_chan_t  (axi_b_chan_t),
-        .ar_chan_t (axi_ar_chan_t),
-        .r_chan_t  (axi_r_chan_t),
-        .axi_req_t (axi_req_t),
-        .axi_resp_t(axi_resp_t)
-    ) i_axi_cut (
-        .clk_i      (clk),
-        .rst_ni     (rst_n),
-        .slv_req_i  (dma_be_cut_req),
-        .slv_resp_o (dma_be_cut_resp),
-        .mst_req_o  (dma_be_master_request),
-        .mst_resp_i (dma_be_master_response)
+
+    //--------------------------------------
+    // TB connections
+    //--------------------------------------
+
+    // Read Write Join
+    axi_rw_join #(
+        .axi_req_t        ( axi_req_t  ),
+        .axi_resp_t       ( axi_resp_t )
+    ) i_axi_rw_join (
+        .clk_i            ( clk                    ),
+        .rst_ni           ( rst_n                  ),
+        .slv_read_req_i   ( axi_read_req           ),
+        .slv_read_resp_o  ( axi_read_rsp           ),
+        .slv_write_req_i  ( axi_write_req          ),
+        .slv_write_resp_o ( axi_write_rsp          ),
+        .mst_req_o        ( dma_be_master_request  ),
+        .mst_resp_i       ( dma_be_master_response )
     );
-    */
 
     // AXI mux
     axi_mux #(
