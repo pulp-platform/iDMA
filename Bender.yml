@@ -7,8 +7,8 @@ package:
   authors:
     - "Thomas Benz <tbenz@iis.ee.ethz.ch>" # current maintainer
     - "Michael Rogenmoser <michaero@iis.ee.ethz.ch>"
-    - "Tobias Senti <tsenti@student.ethz.ch>"
-    - "Axel Vanoni <axvanoni@student.ethz.ch>"
+    - "Tobias Senti <tsenti@ethz.ch>"
+    - "Axel Vanoni <axvanoni@ethz.ch>"
 
 dependencies:
   common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.32.0 }
@@ -67,18 +67,15 @@ sources:
       - src/frontend/desc64/idma_desc64_reg_wrapper.sv
       # Level 2
       - src/frontend/desc64/idma_desc64_top.sv
-      - src/frontend/desc64/idma_desc64_cva6_wrap.sv
 
   # Synthesis wrappers
   - target: synth
     files:
       # Level 0
       - src/frontend/desc64/idma_desc64_synth_pkg.sv
-      - src/frontend/desc64/idma_desc64_cva6_synth_pkg.sv
       - src/synth/idma_nd_backend_synth.sv
       # Level 1
       - src/frontend/desc64/idma_desc64_synth.sv
-      - src/frontend/desc64/idma_desc64_cva6_synth.sv
 
   # Testbenches
   - target: test
