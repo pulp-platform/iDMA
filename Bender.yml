@@ -55,6 +55,8 @@ sources:
   - target: rtl
     files:
       # Level 0
+      - src/midend/idma_mp_dist_midend.sv
+      - src/midend/idma_mp_split_midend.sv
       - src/midend/idma_nd_midend.sv
       - src/midend/idma_rt_midend.sv
 
@@ -78,10 +80,12 @@ sources:
     files:
       # Level 0
       - src/frontend/desc64/idma_desc64_synth_pkg.sv
+      - src/midend/idma_mp_midend_synth_pkg.sv
       - src/midend/idma_nd_midend_synth.sv
       - src/midend/idma_rt_midend_synth_pkg.sv
       # Level 1
       - src/frontend/desc64/idma_desc64_synth.sv
+      - src/midend/idma_mp_midend_synth.sv
       - src/midend/idma_rt_midend_synth.sv
 
   # Testbenches

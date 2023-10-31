@@ -138,7 +138,7 @@
         },
         "params" : {
         },
-        "proc_id" : "rw_axi",
+        "proc_id" : "none",
         "testbench" : "tb_idma_desc64_top",
         "synth_top" : "idma_desc64_synth"
     },
@@ -148,7 +148,7 @@
         },
         "params" : {
         },
-        "proc_id" : "rw_axi",
+        "proc_id" : "none",
         "testbench" : "tb_idma_desc64_bench",
         "synth_top" : "idma_desc64_synth"
     },
@@ -158,8 +158,18 @@
         },
         "params" : {
         },
-        "proc_id" : "rw_axi",
+        "proc_id" : "none",
         "testbench" : "tb_idma_rt_midend",
         "synth_top" : "idma_rt_midend_synth"
+    },
+    "mp_midend": {
+        "jobs" : {
+            "simple" : "jobs.json"
+        },
+        "params" : {
+        },
+        "proc_id" : "none",
+        "testbench" : "idma_mp_midend_synth",
+        "synth_top" : "idma_mp_midend_synth"
     }
 }

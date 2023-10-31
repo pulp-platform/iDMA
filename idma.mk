@@ -246,6 +246,11 @@ IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_rt_midend_synth.png
 IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_rt_midend_synth/index.html
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_rt_midend_synth.sv
 
+# Mempool midend
+IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_mp_midend_synth.png
+IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_mp_midend_synth/index.html
+IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_mp_midend_synth.sv
+
 
 # --------------
 # QuestaSim
@@ -267,7 +272,7 @@ endef
 $(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
 	$(BENDER) update
 	$(BENDER) checkout
-	$(call idma_generate_vsim, $@, -t sim -t test -t rtl -t asic,../../..)
+	$(call idma_generate_vsim, $@, -t sim -t test -t synth -t rtl -t asic,../../..)
 
 idma_sim_clean:
 	rm -rf $(IDMA_VSIM_DIR)/compile.tcl
@@ -308,7 +313,7 @@ IDMA_VCS_PARAMS  ?=
 $(IDMA_VCS_DIR)/compile.sh: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
 	$(BENDER) update
 	$(BENDER) checkout
-	$(BENDER) script vcs -t test -t rtl -t simulation --vlog-arg "\$(IDMA_VLOGAN_ARGS)" --vlogan-bin "$(VLOGAN)" $(IDMA_VLOGAN_REL_PATHS) > $@
+	$(BENDER) script vcs -t test -t rtl -t synth -t simulation --vlog-arg "\$(IDMA_VLOGAN_ARGS)" --vlogan-bin "$(VLOGAN)" $(IDMA_VLOGAN_REL_PATHS) > $@
 	chmod +x $@
 
 idma_vcs_compile: $(IDMA_VCS_DIR)/compile.sh
