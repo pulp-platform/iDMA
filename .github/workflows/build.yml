@@ -15,7 +15,7 @@ jobs:
   build:
     strategy:
       matrix:
-        target: [rtl, doc]
+        target: [hw, doc]
       fail-fast: false
     runs-on: ubuntu-22.04
     steps:

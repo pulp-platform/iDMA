@@ -19,6 +19,7 @@ module axi_dma_tc_snitch_fe #(
     parameter type         axi_req_t     = logic,
     parameter type         axi_res_t     = logic,
     parameter type         acc_resp_t    = logic,
+    parameter type         dma_events_t  = logic,
     /// Derived parameter *Do not override*
     parameter type addr_t = logic [AddrWidth-1:0],
     parameter type data_t = logic [DataWidth-1:0]
@@ -50,7 +51,8 @@ module axi_dma_tc_snitch_fe #(
     input  logic [31:0]       hart_id_i,
 
     // performance output
-    output axi_dma_pkg::dma_perf_t dma_perf_o
+    output axi_dma_pkg::dma_perf_t dma_perf_o,
+    output dma_events_t dma_events_o
 );
 
     typedef logic [IdWidth-1:0] id_t;
@@ -62,6 +64,7 @@ module axi_dma_tc_snitch_fe #(
         axi_pkg::burst_t  burst_src, burst_dst;
         logic             decouple_rw;
         logic             deburst;
+        logic             serialize;
     } burst_req_t;
 
     typedef struct packed {
@@ -137,8 +140,8 @@ module axi_dma_tc_snitch_fe #(
     //--------------------------------------
     // Buffer twod last
     //--------------------------------------
-    localparam int unsigned TwodBufferDepth = 2 * DMAReqFifoDepth +
-        DMAAxiReqFifoDepth + 3 + 1;
+    localparam int unsigned TwodBufferDepth = 2 * (DMAReqFifoDepth +
+        DMAAxiReqFifoDepth) + 3 + 1;
     logic twod_req_last_realigned;
     fifo_v3 # (
         .DATA_WIDTH  (  1                 ),
@@ -176,7 +179,8 @@ module axi_dma_tc_snitch_fe #(
         .TRANSFER_ID_WIDTH  ( 32           ),
         .DATA_WIDTH         ( DMADataWidth ),
         .axi_req_t          ( axi_req_t    ),
-        .axi_res_t          ( axi_res_t    )
+        .axi_res_t          ( axi_res_t    ),
+        .dma_events_t       ( dma_events_t )
     ) i_axi_dma_perf_counters (
         .clk_i           ( clk_i               ),
         .rst_ni          ( rst_ni              ),
@@ -185,7 +189,8 @@ module axi_dma_tc_snitch_fe #(
         .next_id_i       ( next_id             ),
         .completed_id_i  ( completed_id        ),
         .dma_busy_i      ( dma_busy_o          ),
-        .dma_perf_o      ( dma_perf_o          )
+        .dma_perf_o      ( dma_perf_o          ),
+        .dma_events_o    ( dma_events_o        )
     );
 
     //--------------------------------------
@@ -263,6 +268,7 @@ module axi_dma_tc_snitch_fe #(
                   automatic logic [1:0] cfg;
 
                   // Parse the transfer parameters from the register or immediate.
+                  cfg = '0;
                   unique casez (acc_qdata_op_i)
                       riscv_instr::DMCPYI : cfg = acc_qdata_op_i[24:20];
                       riscv_instr::DMCPY :  cfg = acc_qdata_argb_i;
@@ -299,6 +305,7 @@ module axi_dma_tc_snitch_fe #(
                   automatic logic [1:0] status;
 
                   // Parse the status index from the register or immediate.
+                  status = '0;
                   unique casez (acc_qdata_op_i)
                       riscv_instr::DMSTATI: status = acc_qdata_op_i[24:20];
                       riscv_instr::DMSTAT:  status = acc_qdata_argb_i;

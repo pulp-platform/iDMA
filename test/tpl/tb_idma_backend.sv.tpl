@@ -245,8 +245,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
     % else:
         % if protocol in used_read_protocols:
             % if database[protocol]['read_slave'] == 'true':
-    ${protocol}_rsp_t ${protocol}_read_req;
-    ${protocol}_req_t ${protocol}_read_rsp;
+    ${protocol}_req_t ${protocol}_read_req;
+    ${protocol}_rsp_t ${protocol}_read_rsp;
             % else:
     ${protocol}_req_t ${protocol}_read_req;
     ${protocol}_rsp_t ${protocol}_read_rsp;
@@ -1069,7 +1069,7 @@ axi_rsp_mem       )
     % endif
 % endfor
  })) begin
-                now.src_protocol = idma_pkg::${database[used_read_protocols[-1]]['protocol_enum']};
+                $fatal(1, "Requested Protocol Not Supported");
             end
             if (!(now.dst_protocol inside {\
 % for index, protocol in enumerate(used_write_protocols):
@@ -1079,7 +1079,7 @@ axi_rsp_mem       )
     % endif
 % endfor
  })) begin
-                now.dst_protocol = idma_pkg::${database[used_write_protocols[-1]]['protocol_enum']};
+                $fatal(1, "Requested Protocol Not Supported");
             end
             // wait for DMA to complete
             ack_tf_handle_err(now);
@@ -1087,7 +1087,7 @@ axi_rsp_mem       )
             case(now.dst_protocol)
     % for protocol in used_write_protocols:
             idma_pkg::${database[protocol]['protocol_enum']}:
-        % if (protocol == 'axi') or (protocol == 'axi_stream') or (protocol == 'obi'):
+        % if (protocol == 'axi') or (protocol == 'axi_stream') or (protocol == 'obi') or (protocol == 'init'):
                 id = now.id;
         % elif protocol == 'axi_lite':
                 id = now.id[2:0];

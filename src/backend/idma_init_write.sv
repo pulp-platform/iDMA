@@ -6,8 +6,9 @@
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 // - Tobias Senti <tsenti@ethz.ch>
 
-/// Implementing the OBI write task in the iDMA transport layer.
-module idma_obi_write #(
+/// Implementing the INIT write task in the iDMA transport layer.
+/// This is called TERM (terminate), as it terminates a write stream
+module idma_init_write #(
     /// Stobe width
     parameter int unsigned StrbWidth = 32'd16,
     /// Mask invalid data on the manager interface
@@ -20,9 +21,9 @@ module idma_obi_write #(
     /// Offset type
     parameter type strb_t = logic,
 
-    /// OBI Request channel type
+    /// INIT Request channel type
     parameter type write_req_t = logic,
-    /// OBI Response channel type
+    /// INIT Response channel type
     parameter type write_rsp_t = logic,
 
     /// `w_dp_req_t` type:
@@ -50,15 +51,15 @@ module idma_obi_write #(
     input  logic w_dp_ready_i,
 
     /// Write meta request
-    input  write_meta_channel_t aw_req_i,
+    input  write_meta_channel_t write_meta_req_i,
     /// Write meta request valid
-    input  logic aw_valid_i,
+    input  logic write_meta_valid_i,
     /// Write meta request ready
-    output logic aw_ready_o,
+    output logic write_meta_ready_o,
 
-    /// OBI write manager port request
+    /// INIT write manager port request
     output write_req_t write_req_o,
-    /// OBI write manager port response
+    /// INIT write manager port response
     input  write_rsp_t write_rsp_i,
 
     /// Data from buffer
@@ -90,27 +91,26 @@ module idma_obi_write #(
     // determine valid data to pop by calculation the be
 
     assign mask_out = ('1 << w_dp_req_i.offset) &
-        ((w_dp_req_i.tailer != '0) ? ('1 >> (StrbWidth - w_dp_req_i.tailer))
-        : '1);
+        ((w_dp_req_i.tailer != '0) ? ('1 >> (StrbWidth - w_dp_req_i.tailer)) : '1);
 
     //--------------------------------------
     // Write control
     //--------------------------------------
     // all elements needed (defined by the mask) are in the buffer and the buffer is non-empty
-    assign ready_to_write = aw_valid_i & w_dp_valid_i
+    assign ready_to_write = write_meta_valid_i & w_dp_valid_i
         & ((buffer_out_valid_i & mask_out) == mask_out) & (buffer_out_valid_i != '0);
 
     // the buffer is completely empty and idle
     assign buffer_clean = &(~buffer_out_valid_i);
 
     // write happening: both the bus (w_ready) and the buffer (ready_to_write) is high
-    assign write_happening = ready_to_write & write_rsp_i.a_gnt;
+    assign write_happening = ready_to_write & write_rsp_i.req_ready;
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
 
     // signal the bus that we are ready
-    assign write_req_o.a_req = ready_to_write;
+    assign write_req_o.req_valid = ready_to_write;
 
     // connect data and strobe either directly or mask invalid data
     if (MaskInvalidData) begin : gen_mask_invalid_data
@@ -118,12 +118,11 @@ module idma_obi_write #(
         // always_comb process implements masking of invalid data
         always_comb begin : proc_mask
             // defaults
-            write_req_o.a.addr  = aw_req_i.obi.a_chan.addr;
-            write_req_o.a.aid   = aw_req_i.obi.a_chan.aid;
-            write_req_o.a.we    = 1'b1;
-            write_req_o.a.wdata = '0;
-            write_req_o.a.be    = '0;
-            buffer_data_masked  = '0;
+            write_req_o.req_chan.cfg  = write_meta_req_i.init.req_chan.cfg;
+            write_req_o.req_chan.id   = write_meta_req_i.init.req_chan.id;
+            write_req_o.req_chan.term = '0;
+            write_req_o.req_chan.strb = '0;
+            buffer_data_masked        = '0;
             // control the write to the bus apply data to the bus only if data should be written
             if (ready_to_write == 1'b1 & !dp_poison_i) begin
                 // assign data from buffers, mask non valid entries
@@ -131,27 +130,26 @@ module idma_obi_write #(
                     buffer_data_masked[i*8 +: 8] = mask_out[i] ? buffer_out_i[i] : 8'b0;
                 end
                 // assign the output
-                write_req_o.a.wdata = buffer_data_masked;
+                write_req_o.req_chan.term = buffer_data_masked;
                 // assign the out mask to the strobe
-                write_req_o.a.be = mask_out;
+                write_req_o.req_chan.strb = mask_out;
             end
         end
 
     end else begin : gen_direct_connect
         // assign meta data
-        assign write_req_o.a.addr  = aw_req_i.obi.a_chan.addr;
-        assign write_req_o.a.aid   = aw_req_i.obi.a_chan.aid;
-        assign write_req_o.a.we    = 1'b1;
+        assign write_req_o.req_chan.cfg = write_meta_req_i.init.req_chan.cfg;
+        assign write_req_o.req_chan.id  = write_meta_req_i.init.req_chan.id;
         // not used signal
         assign buffer_data_masked  = '0;
         // simpler: direct connection
-        assign write_req_o.a.wdata = buffer_out_i;
-        assign write_req_o.a.be    = dp_poison_i ? '0 : mask_out;
+        assign write_req_o.req_chan.term = buffer_out_i;
+        assign write_req_o.req_chan.strb = dp_poison_i ? '0 : mask_out;
     end
 
     // we are ready for the next transfer internally, once the w last signal is applied
-    assign w_dp_ready_o = write_happening;
-    assign aw_ready_o   = write_happening;
+    assign w_dp_ready_o       = write_happening;
+    assign write_meta_ready_o = write_happening;
 
     //--------------------------------------
     // Write response
@@ -160,10 +158,10 @@ module idma_obi_write #(
     assign w_dp_rsp_o = '0;
 
     // w_dp_valid_o is triggered once the write answer is here
-    assign w_dp_valid_o = write_rsp_i.r_valid;
+    assign w_dp_valid_o = write_rsp_i.rsp_valid;
 
     // create back pressure on the b channel if the higher parts of the DMA cannot accept more
     // write responses
-    assign write_req_o.r_ready = w_dp_ready_i;
+    assign write_req_o.rsp_ready = w_dp_ready_i;
 
 endmodule

@@ -42,6 +42,7 @@ sources:
       - src/backend/idma_dataflow_element.sv
       - src/backend/idma_error_handler.sv
       - src/backend/idma_init_read.sv
+      - src/backend/idma_init_write.sv
       - src/backend/idma_obi_read.sv
       - src/backend/idma_obi_write.sv
       - src/backend/idma_tilelink_read.sv

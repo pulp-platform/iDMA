@@ -87,24 +87,18 @@ module idma_backend_synth_${name_uniqueifier} #(
     input  logic                   req_valid_i,
     output logic                   req_ready_o,
 
-% if not one_read_port:
-    input  idma_pkg::protocol_e    req_src_protocol_i,
-% endif
-% if not one_write_port:
-    input  idma_pkg::protocol_e    req_dst_protocol_i,
-% endif
     input  tf_len_t                req_length_i,
     input  addr_t                  req_src_addr_i,
     input  addr_t                  req_dst_addr_i,
+    input  idma_pkg::protocol_e    req_src_protocol_i,
+    input  idma_pkg::protocol_e    req_dst_protocol_i,
     input  id_t                    req_axi_id_i,
-    input  idma_pkg::protocol_e    req_src_protocol,
     input  axi_pkg::burst_t        req_src_burst_i,
     input  axi_pkg::cache_t        req_src_cache_i,
     input  logic                   req_src_lock_i,
     input  axi_pkg::prot_t         req_src_prot_i,
     input  axi_pkg::qos_t          req_src_qos_i,
     input  axi_pkg::region_t       req_src_region_i,
-    input  idma_pkg::protocol_e    req_dst_protocol,
     input  axi_pkg::burst_t        req_dst_burst_i,
     input  axi_pkg::cache_t        req_dst_cache_i,
     input  logic                   req_dst_lock_i,
@@ -360,21 +354,15 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.dst_addr               = req_dst_addr_i;
     assign idma_req.src_addr               = req_src_addr_i;
     assign idma_req.length                 = req_length_i;
-% if not one_read_port:
     assign idma_req.opt.src_protocol       = req_src_protocol_i;
-% endif
-% if not one_write_port:
     assign idma_req.opt.dst_protocol       = req_dst_protocol_i;
-% endif
     assign idma_req.opt.axi_id             = req_axi_id_i;
-    assign idma_req.opt.dst_protocol       = req_dst_protocol;
     assign idma_req.opt.dst.cache          = req_dst_cache_i;
     assign idma_req.opt.dst.burst          = req_dst_burst_i;
     assign idma_req.opt.dst.qos            = req_dst_qos_i;
     assign idma_req.opt.dst.lock           = req_dst_lock_i;
     assign idma_req.opt.dst.prot           = req_dst_prot_i;
     assign idma_req.opt.dst.region         = req_dst_region_i;
-    assign idma_req.opt.src_protocol       = req_src_protocol;
     assign idma_req.opt.src.cache          = req_src_cache_i;
     assign idma_req.opt.src.burst          = req_src_burst_i;
     assign idma_req.opt.src.qos            = req_src_qos_i;

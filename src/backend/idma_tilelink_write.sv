@@ -194,8 +194,13 @@ module idma_tilelink_write #(
         // not used signal
         assign buffer_data_masked = '0;
         // simpler: direct connection
-        assign write_req_o.a.data = buffer_out_i;
-        assign write_req_o.a.mask = dp_poison_i ? '0 : mask_out;
+        always_comb begin : proc_direct_connect_channel
+            // meta data
+            write_req_o.a      = write_meta_req_i.tilelink.a_chan;
+            // payload
+            write_req_o.a.data = buffer_out_i;
+            write_req_o.a.mask = dp_poison_i ? '0 : mask_out;
+        end
     end
 
     // the w last signal should only be applied to the bus if an actual transfer happens

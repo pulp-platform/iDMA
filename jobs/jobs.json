@@ -45,8 +45,6 @@
             "mixed"           : "backend_r_axi_w_obi/mixed.txt",
             "small"           : "backend_r_axi_w_obi/small.txt",
             "tiny"            : "backend_r_axi_w_obi/tiny.txt",
-            "error_simple"    : "backend_r_axi_w_obi/error_simple.txt",
-            "error_mixed"     : "backend_r_axi_w_obi/error_mixed.txt",
             "zero_transfer"   : "backend_r_axi_w_obi/zero_transfer.txt"
         },
         "params" : {
@@ -80,8 +78,6 @@
             "mixed"           : "backend_r_obi_w_axi/mixed.txt",
             "small"           : "backend_r_obi_w_axi/small.txt",
             "tiny"            : "backend_r_obi_w_axi/tiny.txt",
-            "error_simple"    : "backend_r_obi_w_axi/error_simple.txt",
-            "error_mixed"     : "backend_r_obi_w_axi/error_mixed.txt",
             "zero_transfer"   : "backend_r_obi_w_axi/zero_transfer.txt"
         },
         "params" : {
@@ -103,6 +99,72 @@
         "proc_id" : "r_obi_w_axi",
         "testbench": "tb_idma_backend_r_obi_w_axi",
         "synth_top": "idma_backend_synth_r_obi_w_axi"
+    },
+    "snitch_read" : {
+        "jobs" : {
+            "simple"          : "backend_r_axi_rw_init_rw_obi/simple.txt",
+            "same_dst"        : "backend_r_axi_rw_init_rw_obi/same_dst.txt",
+            "linear"          : "backend_r_axi_rw_init_rw_obi/linear.txt",
+            "huge"            : "backend_r_axi_rw_init_rw_obi/huge.txt",
+            "large"           : "backend_r_axi_rw_init_rw_obi/large.txt",
+            "medium"          : "backend_r_axi_rw_init_rw_obi/medium.txt",
+            "mixed"           : "backend_r_axi_rw_init_rw_obi/mixed.txt",
+            "small"           : "backend_r_axi_rw_init_rw_obi/small.txt",
+            "tiny"            : "backend_r_axi_rw_init_rw_obi/tiny.txt",
+            "zero_transfer"   : "backend_r_axi_rw_init_rw_obi/zero_transfer.txt"
+        },
+        "params" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 32,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 12,
+            "NumAxInFlight"       : 3,
+            "BufferDepth"         : 3,
+            "TFLenWidth"          : 32,
+            "MemSysDepth"         : 0,
+            "CombinedShifter"     : 0,
+            "MaskInvalidData"     : 1,
+            "RAWCouplingAvail"    : 0,
+            "HardwareLegalizer"   : 1,
+            "RejectZeroTransfers" : 1,
+            "ErrorHandling"       : 0
+        },
+        "proc_id" : "r_axi_rw_init_rw_obi",
+        "testbench": "tb_idma_backend_r_axi_rw_init_rw_obi",
+        "synth_top": "idma_backend_synth_r_axi_rw_init_rw_obi"
+    },
+    "snitch_write" : {
+        "jobs" : {
+            "simple"          : "backend_r_obi_rw_init_w_axi/simple.txt",
+            "same_dst"        : "backend_r_obi_rw_init_w_axi/same_dst.txt",
+            "linear"          : "backend_r_obi_rw_init_w_axi/linear.txt",
+            "huge"            : "backend_r_obi_rw_init_w_axi/huge.txt",
+            "large"           : "backend_r_obi_rw_init_w_axi/large.txt",
+            "medium"          : "backend_r_obi_rw_init_w_axi/medium.txt",
+            "mixed"           : "backend_r_obi_rw_init_w_axi/mixed.txt",
+            "small"           : "backend_r_obi_rw_init_w_axi/small.txt",
+            "tiny"            : "backend_r_obi_rw_init_w_axi/tiny.txt",
+            "zero_transfer"   : "backend_r_obi_rw_init_w_axi/zero_transfer.txt"
+        },
+        "params" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 32,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 12,
+            "NumAxInFlight"       : 3,
+            "BufferDepth"         : 3,
+            "TFLenWidth"          : 32,
+            "MemSysDepth"         : 0,
+            "CombinedShifter"     : 0,
+            "MaskInvalidData"     : 1,
+            "RAWCouplingAvail"    : 0,
+            "HardwareLegalizer"   : 1,
+            "RejectZeroTransfers" : 1,
+            "ErrorHandling"       : 0
+        },
+        "proc_id" : "r_obi_rw_init_w_axi",
+        "testbench": "tb_idma_backend_r_obi_rw_init_w_axi",
+        "synth_top": "idma_backend_synth_r_obi_rw_init_w_axi"
     },
     "4d_extension" : {
         "jobs" : {

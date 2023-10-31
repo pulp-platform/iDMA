@@ -239,6 +239,10 @@
             idma_pkg::OBI: read_byte_obi_axi_mem (data, addr_i + now);
             idma_pkg::TILELINK: read_byte_tilelink_axi_mem (data, addr_i + now);
             idma_pkg::AXI_STREAM: read_byte_axi_stream_axi_mem(data, addr_i + now);
+            idma_pkg::INIT: begin
+                now++;
+                continue; // Omit checks against INIT terminate events
+            end
             default: $fatal(1, "compare_mem for protocol %d not implemented!", protocol);
             endcase
             // omit check against ff (DMA init memory state to simplify error model - ideally this will be rewritten at some point)

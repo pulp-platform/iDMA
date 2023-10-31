@@ -12,12 +12,17 @@ tb_define: "PROT_INIT"
 bursts: "not_supported"
 legalizer_force_decouple: "false"
 read_meta_channel: "req_chan"
-read_meta_channel_width: "localparam int unsigned init_req_chan_width = $bits(init_req_chan_t);"
+write_meta_channel: "req_chan"
+meta_channel_width: "localparam int unsigned init_req_chan_width = $bits(init_req_chan_t);"
 combined_aw_and_w: "false"
 read_slave: "false"
 typedefs: |
+    /// init read request
     typedef struct packed {
-        logic [AddrWidth-1:0] cfg;
+        logic [AddrWidth-1:0]  cfg;
+        logic [DataWidth-1:0]  term;
+        logic [StrbWidth-1:0]  strb;
+        logic [AxiIdWidth-1:0] id;
     } init_req_chan_t;
 
     typedef struct packed {
@@ -27,7 +32,7 @@ typedefs: |
     } init_req_t;
 
     typedef struct packed {
-        logic [DataWidth-1:0] init_value;
+        logic [DataWidth-1:0] init;
     } init_rsp_chan_t;
 
     typedef struct packed {
@@ -50,11 +55,25 @@ read_bridge_template: |
         .data_o  ( /* NOT CONNECTED */     )
     );
 
-    assign init_read_rsp.rsp_chan.init_value = {StrbWidth{8'h42}};
+    assign init_read_rsp.rsp_chan.init = {StrbWidth{8'h42}};
     assign init_axi_read_req = '0;
+write_bridge_template : |
+    assign init_write_rsp.rsp_valid = 1'b1;
+    assign init_write_rsp.req_ready = 1'b1;
+    assign init_axi_write_req = '0;
 legalizer_read_meta_channel: |
     r_req_o.ar_req.init.req_chan = '{
-        cfg: r_tf_q.base_addr
+        cfg:  r_tf_q.base_addr,
+        term: '0,
+        strb: '0,
+        id:   opt_tf_d.axi_id
+    };
+legalizer_write_meta_channel: |
+    w_req_o.aw_req.init.req_chan = '{
+        cfg:  w_tf_q.base_addr,
+        term: '0,
+        strb: '0,
+        id:   opt_tf_d.axi_id
     };
 read_template: |
     idma_init_read #(
@@ -84,22 +103,70 @@ read_template: |
         .buffer_in_valid_o ( ${buffer_in_valid} ),
         .buffer_in_ready_i ( buffer_in_ready )
     );
+write_template: |
+    idma_init_write #(
+        .StrbWidth            ( StrbWidth            ),
+        .byte_t               ( byte_t               ),
+        .data_t               ( data_t               ),
+        .strb_t               ( strb_t               ),
+        .w_dp_req_t           ( w_dp_req_t           ),
+        .w_dp_rsp_t           ( w_dp_rsp_t           ),
+        .write_meta_channel_t ( write_meta_channel_t ),
+        .write_req_t          ( ${req_t}            ),
+        .write_rsp_t          ( ${rsp_t}            )
+    ) i_idma_init_write (
+        .w_dp_req_i         ( w_dp_req_i ),
+        .w_dp_valid_i       ( ${w_dp_valid_i} ),
+        .w_dp_ready_o       ( ${w_dp_ready_o} ),
+        .dp_poison_i        ( dp_poison_i ),
+        .w_dp_rsp_o         ( ${w_dp_rsp_o} ),
+        .w_dp_valid_o       ( ${w_dp_valid_o} ),
+        .w_dp_ready_i       ( ${w_dp_ready_i} ),
+        .write_meta_req_i   ( ${write_meta_request} ),
+        .write_meta_valid_i ( ${write_meta_valid} ),
+        .write_meta_ready_o ( ${write_meta_ready}  ),
+        .write_req_o        ( ${write_request} ),
+        .write_rsp_i        ( ${write_response} ),
+        .buffer_out_i       ( buffer_out_shifted ),
+        .buffer_out_valid_i ( buffer_out_valid_shifted ),
+        .buffer_out_ready_o ( ${buffer_out_ready} )
+    );
 synth_wrapper_ports_read: |
     output logic                   init_read_req_valid_o,
     output addr_t                  init_read_req_config_o,
     input  logic                   init_read_req_ready_i,
 
     input  logic                   init_read_rsp_valid_i,
-    input  data_t                  init_read_rsp_init_value_i,
+    input  data_t                  init_read_rsp_init_i,
     output logic                   init_read_rsp_ready_o,
+synth_wrapper_ports_write: |
+    output logic                   init_write_req_valid_o,
+    output addr_t                  init_write_req_cfg_o,
+    output data_t                  init_write_req_term_o,
+    output strb_t                  init_write_req_strb_o,
+    output id_t                    init_write_req_id_o,
+    input  logic                   init_write_req_ready_i,
+
+    input  logic                   init_write_rsp_valid_i,
+    output logic                   init_write_rsp_ready_o,
 synth_wrapper_assign_read: |
     assign init_read_req_valid_o   = init_read_req.req_valid;
     assign init_read_req_config_o  = init_read_req.req_chan.cfg;
     assign init_read_rsp.req_ready = init_read_req_ready_i;
 
-    assign init_read_rsp.rsp_valid           = init_read_rsp_valid_i;
-    assign init_read_rsp.rsp_chan.init_value = init_read_rsp_init_value_i;
-    assign init_read_rsp_ready_o             = init_read_req.rsp_ready;
+    assign init_read_rsp.rsp_valid     = init_read_rsp_valid_i;
+    assign init_read_rsp.rsp_chan.init = init_read_rsp_init_i;
+    assign init_read_rsp_ready_o       = init_read_req.rsp_ready;
+synth_wrapper_assign_write: |
+    assign init_write_req_valid_o   = init_write_req.req_valid;
+    assign init_write_req_cfg_o     = init_write_req.req_chan.cfg;
+    assign init_write_req_term_o    = init_write_req.req_chan.term;
+    assign init_write_req_strb_o    = init_write_req.req_chan.strb;
+    assign init_write_req_id_o      = init_write_req.req_chan.id;
+    assign init_write_rsp.req_ready = init_write_req_ready_i;
+
+    assign init_write_rsp.rsp_valid           = init_write_rsp_valid_i;
+    assign init_write_rsp_ready_o             = init_write_req.rsp_ready;
 trace_signals:
     read:
         req:
@@ -109,3 +176,12 @@ trace_signals:
         rsp:
             valid: init_read_rsp_i.rsp_valid
             ready: init_read_req_o.rsp_ready
+    write:
+        req:
+            valid: init_write_req_o.req_valid
+            config: init_write_req_o.req_chan.cfg
+            data: init_write_req_o.req_chan.term
+            ready: init_write_rsp_i.req_ready
+        rsp:
+            valid: init_write_rsp_i.rsp_valid
+            ready: init_write_req_o.rsp_ready
