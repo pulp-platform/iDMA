@@ -1,0 +1,45 @@
+# Copyright 2023 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+header-regex: >
+  (?:#\!/.*\n)*[/|#]+ Copyright ([0-9]+) ETH Zurich and University of Bologna\.\n[/|#]+ Solderpad Hardware License, Version 0\.51, see LICENSE for details\.\n[/|#]+ SPDX-License-Identifier: SHL-0\.51\n\n[/|#]+ Authors:\n((?:[/#]+ - [0-9A-Za-z ]+<[0-9A-Za-z\.]+@[0-9A-Za-z\.]+>\n)+)
+
+author-regex: >
+  ([0-9A-Za-z ]+)<([0-9A-Za-z\.]+@[0-9A-Za-z\.]+)>
+
+excludes:
+  - LICENSE
+  - VERSION
+  - CODEOWNERS
+  - doc/fig/iDMA_overview
+  - util/lint-commits.py
+  - test/future/idma_tb_per2axi.sv
+  - test/future/TLToAXI4.v
+
+exclude-ext:
+  - png
+  - pyc
+  - rst
+  - svg
+  - txt
+  - json
+  - md
+  - lock
+  - local
+
+exclude-paths:
+  - target
+
+allowed-years:
+  - 2023
+
+allowed-authors:
+  Axel Vanoni: axvanoni@ethz.ch
+  Michael Rogenmoser: michaero@iis.ee.ethz.ch
+  Samuel Riedel: sriedel@iis.ee.ethz.ch
+  Thomas Benz: tbenz@iis.ee.ethz.ch
+  Tobias Senti: tsenti@ethz.ch

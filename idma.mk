@@ -1,4 +1,4 @@
-# Copyright 2022 ETH Zurich and University of Bologna.
+# Copyright 2023 ETH Zurich and University of Bologna.
 # Solderpad Hardware License, Version 0.51, see LICENSE for details.
 # SPDX-License-Identifier: SHL-0.51
 
@@ -232,9 +232,9 @@ IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_HTML_DIR)/idma_backen
 IDMA_PICKLE_ALL  += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_PICKLE_DIR)/idma_backend_synth_$Y.sv)
 
 # nDs
-IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_nd_backend_synth.png
-IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_nd_backend_synth/index.html
-IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_nd_backend_synth.sv
+IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_nd_midend_synth.png
+IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_nd_midend_synth/index.html
+IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_nd_midend_synth.sv
 
 # descriptor-based frontend
 IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_desc64_synth.png
@@ -392,7 +392,7 @@ idma_spinx_doc_clean:
 
 IDMA_NONFREE_REMOTE ?= git@iis-git.ee.ethz.ch:bslk/idma/idma-non-free.git
 IDMA_NONFREE_DIR    ?= $(IDMA_ROOT)/nonfree
-IDMA_NONFREE_COMMIT ?= dev-tbenz
+IDMA_NONFREE_COMMIT ?= deploy
 
 idma_nonfree_init:
 	git clone $(IDMA_NONFREE_REMOTE) $(IDMA_NONFREE_DIR)

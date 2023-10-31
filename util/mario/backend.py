@@ -1,10 +1,10 @@
 #!/usr/env python3
-# Copyright 2022 ETH Zurich and University of Bologna.
+# Copyright 2023 ETH Zurich and University of Bologna.
 # Solderpad Hardware License, Version 0.51, see LICENSE for details.
 # SPDX-License-Identifier: SHL-0.51
 
 # Authors:
-# - Tobias Senti <tsenti@.ethz.ch>
+# - Tobias Senti <tsenti@ethz.ch>
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 """ MARIO backend interaction"""

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
-// - Thomas Benz <tbenz@ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 /// DMA transaction id generator. Increases the transaction id on every request.
 module idma_transfer_id_gen #(

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
-// - Michael Rogenmoser <michaero@ethz.ch>
-// - Thomas Benz <tbenz@ethz.ch>
+// - Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 /// Description: Register-based front-end for iDMA
 module idma_${identifier} #(

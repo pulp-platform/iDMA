@@ -1,9 +1,9 @@
 // Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
+
 // Authors:
-// - Thomas Benz <tbenz@ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 // Macro holding all the resources for the iDMA backend tracer
 `ifndef IDMA_TRACER_SVH_

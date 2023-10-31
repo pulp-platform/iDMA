@@ -1,9 +1,9 @@
-// Copyright 2020 ETH Zurich and University of Bologna.
+// Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
-// - Thomas Benz <tbenz@ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 /// defines a type for the axi bus to allow a ooc synthesis
 module sdma_synth_wrapper (

@@ -1,9 +1,9 @@
-// Copyright 2022 ETH Zurich and University of Bologna.
+// Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
-// - Tobias Senti <tsenti@student.ethz.ch>
+// - Tobias Senti <tsenti@ethz.ch>
 
 /// Legalizer module implementing a power of 2 splitter
 module idma_legalizer_pow2_splitter #(

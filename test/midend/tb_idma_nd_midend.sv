@@ -1,10 +1,10 @@
-// Copyright 2022 ETH Zurich and University of Bologna.
+// Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
+
 // Authors:
 // - Thomas Benz  <tbenz@iis.ee.ethz.ch>
-// - Tobias Senti <tsenti@sethz.ch>
+// - Tobias Senti <tsenti@ethz.ch>
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
@@ -14,7 +14,7 @@
 // Protocol testbench defines
 `define PROT_AXI4
 
-module tb_idma_nd_backend import idma_pkg::*; #(
+module tb_idma_nd_midend import idma_pkg::*; #(
     parameter int unsigned BufferDepth         = 3,
     parameter int unsigned NumAxInFlight       = 3,
     parameter int unsigned DataWidth           = 32,

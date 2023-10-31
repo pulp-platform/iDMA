@@ -1,17 +1,17 @@
-// Copyright 2022 ETH Zurich and University of Bologna.
+// Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
+
 // Authors:
 // - Thomas Benz  <tbenz@iis.ee.ethz.ch>
-// - Tobias Senti <tsenti@sethz.ch>
+// - Tobias Senti <tsenti@ethz.ch>
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
 
 /// Synthesis wrapper for the iDMA backend and the nd-midend combined.
 /// Unpacks all the interfaces to simple logic vectors
-module idma_nd_backend_synth #(
+module idma_nd_midend_synth #(
     /// Data width
     parameter int unsigned  DataWidth           = 32'd32,
     /// Address width
@@ -432,4 +432,4 @@ module idma_nd_backend_synth #(
     assign axi_rsp_i.r.user   = axi_r_user_i;
     assign axi_rsp_i.r_valid  = axi_r_valid_i;
 
-endmodule : idma_nd_backend_synth
+endmodule

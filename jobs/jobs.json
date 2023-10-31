@@ -129,8 +129,8 @@
             "ErrorHandling"       : 0
         },
         "proc_id" : "rw_axi",
-        "testbench": "tb_idma_nd_backend",
-        "synth_top": "idma_nd_backend_synth"
+        "testbench": "tb_idma_nd_midend",
+        "synth_top": "idma_nd_midend_synth"
     },
     "desc64": {
         "jobs" : {

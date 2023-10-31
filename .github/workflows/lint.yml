@@ -127,3 +127,22 @@ jobs:
       -
         name: Lint commits
         run: python3 util/lint-commits.py HEAD
+
+  lint-author:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Install Python
+        uses: actions/setup-python@v4
+        with:
+            python-version: '3.9'
+            cache: 'pip'
+      -
+        name: Python Requirements
+        run: pip install -r requirements.txt
+      -
+        name: Lint authors
+        run: python3 util/lint-authors.py .github/authors-cfg.yaml

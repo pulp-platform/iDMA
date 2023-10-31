@@ -1,7 +1,10 @@
-# Copyright 2022 ETH Zurich and University of Bologna.
+# Copyright 2023 ETH Zurich and University of Bologna.
 # Solderpad Hardware License, Version 0.51, see LICENSE for details.
 # SPDX-License-Identifier: SHL-0.51
-#
+
+# Authors:
+# - Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file does only contain a selection of the most common options. For a

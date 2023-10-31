@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+### Changed
+- Various cleanup and modernization passes: CI, documentation, scripts
+- Rework ND-front-ends for both 32 and 64-bit systems [#30](https://github.com/pulp-platform/iDMA/pull/30),
+  [#32](https://github.com/pulp-platform/iDMA/pull/32), [#33](https://github.com/pulp-platform/iDMA/pull/33)
+- Remove default system wrappers and drivers
+- Update descriptor-based frontend [#18](https://github.com/pulp-platform/iDMA/pull/18),
+  [#26](https://github.com/pulp-platform/iDMA/pull/26)
+- Update tracer to the multiprotocol version of iDMA [#8](https://github.com/pulp-platform/iDMA/pull/8)
+
+### Added
+- Add true multiprotocol capabilities to iDMA using MARIO [#22](https://github.com/pulp-platform/iDMA/pull/22)
+- Add RT midend [#24](https://github.com/pulp-platform/iDMA/pull/24)
+- Add Mempool midend [#34](https://github.com/pulp-platform/iDMA/pull/34)
+
 ## 0.5.1 - 2023-10-21
 
 ### Fixed

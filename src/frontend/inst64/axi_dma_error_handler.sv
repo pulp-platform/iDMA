@@ -1,9 +1,9 @@
-// Copyright 2020 ETH Zurich and University of Bologna.
+// Copyright 2023 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
 // Authors:
-// - Thomas Benz <tbenz@ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 /// Sample implementation to report errors from the AXI bus.
 /// This module provides the address of errors on a handshaked interface
