@@ -241,6 +241,11 @@ IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_desc64_synth.png
 IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_desc64_synth/index.html
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_desc64_synth.sv
 
+# RT midend
+IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_rt_midend_synth.png
+IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_rt_midend_synth/index.html
+IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_rt_midend_synth.sv
+
 
 # --------------
 # QuestaSim

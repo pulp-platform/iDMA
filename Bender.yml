@@ -56,6 +56,7 @@ sources:
     files:
       # Level 0
       - src/midend/idma_nd_midend.sv
+      - src/midend/idma_rt_midend.sv
 
   # Frontends (without inst64)
   - target: rtl
@@ -78,8 +79,10 @@ sources:
       # Level 0
       - src/frontend/desc64/idma_desc64_synth_pkg.sv
       - src/midend/idma_nd_midend_synth.sv
+      - src/midend/idma_rt_midend_synth_pkg.sv
       # Level 1
       - src/frontend/desc64/idma_desc64_synth.sv
+      - src/midend/idma_rt_midend_synth.sv
 
   # Testbenches
   - target: test
@@ -92,6 +95,7 @@ sources:
       - test/future/TLToAXI4.v
       - test/future/tb_idma_improved_fifo.sv
       - test/midend/tb_idma_nd_midend.sv
+      - test/midend/tb_idma_rt_midend.sv
       # Level 1
       - test/future/idma_obi2axi_bridge.sv
       - test/future/idma_tilelink2axi_bridge.sv

@@ -151,5 +151,15 @@
         "proc_id" : "rw_axi",
         "testbench" : "tb_idma_desc64_bench",
         "synth_top" : "idma_desc64_synth"
+    },
+    "rt_midend": {
+        "jobs" : {
+            "simple" : "jobs.json"
+        },
+        "params" : {
+        },
+        "proc_id" : "rw_axi",
+        "testbench" : "tb_idma_rt_midend",
+        "synth_top" : "idma_rt_midend_synth"
     }
 }
