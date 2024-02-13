@@ -92,7 +92,7 @@ module tb_idma_backend_${name_uniqueifier} import idma_pkg::*; #(
 
     // ${database['axi']['full_name']} typedefs
 ${database['axi']['typedefs']}
-% if ('obi' in used_protocols) or ('axi_stream' in used_protocols):
+% if ('obi' in used_protocols) or ('axis' in used_protocols):
     // ${database['obi']['full_name']} typedefs
 ${database['obi']['typedefs']}
 % endif
@@ -213,7 +213,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     idma_rsp_t idma_rsp;
     logic rsp_valid;
     logic rsp_ready;
-% if 'axi_stream' in used_write_protocols and False:
+% if 'axis' in used_write_protocols and False:
     idma_rsp_t idma_rsp_w, idma_rsp_w2;
     logic rsp_valid_w, rsp_ready_w, rsp_valid_w2, rsp_ready_w2;
 % endif
@@ -581,8 +581,13 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .eh_req_ready_o       ( eh_req_ready    )\
 % for protocol in used_read_protocols:
 ,
+% if database[protocol]['passive_req'] == 'true':
+        .${protocol}_read_req_i       ( ${protocol}_read_req    ),
+        .${protocol}_read_rsp_o       ( ${protocol}_read_rsp    )\
+% else:
         .${protocol}_read_req_o       ( ${protocol}_read_req    ),
         .${protocol}_read_rsp_i       ( ${protocol}_read_rsp    )\
+% endif
 % endfor
 % for protocol in used_write_protocols:
 ,
@@ -612,7 +617,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     //--------------------------------------
     // TB connections
     //--------------------------------------
-% if 'axi_stream' in used_write_protocols and False:
+% if 'axis' in used_write_protocols and False:
     // Delay iDMA response 2 cycles such that all axi stream writes are finished 
 
     spill_register #(
@@ -1086,8 +1091,8 @@ axi_rsp_mem       )
             // Check if corresponding writes went through
             case(now.dst_protocol)
     % for protocol in used_write_protocols:
-            idma_pkg::${database[protocol]['protocol_enum']}:
-        % if (protocol == 'axi') or (protocol == 'axi_stream') or (protocol == 'obi') or (protocol == 'init'):
+        idma_pkg::${database[protocol]['protocol_enum']}:
+        % if (protocol == 'axi') or (protocol == 'axis') or (protocol == 'obi') or (protocol == 'init'):
                 id = now.id;
         % elif protocol == 'axi_lite':
                 id = now.id[2:0];

@@ -159,26 +159,26 @@
 
 `ifdef PROT_AXI4_STREAM
     // write a byte to the AXI Stream AXI-attached memory
-    task write_byte_axi_stream_axi_mem (
+    task write_byte_axis_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
-        i_axi_stream_axi_sim_mem.mem[addr_i] = byte_i;
+        i_axis_axi_sim_mem.mem[addr_i] = byte_i;
     endtask
 
     // read a byte from the AXI Stream AXI-attached memory
-    task read_byte_axi_stream_axi_mem (
+    task read_byte_axis_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
-        if (i_axi_stream_axi_sim_mem.mem.exists(addr_i))
-            byte_o = i_axi_stream_axi_sim_mem.mem[addr_i];
+        if (i_axis_axi_sim_mem.mem.exists(addr_i))
+            byte_o = i_axis_axi_sim_mem.mem[addr_i];
         else
             byte_o = '1;
     endtask
 `else
     // write a byte to the AXI Stream AXI-attached memory
-    task write_byte_axi_stream_axi_mem (
+    task write_byte_axis_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -186,7 +186,7 @@
     endtask
 
     // read a byte from the AXI Stream AXI-attached memory
-    task read_byte_axi_stream_axi_mem (
+    task read_byte_axis_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -238,7 +238,7 @@
             idma_pkg::AXI_LITE: read_byte_axi_lite_axi_mem (data, addr_i + now); 
             idma_pkg::OBI: read_byte_obi_axi_mem (data, addr_i + now);
             idma_pkg::TILELINK: read_byte_tilelink_axi_mem (data, addr_i + now);
-            idma_pkg::AXI_STREAM: read_byte_axi_stream_axi_mem(data, addr_i + now);
+            idma_pkg::AXI_STREAM: read_byte_axis_axi_mem(data, addr_i + now);
             idma_pkg::INIT: begin
                 now++;
                 continue; // Omit checks against INIT terminate events
@@ -334,7 +334,7 @@
                 end
                 idma_pkg::AXI_STREAM: begin
                     model.write_byte              ( ~{to_write[3:0], to_write[7:4]}, now_r.src_addr + now, idma_pkg::AXI_STREAM );
-                    write_byte_axi_stream_axi_mem ( ~{to_write[3:0], to_write[7:4]}, now_r.src_addr + now );
+                    write_byte_axis_axi_mem ( ~{to_write[3:0], to_write[7:4]}, now_r.src_addr + now );
                 end
                 default: $fatal(1, "init_mem not implemented for used protocol!");
                 endcase

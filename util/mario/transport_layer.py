@@ -33,6 +33,13 @@ def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
             read_req_str = f'{rp}_req_t'
             read_rsp_str = f'{rp}_rsp_t'
 
+        if db[rp]['passive_req'] == 'true':
+            read_port_dir_req_str = 'i'
+            read_port_dir_rsp_str = 'o'
+        else:
+            read_port_dir_req_str = 'o'
+            read_port_dir_rsp_str = 'i'
+
         if srp:
             read_dp_valid_in = 'r_dp_valid_i'
             read_dp_ready_out = 'r_dp_ready_o'
@@ -78,8 +85,8 @@ def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
             'read_meta_request': read_meta_request,
             'read_meta_valid': read_meta_valid,
             'read_meta_ready': read_meta_ready,
-            'read_request': f'{rp}_read_req_o',
-            'read_response': f'{rp}_read_rsp_i',
+            'read_request': f'{rp}_read_req_{read_port_dir_req_str}',
+            'read_response': f'{rp}_read_rsp_{read_port_dir_rsp_str}',
             'r_chan_valid': r_chan_valid,
             'r_chan_ready': r_chan_ready,
             'buffer_in': buffer_in,

@@ -124,7 +124,7 @@ module idma_axis_write #(
         // always_comb process implements masking of invalid data
         always_comb begin : proc_mask
             // defaults
-            write_req_o.t      = aw_req_i.axi_stream.t_chan;
+            write_req_o.t      = aw_req_i.axis.t_chan;
             buffer_data_masked = '0;
             // control the write to the bus apply data to the bus only if data should be written
             if (ready_to_write == 1'b1 & !dp_poison_i) begin
@@ -143,7 +143,7 @@ module idma_axis_write #(
         // not used signal
         assign buffer_data_masked = '0;
         // simpler: direct connection
-        assign write_req_o.t      = aw_req_i.axi_stream.t_chan;
+        assign write_req_o.t      = aw_req_i.axis.t_chan;
         assign write_req_o.t.data = buffer_out_i;
         assign write_req_o.t.keep = dp_poison_i ? '0 : mask_out;
     end

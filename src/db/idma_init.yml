@@ -16,6 +16,7 @@ write_meta_channel: "req_chan"
 meta_channel_width: "localparam int unsigned init_req_chan_width = $bits(init_req_chan_t);"
 combined_aw_and_w: "false"
 read_slave: "false"
+passive_req: "false"
 typedefs: |
     /// init read request
     typedef struct packed {

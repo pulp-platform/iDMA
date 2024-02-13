@@ -122,17 +122,33 @@ module idma_backend_${name_uniqueifier} #(
 % for protocol in used_read_protocols:
 
     /// ${database[protocol]['full_name']} read request
+% if database[protocol]['passive_req'] == 'true':
+    input  ${protocol}\
+% if database[protocol]['read_slave'] == 'true':
+_read\
+% endif
+_req_t ${protocol}_read_req_i,
+% else:
     output ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
 _req_t ${protocol}_read_req_o,
+% endif
     /// ${database[protocol]['full_name']} read response
+% if database[protocol]['passive_req'] == 'true':
+    output ${protocol}\
+% if database[protocol]['read_slave'] == 'true':
+_read\
+% endif
+_rsp_t ${protocol}_read_rsp_o,
+% else:
     input  ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
 _rsp_t ${protocol}_read_rsp_i,
+% endif
 % endfor
 % for protocol in used_write_protocols:
 
@@ -713,8 +729,13 @@ _rsp_t ${protocol}_write_rsp_i,
         .testmode_i      ( testmode_i           )\
 % for protocol in used_read_protocols:
 ,
+% if database[protocol]['passive_req'] == 'true':
+        .${protocol}_read_req_i  ( ${protocol}_read_req_i       ),
+        .${protocol}_read_rsp_o  ( ${protocol}_read_rsp_o       )\
+% else:
         .${protocol}_read_req_o  ( ${protocol}_read_req_o       ),
         .${protocol}_read_rsp_i  ( ${protocol}_read_rsp_i       )\
+% endif
 % endfor
 % for protocol in used_write_protocols:
 ,

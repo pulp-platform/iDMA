@@ -14,27 +14,28 @@ legalizer_force_decouple: "false"
 write_meta_channel: "t_chan"
 read_meta_channel: "t_chan"
 combined_aw_and_w: "true"
-read_slave: "true"
-meta_channel_width: "localparam int unsigned axi_stream_t_chan_width = $bits(axi_stream_t_chan_t);"
+read_slave: "false"
+passive_req: "true"
+meta_channel_width: "localparam int unsigned axis_t_chan_width = $bits(axis_t_chan_t);"
 typedefs: |
-    `IDMA_AXI_STREAM_TYPEDEF_S_CHAN_T(axi_stream_t_chan_t, data_t, strb_t, strb_t, id_t, id_t, user_t)
+    `IDMA_AXI_STREAM_TYPEDEF_S_CHAN_T(axis_t_chan_t, data_t, strb_t, strb_t, id_t, id_t, user_t)
 
-    `IDMA_AXI_STREAM_TYPEDEF_REQ_T(axi_stream_req_t, axi_stream_t_chan_t)
-    `IDMA_AXI_STREAM_TYPEDEF_RSP_T(axi_stream_rsp_t)
+    `IDMA_AXI_STREAM_TYPEDEF_REQ_T(axis_req_t, axis_t_chan_t)
+    `IDMA_AXI_STREAM_TYPEDEF_RSP_T(axis_rsp_t)
 read_bridge_template: |
     // AXI Stream to OBI Read Bridge
-    obi_req_t axi_stream_obi_read_req;
-    obi_rsp_t axi_stream_obi_read_rsp;
+    obi_req_t axis_obi_read_req;
+    obi_rsp_t axis_obi_read_rsp;
 
-    assign axi_stream_obi_read_req.a.we    = 1'b0;
-    assign axi_stream_obi_read_req.a.wdata = '0;
-    assign axi_stream_obi_read_req.a.be    = '1;
+    assign axis_obi_read_req.a.we    = 1'b0;
+    assign axis_obi_read_req.a.wdata = '0;
+    assign axis_obi_read_req.a.be    = '1;
 
-    assign axi_stream_obi_read_req.r_ready = axi_stream_read_req.tready;
-    assign axi_stream_read_rsp.tvalid      = axi_stream_obi_read_rsp.r_valid;
+    assign axis_obi_read_req.r_ready = axis_read_rsp.tready;
+    assign axis_read_req.tvalid      = axis_obi_read_rsp.r_valid;
     always_comb begin
-        axi_stream_read_rsp.t      = '0;
-        axi_stream_read_rsp.t.data = axi_stream_obi_read_rsp.r.rdata;
+        axis_read_req.t      = '0;
+        axis_read_req.t.data = axis_obi_read_rsp.r.rdata;
     end
 
     int unsigned launched_axis_jobs;
@@ -83,21 +84,21 @@ read_bridge_template: |
         while(axis_jobs.size() > 0) begin
             current_job = axis_jobs.pop_front();
             address = { current_job.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
-            axi_stream_obi_read_req.a_req = 1'b0;
-            axi_stream_obi_read_req.a.aid = current_job.id;
+            axis_obi_read_req.a_req = 1'b0;
+            axis_obi_read_req.a.aid = current_job.id;
 
             // Wait for launch of job 
             wait(launched_axis_jobs > 0);
             launched_axis_jobs--;
             while(address < (current_job.src_addr + current_job.length)) begin
-                axi_stream_obi_read_req.a.addr = address;
-                axi_stream_obi_read_req.a_req  = 1'b1;
+                axis_obi_read_req.a.addr = address;
+                axis_obi_read_req.a_req  = 1'b1;
                 @(posedge clk);
-                if(axi_stream_obi_read_rsp.a_gnt && axi_stream_obi_read_req.a_req) begin
+                if(axis_obi_read_rsp.a_gnt && axis_obi_read_req.a_req) begin
                     address += StrbWidth;
                 end
             end
-            axi_stream_obi_read_req.a_req  = 1'b0;
+            axis_obi_read_req.a_req  = 1'b0;
         end
     end
 
@@ -111,27 +112,27 @@ read_bridge_template: |
         .obi_rsp_t ( obi_rsp_t    ),
         .axi_req_t ( axi_req_t    ),
         .axi_rsp_t ( axi_rsp_t    )
-    ) i_axi_stream_obi2axi_bridge_read (
+    ) i_axis_obi2axi_bridge_read (
         .clk_i     ( clk ),
         .rst_ni    ( rst_n ),
-        .obi_req_i ( axi_stream_obi_read_req ),
-        .obi_rsp_o ( axi_stream_obi_read_rsp ),
-        .axi_req_o ( axi_stream_axi_read_req ),
-        .axi_rsp_i ( axi_stream_axi_read_rsp )
+        .obi_req_i ( axis_obi_read_req ),
+        .obi_rsp_o ( axis_obi_read_rsp ),
+        .axi_req_o ( axis_axi_read_req ),
+        .axi_rsp_i ( axis_axi_read_rsp )
     );
 write_bridge_template: |
     // AXI Stream to OBI Write Bridge
-    obi_req_t axi_stream_obi_write_req;
-    obi_rsp_t axi_stream_obi_write_rsp;
+    obi_req_t axis_obi_write_req;
+    obi_rsp_t axis_obi_write_rsp;
 
-    assign axi_stream_obi_write_req.a_req   = axi_stream_write_req.tvalid;
-    assign axi_stream_obi_write_req.a.we    = 1'b1;
-    assign axi_stream_obi_write_req.a.wdata = axi_stream_write_req.t.data;
-    assign axi_stream_obi_write_req.a.be    = axi_stream_write_req.t.keep;
-    assign axi_stream_obi_write_req.a.aid   = axi_stream_write_req.t.id;
-    assign axi_stream_obi_write_req.r_ready = 1'b1;
+    assign axis_obi_write_req.a_req   = axis_write_req.tvalid;
+    assign axis_obi_write_req.a.we    = 1'b1;
+    assign axis_obi_write_req.a.wdata = axis_write_req.t.data;
+    assign axis_obi_write_req.a.be    = axis_write_req.t.keep;
+    assign axis_obi_write_req.a.aid   = axis_write_req.t.id;
+    assign axis_obi_write_req.r_ready = 1'b1;
 
-    assign axi_stream_write_rsp.tready = axi_stream_obi_write_rsp.a_gnt;
+    assign axis_write_rsp.tready = axis_obi_write_rsp.a_gnt;
 
     initial begin
         string job_file;
@@ -169,19 +170,19 @@ write_bridge_template: |
         while(axis_jobs.size() > 0) begin
             current_job = axis_jobs.pop_front();
             address = { current_job.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
-            axi_stream_obi_write_req.a.addr = address;
+            axis_obi_write_req.a.addr = address;
 
             // Wait for first write
-            wait(axi_stream_write_req.tvalid);
+            wait(axis_write_req.tvalid);
             next_job = 1'b0;
             while(!next_job) begin
                 @(posedge clk);
-                if(axi_stream_write_req.tvalid && axi_stream_write_rsp.tready) begin
-                    next_job = axi_stream_write_req.t.last;
+                if(axis_write_req.tvalid && axis_write_rsp.tready) begin
+                    next_job = axis_write_req.t.last;
 
                     // Increment address
                     address += StrbWidth;
-                    axi_stream_obi_write_req.a.addr = address;
+                    axis_obi_write_req.a.addr = address;
                 end
             end
         end
@@ -197,25 +198,25 @@ write_bridge_template: |
         .obi_rsp_t ( obi_rsp_t    ),
         .axi_req_t ( axi_req_t    ),
         .axi_rsp_t ( axi_rsp_t    )
-    ) i_axi_stream_obi2axi_bridge_write (
+    ) i_axis_obi2axi_bridge_write (
         .clk_i     ( clk ),
         .rst_ni    ( rst_n ),
-        .obi_req_i ( axi_stream_obi_write_req ),
-        .obi_rsp_o ( axi_stream_obi_write_rsp ),
-        .axi_req_o ( axi_stream_axi_write_req ),
-        .axi_rsp_i ( axi_stream_axi_write_rsp )
+        .obi_req_i ( axis_obi_write_req ),
+        .obi_rsp_o ( axis_obi_write_rsp ),
+        .axi_req_o ( axis_axi_write_req ),
+        .axi_rsp_i ( axis_axi_write_rsp )
     );
 legalizer_read_meta_channel: |
     r_req_o.ar_req = '0;
 legalizer_write_meta_channel: |
-    w_req_o.aw_req.axi_stream.t_chan = '{
+    w_req_o.aw_req.axis.t_chan = '{
         data: '0,
         strb: '1,
         keep: '0,
         last: w_tf_q.length == w_num_bytes,
         id: opt_tf_q.axi_id,
-        dest: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.dest)-1:0],
-        user: w_tf_q.base_addr[$bits(w_req_o.aw_req.axi_stream.t_chan.user)-1+:$bits(w_req_o.aw_req.axi_stream.t_chan.dest)]
+        dest: w_tf_q.base_addr[$bits(w_req_o.aw_req.axis.t_chan.dest)-1:0],
+        user: w_tf_q.base_addr[$bits(w_req_o.aw_req.axis.t_chan.user)-1+:$bits(w_req_o.aw_req.axis.t_chan.dest)]
     };
 read_template: |
     idma_axis_read #(
@@ -237,8 +238,8 @@ read_template: |
         .read_meta_req_i   ( ${read_meta_request} ),
         .read_meta_valid_i ( ${read_meta_valid} ),
         .read_meta_ready_o ( ${read_meta_ready} ),
-        .read_req_o        ( ${read_request} ),
-        .read_rsp_i        ( ${read_response} ),
+        .read_req_i        ( ${read_request} ),
+        .read_rsp_o        ( ${read_response} ),
         .r_chan_valid_o    ( ${r_chan_valid} ),
         .r_chan_ready_o    ( ${r_chan_ready} ),
         .buffer_in_o       ( ${buffer_in} ),
@@ -277,57 +278,57 @@ write_template: |
         .buffer_out_ready_o ( ${buffer_out_ready} )
     );
 synth_wrapper_ports_read: |
-    input  data_t                  axi_stream_read_data_i,
-    input  strb_t                  axi_stream_read_strb_i,
-    input  strb_t                  axi_stream_read_keep_i,
-    input  logic                   axi_stream_read_last_i,
-    input  id_t                    axi_stream_read_id_i,
-    input  id_t                    axi_stream_read_dest_i,
-    input  user_t                  axi_stream_read_user_i,
-    input  logic                   axi_stream_read_tvalid_i,
+    input  data_t                  axis_read_data_i,
+    input  strb_t                  axis_read_strb_i,
+    input  strb_t                  axis_read_keep_i,
+    input  logic                   axis_read_last_i,
+    input  id_t                    axis_read_id_i,
+    input  id_t                    axis_read_dest_i,
+    input  user_t                  axis_read_user_i,
+    input  logic                   axis_read_tvalid_i,
     
-    output logic                   axi_stream_read_tready_o,
+    output logic                   axis_read_tready_o,
 synth_wrapper_ports_write: |
-    output data_t                  axi_stream_write_data_o,
-    output strb_t                  axi_stream_write_strb_o,
-    output strb_t                  axi_stream_write_keep_o,
-    output logic                   axi_stream_write_last_o,
-    output id_t                    axi_stream_write_id_o,
-    output id_t                    axi_stream_write_dest_o,
-    output user_t                  axi_stream_write_user_o,
-    output logic                   axi_stream_write_tvalid_o,
+    output data_t                  axis_write_data_o,
+    output strb_t                  axis_write_strb_o,
+    output strb_t                  axis_write_keep_o,
+    output logic                   axis_write_last_o,
+    output id_t                    axis_write_id_o,
+    output id_t                    axis_write_dest_o,
+    output user_t                  axis_write_user_o,
+    output logic                   axis_write_tvalid_o,
     
-    input  logic                   axi_stream_write_tready_i,
+    input  logic                   axis_write_tready_i,
 synth_wrapper_assign_read: |
-    assign axi_stream_read_rsp.t.data = axi_stream_read_data_i;
-    assign axi_stream_read_rsp.t.strb = axi_stream_read_strb_i;
-    assign axi_stream_read_rsp.t.keep = axi_stream_read_keep_i;
-    assign axi_stream_read_rsp.t.last = axi_stream_read_last_i;
-    assign axi_stream_read_rsp.t.id   = axi_stream_read_id_i;
-    assign axi_stream_read_rsp.t.dest = axi_stream_read_dest_i;
-    assign axi_stream_read_rsp.t.user = axi_stream_read_user_i;
-    assign axi_stream_read_rsp.tvalid = axi_stream_read_tvalid_i;
+    assign axis_read_req.t.data = axis_read_data_i;
+    assign axis_read_req.t.strb = axis_read_strb_i;
+    assign axis_read_req.t.keep = axis_read_keep_i;
+    assign axis_read_req.t.last = axis_read_last_i;
+    assign axis_read_req.t.id   = axis_read_id_i;
+    assign axis_read_req.t.dest = axis_read_dest_i;
+    assign axis_read_req.t.user = axis_read_user_i;
+    assign axis_read_req.tvalid = axis_read_tvalid_i;
 
-    assign axi_stream_read_tready_o = axi_stream_read_req.tready;
+    assign axis_read_tready_o = axis_read_rsp.tready;
 synth_wrapper_assign_write: |
-    assign axi_stream_write_data_o   = axi_stream_write_req.t.data; 
-    assign axi_stream_write_strb_o   = axi_stream_write_req.t.strb; 
-    assign axi_stream_write_keep_o   = axi_stream_write_req.t.keep; 
-    assign axi_stream_write_last_o   = axi_stream_write_req.t.last; 
-    assign axi_stream_write_id_o     = axi_stream_write_req.t.id; 
-    assign axi_stream_write_dest_o   = axi_stream_write_req.t.dest; 
-    assign axi_stream_write_user_o   = axi_stream_write_req.t.user; 
-    assign axi_stream_write_tvalid_o = axi_stream_write_req.tvalid;
+    assign axis_write_data_o   = axis_write_req.t.data;
+    assign axis_write_strb_o   = axis_write_req.t.strb;
+    assign axis_write_keep_o   = axis_write_req.t.keep;
+    assign axis_write_last_o   = axis_write_req.t.last;
+    assign axis_write_id_o     = axis_write_req.t.id;
+    assign axis_write_dest_o   = axis_write_req.t.dest;
+    assign axis_write_user_o   = axis_write_req.t.user;
+    assign axis_write_tvalid_o = axis_write_req.tvalid;
 
-    assign axi_stream_write_rsp.tready = axi_stream_write_tready_i;
+    assign axis_write_rsp.tready = axis_write_tready_i;
 trace_signals:
     read:
         rsp:
-            valid: axi_stream_read_rsp_i.tvalid
-            ready: axi_stream_read_req_o.tready
-            strobe: axi_stream_read_rsp_i.t.strb
+            valid: axis_read_req_i.tvalid
+            ready: axis_read_rsp_o.tready
+            strobe: axis_read_req_i.t.strb
     write:
         req:
-            valid: axi_stream_write_req_o.tvalid
-            ready: axi_stream_write_rsp_i.tready
-            strobe: axi_stream_write_req_o.t.strb
+            valid: axis_write_req_o.tvalid
+            ready: axis_write_rsp_i.tready
+            strobe: axis_write_req_o.t.strb

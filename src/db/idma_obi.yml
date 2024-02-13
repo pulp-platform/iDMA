@@ -15,6 +15,7 @@ read_meta_channel: "a_chan"
 write_meta_channel: "a_chan"
 combined_aw_and_w: "true"
 read_slave: "false"
+passive_req: "false"
 meta_channel_width: "localparam int unsigned obi_a_chan_width = $bits(obi_a_chan_t);"
 typedefs: |
     `IDMA_OBI_TYPEDEF_A_CHAN_T(obi_a_chan_t, addr_t, data_t, strb_t, id_t)

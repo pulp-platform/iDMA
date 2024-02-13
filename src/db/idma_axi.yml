@@ -17,6 +17,7 @@ read_meta_channel: "ar_chan"
 write_meta_channel: "aw_chan"
 combined_aw_and_w: "false"
 read_slave: "false"
+passive_req: "false"
 read_meta_channel_width: "localparam int unsigned axi_ar_chan_width = axi_pkg::ar_width(AddrWidth, AxiIdWidth, UserWidth);"
 write_meta_channel_width: "localparam int unsigned axi_aw_chan_width = axi_pkg::aw_width(AddrWidth, AxiIdWidth, UserWidth);"
 typedefs: |

@@ -50,9 +50,9 @@ module idma_axis_read #(
     output logic read_meta_ready_o,
 
     /// AXI Stream read manager port request
-    output read_req_t read_req_o,
+    input  read_req_t read_req_i,
     /// AXI Stream read manager port response
-    input  read_rsp_t read_rsp_i,
+    output read_rsp_t read_rsp_o,
 
     /// Response channel valid and ready
     output logic r_chan_ready_o,
@@ -105,7 +105,7 @@ module idma_axis_read #(
 
     // a barrel shifter is a concatenation of the same array with twice and a normal
     // shift. Optimized for Synopsys DesignWare.
-    assign buffer_in_o = read_rsp_i.t.data;
+    assign buffer_in_o = read_req_i.t.data;
     assign mask_in     = {read_aligned_in_mask, read_aligned_in_mask} >> r_dp_req_i.shift;
 
 
@@ -115,17 +115,17 @@ module idma_axis_read #(
     // the buffer can be pushed to if all the masked FIFO buffers (mask_in) are ready.
     assign in_ready = &(buffer_in_ready_i | ~mask_in);
     // the read can accept data if the buffer is ready and the response channel is ready
-    assign read_req_o.tready = in_ready & r_dp_rsp_ready_i & r_dp_req_valid_i;
+    assign read_rsp_o.tready = in_ready & r_dp_rsp_ready_i & r_dp_req_valid_i;
 
     // once valid data is applied, it can be pushed in all the selected (mask_in) buffers
     // be sure the response channel is ready
-    assign in_valid          = read_rsp_i.tvalid & in_ready & r_dp_rsp_ready_i;
+    assign in_valid          = read_req_i.tvalid & in_ready & r_dp_rsp_ready_i;
     assign buffer_in_valid_o = in_valid ? mask_in : '0;
 
     // r_dp_ready_o is triggered by the last element arriving from the read
-    assign r_dp_req_ready_o = r_dp_req_valid_i & r_dp_rsp_ready_i & read_rsp_i.tvalid & in_ready;
-    assign r_chan_ready_o   = read_req_o.tready;
-    assign r_chan_valid_o   = read_rsp_i.tvalid;
+    assign r_dp_req_ready_o = r_dp_req_valid_i & r_dp_rsp_ready_i & read_req_i.tvalid & in_ready;
+    assign r_chan_ready_o   = read_rsp_o.tready;
+    assign r_chan_valid_o   = read_req_i.tvalid;
 
     // connect r_dp response payload
     assign r_dp_rsp_o.resp  = '0;
@@ -133,6 +133,6 @@ module idma_axis_read #(
     assign r_dp_rsp_o.first = 1'b1;
 
     // r_dp_valid_o is triggered once the last element is here or an error occurs
-    assign r_dp_rsp_valid_o = read_rsp_i.tvalid & in_ready;
+    assign r_dp_rsp_valid_o = read_req_i.tvalid & in_ready;
 
 endmodule

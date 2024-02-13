@@ -338,8 +338,13 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .eh_req_ready_o       ( eh_req_ready_o )\
 % for protocol in used_read_protocols:
 ,
+% if database[protocol]['passive_req'] == 'true':
+        .${protocol}_read_req_i       ( ${protocol}_read_req   ),
+        .${protocol}_read_rsp_o       ( ${protocol}_read_rsp   )\
+% else:
         .${protocol}_read_req_o       ( ${protocol}_read_req   ),
         .${protocol}_read_rsp_i       ( ${protocol}_read_rsp   )\
+% endif
 % endfor
 % for protocol in used_write_protocols:
 ,

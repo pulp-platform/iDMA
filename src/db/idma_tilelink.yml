@@ -18,6 +18,7 @@ write_meta_channel: "a_chan"
 meta_channel_width: "localparam int unsigned tilelink_a_chan_width = $bits(tilelink_a_chan_t);"
 combined_aw_and_w: "true"
 read_slave: "false"
+passive_req: "false"
 # logic[3:0] is the size field, is 4 bit as we're limited by the TLToAXI4 Bridge
 typedefs: |
     `IDMA_TILELINK_TYPEDEF_A_CHAN_T(tilelink_a_chan_t, addr_t, data_t, strb_t, logic[3:0], logic[4:0])
