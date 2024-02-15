@@ -25,7 +25,7 @@
 # -- Project information -----------------------------------------------------
 
 project = u'iDMA Specification'
-copyright = u'2021 PULP-platform'
+copyright = u'2024 PULP-platform'
 author = u'PULP-platform'
 
 # The short X.Y version
