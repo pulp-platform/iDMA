@@ -1074,7 +1074,7 @@ axi_rsp_mem       )
     % endif
 % endfor
  })) begin
-                $fatal(1, "Requested Protocol Not Supported");
+                $fatal(1, "Requested Source Protocol (%d) Not Supported", now.src_protocol);
             end
             if (!(now.dst_protocol inside {\
 % for index, protocol in enumerate(used_write_protocols):
@@ -1084,7 +1084,7 @@ axi_rsp_mem       )
     % endif
 % endfor
  })) begin
-                $fatal(1, "Requested Protocol Not Supported");
+                $fatal(1, "Requested Destination Protocol (%d) Not Supported", now.dst_protocol);
             end
             // wait for DMA to complete
             ack_tf_handle_err(now);
