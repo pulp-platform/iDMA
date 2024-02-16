@@ -36,6 +36,7 @@ exclude-paths:
 
 allowed-years:
   - 2023
+  - 2024
 
 allowed-authors:
   Axel Vanoni: axvanoni@ethz.ch
