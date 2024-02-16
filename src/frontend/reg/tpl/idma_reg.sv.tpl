@@ -44,6 +44,10 @@ module idma_${identifier} #(
   input  logic                 [NumStreams-1:0] midend_busy_i
 );
 
+  /// Maximum number of streams is set to 16. It can be enlarged, but the register file
+  /// needs to be adapted too.
+  localparam int unsigned MaxNumStreams = 32'd16;
+
   // register connections
   idma_${identifier}_reg_pkg::idma_${identifier}_reg2hw_t [NumRegs-1:0] dma_reg2hw;
   idma_${identifier}_reg_pkg::idma_${identifier}_hw2reg_t [NumRegs-1:0] dma_hw2reg;
@@ -66,7 +70,7 @@ module idma_${identifier} #(
       .clk_i,
       .rst_ni,
       .reg_req_i ( dma_ctrl_req_i   [i] ),
-      .reg_rsp_o ( dma_ctrl_rsp_o   [i] ),
+      .reg_rsp_o ( dma_ctrl_rsp     [i] ),
       .reg2hw    ( dma_reg2hw       [i] ),
       .hw2reg    ( dma_hw2reg       [i] ),
       .devmode_i ( 1'b1                 )
@@ -160,9 +164,17 @@ module idma_${identifier} #(
     // observational registers
     for (genvar c = 0; c < NumStreams; c++) begin
         assign dma_hw2reg[i].status[c]  = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].next_id    = next_id_i;
+        assign dma_hw2reg[i].next_id[c] = next_id_i;
         assign dma_hw2reg[i].done_id[c] = done_id_i[c];
     end
+
+    // tie-off unused channels
+    for (genvar c = NumStreams; c < MaxNumStreams; c++) begin
+        assign dma_hw2reg[i].status[c]  = '0;
+        assign dma_hw2reg[i].next_id[c] = '0;
+        assign dma_hw2reg[i].done_id[c] = '0;
+    end
+
   end
 
   // arbitration
