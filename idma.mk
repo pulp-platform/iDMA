@@ -20,15 +20,16 @@ VLOGAN      ?= vlogan
 SHELL := /bin/bash
 
 # iDMA Variants
-IDMA_BASE_IDS    ?= \
+IDMA_BASE_IDS    := \
 					rw_axi \
 					r_obi_w_axi \
 					r_axi_w_obi \
 					rw_axi_rw_axis
-IDMA_OCCAMY_IDS  ?= \
+IDMA_OCCAMY_IDS  := \
 					r_obi_rw_init_w_axi \
 					r_axi_rw_init_rw_obi
-IDMA_BACKEND_IDS ?= $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS)
+IDMA_ADD_IDS     ?=
+IDMA_BACKEND_IDS := $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
 
 # generated frontends
 IDMA_FE_IDS ?= reg32_3d reg64_2d
@@ -450,7 +451,7 @@ idma_doc_all: idma_spinx_doc
 
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
-idma_hw_all: $(IDMA_RTL_ALL)
+idma_hw_all: $(IDMA_RTL_ALL) $(IDMA_TB_ALL)
 
 idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl
 
