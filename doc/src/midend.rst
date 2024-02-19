@@ -1,13 +1,11 @@
-iDMA Midend
-===========
+iDMA Midends
+============
 
-Parameters
-----------
+Morty files:
 
-+------------------+------------------+---------------------------------------------------------------------+
-| Parameter        | Type             | Description                                                         |
-+==================+==================+=====================================================================+
-| ``Instantiated`` | ``bit``          | Optional enable for the midend (default only supports 1D transfers) |
-+------------------+------------------+---------------------------------------------------------------------+
-| ``Dimensions``   | ``unsigned int`` | Number of dimensions supported (2-8)                                |
-+------------------+------------------+---------------------------------------------------------------------+
+.. only:: html
+
+  `ND Backend <idma_nd_midend_synth/index.html>`_
+
+.. image:: ../fig/graph/idma_nd_midend_synth.png
+  :width: 600

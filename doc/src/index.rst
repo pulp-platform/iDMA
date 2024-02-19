@@ -49,6 +49,7 @@ The morty docs provide the generated description of the SystemVerilog files with
 
   `RW_AXI Backend <idma_backend_synth_rw_axi/index.html>`_
 
+
 .. image:: ../fig/graph/idma_backend_synth_r_axi_w_obi.png
   :width: 600
 
@@ -57,3 +58,4 @@ The morty docs provide the generated description of the SystemVerilog files with
 
 .. image:: ../fig/graph/idma_backend_synth_rw_axi.png
   :width: 600
+
