@@ -61,7 +61,13 @@ sources:
       - src/midend/idma_nd_midend.sv
       - src/midend/idma_rt_midend.sv
 
-  # Frontends (without inst64)
+  # RISC-V opcode package for ooc use of inst64
+  - target: all(rtl,snitch_cluster)
+    files:
+      # Level 0
+      - src/frontend/inst64/idma_inst64_snitch_pkg.sv
+
+  # Frontends
   - target: rtl
     files:
       # Level 0
@@ -71,8 +77,10 @@ sources:
       - src/frontend/desc64/idma_desc64_reader_gater.sv
       - src/frontend/desc64/idma_desc64_reshaper.sv
       - src/frontend/idma_transfer_id_gen.sv
+      - src/frontend/inst64/idma_inst64_events.sv
       # Level 1
       - src/frontend/desc64/idma_desc64_reg_wrapper.sv
+      - src/frontend/inst64/idma_inst64_top.sv
       # Level 2
       - src/frontend/desc64/idma_desc64_top.sv
 
@@ -90,7 +98,7 @@ sources:
       - src/midend/idma_rt_midend_synth.sv
 
   # Testbenches
-  - target: test
+  - target: idma_test
     files:
       # Level 0
       - test/frontend/tb_idma_desc64_top.sv

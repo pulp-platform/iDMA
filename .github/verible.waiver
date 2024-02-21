@@ -4,3 +4,5 @@
 
 # Authors:
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+waive --rule=package-filename --location="src/frontend/inst64/idma_inst64_opcode.sv"

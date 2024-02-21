@@ -217,7 +217,7 @@ $(IDMA_PICKLE_DIR)/sources.json: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_
 	$(BENDER) update
 	$(BENDER) checkout
 	mkdir -p $(IDMA_PICKLE_DIR)
-	$(BENDER) sources -f -t rtl -t synthesis -t synth -t asic | sed -e $(IDMA_RELATIVE_PATH_REGEX) > $@
+	$(BENDER) sources -f -t rtl -t synthesis -t synth -t asic -t snitch_cluster | sed -e $(IDMA_RELATIVE_PATH_REGEX) > $@
 
 $(IDMA_PICKLE_DIR)/%.sv: $(IDMA_PICKLE_DIR)/sources.json
 	$(MORTY) -f $< -i --top $* $(IDMA_MORTY_ARGS) --propagate_defines -o $@
@@ -284,7 +284,7 @@ endef
 $(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
 	$(BENDER) update
 	$(BENDER) checkout
-	$(call idma_generate_vsim, $@, -t sim -t test -t synth -t rtl -t asic,../../..)
+	$(call idma_generate_vsim, $@, -t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster,../../..)
 
 idma_sim_clean:
 	rm -rf $(IDMA_VSIM_DIR)/compile.tcl
@@ -325,7 +325,7 @@ IDMA_VCS_PARAMS  ?=
 $(IDMA_VCS_DIR)/compile.sh: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
 	$(BENDER) update
 	$(BENDER) checkout
-	$(BENDER) script vcs -t test -t rtl -t synth -t simulation --vlog-arg "\$(IDMA_VLOGAN_ARGS)" --vlogan-bin "$(VLOGAN)" $(IDMA_VLOGAN_REL_PATHS) > $@
+	$(BENDER) script vcs -t test -t idma_test -t rtl -t synth -t simulation -t snitch_cluster --vlog-arg "\$(IDMA_VLOGAN_ARGS)" --vlogan-bin "$(VLOGAN)" $(IDMA_VLOGAN_REL_PATHS) > $@
 	chmod +x $@
 
 idma_vcs_compile: $(IDMA_VCS_DIR)/compile.sh

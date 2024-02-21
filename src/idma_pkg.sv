@@ -100,4 +100,4 @@ package idma_pkg;
     /// Supported Protocols type
     typedef logic[1:0] protocol_t;
 
-endpackage : idma_pkg
+endpackage

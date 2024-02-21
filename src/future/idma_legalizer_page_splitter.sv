@@ -36,7 +36,7 @@ module idma_legalizer_page_splitter #(
             // smaller chunks than the AXI page size?
             page_addr_width = OffsetWidth + (reduce_len_i ? max_llen_i : 'd8);
             // a page can be a maximum of 4kB (12 bit)
-            page_addr_width = page_addr_width > PageAddrWidth ? PageAddrWidth : page_addr_width;
+            page_addr_width = page_addr_width > 'd12 ? 'd12 : page_addr_width;
         end
     end
 

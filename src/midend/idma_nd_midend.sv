@@ -118,7 +118,7 @@ module idma_nd_midend #(
         assign stage_clear[d-2] = &(stage_done[d-1:0]) & burst_req_ready_i;
 
         // size conversion
-        assign local_rep = nd_req_i.d_req[d-2].reps[RepWidth-1:0];
+        assign local_rep = nd_req_valid_i ? nd_req_i.d_req[d-2].reps[RepWidth-1:0] : '0;
 
         // bypass if num iterations is 0, mark stage as 0 stage:
         always_comb begin : proc_zero_bypass
