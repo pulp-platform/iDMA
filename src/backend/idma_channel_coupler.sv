@@ -71,16 +71,9 @@ module idma_channel_coupler #(
     /// ID type
     typedef logic [AxiIdWidth-1:0]   id_t;
 
-
-    /// Combination of regular `AW` type and the decoupled field
-    typedef struct packed {
-        axi_aw_chan_t aw;
-        logic     decoupled;
-    } aw_ext_t;
-
     // cut signals after the fifo
-    aw_ext_t aw_req_in, aw_req_out;
     logic    aw_ready, aw_valid;
+    logic    aw_decoupled_head;
 
     // first R arrives -> AW can be sent
     logic first;
@@ -100,7 +93,7 @@ module idma_channel_coupler #(
     // stream fifo to hold AWs back
     stream_fifo_optimal_wrap #(
         .Depth        ( NumAxInFlight ),
-        .type_t       ( aw_ext_t      ),
+        .type_t       ( axi_aw_chan_t ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_aw_store (
         .clk_i,
@@ -108,20 +101,31 @@ module idma_channel_coupler #(
         .testmode_i,
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
-        .data_i       ( aw_req_in           ),
+        .data_i       ( aw_req_i            ),
         .valid_i      ( aw_valid_i          ),
         .ready_o      ( aw_ready_o          ),
-        .data_o       ( aw_req_out          ),
+        .data_o       ( aw_req_o            ),
         .valid_o      ( aw_valid            ),
         .ready_i      ( aw_ready            )
     );
 
-    // fifo input is assembled
-    assign aw_req_in.aw        = aw_req_i;
-    assign aw_req_in.decoupled = aw_decouple_aw_i;
-
-    // aw payload is just connected to fifo
-    assign aw_req_o = aw_req_out.aw;
+    stream_fifo_optimal_wrap #(
+        .Depth        ( NumAxInFlight ),
+        .type_t       ( logic         ),
+        .PrintInfo    ( PrintFifoInfo )
+    ) i_aw_decoupled_store (
+        .clk_i,
+        .rst_ni,
+        .testmode_i,
+        .flush_i      ( 1'b0                ),
+        .usage_o      ( /* NOT CONNECTED */ ),
+        .data_i       ( aw_decouple_aw_i    ),
+        .valid_i      ( aw_valid_i          ),
+        .ready_o      ( /* NOT CONNECTED */ ),
+        .data_o       ( aw_decoupled_head   ),
+        .valid_o      ( /* NOT CONNECTED */ ),
+        .ready_i      ( aw_ready            )
+    );
 
     // use a credit counter to keep track of AWs to send
     always_comb begin : proc_credit_cnt
@@ -130,7 +134,7 @@ module idma_channel_coupler #(
         aw_to_send_d = aw_to_send_q;
 
         // if we bypass the logic
-        aw_sent = aw_req_out.decoupled & aw_valid;
+        aw_sent = aw_decoupled_head & aw_valid;
 
         // first is asserted and aw is ready -> just send AW out
         // without changing the credit counter value
