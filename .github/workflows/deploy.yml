@@ -1,0 +1,56 @@
+# Copyright 2024 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+name: deploy
+
+on:
+  push:
+    branches-ignore:
+      - '__deploy__**'
+
+jobs:
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    -
+      name: Checkout
+      uses: actions/checkout@v4
+      with:
+          fetch-depth: 0
+    -
+      name: Install Python
+      uses: actions/setup-python@v4
+      with:
+          python-version: '3.9'
+          cache: 'pip'
+    -
+      name: Python Requirements
+      run: pip install -r requirements.txt
+    -
+      name: Install Bender
+      uses: pulp-platform/pulp-actions/bender-install@v2
+      with:
+        version: 0.27.3
+    -
+      name: Install Morty
+      run: |
+        curl --proto '=https' --tlsv1.2 -sLO https://github.com/pulp-platform/morty/releases/download/v0.9.0/morty-ubuntu.22.04-x86_64.tar.gz
+        tar -xvf morty-ubuntu.22.04-x86_64.tar.gz morty
+        rm -f morty-ubuntu.22.04-x86_64.tar.gz
+        chmod 777 morty
+        echo "PATH=.:$PATH" >> ${GITHUB_ENV}
+    -
+      name: Build hardware
+      run: make -B idma_hw_all
+    -
+      name: Deploy generated files
+      run: |
+        git config user.email "github-ci@iis.ee.ethz.ch"
+        git config user.name "github-ci"
+        git fetch --all
+        python3 util/deploy.py

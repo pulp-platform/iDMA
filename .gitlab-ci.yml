@@ -21,6 +21,8 @@ init:
 idma:
   stage: idma
   needs: [ init ]
+  except:
+    - /^__deploy__.*$/
   trigger:
     include:
       - artifact: nonfree/ci/ci.yml
