@@ -32,6 +32,7 @@ sources:
     files:
       # IDMA packet is included through the idma_gen dependency
       # Level 0
+      - src/idma_pkg.sv
       - src/backend/idma_axil_read.sv
       - src/backend/idma_axil_write.sv
       - src/backend/idma_axi_read.sv
@@ -51,9 +52,12 @@ sources:
       - src/future/idma_legalizer_page_splitter.sv
       - src/future/idma_legalizer_pow2_splitter.sv
       - src/future/idma_reg_to_axi.sv
+      - target/rtl/idma_legalizer_rw_axi_rw_axis.sv
+      - target/rtl/idma_transport_layer_rw_axi_rw_axis.sv
+      - target/rtl/idma_backend_rw_axi_rw_axis.sv
 
   # Midends
-  - target: rtl
+  - target: idma_rtl
     files:
       # Level 0
       - src/midend/idma_mp_dist_midend.sv
@@ -62,7 +66,7 @@ sources:
       - src/midend/idma_rt_midend.sv
 
   # Frontends (without inst64)
-  - target: rtl
+  - target: idma_rtl
     files:
       # Level 0
       - src/frontend/desc64/idma_desc64_ar_gen.sv
@@ -77,7 +81,7 @@ sources:
       - src/frontend/desc64/idma_desc64_top.sv
 
   # Synthesis wrappers
-  - target: synth
+  - target: idma_synth
     files:
       # Level 0
       - src/frontend/desc64/idma_desc64_synth_pkg.sv
@@ -90,7 +94,7 @@ sources:
       - src/midend/idma_rt_midend_synth.sv
 
   # Testbenches
-  - target: test
+  - target: idma_test
     files:
       # Level 0
       - test/frontend/tb_idma_desc64_top.sv
