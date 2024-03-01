@@ -39,8 +39,6 @@ def render_vsim_wave(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'one_write_port': swp
         }
 
-        print(context)
-
         # render
         wave_rendered += Template(wave_tpl).render(**context)
 

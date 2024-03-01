@@ -6,6 +6,7 @@
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 BENDER      ?= bender
+CAT         ?= cat
 DOT         ?= dot
 GIT         ?= git
 MORTY       ?= morty
@@ -39,18 +40,20 @@ IDMA_FE_IDS      := $(IDMA_BASE_FE_IDS) $(IDMA_ADD_FE_IDS)
 # iDMA paths
 IDMA_ROOT     ?= $(shell $(BENDER) path idma)
 IDMA_REG_DIR  := $(shell $(BENDER) path register_interface)
+IDMA_CC_DIR   := $(shell $(BENDER) path common_cells)
 IDMA_REGTOOL  ?= $(IDMA_REG_DIR)/vendor/lowrisc_opentitan/util/regtool.py
 IDMA_UTIL_DIR := $(IDMA_ROOT)/util
 IDMA_RTL_DIR  := $(IDMA_ROOT)/target/rtl
+
+# cf_math_pkg file
+IDMA_CF_PKG   := $(IDMA_CC_DIR)/src/cf_math_pkg.sv
 
 # job file
 IDMA_JOBS_JSON := jobs/jobs.json
 
 # Bender files
-IDMA_GEN_BENDER   := $(IDMA_RTL_DIR)/Bender.yml
 IDMA_BENDER_FILES := $(IDMA_ROOT)/Bender.yml \
-					 $(IDMA_ROOT)/Bender.lock \
-					 $(IDMA_GEN_BENDER)
+					 $(IDMA_ROOT)/Bender.lock
 
 # Helper functions
 # Relative paths for VLOGAN
@@ -70,14 +73,19 @@ IDMA_RELATIVE_PATH_REGEX := 's/$(IDMA_PATH_ESCAPED)/./'
 .PHONY: idma_rtl_clean
 
 # All RTL files
+IDMA_INCLUDE_ALL :=
 IDMA_RTL_ALL     :=
 IDMA_PICKLE_ALL  :=
 IDMA_TB_ALL      :=
+IDMA_WAVE_ALL    :=
 IDMA_RTL_DOC_ALL :=
+
+# Generated cumulative RTL files
+IDMA_FULL_RTL   := $(IDMA_RTL_DIR)/idma_generated.sv
+IDMA_FULL_TB    := $(IDMA_RTL_DIR)/tb_idma_generated.sv
 
 IDMA_GEN        := $(IDMA_UTIL_DIR)/gen_idma.py
 IDMA_GEN_SRC    := $(IDMA_UTIL_DIR)/mario/backend.py \
-				   $(IDMA_UTIL_DIR)/mario/bender.py \
 				   $(IDMA_UTIL_DIR)/mario/database.py \
 				   $(IDMA_UTIL_DIR)/mario/frontend.py \
 				   $(IDMA_UTIL_DIR)/mario/legalizer.py \
@@ -104,25 +112,22 @@ define idma_gen
 	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 > $6
 endef
 
-$(IDMA_GEN_BENDER): $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/tpl/Bender.yml.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk
-	$(call idma_gen,bender,$(IDMA_RTL_DIR)/tpl/Bender.yml.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
-
-$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_BENDER) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl
+$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl
 	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_BENDER) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl
+$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl
 	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl
+$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl
 	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl
+$(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl
 	$(call idma_gen,synth_wrapper,$(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl
+$(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl
 	$(call idma_gen,testbench,$(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_RTL_DIR)/tb_idma_backend_%.sv $(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl
+$(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/tb_idma_backend_%.sv $(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl
 	$(call idma_gen,vsim_wave,$(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk
@@ -136,10 +141,10 @@ idma_rtl_clean:
 	rm -f $(IDMA_RTL_DIR)/include/idma/tracer.svh
 
 # assemble the required files
-IDMA_RTL_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
-IDMA_RTL_ALL += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
-IDMA_TB_ALL  += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
-IDMA_TB_ALL  += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
+IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
+IDMA_RTL_ALL     += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
+IDMA_TB_ALL      += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
+IDMA_WAVE_ALL    += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
 
 
 # --------------
@@ -157,7 +162,7 @@ IDMA_FE_REGS     := desc64
 IDMA_FE_REGS     += $(IDMA_FE_IDS)
 
 # customize the HJSON
-$(IDMA_RTL_DIR)/idma_%.hjson: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.hjson.tpl $(IDMA_GEN_BENDER)
+$(IDMA_RTL_DIR)/idma_%.hjson: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.hjson.tpl
 	$(call idma_gen,reg_hjson,$(IDMA_FE_DIR)/reg/tpl/idma_reg.hjson.tpl,,,$*,$@)
 
 IDMA_REG_CUST_ALL += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_RTL_DIR)/idma_$Y.hjson)
@@ -168,14 +173,14 @@ $(IDMA_HTML_DIR)/regs/reg_html.css:
 	mkdir -p $(IDMA_HTML_DIR)/regs
 	cp $(IDMA_REG_DIR)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $@
 
-$(IDMA_RTL_DIR)/idma_%_reg_pkg.sv $(IDMA_RTL_DIR)/idma_%_reg_top.sv: $(IDMA_GEN_BENDER) $(IDMA_REG_CUST_ALL)
+$(IDMA_RTL_DIR)/idma_%_reg_pkg.sv $(IDMA_RTL_DIR)/idma_%_reg_top.sv: $(IDMA_REG_CUST_ALL)
 	if [ -a "$(IDMA_FE_DIR)/$*/idma_$*.hjson" ]; then \
 	    $(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -t $(IDMA_RTL_DIR) -r; \
 	else \
 	    $(PYTHON) $(IDMA_REGTOOL) $(IDMA_RTL_DIR)/idma_$*.hjson -t $(IDMA_RTL_DIR) -r; \
 	fi
 
-$(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl $(IDMA_GEN_BENDER)
+$(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl
 	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@)
 
 $(IDMA_HTML_DIR)/regs/idma_%.html: $(IDMA_HTML_DIR)/regs/reg_html.css $(IDMA_REG_CUST_ALL)
@@ -205,6 +210,17 @@ IDMA_HJSON_ALL   += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y.hjson)
 
 
 # ---------------
+# RTL assembly
+# ---------------
+
+$(IDMA_FULL_RTL): $(IDMA_RTL_ALL)
+	$(CAT) $^ > $@
+
+$(IDMA_FULL_TB): $(IDMA_TB_ALL)
+	$(CAT) $^ > $@
+
+
+# ---------------
 # Morty
 # ---------------
 
@@ -213,14 +229,19 @@ IDMA_HJSON_ALL   += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y.hjson)
 IDMA_PICKLE_DIR  := $(IDMA_ROOT)/target/morty
 IDMA_MORTY_ARGS  ?=
 
-$(IDMA_PICKLE_DIR)/sources.json: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
-	$(BENDER) update
-	$(BENDER) checkout
+$(IDMA_PICKLE_DIR)/sources.json: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
 	mkdir -p $(IDMA_PICKLE_DIR)
-	$(BENDER) sources -f -t rtl -t synthesis -t synth -t asic -t snitch_cluster | sed -e $(IDMA_RELATIVE_PATH_REGEX) > $@
+	$(BENDER) sources -f -t rtl -t synth -t asic -t snitch_cluster | sed -e $(IDMA_RELATIVE_PATH_REGEX) > $@
 
 $(IDMA_PICKLE_DIR)/%.sv: $(IDMA_PICKLE_DIR)/sources.json
-	$(MORTY) -f $< -i --top $* $(IDMA_MORTY_ARGS) --propagate_defines -o $@
+	$(MORTY) -f $< -i --top $* $(IDMA_MORTY_ARGS) --propagate_defines -o $@.pre
+	# Hack cf_math_pkg in
+	if grep -q "package cf_math_pkg;" "$@.pre"; then \
+		$(CAT) $@.pre > $@; \
+	else \
+		$(CAT) $(IDMA_CF_PKG) $@.pre > $@; \
+	fi
+	rm -f $@.pre
 
 $(IDMA_HTML_DIR)/%/index.html: $(IDMA_PICKLE_DIR)/%.sv
 	mkdir -p $(IDMA_HTML_DIR)/$*
@@ -281,9 +302,7 @@ define idma_generate_vsim
 	echo >> $1
 endef
 
-$(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
-	$(BENDER) update
-	$(BENDER) checkout
+$(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
 	$(call idma_generate_vsim, $@, -t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster,../../..)
 
 idma_sim_clean:
@@ -322,16 +341,14 @@ IDMA_VCS_ARGS    := -full64 \
 IDMA_VCS_TB      ?=
 IDMA_VCS_PARAMS  ?=
 
-$(IDMA_VCS_DIR)/compile.sh: $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
-	$(BENDER) update
-	$(BENDER) checkout
+$(IDMA_VCS_DIR)/compile.sh: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
 	$(BENDER) script vcs -t test -t idma_test -t rtl -t synth -t simulation -t snitch_cluster --vlog-arg "\$(IDMA_VLOGAN_ARGS)" --vlogan-bin "$(VLOGAN)" $(IDMA_VLOGAN_REL_PATHS) > $@
 	chmod +x $@
 
 idma_vcs_compile: $(IDMA_VCS_DIR)/compile.sh
 	cd $(IDMA_VCS_DIR); ./compile.sh
 
-$(IDMA_VCS_DIR)/bin/%.vcs: idma_vcs_compile $(IDMA_BENDER_FILES) $(IDMA_TB_ALL) $(IDMA_RTL_ALL)
+$(IDMA_VCS_DIR)/bin/%.vcs: idma_vcs_compile $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
 	mkdir -p $(IDMA_VCS_DIR)/bin
 	cd $(IDMA_VCS_DIR); $(VCS) $(IDMA_VCS_ARGS) $(IDMA_VCS_PARAMS) $(IDMA_VCS_TB) -o bin/$*.vcs
 
@@ -370,7 +387,14 @@ IDMA_VLT_PARAMS  ?=
 $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
 	mkdir -p $(IDMA_VLT_DIR)
 	# We need a dedicated pickle here to set the defines
-	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv
+	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
+	# Hack cf_math_pkg in
+	if grep -q "package cf_math_pkg;" "$(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre"; then \
+  		$(CAT) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
+	else \
+		$(CAT) $(IDMA_CF_PKG) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
+	fi
+	rm -f $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
 	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
 idma_verilator_clean:
@@ -454,7 +478,7 @@ idma_doc_all: idma_spinx_doc
 
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
-idma_hw_all: $(IDMA_RTL_ALL) $(IDMA_TB_ALL) $(IDMA_HJSON_ALL)
+idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) $(IDMA_WAVE_ALL)
 
 idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl
 

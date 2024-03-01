@@ -14,7 +14,6 @@ import sys
 
 from mario.util import prepare_ids, prepare_fids
 from mario.database import read_database
-from mario.bender import render_bender
 from mario.transport_layer import render_transport_layer
 from mario.legalizer import render_legalizer
 from mario.backend import render_backend
@@ -25,7 +24,7 @@ from mario.frontend import render_reg_hjson, render_reg_top
 from mario.tracer import render_tracer
 
 GENABLE_ENTITIES = ['transport', 'legalizer', 'backend', 'vsim_wave', 'testbench', 'synth_wrapper',
-    'bender', 'reg_top', 'reg_hjson', 'tracer']
+    'reg_top', 'reg_hjson', 'tracer']
 
 EPILOG = '''
 The iDMA configuration ID is composed of a underscore-separated list of specifiers and protocols.
@@ -56,9 +55,7 @@ def main():
     protocol_db = read_database(args.db)
 
     # decide what to render
-    if args.entity == 'bender':
-        print(render_bender(protocol_ids, frontend_ids, args.tpl))
-    elif args.entity == 'transport':
+    if args.entity == 'transport':
         print(render_transport_layer(protocol_ids, protocol_db, args.tpl))
     elif args.entity == 'legalizer':
         print(render_legalizer(protocol_ids, protocol_db, args.tpl))

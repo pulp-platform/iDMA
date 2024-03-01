@@ -8,7 +8,16 @@
 
 name: analyze
 
-on: [ push, pull_request, workflow_dispatch ]
+on:
+  push:
+    branches-ignore:
+      - '__deploy__**'
+  pull_request:
+    branches-ignore:
+      - '__deploy__**'
+  workflow_dispatch:
+    branches-ignore:
+      - '__deploy__**'
 
 jobs:
 
