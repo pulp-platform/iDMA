@@ -14,7 +14,7 @@ package:
     - "Axel Vanoni <axvanoni@ethz.ch>"
 
 dependencies:
-  common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.32.0 }
+  common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.33.0 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.3  }
   axi:                 { git: "https://github.com/pulp-platform/axi.git",                 version: 0.39.1 }
   register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.3  }
@@ -44,13 +44,12 @@ sources:
       - src/backend/idma_error_handler.sv
       - src/backend/idma_init_read.sv
       - src/backend/idma_init_write.sv
+      - src/backend/idma_legalizer_page_splitter.sv
+      - src/backend/idma_legalizer_pow2_splitter.sv
       - src/backend/idma_obi_read.sv
       - src/backend/idma_obi_write.sv
       - src/backend/idma_tilelink_read.sv
       - src/backend/idma_tilelink_write.sv
-      - src/future/idma_improved_fifo.sv
-      - src/future/idma_legalizer_page_splitter.sv
-      - src/future/idma_legalizer_pow2_splitter.sv
 
   # Generated content
   - target: rtl
@@ -114,7 +113,6 @@ sources:
       - test/future/idma_tb_per2axi.sv
       - test/future/idma_obi_asserter.sv
       - test/future/TLToAXI4.v
-      - test/future/tb_idma_improved_fifo.sv
       - test/midend/tb_idma_nd_midend.sv
       - test/midend/tb_idma_rt_midend.sv
       # Level 2
