@@ -18,10 +18,10 @@ read_slave: "false"
 passive_req: "true"
 meta_channel_width: "localparam int unsigned axis_t_chan_width = $bits(axis_t_chan_t);"
 typedefs: |
-    `IDMA_AXI_STREAM_TYPEDEF_S_CHAN_T(axis_t_chan_t, data_t, strb_t, strb_t, id_t, id_t, user_t)
+    `AXI_STREAM_TYPEDEF_S_CHAN_T(axis_t_chan_t, data_t, strb_t, strb_t, id_t, id_t, user_t)
 
-    `IDMA_AXI_STREAM_TYPEDEF_REQ_T(axis_req_t, axis_t_chan_t)
-    `IDMA_AXI_STREAM_TYPEDEF_RSP_T(axis_rsp_t)
+    `AXI_STREAM_TYPEDEF_REQ_T(axis_req_t, axis_t_chan_t)
+    `AXI_STREAM_TYPEDEF_RSP_T(axis_rsp_t)
 read_bridge_template: |
     // AXI Stream to OBI Read Bridge
     obi_req_t axis_obi_read_req;
@@ -31,8 +31,8 @@ read_bridge_template: |
     assign axis_obi_read_req.a.wdata = '0;
     assign axis_obi_read_req.a.be    = '1;
 
-    assign axis_obi_read_req.r_ready = axis_read_rsp.tready;
-    assign axis_read_req.tvalid      = axis_obi_read_rsp.r_valid;
+    assign axis_obi_read_req.rready  = axis_read_rsp.tready;
+    assign axis_read_req.tvalid      = axis_obi_read_rsp.rvalid;
     always_comb begin
         axis_read_req.t      = '0;
         axis_read_req.t.data = axis_obi_read_rsp.r.rdata;
@@ -84,7 +84,7 @@ read_bridge_template: |
         while(axis_jobs.size() > 0) begin
             current_job = axis_jobs.pop_front();
             address = { current_job.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
-            axis_obi_read_req.a_req = 1'b0;
+            axis_obi_read_req.req   = 1'b0;
             axis_obi_read_req.a.aid = current_job.id;
 
             // Wait for launch of job 
@@ -92,13 +92,13 @@ read_bridge_template: |
             launched_axis_jobs--;
             while(address < (current_job.src_addr + current_job.length)) begin
                 axis_obi_read_req.a.addr = address;
-                axis_obi_read_req.a_req  = 1'b1;
+                axis_obi_read_req.req  = 1'b1;
                 @(posedge clk);
-                if(axis_obi_read_rsp.a_gnt && axis_obi_read_req.a_req) begin
+                if(axis_obi_read_rsp.gnt && axis_obi_read_req.req) begin
                     address += StrbWidth;
                 end
             end
-            axis_obi_read_req.a_req  = 1'b0;
+            axis_obi_read_req.req  = 1'b0;
         end
     end
 
@@ -125,14 +125,14 @@ write_bridge_template: |
     obi_req_t axis_obi_write_req;
     obi_rsp_t axis_obi_write_rsp;
 
-    assign axis_obi_write_req.a_req   = axis_write_req.tvalid;
+    assign axis_obi_write_req.req     = axis_write_req.tvalid;
     assign axis_obi_write_req.a.we    = 1'b1;
     assign axis_obi_write_req.a.wdata = axis_write_req.t.data;
     assign axis_obi_write_req.a.be    = axis_write_req.t.keep;
     assign axis_obi_write_req.a.aid   = axis_write_req.t.id;
-    assign axis_obi_write_req.r_ready = 1'b1;
+    assign axis_obi_write_req.rready  = 1'b1;
 
-    assign axis_write_rsp.tready = axis_obi_write_rsp.a_gnt;
+    assign axis_write_rsp.tready = axis_obi_write_rsp.gnt;
 
     initial begin
         string job_file;

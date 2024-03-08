@@ -41,19 +41,19 @@ module idma_obi2axi_bridge #(
         .rst_ni                 ( rst_ni              ),
         .test_en_i              ( 1'b0                ),
 
-        .per_slave_req_i        ( obi_req_i.a_req     ),
+        .per_slave_req_i        ( obi_req_i.req       ),
         .per_slave_add_i        ( obi_req_i.a.addr    ),
         .per_slave_we_i         ( !obi_req_i.a.we     ),
         .per_slave_wdata_i      ( obi_req_i.a.wdata   ),
         .per_slave_be_i         ( obi_req_i.a.be      ),
         .per_slave_id_i         ( obi_req_i.a.aid     ),
-        .per_slave_gnt_o        ( obi_rsp_o.a_gnt     ),
+        .per_slave_gnt_o        ( obi_rsp_o.gnt       ),
 
-        .per_slave_r_valid_o    ( obi_rsp_o.r_valid   ),
+        .per_slave_r_valid_o    ( obi_rsp_o.rvalid    ),
         .per_slave_r_opc_o      (                     ),
         .per_slave_r_id_o       ( obi_rsp_o.r.rid     ),
         .per_slave_r_rdata_o    ( obi_rsp_o.r.rdata   ),
-        .per_slave_r_ready_i    ( obi_req_i.r_ready   ),
+        .per_slave_r_ready_i    ( obi_req_i.rready    ),
 
         .axi_master_aw_valid_o  ( axi_req_o.aw_valid  ),
         .axi_master_aw_addr_o   ( axi_req_o.aw.addr   ),
@@ -107,4 +107,7 @@ module idma_obi2axi_bridge #(
         .busy_o                 ( /* NOT CONNECTED */ )
     );
 
-endmodule : idma_obi2axi_bridge
+    // assign error signal
+    assign obi_rsp_o.r.err = 1'b0;
+
+endmodule

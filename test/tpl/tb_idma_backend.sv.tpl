@@ -8,8 +8,11 @@
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
+`include "axi_stream/typedef.svh"
 `include "idma/tracer.svh"
 `include "idma/typedef.svh"
+`include "obi/typedef.svh"
+`include "tilelink/typedef.svh"
 
 // Protocol testbench defines
 ${tb_defines}

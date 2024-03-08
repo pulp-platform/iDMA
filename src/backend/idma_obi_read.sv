@@ -82,8 +82,8 @@ module idma_obi_read #(
     //--------------------------------------
     // connect the ar requests to the OBI bus
     assign read_req_o.a      = read_meta_req_i.obi.a_chan;
-    assign read_req_o.a_req  = read_meta_valid_i;
-    assign read_meta_ready_o = read_rsp_i.a_gnt;
+    assign read_req_o.req    = read_meta_valid_i;
+    assign read_meta_ready_o = read_rsp_i.gnt;
 
     //--------------------------------------
     // Mask pre-calculation
@@ -117,24 +117,24 @@ module idma_obi_read #(
     // the buffer can be pushed to if all the masked FIFO buffers (mask_in) are ready.
     assign in_ready = &(buffer_in_ready_i | ~mask_in);
     // the read can accept data if the buffer is ready and the response channel is ready
-    assign read_req_o.r_ready = in_ready & r_dp_ready_i;
+    assign read_req_o.rready = in_ready & r_dp_ready_i;
 
     // once valid data is applied, it can be pushed in all the selected (mask_in) buffers
     // be sure the response channel is ready
-    assign in_valid          = read_rsp_i.r_valid & in_ready & r_dp_ready_i;
+    assign in_valid          = read_rsp_i.rvalid & in_ready & r_dp_ready_i;
     assign buffer_in_valid_o = in_valid ? mask_in : '0;
 
     // r_dp_ready_o is triggered by the last element arriving from the read
-    assign r_dp_ready_o   = r_dp_valid_i & r_dp_ready_i & read_rsp_i.r_valid & in_ready;
-    assign r_chan_ready_o = read_req_o.r_ready;
-    assign r_chan_valid_o = read_rsp_i.r_valid;
+    assign r_dp_ready_o   = r_dp_valid_i & r_dp_ready_i & read_rsp_i.rvalid & in_ready;
+    assign r_chan_ready_o = read_req_o.rready;
+    assign r_chan_valid_o = read_rsp_i.rvalid;
 
     // connect r_dp response payload
-    assign r_dp_rsp_o.resp  = '0;
+    assign r_dp_rsp_o.resp  = {1'b0, read_rsp_i.r.err};
     assign r_dp_rsp_o.last  = 1'b1;
     assign r_dp_rsp_o.first = 1'b1;
 
     // r_dp_valid_o is triggered once the last element is here or an error occurs
-    assign r_dp_valid_o = read_rsp_i.r_valid & in_ready;
+    assign r_dp_valid_o = read_rsp_i.rvalid & in_ready;
 
 endmodule

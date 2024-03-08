@@ -112,33 +112,34 @@ define idma_gen
 	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 > $6
 endef
 
-$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl
+$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl $(IDMA_DB_FILES)
 	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl
+$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl $(IDMA_DB_FILES)
 	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl
+$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl $(IDMA_DB_FILES)
 	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl
+$(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl $(IDMA_DB_FILES)
 	$(call idma_gen,synth_wrapper,$(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl
+$(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl $(IDMA_DB_FILES)
 	$(call idma_gen,testbench,$(IDMA_ROOT)/test/tpl/tb_idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/tb_idma_backend_%.sv $(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl
 	$(call idma_gen,vsim_wave,$(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk
+$(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk $(IDMA_DB_FILES)
 	mkdir -p $(IDMA_RTL_DIR)/include/idma
 	$(call idma_gen,tracer,$(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
 
 idma_rtl_clean:
-	rm -f $(IDMA_RTL_DIR)/Bender.yml
-	rm -f $(IDMA_RTL_DIR)/*.sv
-	rm -f $(IDMA_VSIM_DIR)/wave/*.do
-	rm -f $(IDMA_RTL_DIR)/include/idma/tracer.svh
+	rm -f  $(IDMA_RTL_DIR)/Bender.yml
+	rm -f  $(IDMA_RTL_DIR)/*.sv
+	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
+	rm -f  $(IDMA_RTL_DIR)/include/idma/tracer.svh
+	rm -rf $(IDMA_RTL_DIR)/include/idma
 
 # assemble the required files
 IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
@@ -199,6 +200,7 @@ idma_reg_clean:
 	rm -f  $(IDMA_RTL_DIR)/*_reg_top.sv
 	rm -f  $(IDMA_RTL_DIR)/*_reg_pkg.sv
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
+	rm -f  $(IDMA_RTL_DIR)/*.hjson
 	rm -f  $(IDMA_REG_CUST_ALL)
 
 # assemble the required files

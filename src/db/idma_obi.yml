@@ -18,11 +18,14 @@ read_slave: "false"
 passive_req: "false"
 meta_channel_width: "localparam int unsigned obi_a_chan_width = $bits(obi_a_chan_t);"
 typedefs: |
-    `IDMA_OBI_TYPEDEF_A_CHAN_T(obi_a_chan_t, addr_t, data_t, strb_t, id_t)
-    `IDMA_OBI_TYPEDEF_R_CHAN_T(obi_r_chan_t, data_t, id_t)
+    `OBI_TYPEDEF_MINIMAL_A_OPTIONAL(a_optional_t)
+    `OBI_TYPEDEF_MINIMAL_R_OPTIONAL(r_optional_t)
 
-    `IDMA_OBI_TYPEDEF_REQ_T(obi_req_t, obi_a_chan_t)
-    `IDMA_OBI_TYPEDEF_RESP_T(obi_rsp_t, obi_r_chan_t)
+    `OBI_TYPEDEF_TYPE_A_CHAN_T(obi_a_chan_t, addr_t, data_t, strb_t, id_t, a_optional_t)
+    `OBI_TYPEDEF_TYPE_R_CHAN_T(obi_r_chan_t, data_t, id_t, r_optional_t)
+
+    `OBI_TYPEDEF_REQ_T(obi_req_t, obi_a_chan_t)
+    `OBI_TYPEDEF_RSP_T(obi_rsp_t, obi_r_chan_t)
 bridge_template: |
     idma_obi2axi_bridge #(
         .DataWidth ( DataWidth    ),
@@ -47,7 +50,8 @@ legalizer_read_meta_channel: |
         be: '1,
         we: 1'b0,
         wdata: '0,
-        aid: opt_tf_q.axi_id
+        aid: opt_tf_q.axi_id,
+        a_optional: '0
     };
 legalizer_write_meta_channel: |
     w_req_o.aw_req.obi.a_chan = '{
@@ -55,7 +59,8 @@ legalizer_write_meta_channel: |
         be: '0,
         we: 1,
         wdata: '0,
-        aid: opt_tf_q.axi_id
+        aid: opt_tf_q.axi_id,
+        a_optional: '0
     };
 read_template: |
     idma_obi_read #(
@@ -138,39 +143,41 @@ synth_wrapper_ports_read: |
     input logic                    obi_read_rsp_r_valid_i,
     input data_t                   obi_read_rsp_r_rdata_i,
     input id_t                     obi_read_rsp_r_rid_i,
+    input logic                    obi_read_rsp_r_err_i,
 synth_wrapper_assign_write: |
-    assign obi_write_req_a_req_o   = obi_write_req.a_req;
+    assign obi_write_req_a_req_o   = obi_write_req.req;
     assign obi_write_req_a_addr_o  = obi_write_req.a.addr;
     assign obi_write_req_a_we_o    = obi_write_req.a.we;
     assign obi_write_req_a_be_o    = obi_write_req.a.be;
     assign obi_write_req_a_wdata_o = obi_write_req.a.wdata;
     assign obi_write_req_a_aid_o   = obi_write_req.a.aid;
-    assign obi_write_req_r_ready_o = obi_write_req.r_ready;
+    assign obi_write_req_r_ready_o = obi_write_req.rready;
 
-    assign obi_write_rsp.a_gnt   = obi_write_rsp_a_gnt_i;
-    assign obi_write_rsp.r_valid = obi_write_rsp_r_valid_i;
+    assign obi_write_rsp.gnt     = obi_write_rsp_a_gnt_i;
+    assign obi_write_rsp.rvalid  = obi_write_rsp_r_valid_i;
     assign obi_write_rsp.r.rdata = obi_write_rsp_r_rdata_i;
 synth_wrapper_assign_read: |
-    assign obi_read_req_a_req_o   = obi_read_req.a_req;
+    assign obi_read_req_a_req_o   = obi_read_req.req;
     assign obi_read_req_a_addr_o  = obi_read_req.a.addr;
     assign obi_read_req_a_we_o    = obi_read_req.a.we;
     assign obi_read_req_a_be_o    = obi_read_req.a.be;
     assign obi_read_req_a_wdata_o = obi_read_req.a.wdata;
-    assign obi_read_req_r_ready_o = obi_read_req.r_ready;
+    assign obi_read_req_r_ready_o = obi_read_req.rready;
 
-    assign obi_read_rsp.a_gnt   = obi_read_rsp_a_gnt_i;
-    assign obi_read_rsp.r_valid = obi_read_rsp_r_valid_i;
+    assign obi_read_rsp.gnt     = obi_read_rsp_a_gnt_i;
+    assign obi_read_rsp.rvalid  = obi_read_rsp_r_valid_i;
     assign obi_read_rsp.r.rdata = obi_read_rsp_r_rdata_i;
     assign obi_read_rsp.r.rid   = obi_read_rsp_r_rid_i;
+    assign obi_read_rsp.r.err   = obi_read_rsp_r_err_i;
 trace_signals:
     read:
         rsp:
-            valid: obi_read_req_o.a_req
-            ready: obi_read_rsp_i.a_gnt
+            valid: obi_read_req_o.req
+            ready: obi_read_rsp_i.gnt
             write_en: obi_read_req_o.a.we
     write:
         req:
-            valid: obi_write_req_o.a_req
-            ready: obi_write_rsp_i.a_gnt
+            valid: obi_write_req_o.req
+            ready: obi_write_rsp_i.gnt
             strobe: obi_write_req_o.a.be
             write_en: obi_write_req_o.a.we

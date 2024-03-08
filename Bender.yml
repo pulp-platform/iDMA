@@ -14,10 +14,12 @@ package:
     - "Axel Vanoni <axvanoni@ethz.ch>"
 
 dependencies:
+  axi:                 { git: "https://github.com/pulp-platform/axi.git",                 version: 0.39.1 }
+  axi_stream:          { git: "https://github.com/pulp-platform/axi_stream.git",          version: 0.1.1  }
   common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.33.0 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.3  }
-  axi:                 { git: "https://github.com/pulp-platform/axi.git",                 version: 0.39.1 }
   register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.3  }
+  obi:                 { git: "https://github.com/pulp-platform/obi.git",                 version: 0.1.2  }
 
 export_include_dirs:
   - src/include
@@ -111,7 +113,6 @@ sources:
       - test/frontend/tb_idma_desc64_top.sv
       - test/frontend/tb_idma_desc64_bench.sv
       - test/future/idma_tb_per2axi.sv
-      - test/future/idma_obi_asserter.sv
       - test/future/TLToAXI4.v
       - test/midend/tb_idma_nd_midend.sv
       - test/midend/tb_idma_rt_midend.sv

@@ -21,11 +21,11 @@ read_slave: "false"
 passive_req: "false"
 # logic[3:0] is the size field, is 4 bit as we're limited by the TLToAXI4 Bridge
 typedefs: |
-    `IDMA_TILELINK_TYPEDEF_A_CHAN_T(tilelink_a_chan_t, addr_t, data_t, strb_t, logic[3:0], logic[4:0])
-    `IDMA_TILELINK_TYPEDEF_D_CHAN_T(tilelink_d_chan_t, data_t, logic[3:0], logic[4:0], logic)
+    `TILELINK_TYPEDEF_A_CHAN_T(tilelink_a_chan_t, addr_t, data_t, strb_t, logic[3:0], logic[4:0])
+    `TILELINK_TYPEDEF_D_CHAN_T(tilelink_d_chan_t, data_t, logic[3:0], logic[4:0], logic)
 
-    `IDMA_TILELINK_TYPEDEF_REQ_T(tilelink_req_t, tilelink_a_chan_t)
-    `IDMA_TILELINK_TYPEDEF_RSP_T(tilelink_rsp_t, tilelink_d_chan_t)
+    `TILELINK_TYPEDEF_REQ_T(tilelink_req_t, tilelink_a_chan_t)
+    `TILELINK_TYPEDEF_RSP_T(tilelink_rsp_t, tilelink_d_chan_t)
 bridge_template: |
     idma_tilelink2axi_bridge #(
         .DataWidth      ( DataWidth      ),

@@ -129,4 +129,4 @@ module idma_tilelink2axi_bridge #(
         .auto_out_r_bits_echo_tl_state_size(axi_rsp_i.r.id[11:8]),
         .auto_out_r_bits_echo_tl_state_source(axi_rsp_i.r.id[4:0])
     );
-endmodule : idma_tilelink2axi_bridge
+endmodule

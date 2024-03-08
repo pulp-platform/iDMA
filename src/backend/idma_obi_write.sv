@@ -104,13 +104,13 @@ module idma_obi_write #(
     assign buffer_clean = &(~buffer_out_valid_i);
 
     // write happening: both the bus (w_ready) and the buffer (ready_to_write) is high
-    assign write_happening = ready_to_write & write_rsp_i.a_gnt;
+    assign write_happening = ready_to_write & write_rsp_i.gnt;
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
 
     // signal the bus that we are ready
-    assign write_req_o.a_req = ready_to_write;
+    assign write_req_o.req = ready_to_write;
 
     // connect data and strobe either directly or mask invalid data
     if (MaskInvalidData) begin : gen_mask_invalid_data
@@ -160,10 +160,10 @@ module idma_obi_write #(
     assign w_dp_rsp_o = '0;
 
     // w_dp_valid_o is triggered once the write answer is here
-    assign w_dp_valid_o = write_rsp_i.r_valid;
+    assign w_dp_valid_o = write_rsp_i.rvalid;
 
     // create back pressure on the b channel if the higher parts of the DMA cannot accept more
     // write responses
-    assign write_req_o.r_ready = w_dp_ready_i;
+    assign write_req_o.rready = w_dp_ready_i;
 
 endmodule
