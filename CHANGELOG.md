@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.6.0 - 2024-03-11
 
 ### Fixed
 
@@ -16,11 +16,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Update descriptor-based frontend [#18](https://github.com/pulp-platform/iDMA/pull/18),
   [#26](https://github.com/pulp-platform/iDMA/pull/26)
 - Update tracer to the multiprotocol version of iDMA [#8](https://github.com/pulp-platform/iDMA/pull/8)
+- Modified `init` protocol to support writes to implement the `simple FIFO` interface
+- Update `inst64` frontend, add changes from Occamy, and update to newest backend version
+- Upstream resources and update dependencies
 
 ### Added
 - Add true multiprotocol capabilities to iDMA using MARIO [#22](https://github.com/pulp-platform/iDMA/pull/22)
+- Add multiple default protocols next to AXI read/write:
+  - AXI read, OBI write
+  - OBI read, AXI write
+  - AXI and AXI Stream read/write
+  - OBI read, AXI write, Init read/write
+  - AXI read, OBI and Init read/write
 - Add RT midend [#24](https://github.com/pulp-platform/iDMA/pull/24)
 - Add Mempool midend [#34](https://github.com/pulp-platform/iDMA/pull/34)
+- Add `retarget.py` Python script to transform patterns to new protocol configurations
 
 ## 0.5.1 - 2023-10-21
 
