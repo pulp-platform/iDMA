@@ -250,10 +250,10 @@ module tb_idma_backend_rw_axi import idma_pkg::*; #(
         axi_pkg::resp_t werr[addr_t];
     } dummy_mem_t;
 
-    dummy_mem_t i_obi_axi_sim_mem;
     dummy_mem_t i_axil_axi_sim_mem;
-    dummy_mem_t i_init_axi_sim_mem;
+    dummy_mem_t i_obi_axi_sim_mem;
     dummy_mem_t i_axis_axi_sim_mem;
+    dummy_mem_t i_init_axi_sim_mem;
     dummy_mem_t i_tilelink_axi_sim_mem;
 
     //--------------------------------------

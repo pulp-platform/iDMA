@@ -331,9 +331,9 @@ module tb_idma_backend_rw_axi_rw_axis import idma_pkg::*; #(
     } dummy_mem_t;
 
     dummy_mem_t i_axil_axi_sim_mem;
-    dummy_mem_t i_obi_axi_sim_mem;
-    dummy_mem_t i_init_axi_sim_mem;
     dummy_mem_t i_tilelink_axi_sim_mem;
+    dummy_mem_t i_init_axi_sim_mem;
+    dummy_mem_t i_obi_axi_sim_mem;
 
     //--------------------------------------
     // TB Monitors

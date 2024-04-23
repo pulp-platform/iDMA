@@ -405,6 +405,7 @@ module idma_backend_r_obi_rw_init_w_axi #(
 
         // assemble read datapath request
         assign r_req.r_dp_req = '{
+            src_protocol: idma_req_i.opt.src_protocol,
             offset:      idma_req_i.src_addr[OffsetWidth-1:0],
             tailer:      OffsetWidth'(idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0]),
             shift:       OffsetWidth'(idma_req_i.src_addr[OffsetWidth-1:0]),
@@ -413,6 +414,7 @@ module idma_backend_r_obi_rw_init_w_axi #(
 
         // assemble write datapath request
         assign w_req.w_dp_req = '{
+            dst_protocol: idma_req_i.opt.dst_protocol,
             offset:    idma_req_i.dst_addr[OffsetWidth-1:0],
             tailer:    OffsetWidth'(idma_req_i.length + idma_req_i.dst_addr[OffsetWidth-1:0]),
             shift:     OffsetWidth'(- idma_req_i.dst_addr[OffsetWidth-1:0]),
