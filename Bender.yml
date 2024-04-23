@@ -56,9 +56,7 @@ sources:
   # Generated content
   - target: rtl
     files:
-      - target/rtl/idma_legalizer_rw_axi_rw_axis.sv
-      - target/rtl/idma_transport_layer_rw_axi_rw_axis.sv
-      - target/rtl/idma_backend_rw_axi_rw_axis.sv
+      - target/rtl/idma_generated.sv
 
   # Midends
   - target: rtl
