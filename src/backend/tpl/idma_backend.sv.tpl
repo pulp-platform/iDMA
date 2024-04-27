@@ -470,7 +470,8 @@ _rsp_t ${protocol}_write_rsp_i,
             offset:      idma_req_i.src_addr[OffsetWidth-1:0],
             tailer:      OffsetWidth'(idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0]),
             shift:       OffsetWidth'(idma_req_i.src_addr[OffsetWidth-1:0]),
-            decouple_aw: idma_req_i.opt.beo.decouple_aw
+            decouple_aw: idma_req_i.opt.beo.decouple_aw,
+            is_single:   len == '0
         };
 
         // assemble write datapath request
