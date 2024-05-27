@@ -284,7 +284,7 @@ module idma_inst64_top #(
     //--------------------------------------
     // Performance events
     //--------------------------------------
-    for (genvar c = 0; c < NumChannels; c++) begin : gen_transfer_id_gen
+    for (genvar c = 0; c < NumChannels; c++) begin : gen_events
         idma_inst64_events #(
             .DataWidth    ( AxiDataWidth ),
             .axi_req_t    ( axi_req_t    ),
@@ -411,7 +411,7 @@ module idma_inst64_top #(
 
                     dma_op_name = "DMCPY";
                     is_dma_op   = 1'b1;
-                    idma_fe_req_d.burst_reg.axi_id = idma_fe_sel_chan;
+                    idma_fe_req_d.burst_req.opt.axi_id = idma_fe_sel_chan;
                     idma_fe_req_d.burst_req.length = acc_req_i.data_arga;
 
                     // Perform the following sequence:
