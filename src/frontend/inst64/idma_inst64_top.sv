@@ -17,6 +17,7 @@ module idma_inst64_top #(
     parameter int unsigned AxiIdWidth      = 32'd0,
     parameter int unsigned NumAxInFlight   = 32'd3,
     parameter int unsigned DMAReqFifoDepth = 32'd3,
+    parameter int unsigned NumChannels     = 32'd1,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -25,26 +26,26 @@ module idma_inst64_top #(
     parameter type         acc_res_t       = logic,
     parameter type         dma_events_t    = logic
 ) (
-    input  logic           clk_i,
-    input  logic           rst_ni,
-    input  logic           testmode_i,
+    input  logic                          clk_i,
+    input  logic                          rst_ni,
+    input  logic                          testmode_i,
     // AXI4 bus
-    output axi_req_t       axi_req_o,
-    input  axi_res_t       axi_res_i,
+    output axi_req_t    [NumChannels-1:0] axi_req_o,
+    input  axi_res_t    [NumChannels-1:0] axi_res_i,
     // debug output
-    output logic           busy_o,
+    output logic        [NumChannels-1:0] busy_o,
     // accelerator interface
-    input  acc_req_t       acc_req_i,
-    input  logic           acc_req_valid_i,
-    output logic           acc_req_ready_o,
+    input  acc_req_t                      acc_req_i,
+    input  logic                          acc_req_valid_i,
+    output logic                          acc_req_ready_o,
 
-    output acc_res_t       acc_res_o,
-    output logic           acc_res_valid_o,
-    input  logic           acc_res_ready_i,
+    output acc_res_t                      acc_res_o,
+    output logic                          acc_res_valid_o,
+    input  logic                          acc_res_ready_i,
     // hart id of the frankensnitch
-    input  logic [31:0]    hart_id_i,
+    input  logic [31:0]                   hart_id_i,
     // performance output
-    output dma_events_t    events_o
+    output dma_events_t [NumChannels-1:0] events_o
 );
 
     // constants
@@ -96,44 +97,45 @@ module idma_inst64_top #(
     } write_meta_channel_t;
 
     // internal AXI channels
-    axi_req_t axi_read_req, axi_write_req;
-    axi_res_t axi_read_rsp, axi_write_rsp;
+    axi_req_t [NumChannels-1:0] axi_read_req, axi_write_req;
+    axi_res_t [NumChannels-1:0] axi_read_rsp, axi_write_rsp;
 
     // backend signals
-    idma_req_t idma_req;
-    logic      idma_req_valid;
-    logic      idma_req_ready;
-    idma_rsp_t idma_rsp;
-    logic      idma_rsp_valid;
-    logic      idma_rsp_ready;
+    idma_req_t [NumChannels-1:0] idma_req;
+    logic      [NumChannels-1:0] idma_req_valid;
+    logic      [NumChannels-1:0] idma_req_ready;
+    idma_rsp_t [NumChannels-1:0] idma_rsp;
+    logic      [NumChannels-1:0] idma_rsp_valid;
+    logic      [NumChannels-1:0] idma_rsp_ready;
 
     // nd signals
-    idma_nd_req_t idma_nd_req;
-    logic         idma_nd_req_valid;
-    logic         idma_nd_req_ready;
-    idma_rsp_t    idma_nd_rsp;
-    logic         idma_nd_rsp_valid;
-    logic         idma_nd_rsp_ready;
+    idma_nd_req_t [NumChannels-1:0] idma_nd_req;
+    logic         [NumChannels-1:0] idma_nd_req_valid;
+    logic         [NumChannels-1:0] idma_nd_req_ready;
+    idma_rsp_t    [NumChannels-1:0] idma_nd_rsp;
+    logic         [NumChannels-1:0] idma_nd_rsp_valid;
+    logic         [NumChannels-1:0] idma_nd_rsp_ready;
 
     // frontend
     idma_nd_req_t idma_fe_req_d, idma_fe_req_q, idma_fe_req;
-    logic         idma_fe_req_valid;
-    logic         idma_fe_req_ready;
+    logic         [NumChannels-1:0] idma_fe_req_valid;
+    logic         [NumChannels-1:0] idma_fe_req_ready;
 
     // frontend state
     logic [1:0] idma_fe_cfg;
     logic [1:0] idma_fe_status;
+    logic [2:0] idma_fe_sel_chan;
     logic       idma_fe_twod;
 
     // busy signals
-    idma_pkg::idma_busy_t idma_busy;
-    logic                 idma_nd_busy;
+    idma_pkg::idma_busy_t [NumChannels-1:0] idma_busy;
+    logic                 [NumChannels-1:0] idma_nd_busy;
 
     // counter signals
-    logic   issue_id;
-    logic   retire_id;
-    tf_id_t next_id;
-    tf_id_t completed_id;
+    logic   [NumChannels-1:0] issue_id;
+    logic   [NumChannels-1:0] retire_id;
+    tf_id_t [NumChannels-1:0] next_id;
+    tf_id_t [NumChannels-1:0] completed_id;
 
     // accelerator bus decoupled signals
     acc_res_t acc_res;
@@ -144,150 +146,159 @@ module idma_inst64_top #(
     //--------------------------------------
     // Backend instantiation
     //--------------------------------------
-    idma_backend_rw_axi #(
-        .DataWidth            ( AxiDataWidth                ),
-        .AddrWidth            ( AxiAddrWidth                ),
-        .UserWidth            ( AxiUserWidth                ),
-        .AxiIdWidth           ( AxiIdWidth                  ),
-        .NumAxInFlight        ( NumAxInFlight               ),
-        .BufferDepth          ( BufferDepth                 ),
-        .TFLenWidth           ( TFLenWidth                  ),
-        .MemSysDepth          ( 32'd16                      ),
-        .CombinedShifter      ( 1'b1                        ),
-        .RAWCouplingAvail     ( 1'b1                        ),
-        .MaskInvalidData      ( 1'b0                        ),
-        .HardwareLegalizer    ( 1'b1                        ),
-        .RejectZeroTransfers  ( 1'b1                        ),
-        .ErrorCap             ( idma_pkg::NO_ERROR_HANDLING ),
-        .PrintFifoInfo        ( 1'b0                        ),
-        .idma_req_t           ( idma_req_t                  ),
-        .idma_rsp_t           ( idma_rsp_t                  ),
-        .idma_eh_req_t        ( idma_pkg::idma_eh_req_t     ),
-        .idma_busy_t          ( idma_pkg::idma_busy_t       ),
-        .axi_req_t            ( axi_req_t                   ),
-        .axi_rsp_t            ( axi_res_t                   ),
-        .read_meta_channel_t  ( read_meta_channel_t         ),
-        .write_meta_channel_t ( write_meta_channel_t        )
-    ) i_idma_backend_rw_axi (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .idma_req_i      ( idma_req       ),
-        .req_valid_i     ( idma_req_valid ),
-        .req_ready_o     ( idma_req_ready ),
-        .idma_rsp_o      ( idma_rsp       ),
-        .rsp_valid_o     ( idma_rsp_valid ),
-        .rsp_ready_i     ( idma_rsp_ready ),
-        .idma_eh_req_i   ( '0             ),
-        .eh_req_valid_i  ( 1'b0           ),
-        .eh_req_ready_o  ( /* NC */       ),
-        .axi_read_req_o  ( axi_read_req   ),
-        .axi_read_rsp_i  ( axi_read_rsp   ),
-        .axi_write_req_o ( axi_write_req  ),
-        .axi_write_rsp_i ( axi_write_rsp  ),
-        .busy_o          ( idma_busy      )
-    );
+    for (genvar c = 0; c < NumChannels; c++) begin : gen_backend
+        idma_backend_rw_axi #(
+            .DataWidth            ( AxiDataWidth                ),
+            .AddrWidth            ( AxiAddrWidth                ),
+            .UserWidth            ( AxiUserWidth                ),
+            .AxiIdWidth           ( AxiIdWidth                  ),
+            .NumAxInFlight        ( NumAxInFlight               ),
+            .BufferDepth          ( BufferDepth                 ),
+            .TFLenWidth           ( TFLenWidth                  ),
+            .MemSysDepth          ( 32'd16                      ),
+            .CombinedShifter      ( 1'b1                        ),
+            .RAWCouplingAvail     ( 1'b1                        ),
+            .MaskInvalidData      ( 1'b0                        ),
+            .HardwareLegalizer    ( 1'b1                        ),
+            .RejectZeroTransfers  ( 1'b1                        ),
+            .ErrorCap             ( idma_pkg::NO_ERROR_HANDLING ),
+            .PrintFifoInfo        ( 1'b0                        ),
+            .idma_req_t           ( idma_req_t                  ),
+            .idma_rsp_t           ( idma_rsp_t                  ),
+            .idma_eh_req_t        ( idma_pkg::idma_eh_req_t     ),
+            .idma_busy_t          ( idma_pkg::idma_busy_t       ),
+            .axi_req_t            ( axi_req_t                   ),
+            .axi_rsp_t            ( axi_res_t                   ),
+            .read_meta_channel_t  ( read_meta_channel_t         ),
+            .write_meta_channel_t ( write_meta_channel_t        )
+        ) i_idma_backend_rw_axi (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .idma_req_i      ( idma_req       [c] ),
+            .req_valid_i     ( idma_req_valid [c] ),
+            .req_ready_o     ( idma_req_ready [c] ),
+            .idma_rsp_o      ( idma_rsp       [c] ),
+            .rsp_valid_o     ( idma_rsp_valid [c] ),
+            .rsp_ready_i     ( idma_rsp_ready [c] ),
+            .idma_eh_req_i   ( '0                 ),
+            .eh_req_valid_i  ( 1'b0               ),
+            .eh_req_ready_o  ( /* NC */           ),
+            .axi_read_req_o  ( axi_read_req   [c] ),
+            .axi_read_rsp_i  ( axi_read_rsp   [c] ),
+            .axi_write_req_o ( axi_write_req  [c] ),
+            .axi_write_rsp_i ( axi_write_rsp  [c] ),
+            .busy_o          ( idma_busy      [c] )
+        );
 
-    axi_rw_join #(
-        .axi_req_t  ( axi_req_t ),
-        .axi_resp_t ( axi_res_t )
-    ) i_axi_rw_join (
-        .clk_i,
-        .rst_ni,
-        .slv_read_req_i   ( axi_read_req  ),
-        .slv_read_resp_o  ( axi_read_rsp  ),
-        .slv_write_req_i  ( axi_write_req ),
-        .slv_write_resp_o ( axi_write_rsp ),
-        .mst_req_o        ( axi_req_o     ),
-        .mst_resp_i       ( axi_res_i     )
-    );
+        axi_rw_join #(
+            .axi_req_t  ( axi_req_t ),
+            .axi_resp_t ( axi_res_t )
+        ) i_axi_rw_join (
+            .clk_i,
+            .rst_ni,
+            .slv_read_req_i   ( axi_read_req  [c] ),
+            .slv_read_resp_o  ( axi_read_rsp  [c] ),
+            .slv_write_req_i  ( axi_write_req [c] ),
+            .slv_write_resp_o ( axi_write_rsp [c] ),
+            .mst_req_o        ( axi_req_o     [c] ),
+            .mst_resp_i       ( axi_res_i     [c] )
+        );
 
-    assign busy_o = (|idma_busy) | idma_nd_busy;
+        assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c];
+    end
+
 
 
     //--------------------------------------
     // 2D Extension
     //--------------------------------------
-    idma_nd_midend #(
-        .NumDim        ( NumDim        ),
-        .addr_t        ( addr_t        ),
-        .idma_req_t    ( idma_req_t    ),
-        .idma_rsp_t    ( idma_rsp_t    ),
-        .idma_nd_req_t ( idma_nd_req_t ),
-        .RepWidths     ( RepWidth      )
-    ) i_idma_nd_midend (
-        .clk_i,
-        .rst_ni,
-        .nd_req_i          ( idma_nd_req       ),
-        .nd_req_valid_i    ( idma_nd_req_valid ),
-        .nd_req_ready_o    ( idma_nd_req_ready ),
-        .nd_rsp_o          ( idma_nd_rsp       ),
-        .nd_rsp_valid_o    ( idma_nd_rsp_valid ),
-        .nd_rsp_ready_i    ( idma_nd_rsp_ready ),
-        .burst_req_o       ( idma_req          ),
-        .burst_req_valid_o ( idma_req_valid    ),
-        .burst_req_ready_i ( idma_req_ready    ),
-        .burst_rsp_i       ( idma_rsp          ),
-        .burst_rsp_valid_i ( idma_rsp_valid    ),
-        .burst_rsp_ready_o ( idma_rsp_ready    ),
-        .busy_o            ( idma_nd_busy      )
-    );
+    for (genvar c = 0; c < NumChannels; c++) begin : gen_nd_midend
+        idma_nd_midend #(
+            .NumDim        ( NumDim        ),
+            .addr_t        ( addr_t        ),
+            .idma_req_t    ( idma_req_t    ),
+            .idma_rsp_t    ( idma_rsp_t    ),
+            .idma_nd_req_t ( idma_nd_req_t ),
+            .RepWidths     ( RepWidth      )
+        ) i_idma_nd_midend (
+            .clk_i,
+            .rst_ni,
+            .nd_req_i          ( idma_nd_req       [c] ),
+            .nd_req_valid_i    ( idma_nd_req_valid [c] ),
+            .nd_req_ready_o    ( idma_nd_req_ready [c] ),
+            .nd_rsp_o          ( idma_nd_rsp       [c] ),
+            .nd_rsp_valid_o    ( idma_nd_rsp_valid [c] ),
+            .nd_rsp_ready_i    ( idma_nd_rsp_ready [c] ),
+            .burst_req_o       ( idma_req          [c] ),
+            .burst_req_valid_o ( idma_req_valid    [c] ),
+            .burst_req_ready_i ( idma_req_ready    [c] ),
+            .burst_rsp_i       ( idma_rsp          [c] ),
+            .burst_rsp_valid_i ( idma_rsp_valid    [c] ),
+            .burst_rsp_ready_o ( idma_rsp_ready    [c] ),
+            .busy_o            ( idma_nd_busy      [c] )
+        );
 
-    stream_fifo_optimal_wrap #(
-        .Depth     ( DMAReqFifoDepth ),
-        .type_t    ( idma_nd_req_t   ),
-        .PrintInfo ( 1'b0            )
-    ) i_stream_fifo_optimal_wrap (
-        .clk_i,
-        .rst_ni,
-        .testmode_i,
-        .flush_i    ( 1'b0              ),
-        .usage_o    ( /* NC */          ),
-        .data_i     ( idma_fe_req       ),
-        .valid_i    ( idma_fe_req_valid ),
-        .ready_o    ( idma_fe_req_ready ),
-        .data_o     ( idma_nd_req       ),
-        .valid_o    ( idma_nd_req_valid ),
-        .ready_i    ( idma_nd_req_ready )
-    );
+        stream_fifo_optimal_wrap #(
+            .Depth     ( DMAReqFifoDepth ),
+            .type_t    ( idma_nd_req_t   ),
+            .PrintInfo ( 1'b0            )
+        ) i_stream_fifo_optimal_wrap (
+            .clk_i,
+            .rst_ni,
+            .testmode_i,
+            .flush_i    ( 1'b0                  ),
+            .usage_o    ( /* NC */              ),
+            .data_i     ( idma_fe_req           ),
+            .valid_i    ( idma_fe_req_valid [c] ),
+            .ready_o    ( idma_fe_req_ready [c] ),
+            .data_o     ( idma_nd_req       [c] ),
+            .valid_o    ( idma_nd_req_valid [c] ),
+            .ready_i    ( idma_nd_req_ready [c] )
+        );
+    end
 
 
     //--------------------------------------
     // ID gen
     //--------------------------------------
-    idma_transfer_id_gen #(
-        .IdWidth ( TfIdWidth )
-    ) i_idma_transfer_id_gen (
-        .clk_i,
-        .rst_ni,
-        .issue_i     ( issue_id     ),
-        .retire_i    ( retire_id    ),
-        .next_o      ( next_id      ),
-        .completed_o ( completed_id )
-    );
+    for (genvar c = 0; c < NumChannels; c++) begin : gen_transfer_id_gen
+        idma_transfer_id_gen #(
+            .IdWidth ( TfIdWidth )
+        ) i_idma_transfer_id_gen (
+            .clk_i,
+            .rst_ni,
+            .issue_i     ( issue_id     [c] ),
+            .retire_i    ( retire_id    [c] ),
+            .next_o      ( next_id      [c] ),
+            .completed_o ( completed_id [c] )
+        );
 
-    // we are always ready to accept responses
-    assign idma_nd_rsp_ready = 1'b1;
-    assign issue_id  = idma_nd_req_valid & idma_nd_req_ready;
-    assign retire_id = idma_nd_rsp_valid & idma_nd_rsp_ready;
+        // we are always ready to accept responses
+        assign idma_nd_rsp_ready [c] = 1'b1;
+        assign issue_id [c] = idma_nd_req_valid[c] & idma_nd_req_ready[c];
+        assign retire_id[c] = idma_nd_rsp_valid[c] & idma_nd_rsp_ready[c];
+    end
 
 
     //--------------------------------------
-    // Performance counters
+    // Performance events
     //--------------------------------------
-    idma_inst64_events #(
-        .DataWidth    ( AxiDataWidth ),
-        .axi_req_t    ( axi_req_t    ),
-        .axi_res_t    ( axi_res_t    ),
-        .dma_events_t ( dma_events_t )
-    ) i_idma_inst64_events (
-        .clk_i,
-        .rst_ni,
-        .axi_req_i      ( axi_req_o ),
-        .axi_rsp_i      ( axi_res_i ),
-        .busy_i         ( busy_o    ),
-        .events_o       ( events_o  )
-    );
+    for (genvar c = 0; c < NumChannels; c++) begin : gen_transfer_id_gen
+        idma_inst64_events #(
+            .DataWidth    ( AxiDataWidth ),
+            .axi_req_t    ( axi_req_t    ),
+            .axi_res_t    ( axi_res_t    ),
+            .dma_events_t ( dma_events_t )
+        ) i_idma_inst64_events (
+            .clk_i,
+            .rst_ni,
+            .axi_req_i      ( axi_req_o [c] ),
+            .axi_rsp_i      ( axi_res_i [c] ),
+            .busy_i         ( busy_o    [c] ),
+            .events_o       ( events_o  [c] )
+        );
+    end
 
 
     //--------------------------------------
@@ -342,11 +353,12 @@ module idma_inst64_top #(
         idma_fe_req_d.burst_req.opt.last               = 1'b0;
 
         // frontend config
-        idma_fe_cfg    = '0;
-        idma_fe_status = '0;
+        idma_fe_cfg      = '0;
+        idma_fe_status   = '0;
+        idma_fe_sel_chan = '0;
 
         // default handshaking
-        idma_fe_req_valid = 1'b0;
+        idma_fe_req_valid =  '0;
         acc_req_ready_o   = 1'b0;
         acc_res_valid     = 1'b0;
 
@@ -386,13 +398,20 @@ module idma_inst64_top #(
                 idma_inst64_snitch_pkg::DMCPY : begin
                     // Parse the transfer parameters from the register or immediate.
                     unique casez (acc_req_i.data_op)
-                        idma_inst64_snitch_pkg::DMCPYI : idma_fe_cfg = acc_req_i.data_op[24:20];
-                        idma_inst64_snitch_pkg::DMCPY :  idma_fe_cfg = acc_req_i.data_argb;
+                        idma_inst64_snitch_pkg::DMCPYI : begin
+                            idma_fe_cfg      = acc_req_i.data_op[21:20];
+                            idma_fe_sel_chan = acc_req_i.data_op[24:22];
+                        end
+                        idma_inst64_snitch_pkg::DMCPY : begin
+                            idma_fe_cfg      = acc_req_i.data_argb[1:0];
+                            idma_fe_sel_chan = acc_req_i.data_argb[4:2];
+                        end
                         default:;
                     endcase
 
                     dma_op_name = "DMCPY";
                     is_dma_op   = 1'b1;
+                    idma_fe_req_d.burst_reg.axi_id = idma_fe_sel_chan;
                     idma_fe_req_d.burst_req.length = acc_req_i.data_arga;
 
                     // Perform the following sequence:
@@ -402,7 +421,7 @@ module idma_inst64_top #(
                     // 4. send acc response (pvalid)
                     // 5. acknowledge acc request (qready)
                     if (acc_res_ready) begin
-                        idma_fe_req_valid = 1'b1;
+                        idma_fe_req_valid [idma_fe_sel_chan] = 1'b1;
                         if (idma_fe_req_ready) begin
                             acc_res.id      = acc_req_i.id;
                             acc_res.data    = next_id;
@@ -418,8 +437,14 @@ module idma_inst64_top #(
               idma_inst64_snitch_pkg::DMSTAT: begin
                     // Parse the status index from the register or immediate.
                     unique casez (acc_req_i.data_op)
-                        idma_inst64_snitch_pkg::DMSTATI: idma_fe_status = acc_req_i.data_op[24:20];
-                        idma_inst64_snitch_pkg::DMSTAT:  idma_fe_status = acc_req_i.data_argb;
+                        idma_inst64_snitch_pkg::DMSTATI : begin
+                            idma_fe_status   = acc_req_i.data_op[21:20];
+                            idma_fe_sel_chan = acc_req_i.data_op[24:22];
+                        end
+                        idma_inst64_snitch_pkg::DMSTAT : begin
+                            idma_fe_status   = acc_req_i.data_argb[1:0];
+                            idma_fe_sel_chan = acc_req_i.data_argb[4:2];
+                        end
                         default:;
                     endcase
                     dma_op_name = "DMSTAT";
@@ -429,10 +454,11 @@ module idma_inst64_top #(
                     acc_res.id    = acc_req_i.id;
                     acc_res.error = 1'b0;
                     case (idma_fe_status)
-                        2'b00 : acc_res.data = completed_id;
-                        2'b01 : acc_res.data = next_id;
-                        2'b10 : acc_res.data = {{{8'd63}{1'b0}}, busy_o};
-                        2'b11 : acc_res.data = {{{8'd63}{1'b0}}, !idma_fe_req_ready};
+                        2'b00 : acc_res.data = completed_id[idma_fe_sel_chan];
+                        2'b01 : acc_res.data = next_id[idma_fe_sel_chan];
+                        2'b10 : acc_res.data = {{{8'd63}{1'b0}}, busy_o[idma_fe_sel_chan]};
+                        2'b11 : acc_res.data = {{{8'd63}{1'b0}},
+                                                !idma_fe_req_ready[idma_fe_sel_chan]};
                         default:;
                     endcase
 
