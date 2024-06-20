@@ -53,6 +53,14 @@ ${params}
           name: "enable_nd",
           desc: "ND-extension enabled"
         }
+        { bits: "${src_prot_range}",
+          name: "src_protocol",
+          desc: "Selection of the source protocol"
+        }
+        { bits: "${dst_prot_range}",
+          name: "dst_protocol",
+          desc: "Selection of the destination protocol"
+        }
       ]
     },
     { multireg:
