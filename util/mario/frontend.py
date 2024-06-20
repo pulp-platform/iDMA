@@ -11,6 +11,8 @@ import sys
 import math
 from mako.template import Template
 
+NUM_PROT_BITS = 3
+
 
 def render_register(content: dict):
     """Render a register"""
@@ -129,7 +131,9 @@ def render_reg_hjson(fe_ids: dict, tpl_file: str) -> str:
             'identifier': fe_id,
             'params': params,
             'registers': regs,
-            'dim_range': f'{10+num_dim_bits}:10'
+            'dim_range': f'{10+num_dim_bits}:10',
+            'src_prot_range': f'{10+num_dim_bits+NUM_PROT_BITS}:{10+num_dim_bits+1}',
+            'dst_prot_range': f'{10+num_dim_bits+2*NUM_PROT_BITS}:{10+num_dim_bits+NUM_PROT_BITS+1}'
         }
 
         # render

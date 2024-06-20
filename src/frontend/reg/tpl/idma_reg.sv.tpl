@@ -60,6 +60,17 @@ module idma_${identifier} #(
   // register signals
   reg_rsp_t [NumRegs-1:0] dma_ctrl_rsp;
 
+  always_comb begin
+      stream_idx_o = '0;
+      for (int r = 0; r < NumRegs; r++) begin
+          for (int c = 0; c < NumStreams; c++) begin
+              if (dma_reg2hw[r].next_id[c].re) begin
+                  stream_idx_o = c;
+              end
+          end
+      end
+  end
+
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
 
@@ -76,23 +87,20 @@ module idma_${identifier} #(
       .devmode_i ( 1'b1                 )
     );
 
+    logic read_happens;
     // DMA backpressure
     always_comb begin : proc_dma_backpressure
       // ready signal
       dma_ctrl_rsp_o[i]       = dma_ctrl_rsp[i];
-      dma_ctrl_rsp_o[i].ready = arb_ready[i];
+      dma_ctrl_rsp_o[i].ready = read_happens ? arb_ready[i] : dma_ctrl_rsp[i];
     end
 
     // valid signals
-    logic read_happens;
+
     always_comb begin : proc_launch
         read_happens = 1'b0;
-        stream_idx_o = '0;
         for (int c = 0; c < NumStreams; c++) begin
             read_happens |= dma_reg2hw[i].next_id[c].re;
-            if (dma_reg2hw[i].next_id[c].re) begin
-                stream_idx_o = c;
-            end
         end
         arb_valid[i] = read_happens;
     end
@@ -112,6 +120,10 @@ module idma_${identifier} #(
       arb_dma_req[i]${sep}src_addr = {dma_reg2hw[i].src_addr_high.q, dma_reg2hw[i].src_addr_low.q};
       arb_dma_req[i]${sep}dst_addr = {dma_reg2hw[i].dst_addr_high.q, dma_reg2hw[i].dst_addr_low.q};
 % endif
+
+      // Protocols
+      arb_dma_req[i]${sep}opt.src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol);
+      arb_dma_req[i]${sep}opt.dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol);
 
       // Current backend only supports incremental burst
       arb_dma_req[i]${sep}opt.src.burst = axi_pkg::BURST_INCR;
@@ -148,13 +160,13 @@ module idma_${identifier} #(
       // Disable higher dimensions
       if ( dma_reg2hw[i].conf.enable_nd.q == 0) begin
 % for nd in range(0, num_dim-1):
-        arb_dma_req[i].d_req[${nd}].reps = '0;
+        arb_dma_req[i].d_req[${nd}].reps = ${"'0" if nd != num_dim-2 else "'d1"};
 % endfor
       end
 % for nd in range(1, num_dim-1):
       else if ( dma_reg2hw[i].conf.enable_nd.q == ${nd}) begin
 % for snd in range(nd, num_dim-1):
-        arb_dma_req[i].d_req[${snd}].reps = '0;
+        arb_dma_req[i].d_req[${snd}].reps = 'd1;
 % endfor
       end
 % endfor
