@@ -83,10 +83,14 @@ sources:
       - src/frontend/desc64/idma_desc64_reader_gater.sv
       - src/frontend/desc64/idma_desc64_reshaper.sv
       - src/frontend/idma_transfer_id_gen.sv
-      - src/frontend/inst64/idma_inst64_events.sv
+      - target: snitch_cluster
+        files:
+          - src/frontend/inst64/idma_inst64_events.sv
       # Level 1
       - src/frontend/desc64/idma_desc64_reg_wrapper.sv
-      - src/frontend/inst64/idma_inst64_top.sv
+      - target: snitch_cluster
+        files:
+          - src/frontend/inst64/idma_inst64_top.sv
       # Level 2
       - src/frontend/desc64/idma_desc64_top.sv
 
