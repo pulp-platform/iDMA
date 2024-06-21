@@ -18,34 +18,34 @@
 `include "register_interface/typedef.svh"
 
 module pulp_idma_wrap #(
-  parameter  int unsigned NB_CORES               = 4,
-  parameter  int unsigned AXI_ADDR_WIDTH         = 32,
-  parameter  int unsigned AXI_DATA_WIDTH         = 64,
-  parameter  int unsigned AXI_USER_WIDTH         = 6,
-  parameter  int unsigned AXI_ID_WIDTH           = 4,
-  parameter  int unsigned PE_ID_WIDTH            = 1,
-  parameter  int unsigned NB_PE_PORTS            = 1,
-  parameter  int unsigned DATA_WIDTH             = 32,
-  parameter  int unsigned ADDR_WIDTH             = 32,
-  parameter  int unsigned BE_WIDTH               = DATA_WIDTH / 8,
-  parameter  type         axi_req_t              = logic,
-  parameter  type         axi_resp_t             = logic,
+  parameter int unsigned NB_CORES               = 4,
+  parameter int unsigned AXI_ADDR_WIDTH         = 32,
+  parameter int unsigned AXI_DATA_WIDTH         = 64,
+  parameter int unsigned AXI_USER_WIDTH         = 6,
+  parameter int unsigned AXI_ID_WIDTH           = 4,
+  parameter int unsigned PE_ID_WIDTH            = 1,
+  parameter int unsigned NB_PE_PORTS            = 1,
+  parameter int unsigned DATA_WIDTH             = 32,
+  parameter int unsigned ADDR_WIDTH             = 32,
+  parameter int unsigned BE_WIDTH               = DATA_WIDTH / 8,
+  parameter type         axi_req_t              = logic,
+  parameter type         axi_resp_t             = logic,
   // bidirectional streams: range 1 to 8                   
-  parameter  int unsigned NUM_BIDIR_STREAMS      = 1,
-  parameter  int unsigned NB_OUTSND_BURSTS       = 8,
+  parameter int unsigned NUM_BIDIR_STREAMS      = 1,
+  parameter int unsigned NB_OUTSND_BURSTS       = 8,
   // queue depth per stream                   
-  parameter  int unsigned GLOBAL_QUEUE_DEPTH     = 2,
+  parameter int unsigned GLOBAL_QUEUE_DEPTH     = 2,
   // mux read ports between tcdm-tcdm and tcdm-axi?                 
-  parameter  bit          MUX_READ               = 1'b0,
+  parameter bit          MUX_READ               = 1'b0,
   // 4 ports per stream if read ports muxed, otherwise 6
-  localparam int unsigned NB_TCDM_PORTS_PER_STRM = 4 + (~MUX_READ) * 2
+  parameter int unsigned NB_TCDM_PORTS_PER_STRM = 4 + (~MUX_READ) * 2
 ) (  // verilog_format: off // verible does not manage to align this :(
   input logic                    clk_i,
   input logic                    rst_ni,
   input logic                    test_mode_i,
-                                 XBAR_PERIPH_BUS.Slave pe_ctrl_slave[NB_PE_PORTS-1:0],
-                                 XBAR_TCDM_BUS.Slave ctrl_slave[NB_CORES-1:0],
-                                 hci_core_intf.master tcdm_master[NB_TCDM_PORTS_PER_STRM*NUM_BIDIR_STREAMS-1:0],
+  XBAR_PERIPH_BUS.Slave          pe_ctrl_slave[NB_PE_PORTS-1:0],
+  XBAR_TCDM_BUS.Slave            ctrl_slave[NB_CORES-1:0],
+  hci_core_intf.master           tcdm_master[NB_TCDM_PORTS_PER_STRM*NUM_BIDIR_STREAMS-1:0],
   output                         axi_req_t [NUM_BIDIR_STREAMS-1:0] ext_master_req_o,
   input                          axi_resp_t [NUM_BIDIR_STREAMS-1:0] ext_master_rsp_i,
   output logic [NB_CORES-1:0]    term_event_o,
@@ -114,10 +114,10 @@ module pulp_idma_wrap #(
   // Memory Init typedefs
   /// init read request
   typedef struct packed {
-    logic [AXI_ADDR_WIDTH-1:0] cfg;
-    logic [AXI_DATA_WIDTH-1:0] term;
-    logic [AXI_STRB_WIDTH-1:0] strb;
-    logic [AXI_ID_WIDTH-1:0]   id;
+    logic [AXI_ADDR_WIDTH-1:0]    cfg;
+    logic [AXI_DATA_WIDTH-1:0]    term;
+    logic [AXI_DATA_WIDTH/8-1:0]  strb;
+    logic [AXI_ID_WIDTH-1:0]      id;
   } init_req_chan_t;
 
   typedef struct packed {
@@ -157,12 +157,9 @@ module pulp_idma_wrap #(
 
   // interface to structs
   for (genvar s = 0; s < NUM_BIDIR_STREAMS; s++) begin : gen_connect_interface
-    //  `AXI_ASSIGN_FROM_REQ(ext_master[s], soc_req[s])
-    //  `AXI_ASSIGN_TO_RESP(soc_rsp[s], ext_master[s])
     assign ext_master_req_o[s] = soc_req[s];
     assign soc_rsp[s]          = ext_master_resp_i[s];
   end
-
 
   // connect RW axi buses
   for (genvar s = 0; s < NUM_BIDIR_STREAMS; s++) begin : gen_rw_axi_connection
@@ -198,7 +195,7 @@ module pulp_idma_wrap #(
   typedef logic [StrideWidth-1:0] strides_t;
 
   // iDMA request / response types
-  `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, slv_id_t, addr_t, tf_len_t)
+  `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, id_t, addr_t, tf_len_t)
   `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
 
   // iDMA ND request
@@ -656,7 +653,7 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
       .atop_i('0),
       .we_i(obi_read_req_muxed[s].a.we),
       .rvalid_o(obi_read_rsp_to_mux[s].rvalid),
-      .rdata_o(obi_read_rsp_to_mux[s].r.data),
+      .rdata_o(obi_read_rsp_to_mux[s].r.rdata),
       .bank_req_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].req
       }),
@@ -714,7 +711,7 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
         .atop_i('0),
         .we_i(obi_reorg_req[s].a.we),
         .rvalid_o(obi_reorg_rsp[s].rvalid),
-        .rdata_o(obi_reorg_rsp[s].r.data),
+        .rdata_o(obi_reorg_rsp[s].r.rdata),
         .bank_req_o({
           tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].req
         }),
@@ -770,7 +767,7 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
       .atop_i('0),
       .we_i(obi_write_req[s].a.we),
       .rvalid_o(obi_write_rsp[s].rvalid),
-      .rdata_o(obi_write_rsp[s].r.data),
+      .rdata_o(obi_write_rsp[s].r.rdata),
       .bank_req_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].req
       }),
