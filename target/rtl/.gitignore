@@ -1,4 +1,5 @@
 Bender.yml
 include
 *.sv
+!idma_generated.sv
 *.hjson
