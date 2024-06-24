@@ -52,6 +52,8 @@ sources:
       - src/backend/idma_obi_write.sv
       - src/backend/idma_tilelink_read.sv
       - src/backend/idma_tilelink_write.sv
+      # Level 2
+      - src/pulp_idma_wrap.sv
 
   # Generated content
   - target: rtl
