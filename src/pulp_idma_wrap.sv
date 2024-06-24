@@ -17,6 +17,8 @@
 `include "idma/typedef.svh"
 `include "register_interface/typedef.svh"
 
+`define MY_MAX(a,b) (a > b ? a : b)
+  
 module pulp_idma_wrap #(
   parameter int unsigned NB_CORES               = 4,
   parameter int unsigned AXI_ADDR_WIDTH         = 32,
@@ -38,7 +40,7 @@ module pulp_idma_wrap #(
   // mux read ports between tcdm-tcdm and tcdm-axi?                 
   parameter bit          MUX_READ               = 1'b0,
   // 4 ports per stream if read ports muxed, otherwise 6
-  parameter int unsigned NB_TCDM_PORTS_PER_STRM = 4 + (~MUX_READ) * 2
+  localparam int unsigned NB_TCDM_PORTS_PER_STRM = 4 + (!MUX_READ) * 2
 ) (  // verilog_format: off // verible does not manage to align this :(
   input logic                    clk_i,
   input logic                    rst_ni,
@@ -47,7 +49,7 @@ module pulp_idma_wrap #(
   XBAR_TCDM_BUS.Slave            ctrl_slave[NB_CORES-1:0],
   hci_core_intf.master           tcdm_master[NB_TCDM_PORTS_PER_STRM*NUM_BIDIR_STREAMS-1:0],
   output                         axi_req_t [NUM_BIDIR_STREAMS-1:0] ext_master_req_o,
-  input                          axi_resp_t [NUM_BIDIR_STREAMS-1:0] ext_master_rsp_i,
+  input                          axi_resp_t [NUM_BIDIR_STREAMS-1:0] ext_master_resp_i,
   output logic [NB_CORES-1:0]    term_event_o,
   output logic [NB_CORES-1:0]    term_irq_o,
   output logic [NB_PE_PORTS-1:0] term_event_pe_o,
@@ -109,8 +111,12 @@ module pulp_idma_wrap #(
   typedef logic [AXI_USER_WIDTH-1:0] user_t;
 
   // // AXI4+ATOP channels typedefs
-  `AXI_TYPEDEF_ALL(axi, addr_t, id_t, data_t, strb_t, user_t)
-
+  //`AXI_TYPEDEF_ALL(axi_int, addr_t, id_t, data_t, strb_t, user_t)
+  `AXI_TYPEDEF_AW_CHAN_T(axi_aw_chan_t, addr_t, id_t, user_t)
+  `AXI_TYPEDEF_W_CHAN_T(axi_w_chan_t, data_t, strb_t, user_t)
+  `AXI_TYPEDEF_B_CHAN_T(axi_b_chan_t, id_t, user_t)
+  `AXI_TYPEDEF_AR_CHAN_T(axi_ar_chan_t, addr_t, id_t, user_t)
+  `AXI_TYPEDEF_R_CHAN_T(axi_r_chan_t, data_t, id_t, user_t)
   // Memory Init typedefs
   /// init read request
   typedef struct packed {
@@ -360,18 +366,15 @@ module pulp_idma_wrap #(
       localparam int unsigned init_req_chan_width = $bits(init_req_chan_t);
       localparam int unsigned obi_a_chan_width = $bits(obi_a_chan_t);
 
-      function int unsigned max_width(input int unsigned a, b);
-        return (a > b) ? a : b;
-      endfunction
 
       typedef struct packed {
         init_req_chan_t req_chan;
-        logic [max_width(init_req_chan_width, obi_a_chan_width)-init_req_chan_width:0] padding;
+        logic [`MY_MAX(init_req_chan_width, obi_a_chan_width)-init_req_chan_width:0] padding;
       } init_read_req_chan_padded_t;
 
       typedef struct packed {
         obi_a_chan_t a_chan;
-        logic [max_width(init_req_chan_width, obi_a_chan_width)-obi_a_chan_width:0] padding;
+        logic [`MY_MAX(init_req_chan_width, obi_a_chan_width)-obi_a_chan_width:0] padding;
       } obi_read_a_chan_padded_t;
 
       typedef union packed {
@@ -381,12 +384,12 @@ module pulp_idma_wrap #(
 
       typedef struct packed {
         axi_aw_chan_t aw_chan;
-        logic [max_width(axi_aw_chan_width, init_req_chan_width)-axi_aw_chan_width:0] padding;
+        logic [`MY_MAX(axi_aw_chan_width, init_req_chan_width)-axi_aw_chan_width:0] padding;
       } axi_write_aw_chan_padded_t;
 
       typedef struct packed {
         init_req_chan_t req_chan;
-        logic [max_width(axi_aw_chan_width, init_req_chan_width)-init_req_chan_width:0] padding;
+        logic [`MY_MAX(axi_aw_chan_width, init_req_chan_width)-init_req_chan_width:0] padding;
       } init_write_req_chan_padded_t;
 
       typedef union packed {
@@ -417,7 +420,7 @@ module pulp_idma_wrap #(
         .idma_eh_req_t       (idma_pkg::idma_eh_req_t),
         .idma_busy_t         (idma_pkg::idma_busy_t),
         .axi_req_t           (axi_req_t),
-        .axi_rsp_t           (axi_rsp_t),
+        .axi_rsp_t           (axi_resp_t),
         .init_req_t          (init_req_t),
         .init_rsp_t          (init_rsp_t),
         .obi_req_t           (obi_req_t),
@@ -475,23 +478,19 @@ module pulp_idma_wrap #(
 
       typedef struct packed {
         axi_ar_chan_t ar_chan;
-        logic [max_width(
-axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
+        logic [`MY_MAX(
+axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
 )-axi_ar_chan_width:0] padding;
       } axi_read_ar_chan_padded_t;
 
       typedef struct packed {
         init_req_chan_t req_chan;
-        logic [max_width(
-axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
-)-init_req_chan_width:0] padding;
+        logic [`MY_MAX(axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width))-init_req_chan_width:0] padding;
       } init_read_req_chan_padded_t;
 
       typedef struct packed {
         obi_a_chan_t a_chan;
-        logic [max_width(
-axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
-)-obi_a_chan_width:0] padding;
+        logic [`MY_MAX(axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width))-obi_a_chan_width:0] padding;
       } obi_read_a_chan_padded_t;
 
       typedef union packed {
@@ -502,12 +501,12 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
 
       typedef struct packed {
         init_req_chan_t req_chan;
-        logic [max_width(init_req_chan_width, obi_a_chan_width)-init_req_chan_width:0] padding;
+        logic [`MY_MAX(init_req_chan_width, obi_a_chan_width)-init_req_chan_width:0] padding;
       } init_write_req_chan_padded_t;
 
       typedef struct packed {
         obi_a_chan_t a_chan;
-        logic [max_width(init_req_chan_width, obi_a_chan_width)-obi_a_chan_width:0] padding;
+        logic [`MY_MAX(init_req_chan_width, obi_a_chan_width)-obi_a_chan_width:0] padding;
       } obi_write_a_chan_padded_t;
 
       typedef union packed {
@@ -538,7 +537,7 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
         .idma_eh_req_t       (idma_pkg::idma_eh_req_t),
         .idma_busy_t         (idma_pkg::idma_busy_t),
         .axi_req_t           (axi_req_t),
-        .axi_rsp_t           (axi_rsp_t),
+        .axi_rsp_t           (axi_resp_t),
         .init_req_t          (init_req_t),
         .init_rsp_t          (init_rsp_t),
         .obi_req_t           (obi_req_t),
@@ -580,8 +579,8 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
       assign init_write_rsp.rsp_chan.init = '0;
       assign init_write_rsp.rsp_valid     = init_read_req.req_valid;  // might need spill register
       assign init_write_rsp.req_ready     = 1'b1;
-    end  // block: gen_cpy_in
-  end  // block: gen_streams
+    end : gen_cpy_in
+  end : gen_streams
 
 
   // ------------------------------------------------------
@@ -589,8 +588,7 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
   // ------------------------------------------------------
   for (genvar s = 0; s < NUM_BIDIR_STREAMS; s++) begin
     if (MUX_READ) begin
-      obi_pkg::obi_cfg_t sbr_obi_cfg;
-      assign sbr_obi_cfg = obi_pkg::obi_default_cfg(
+      localparam obi_pkg::obi_cfg_t sbr_obi_cfg = obi_pkg::obi_default_cfg(
           AXI_ADDR_WIDTH, AXI_DATA_WIDTH, 0, obi_pkg::ObiMinimalOptionalConfig
       );
 
@@ -805,3 +803,4 @@ axi_ar_chan_width, max_width(init_req_chan_width, obi_a_chan_width)
 
   end
 endmodule
+`undef MY_MAX
