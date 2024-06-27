@@ -150,9 +150,9 @@ module pulp_idma_wrap #(
 
 
   obi_req_t [NUM_BIDIR_STREAMS-1:0]
-      obi_read_req_from_dma, obi_reorg_req, obi_write_req, obi_read_req_muxed;
+      obi_read_req_from_dma, obi_read_req_from_rrc, obi_reorg_req_from_dma, obi_reorg_req_from_rrc, obi_write_req_from_dma, obi_write_req_from_rrc, obi_read_req_muxed;
   obi_rsp_t [NUM_BIDIR_STREAMS-1:0]
-      obi_read_rsp_to_dma, obi_reorg_rsp, obi_write_rsp, obi_read_rsp_to_mux;
+      obi_read_rsp_to_dma, obi_read_rsp_to_rrc, obi_reorg_rsp_to_dma, obi_reorg_rsp_to_rrc, obi_write_rsp_to_dma, obi_write_rsp_to_rrc, obi_read_rsp_to_mux;
 
 
   // BUS definitions
@@ -411,7 +411,7 @@ module pulp_idma_wrap #(
         .TFLenWidth          (TFLenWidth),
         .MemSysDepth         (32'd0),
         .CombinedShifter     (1'b1),
-        .RAWCouplingAvail    (1'b1),
+        .RAWCouplingAvail    (1'b0),
         .MaskInvalidData     (1'b0),
         .HardwareLegalizer   (1'b1),
         .RejectZeroTransfers (1'b1),
@@ -528,7 +528,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         .TFLenWidth          (TFLenWidth),
         .MemSysDepth         (32'd0),
         .CombinedShifter     (1'b1),
-        .RAWCouplingAvail    (1'b1),
+        .RAWCouplingAvail    (1'b0),
         .MaskInvalidData     (1'b0),
         .HardwareLegalizer   (1'b1),
         .RejectZeroTransfers (1'b1),
@@ -561,12 +561,12 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         .axi_read_rsp_i  (dma_rsp[s]),
         .init_read_req_o (init_read_req),
         .init_read_rsp_i (init_read_rsp),
-        .obi_read_req_o  (obi_reorg_req[s/2]),
-        .obi_read_rsp_i  (obi_reorg_rsp[s/2]),
+        .obi_read_req_o  (obi_reorg_req_from_dma[s/2]),
+        .obi_read_rsp_i  (obi_reorg_rsp_to_dma[s/2]),
         .init_write_req_o(init_write_req),
         .init_write_rsp_i(init_write_rsp),
-        .obi_write_req_o (obi_write_req[s/2]),
-        .obi_write_rsp_i (obi_write_rsp[s/2]),
+        .obi_write_req_o (obi_write_req_from_dma[s/2]),
+        .obi_write_rsp_i (obi_write_rsp_to_dma[s/2]),
         .busy_o          (idma_busy[s])
       );
 
@@ -588,9 +588,18 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
   // ------------------------------------------------------
   for (genvar s = 0; s < NUM_BIDIR_STREAMS; s++) begin
     if (MUX_READ) begin
-      localparam obi_pkg::obi_cfg_t sbr_obi_cfg = obi_pkg::obi_default_cfg(
-          AXI_ADDR_WIDTH, AXI_DATA_WIDTH, 0, obi_pkg::ObiMinimalOptionalConfig
-      );
+      localparam obi_pkg::obi_cfg_t sbr_obi_cfg = '{
+                                                    UseRReady: 1'b1,
+                                                    CombGnt: 1'b0,
+                                                    AddrWidth: AXI_ADDR_WIDTH,
+                                                    DataWidth: AXI_DATA_WIDTH,
+                                                    IdWidth: 0,
+                                                    Integrity: 1'b0,
+                                                    BeFull:    1'b1,
+                                                    OptionalCfg: obi_pkg::ObiMinimalOptionalConfig
+                                                    };
+
+      // iDMA OBI 
 
       obi_mux #(
         .SbrPortObiCfg     (sbr_obi_cfg),
@@ -602,22 +611,95 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         .mgr_port_obi_req_t(obi_req_t),
         .mgr_port_obi_rsp_t(obi_rsp_t),
         .NumSbrPorts       (2),
-        .NumMaxTrans       (1),
+        .NumMaxTrans       (2),
         .UseIdForRouting   (1'b0)
       ) obi_read_mux_i (
         .clk_i,
         .rst_ni,
         .testmode_i     (test_mode_i),
-        .sbr_ports_req_i({obi_reorg_req, obi_read_req_from_dma}),
-        .sbr_ports_rsp_o({obi_reorg_rsp, obi_read_rsp_to_dma}),
-        .mgr_port_req_o (obi_read_req_muxed),
-        .mgr_port_rsp_i (obi_read_rsp_to_mux)
+        .sbr_ports_req_i({obi_reorg_req_from_dma[s], obi_read_req_from_dma[s]}),
+        .sbr_ports_rsp_o({obi_reorg_rsp_to_dma[s], obi_read_rsp_to_dma[s]}),
+        .mgr_port_req_o (obi_read_req_muxed[s]),
+        .mgr_port_rsp_i (obi_read_rsp_to_mux[s])
       );
+      assign obi_reorg_req_from_rrc = '0;
+      assign obi_reorg_rsp_to_rrc = '0;
     end else begin  // if (MUX_READ)
       // pass through the read req/rsp from/to dma
       assign obi_read_req_muxed  = obi_read_req_from_dma;
       assign obi_read_rsp_to_dma = obi_read_rsp_to_mux;
-    end
+      
+      obi_rready_converter #(
+                             .obi_a_chan_t(obi_a_chan_t),
+                             .obi_r_chan_t(obi_r_chan_t),
+                             .DEPTH(1)
+                             )
+      obi_rready_converter_reorg_i (
+                              .clk_i,
+                              .rst_ni,
+                              .test_mode_i,
+                              .sbr_a_chan_i(obi_reorg_req_from_dma[s].a),
+                              .req_i(obi_reorg_req_from_dma[s].req),
+                              .gnt_o(obi_reorg_rsp_to_dma[s].gnt),
+                              .rready_i(obi_reorg_req_from_dma[s].rready),
+                              .sbr_r_chan_o(obi_reorg_rsp_to_dma[s].r),
+                              .rvalid_o(obi_reorg_rsp_to_dma[s].rvalid),
+                              .mgr_a_chan_o(obi_reorg_req_from_rrc[s].a),
+                              .req_o(obi_reorg_req_from_rrc[s].req),
+                              .rready_o(obi_reorg_req_from_rrc[s].rready),
+                              .mgr_r_chan_i(obi_reorg_rsp_to_rrc[s].r),
+                              .gnt_i(obi_reorg_rsp_to_rrc[s].gnt),
+                              .rvalid_i(obi_reorg_rsp_to_rrc[s].rvalid)
+                              );
+    end // else: !if(MUX_READ)
+    
+      obi_rready_converter #(
+                             .obi_a_chan_t(obi_a_chan_t),
+                             .obi_r_chan_t(obi_r_chan_t),
+                             .DEPTH(1)
+                             )
+      obi_rready_converter_read_i (
+                              .clk_i,
+                              .rst_ni,
+                              .test_mode_i,
+                              .sbr_a_chan_i(obi_read_req_muxed[s].a),
+                              .req_i(obi_read_req_muxed[s].req),
+                              .gnt_o(obi_read_rsp_to_mux[s].gnt),
+                              .rready_i(obi_read_req_muxed[s].rready),
+                              .sbr_r_chan_o(obi_read_rsp_to_mux[s].r),
+                              .rvalid_o(obi_read_rsp_to_mux[s].rvalid),
+                              .mgr_a_chan_o(obi_read_req_from_rrc[s].a),
+                              .req_o(obi_read_req_from_rrc[s].req),
+                              .rready_o(obi_read_req_from_rrc[s].rready),
+                              .mgr_r_chan_i(obi_read_rsp_to_rrc[s].r),
+                              .gnt_i(obi_read_rsp_to_rrc[s].gnt),
+                              .rvalid_i(obi_read_rsp_to_rrc[s].rvalid)
+                              );
+
+
+          
+      obi_rready_converter #(
+                             .obi_a_chan_t(obi_a_chan_t),
+                             .obi_r_chan_t(obi_r_chan_t),
+                             .DEPTH(1)
+                             )
+      obi_rready_converter_wr_i (
+                              .clk_i,
+                              .rst_ni,
+                              .test_mode_i,
+                              .sbr_a_chan_i(obi_write_req_from_dma[s].a),
+                              .req_i(obi_write_req_from_dma[s].req),
+                              .gnt_o(obi_write_rsp_to_dma[s].gnt),
+                              .rready_i(obi_write_req_from_dma[s].rready),
+                              .sbr_r_chan_o(obi_write_rsp_to_dma[s].r),
+                              .rvalid_o(obi_write_rsp_to_dma[s].rvalid),
+                              .mgr_a_chan_o(obi_write_req_from_rrc[s].a),
+                              .req_o(obi_write_req_from_rrc[s].req),
+                              .rready_o(obi_write_req_from_rrc[s].rready),
+                              .mgr_r_chan_i(obi_write_rsp_to_rrc[s].r),
+                              .gnt_i(obi_write_rsp_to_rrc[s].gnt),
+                                 .rvalid_i(obi_write_rsp_to_rrc[s].rvalid)
+                                 );
   end
 
 
@@ -643,15 +725,15 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
     ) i_mem_to_banks_read (
       .clk_i,
       .rst_ni,
-      .req_i(obi_read_req_muxed[s].req),
-      .gnt_o(obi_read_rsp_to_mux[s].gnt),
-      .addr_i(obi_read_req_muxed[s].a.addr),
-      .wdata_i(obi_read_req_muxed[s].a.wdata),
-      .strb_i(obi_read_req_muxed[s].a.be),
+      .req_i(obi_read_req_from_rrc[s].req),
+      .gnt_o(obi_read_rsp_to_rrc[s].gnt),
+      .addr_i(obi_read_req_from_rrc[s].a.addr),
+      .wdata_i(obi_read_req_from_rrc[s].a.wdata),
+      .strb_i(obi_read_req_from_rrc[s].a.be),
       .atop_i('0),
-      .we_i(obi_read_req_muxed[s].a.we),
-      .rvalid_o(obi_read_rsp_to_mux[s].rvalid),
-      .rdata_o(obi_read_rsp_to_mux[s].r.rdata),
+      .we_i(obi_read_req_from_rrc[s].a.we),
+      .rvalid_o(obi_read_rsp_to_rrc[s].rvalid),
+      .rdata_o(obi_read_rsp_to_rrc[s].r.rdata),
       .bank_req_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].req
       }),
@@ -701,15 +783,15 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
       ) i_mem_to_banks_reorg (
         .clk_i,
         .rst_ni,
-        .req_i(obi_reorg_req[s].req),
-        .gnt_o(obi_reorg_rsp[s].gnt),
-        .addr_i(obi_reorg_req[s].a.addr),
-        .wdata_i(obi_reorg_req[s].a.wdata),
-        .strb_i(obi_reorg_req[s].a.be),
+        .req_i(obi_reorg_req_from_rrc[s].req),
+        .gnt_o(obi_reorg_rsp_to_rrc[s].gnt),
+        .addr_i(obi_reorg_req_from_rrc[s].a.addr),
+        .wdata_i(obi_reorg_req_from_rrc[s].a.wdata),
+        .strb_i(obi_reorg_req_from_rrc[s].a.be),
         .atop_i('0),
-        .we_i(obi_reorg_req[s].a.we),
-        .rvalid_o(obi_reorg_rsp[s].rvalid),
-        .rdata_o(obi_reorg_rsp[s].r.rdata),
+        .we_i(obi_reorg_req_from_rrc[s].a.we),
+        .rvalid_o(obi_reorg_rsp_to_rrc[s].rvalid),
+        .rdata_o(obi_reorg_rsp_to_rrc[s].r.rdata),
         .bank_req_o({
           tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].req
         }),
@@ -757,15 +839,15 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
     ) i_mem_to_banks_write (
       .clk_i,
       .rst_ni,
-      .req_i(obi_write_req[s].req),
-      .gnt_o(obi_write_rsp[s].gnt),
-      .addr_i(obi_write_req[s].a.addr),
-      .wdata_i(obi_write_req[s].a.wdata),
-      .strb_i(obi_write_req[s].a.be),
+      .req_i(obi_write_req_from_rrc[s].req),
+      .gnt_o(obi_write_rsp_to_rrc[s].gnt),
+      .addr_i(obi_write_req_from_rrc[s].a.addr),
+      .wdata_i(obi_write_req_from_rrc[s].a.wdata),
+      .strb_i(obi_write_req_from_rrc[s].a.be),
       .atop_i('0),
-      .we_i(obi_write_req[s].a.we),
-      .rvalid_o(obi_write_rsp[s].rvalid),
-      .rdata_o(obi_write_rsp[s].r.rdata),
+      .we_i(obi_write_req_from_rrc[s].a.we),
+      .rvalid_o(obi_write_rsp_to_rrc[s].rvalid),
+      .rdata_o(obi_write_rsp_to_rrc[s].r.rdata),
       .bank_req_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].req
       }),
@@ -782,7 +864,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].be, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].be
       }),
       .bank_atop_o(  /* NOT CONNECTED */),
-      .bank_we_o({tcdm_master_we_0, tcdm_master_we_0}),
+      .bank_we_o({tcdm_master_we_1, tcdm_master_we_0}),
       .bank_rvalid_i({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].r_valid,
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s].r_valid
