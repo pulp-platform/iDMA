@@ -19,7 +19,7 @@ dependencies:
   common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.33.0 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.3  }
   register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.3  }
-  obi:                 { git: "https://github.com/pulp-platform/obi.git",                 version: 0.1.2  }
+  obi:                 { git: "https://github.com/pulp-platform/obi.git",                 rev: "2ee698211db5c007bd0d207ebd646ce79f0472ec"  }
 
 export_include_dirs:
   - src/include
