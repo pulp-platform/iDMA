@@ -3791,7 +3791,7 @@ module idma_legalizer_rw_axi_rw_axis #(
         .page_len_t    ( page_len_t  ),
         .page_addr_t   ( page_addr_t )
     ) i_read_page_splitter (
-        .not_bursting_i    ( 1'b1 ),
+        .not_bursting_i    ( opt_tf_q.src_protocol inside { idma_pkg::AXI_STREAM} ),
 
         .reduce_len_i      ( opt_tf_q.src_reduce_len ),
         .max_llen_i        ( opt_tf_q.src_max_llen   ),
@@ -3818,7 +3818,7 @@ module idma_legalizer_rw_axi_rw_axis #(
         .page_len_t    ( page_len_t  ),
         .page_addr_t   ( page_addr_t )
     ) i_write_page_splitter (
-        .not_bursting_i    ( 1'b1 ),
+        .not_bursting_i    ( opt_tf_q.dst_protocol inside { idma_pkg::AXI_STREAM} ),
 
         .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
         .max_llen_i        ( opt_tf_q.dst_max_llen   ),
@@ -4305,7 +4305,7 @@ module idma_legalizer_r_obi_rw_init_w_axi #(
         .page_len_t    ( page_len_t  ),
         .page_addr_t   ( page_addr_t )
     ) i_write_page_splitter (
-        .not_bursting_i    ( 1'b1 ),
+        .not_bursting_i    ( opt_tf_q.dst_protocol inside { idma_pkg::INIT, idma_pkg::OBI} ),
 
         .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
         .max_llen_i        ( opt_tf_q.dst_max_llen   ),
@@ -4762,7 +4762,7 @@ module idma_legalizer_r_axi_rw_init_rw_obi #(
         .page_len_t    ( page_len_t  ),
         .page_addr_t   ( page_addr_t )
     ) i_read_page_splitter (
-        .not_bursting_i    ( 1'b1 ),
+        .not_bursting_i    ( opt_tf_q.src_protocol inside { idma_pkg::INIT, idma_pkg::OBI} ),
 
         .reduce_len_i      ( opt_tf_q.src_reduce_len ),
         .max_llen_i        ( opt_tf_q.src_max_llen   ),
@@ -7649,10 +7649,10 @@ module idma_backend_rw_axi_rw_axis #(
 
     // Add fall-through register to allow the input to be ready if the output is not. This
     // does not add a cycle of delay
-    assign r_meta_req_tagged = '{
-        src_protocol: r_req.r_dp_req.src_protocol,
-        ar_req:       r_req.ar_req
-    };
+    always_comb begin : assign_r_meta_req
+        r_meta_req_tagged.src_protocol = r_req.r_dp_req.src_protocol;
+        r_meta_req_tagged.ar_req       = r_req.ar_req;
+    end
 
     fall_through_register #(
         .T          ( read_meta_channel_tagged_t )
@@ -7753,10 +7753,10 @@ module idma_backend_rw_axi_rw_axis #(
     //--------------------------------------
     // R-AW channel coupler
     //--------------------------------------
-    assign w_meta_req_tagged = '{
-        dst_protocol: w_req.w_dp_req.dst_protocol,
-        aw_req:       w_req.aw_req
-    };
+    always_comb begin : assign_tagged_w_req // need to have an always_comb block for Questa to not crap itself
+        w_meta_req_tagged.dst_protocol = w_req.w_dp_req.dst_protocol;
+        w_meta_req_tagged.aw_req = w_req.aw_req;
+    end
 
     if (RAWCouplingAvail) begin : gen_r_aw_coupler
         `IDMA_NONSYNTH_BLOCK(
@@ -8343,10 +8343,10 @@ module idma_backend_r_obi_rw_init_w_axi #(
 
     // Add fall-through register to allow the input to be ready if the output is not. This
     // does not add a cycle of delay
-    assign r_meta_req_tagged = '{
-        src_protocol: r_req.r_dp_req.src_protocol,
-        ar_req:       r_req.ar_req
-    };
+    always_comb begin : assign_r_meta_req
+        r_meta_req_tagged.src_protocol = r_req.r_dp_req.src_protocol;
+        r_meta_req_tagged.ar_req       = r_req.ar_req;
+    end
 
     fall_through_register #(
         .T          ( read_meta_channel_tagged_t )
@@ -8449,10 +8449,10 @@ module idma_backend_r_obi_rw_init_w_axi #(
     //--------------------------------------
     // R-AW channel coupler
     //--------------------------------------
-    assign w_meta_req_tagged = '{
-        dst_protocol: w_req.w_dp_req.dst_protocol,
-        aw_req:       w_req.aw_req
-    };
+    always_comb begin : assign_tagged_w_req // need to have an always_comb block for Questa to not crap itself
+        w_meta_req_tagged.dst_protocol = w_req.w_dp_req.dst_protocol;
+        w_meta_req_tagged.aw_req = w_req.aw_req;
+    end
 
     if (RAWCouplingAvail) begin : gen_r_aw_coupler
         `IDMA_NONSYNTH_BLOCK(
@@ -9041,10 +9041,10 @@ module idma_backend_r_axi_rw_init_rw_obi #(
 
     // Add fall-through register to allow the input to be ready if the output is not. This
     // does not add a cycle of delay
-    assign r_meta_req_tagged = '{
-        src_protocol: r_req.r_dp_req.src_protocol,
-        ar_req:       r_req.ar_req
-    };
+    always_comb begin : assign_r_meta_req
+        r_meta_req_tagged.src_protocol = r_req.r_dp_req.src_protocol;
+        r_meta_req_tagged.ar_req       = r_req.ar_req;
+    end
 
     fall_through_register #(
         .T          ( read_meta_channel_tagged_t )
@@ -9149,10 +9149,10 @@ module idma_backend_r_axi_rw_init_rw_obi #(
     //--------------------------------------
     // R-AW channel coupler
     //--------------------------------------
-    assign w_meta_req_tagged = '{
-        dst_protocol: w_req.w_dp_req.dst_protocol,
-        aw_req:       w_req.aw_req
-    };
+    always_comb begin : assign_tagged_w_req // need to have an always_comb block for Questa to not crap itself
+        w_meta_req_tagged.dst_protocol = w_req.w_dp_req.dst_protocol;
+        w_meta_req_tagged.aw_req = w_req.aw_req;
+    end
 
     if (RAWCouplingAvail) begin : gen_r_aw_coupler
         `IDMA_NONSYNTH_BLOCK(
@@ -12105,7 +12105,7 @@ package idma_reg32_3d_reg_pkg;
 
   // Register width information to check illegal writes
   parameter logic [3:0] IDMA_REG32_3D_PERMIT [58] = '{
-    4'b 0011, // index[ 0] IDMA_REG32_3D_CONF
+    4'b 0111, // index[ 0] IDMA_REG32_3D_CONF
     4'b 0011, // index[ 1] IDMA_REG32_3D_STATUS_0
     4'b 0011, // index[ 2] IDMA_REG32_3D_STATUS_1
     4'b 0011, // index[ 3] IDMA_REG32_3D_STATUS_2
@@ -12485,7 +12485,7 @@ package idma_reg64_2d_reg_pkg;
 
   // Register width information to check illegal writes
   parameter logic [3:0] IDMA_REG64_2D_PERMIT [61] = '{
-    4'b 0011, // index[ 0] IDMA_REG64_2D_CONF
+    4'b 0111, // index[ 0] IDMA_REG64_2D_CONF
     4'b 0011, // index[ 1] IDMA_REG64_2D_STATUS_0
     4'b 0011, // index[ 2] IDMA_REG64_2D_STATUS_1
     4'b 0011, // index[ 3] IDMA_REG64_2D_STATUS_2
@@ -12826,7 +12826,7 @@ package idma_reg64_1d_reg_pkg;
 
   // Register width information to check illegal writes
   parameter logic [3:0] IDMA_REG64_1D_PERMIT [55] = '{
-    4'b 0011, // index[ 0] IDMA_REG64_1D_CONF
+    4'b 0111, // index[ 0] IDMA_REG64_1D_CONF
     4'b 0011, // index[ 1] IDMA_REG64_1D_STATUS_0
     4'b 0011, // index[ 2] IDMA_REG64_1D_STATUS_1
     4'b 0011, // index[ 3] IDMA_REG64_1D_STATUS_2
@@ -13550,7 +13550,7 @@ module idma_reg32_3d_reg_top #(
   );
 
 
-  //   F[src_protocol]: 13:11
+  //   F[src_protocol]: 14:12
   prim_subreg #(
     .DW      (3),
     .SWACCESS("RW"),
@@ -13576,7 +13576,7 @@ module idma_reg32_3d_reg_top #(
   );
 
 
-  //   F[dst_protocol]: 15:13
+  //   F[dst_protocol]: 17:15
   prim_subreg #(
     .DW      (3),
     .SWACCESS("RW"),
@@ -14771,10 +14771,10 @@ module idma_reg32_3d_reg_top #(
   assign conf_enable_nd_wd = reg_wdata[11:10];
 
   assign conf_src_protocol_we = addr_hit[0] & reg_we & !reg_error;
-  assign conf_src_protocol_wd = reg_wdata[13:11];
+  assign conf_src_protocol_wd = reg_wdata[14:12];
 
   assign conf_dst_protocol_we = addr_hit[0] & reg_we & !reg_error;
-  assign conf_dst_protocol_wd = reg_wdata[15:13];
+  assign conf_dst_protocol_wd = reg_wdata[17:15];
 
   assign status_0_re = addr_hit[1] & reg_re & !reg_error;
 
@@ -14911,8 +14911,8 @@ module idma_reg32_3d_reg_top #(
         reg_rdata_next[6:4] = conf_src_max_llen_qs;
         reg_rdata_next[9:7] = conf_dst_max_llen_qs;
         reg_rdata_next[11:10] = conf_enable_nd_qs;
-        reg_rdata_next[13:11] = conf_src_protocol_qs;
-        reg_rdata_next[15:13] = conf_dst_protocol_qs;
+        reg_rdata_next[14:12] = conf_src_protocol_qs;
+        reg_rdata_next[17:15] = conf_dst_protocol_qs;
       end
 
       addr_hit[1]: begin
@@ -15629,7 +15629,7 @@ module idma_reg64_2d_reg_top #(
   );
 
 
-  //   F[src_protocol]: 12:10
+  //   F[src_protocol]: 13:11
   prim_subreg #(
     .DW      (3),
     .SWACCESS("RW"),
@@ -15655,7 +15655,7 @@ module idma_reg64_2d_reg_top #(
   );
 
 
-  //   F[dst_protocol]: 14:12
+  //   F[dst_protocol]: 16:14
   prim_subreg #(
     .DW      (3),
     .SWACCESS("RW"),
@@ -16937,10 +16937,10 @@ module idma_reg64_2d_reg_top #(
   assign conf_enable_nd_wd = reg_wdata[10];
 
   assign conf_src_protocol_we = addr_hit[0] & reg_we & !reg_error;
-  assign conf_src_protocol_wd = reg_wdata[12:10];
+  assign conf_src_protocol_wd = reg_wdata[13:11];
 
   assign conf_dst_protocol_we = addr_hit[0] & reg_we & !reg_error;
-  assign conf_dst_protocol_wd = reg_wdata[14:12];
+  assign conf_dst_protocol_wd = reg_wdata[16:14];
 
   assign status_0_re = addr_hit[1] & reg_re & !reg_error;
 
@@ -17086,8 +17086,8 @@ module idma_reg64_2d_reg_top #(
         reg_rdata_next[6:4] = conf_src_max_llen_qs;
         reg_rdata_next[9:7] = conf_dst_max_llen_qs;
         reg_rdata_next[10] = conf_enable_nd_qs;
-        reg_rdata_next[12:10] = conf_src_protocol_qs;
-        reg_rdata_next[14:12] = conf_dst_protocol_qs;
+        reg_rdata_next[13:11] = conf_src_protocol_qs;
+        reg_rdata_next[16:14] = conf_dst_protocol_qs;
       end
 
       addr_hit[1]: begin
@@ -17798,7 +17798,7 @@ module idma_reg64_1d_reg_top #(
   );
 
 
-  //   F[src_protocol]: 12:10
+  //   F[src_protocol]: 13:11
   prim_subreg #(
     .DW      (3),
     .SWACCESS("RW"),
@@ -17824,7 +17824,7 @@ module idma_reg64_1d_reg_top #(
   );
 
 
-  //   F[dst_protocol]: 14:12
+  //   F[dst_protocol]: 16:14
   prim_subreg #(
     .DW      (3),
     .SWACCESS("RW"),
@@ -18932,10 +18932,10 @@ module idma_reg64_1d_reg_top #(
   assign conf_enable_nd_wd = reg_wdata[10];
 
   assign conf_src_protocol_we = addr_hit[0] & reg_we & !reg_error;
-  assign conf_src_protocol_wd = reg_wdata[12:10];
+  assign conf_src_protocol_wd = reg_wdata[13:11];
 
   assign conf_dst_protocol_we = addr_hit[0] & reg_we & !reg_error;
-  assign conf_dst_protocol_wd = reg_wdata[14:12];
+  assign conf_dst_protocol_wd = reg_wdata[16:14];
 
   assign status_0_re = addr_hit[1] & reg_re & !reg_error;
 
@@ -19063,8 +19063,8 @@ module idma_reg64_1d_reg_top #(
         reg_rdata_next[6:4] = conf_src_max_llen_qs;
         reg_rdata_next[9:7] = conf_dst_max_llen_qs;
         reg_rdata_next[10] = conf_enable_nd_qs;
-        reg_rdata_next[12:10] = conf_src_protocol_qs;
-        reg_rdata_next[14:12] = conf_dst_protocol_qs;
+        reg_rdata_next[13:11] = conf_src_protocol_qs;
+        reg_rdata_next[16:14] = conf_dst_protocol_qs;
       end
 
       addr_hit[1]: begin
@@ -19444,15 +19444,16 @@ module idma_reg32_3d #(
       .devmode_i ( 1'b1                 )
     );
 
+    logic read_happens;
     // DMA backpressure
     always_comb begin : proc_dma_backpressure
       // ready signal
       dma_ctrl_rsp_o[i]       = dma_ctrl_rsp[i];
-      dma_ctrl_rsp_o[i].ready = arb_ready[i];
+      dma_ctrl_rsp_o[i].ready = read_happens ? arb_ready[i] : dma_ctrl_rsp[i];
     end
 
     // valid signals
-    logic read_happens;
+  
     always_comb begin : proc_launch
         read_happens = 1'b0;
         for (int c = 0; c < NumStreams; c++) begin
@@ -19501,10 +19502,10 @@ module idma_reg32_3d #(
       // Disable higher dimensions
       if ( dma_reg2hw[i].conf.enable_nd.q == 0) begin
         arb_dma_req[i].d_req[0].reps = '0;
-        arb_dma_req[i].d_req[1].reps = '0;
+        arb_dma_req[i].d_req[1].reps = 'd1;
       end
       else if ( dma_reg2hw[i].conf.enable_nd.q == 1) begin
-        arb_dma_req[i].d_req[1].reps = '0;
+        arb_dma_req[i].d_req[1].reps = 'd1;
       end
     end
 
@@ -19636,15 +19637,16 @@ module idma_reg64_2d #(
       .devmode_i ( 1'b1                 )
     );
 
+    logic read_happens;
     // DMA backpressure
     always_comb begin : proc_dma_backpressure
       // ready signal
       dma_ctrl_rsp_o[i]       = dma_ctrl_rsp[i];
-      dma_ctrl_rsp_o[i].ready = arb_ready[i];
+      dma_ctrl_rsp_o[i].ready = read_happens ? arb_ready[i] : dma_ctrl_rsp[i];
     end
 
     // valid signals
-    logic read_happens;
+  
     always_comb begin : proc_launch
         read_happens = 1'b0;
         for (int c = 0; c < NumStreams; c++) begin
@@ -19692,7 +19694,7 @@ module idma_reg64_2d #(
 
       // Disable higher dimensions
       if ( dma_reg2hw[i].conf.enable_nd.q == 0) begin
-        arb_dma_req[i].d_req[0].reps = '0;
+        arb_dma_req[i].d_req[0].reps = 'd1;
       end
     end
 
@@ -19824,15 +19826,16 @@ module idma_reg64_1d #(
       .devmode_i ( 1'b1                 )
     );
 
+    logic read_happens;
     // DMA backpressure
     always_comb begin : proc_dma_backpressure
       // ready signal
       dma_ctrl_rsp_o[i]       = dma_ctrl_rsp[i];
-      dma_ctrl_rsp_o[i].ready = arb_ready[i];
+      dma_ctrl_rsp_o[i].ready = read_happens ? arb_ready[i] : dma_ctrl_rsp[i];
     end
 
     // valid signals
-    logic read_happens;
+  
     always_comb begin : proc_launch
         read_happens = 1'b0;
         for (int c = 0; c < NumStreams; c++) begin
