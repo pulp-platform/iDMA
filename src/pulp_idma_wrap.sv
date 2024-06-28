@@ -453,12 +453,12 @@ module pulp_idma_wrap #(
 
       // implement zero memory using init protocol
       assign init_read_rsp.rsp_chan.init  = '0;
-      assign init_read_rsp.rsp_valid      = init_read_req.req_valid;  // might need spill register
+      assign init_read_rsp.rsp_valid      = 1'b1;
       assign init_read_rsp.req_ready      = 1'b1;
 
       // implement /dev/null
       assign init_write_rsp.rsp_chan.init = '0;
-      assign init_write_rsp.rsp_valid     = init_read_req.req_valid;  // might need spill register
+      assign init_write_rsp.rsp_valid     = 1'b1;
       assign init_write_rsp.req_ready     = 1'b1;
 
 
@@ -572,12 +572,12 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
 
       // implement zero memory using init protocol
       assign init_read_rsp.rsp_chan.init  = '0;
-      assign init_read_rsp.rsp_valid      = init_read_req.req_valid;  // might need spill register
+      assign init_read_rsp.rsp_valid      = 1'b1;
       assign init_read_rsp.req_ready      = 1'b1;
 
       // implement /dev/null
       assign init_write_rsp.rsp_chan.init = '0;
-      assign init_write_rsp.rsp_valid     = init_read_req.req_valid;  // might need spill register
+      assign init_write_rsp.rsp_valid     = 1'b1;
       assign init_write_rsp.req_ready     = 1'b1;
     end : gen_cpy_in
   end : gen_streams
