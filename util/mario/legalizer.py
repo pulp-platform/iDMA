@@ -56,7 +56,7 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
                 data_path = indent_block(db[wp]['legalizer_write_data_path'], 3 - swp, 4)
                 db[wp]['legalizer_write_data_path'] = data_path
 
-        
+
         has_page_read_bursting = eval_key(used_read_prots, 'bursts', 'split_at_page_boundary', db)
         has_pow2_read_bursting = eval_key(used_read_prots, 'bursts', 'only_pow2', db)
         has_read_bursting = has_page_read_bursting or has_pow2_read_bursting

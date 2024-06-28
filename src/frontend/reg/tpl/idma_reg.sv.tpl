@@ -70,7 +70,7 @@ module idma_${identifier} #(
           end
       end
   end
-              
+
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
 
@@ -96,7 +96,7 @@ module idma_${identifier} #(
     end
 
     // valid signals
-  
+
     always_comb begin : proc_launch
         read_happens = 1'b0;
         for (int c = 0; c < NumStreams; c++) begin
