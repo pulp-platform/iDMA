@@ -19,7 +19,7 @@ dependencies:
   common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.33.0 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.3  }
   register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.3  }
-  obi:                 { git: "https://github.com/pulp-platform/obi.git",                 rev: "2ee698211db5c007bd0d207ebd646ce79f0472ec"  }
+  obi:                 { git: "https://github.com/pulp-platform/obi.git",                 version: 0.1.2  }
 
 export_include_dirs:
   - src/include
@@ -52,8 +52,6 @@ sources:
       - src/backend/idma_obi_write.sv
       - src/backend/idma_tilelink_read.sv
       - src/backend/idma_tilelink_write.sv
-      # Level 2
-      - src/pulp_idma_wrap.sv
 
   # Generated content
   - target: rtl
@@ -70,7 +68,7 @@ sources:
       - src/midend/idma_rt_midend.sv
 
   # RISC-V opcode package for ooc use of inst64
-  - target: rtl
+  - target: all(rtl,snitch_cluster)
     files:
       # Level 0
       - src/frontend/inst64/idma_inst64_snitch_pkg.sv
