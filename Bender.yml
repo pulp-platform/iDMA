@@ -124,3 +124,21 @@ sources:
   - target: idma_test
     files:
       - target/rtl/tb_idma_generated.sv
+
+  # Verilator
+  - target: verilator_test
+    defines:
+      PORT_AXI4: ~
+      PORT_OBI: ~
+      PORT_R_OBI: ~
+      PORT_W_AXI4: ~
+      BACKEND_NAME: idma_backend_r_obi_w_axi
+    files:
+      - test/backend/driver.cpp
+      - test/backend/tb_idma_backend.sv
+      - test/drivers/axi_driver_slave.sv
+      - test/drivers/axi_read.sv
+      - test/drivers/axi_write.sv
+      - test/drivers/obi_driver_slave.sv
+      - test/drivers/obi_read.sv
+      - test/drivers/obi_write.sv

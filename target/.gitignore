@@ -1,3 +1,5 @@
 doc
 morty
-sim/verilator
+sim/verilator/*
+!sim/verilator/driver.cpp
+!sim/verilator/idma.sh

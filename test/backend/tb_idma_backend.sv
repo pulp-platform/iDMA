@@ -1,0 +1,360 @@
+// Copyright 2024 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Authors:
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
+// - Tobias Senti <tsenti@ethz.ch>
+// - Liam Braun <libraun@ethz.ch>
+
+`ifdef PORT_AXI4
+`include "axi/typedef.svh"
+`include "../include/axi/assign.svh"
+`endif
+
+`ifdef PORT_OBI
+`include "obi/typedef.svh"
+`endif
+
+`include "memory_types.svh"
+`include "idma/typedef.svh"
+
+`ifndef BACKEND_NAME
+`define BACKEND_NAME idma_backend_unknown
+`endif
+
+/// Synthesis wrapper for the iDMA backend. Unpacks all the interfaces to simple logic vectors
+module tb_idma_backend #(
+    parameter int unsigned BufferDepth           = 3,
+    parameter int unsigned NumAxInFlight         = 3,
+    parameter int unsigned DataWidth             = 32,
+    parameter int unsigned AddrWidth             = 32,
+    parameter int unsigned UserWidth             = 1,
+    // ID is currently used to differentiate transfers in testbench. We need to fix this
+    // eventually.
+    parameter int unsigned AxiIdWidth            = 12,
+    parameter int unsigned TFLenWidth            = 32,
+    parameter int unsigned MemSysDepth           = 0,
+    parameter bit          AXI_IdealMemory       = 1,
+    parameter int unsigned AXI_MemNumReqOutst    = 1,
+    parameter int unsigned AXI_MemLatency        = 0,
+    parameter bit          OBI_IdealMemory       = 1,
+    parameter int unsigned OBI_MemNumReqOutst    = 1,
+    parameter int unsigned OBI_MemLatency        = 0,
+    parameter bit          CombinedShifter       = 1'b0,
+    parameter int unsigned WatchDogNumCycles     = 100,
+    parameter bit          MaskInvalidData       = 1,
+    parameter bit          RAWCouplingAvail      = 0,
+    parameter bit          HardwareLegalizer     = 1,
+    parameter bit          RejectZeroTransfers   = 1,
+    parameter bit          ErrorHandling         = 0,
+    parameter bit          DmaTracing            = 1
+)(
+    output idma_pkg::idma_busy_t   idma_busy_o
+);
+
+    // timing parameters
+    localparam time TA  =  1ns;
+    localparam time TT  =  9ns;
+    localparam time TCK = 10ns;
+
+    /// Define the error handling capability
+    localparam idma_pkg::error_cap_e ErrorCap = ErrorHandling ? idma_pkg::ERROR_HANDLING :
+                                                                idma_pkg::NO_ERROR_HANDLING;
+
+    // TB parameters
+    // dependent parameters
+    localparam int unsigned StrbWidth       = DataWidth / 8;
+    localparam int unsigned OffsetWidth     = $clog2(StrbWidth);
+    typedef logic [AddrWidth-1:0]   addr_t;
+    typedef logic [DataWidth-1:0]   data_t;
+    typedef logic [StrbWidth-1:0]   strb_t;
+    typedef logic [UserWidth-1:0]   user_t;
+    typedef logic [AxiIdWidth-1:0]  id_t;
+    typedef logic [OffsetWidth-1:0] offset_t;
+    typedef logic [TFLenWidth-1:0]  tf_len_t;
+    
+    // Clock reset signals
+    logic clk;
+    logic rst_n;
+
+    // AXI4+ATOP typedefs
+    `ifdef PORT_AXI4
+`AXI_TYPEDEF_AW_CHAN_T(axi_aw_chan_t, addr_t, id_t, user_t)
+`AXI_TYPEDEF_W_CHAN_T(axi_w_chan_t, data_t, strb_t, user_t)
+`AXI_TYPEDEF_B_CHAN_T(axi_b_chan_t, id_t, user_t)
+
+`AXI_TYPEDEF_AR_CHAN_T(axi_ar_chan_t, addr_t, id_t, user_t)
+`AXI_TYPEDEF_R_CHAN_T(axi_r_chan_t, data_t, id_t, user_t)
+
+`AXI_TYPEDEF_REQ_T(axi_req_t, axi_aw_chan_t, axi_w_chan_t, axi_ar_chan_t)
+`AXI_TYPEDEF_RESP_T(axi_rsp_t, axi_b_chan_t, axi_r_chan_t)
+    `endif
+
+
+    // OBI typedefs
+    `ifdef PORT_OBI
+`OBI_TYPEDEF_MINIMAL_A_OPTIONAL(a_optional_t)
+`OBI_TYPEDEF_MINIMAL_R_OPTIONAL(r_optional_t)
+
+`OBI_TYPEDEF_TYPE_A_CHAN_T(obi_a_chan_t, addr_t, data_t, strb_t, id_t, a_optional_t)
+`OBI_TYPEDEF_TYPE_R_CHAN_T(obi_r_chan_t, data_t, id_t, r_optional_t)
+
+`OBI_TYPEDEF_REQ_T(obi_req_t, obi_a_chan_t)
+`OBI_TYPEDEF_RSP_T(obi_rsp_t, obi_r_chan_t)
+    `endif
+
+
+    `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, id_t, addr_t, tf_len_t)
+    `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
+
+    idma_req_t idma_req [$];
+    idma_rsp_t idma_rsp [$];
+
+    `ifdef PORT_R_AXI4
+    typedef struct packed {
+        axi_ar_chan_t ar_chan;
+    } axi_read_meta_channel_t;
+    typedef struct packed {
+        axi_read_meta_channel_t axi;
+    } read_meta_channel_t;
+    
+    axi_req_t axi_read_req;
+    axi_rsp_t axi_read_rsp;
+    `elsif PORT_R_OBI
+    typedef struct packed {
+        obi_a_chan_t a_chan;
+    } obi_read_meta_channel_t;
+    typedef struct packed {
+        obi_read_meta_channel_t obi;
+    } read_meta_channel_t;
+    
+    obi_req_t obi_read_req;
+    obi_rsp_t obi_read_rsp;
+    `endif
+
+    `ifdef PORT_W_AXI4
+    typedef struct packed {
+        axi_aw_chan_t aw_chan;
+    } axi_write_meta_channel_t;
+    typedef struct packed {
+        axi_write_meta_channel_t axi;
+    } write_meta_channel_t;
+    
+    axi_req_t axi_write_req;
+    axi_rsp_t axi_write_rsp;
+    `elsif PORT_W_OBI
+    typedef struct packed {
+        obi_a_chan_t a_chan;
+    } obi_write_meta_channel_t;
+    typedef struct packed {
+        obi_write_meta_channel_t obi;
+    } write_meta_channel_t;
+
+    obi_req_t obi_write_req;
+    obi_rsp_t obi_write_rsp;
+    `endif
+
+    idma_req_t curr_idma_req;
+    idma_rsp_t curr_idma_rsp;
+
+    logic test = 0;
+    logic req_valid;
+    logic req_ready;
+    logic rsp_valid;
+    logic rsp_ready;
+    logic                   eh_req_valid_i;
+    logic                   eh_req_ready_o;
+    idma_pkg::idma_eh_req_t eh_req_i;
+
+    clk_rst_gen #(
+        .ClkPeriod    ( TCK  ),
+        .RstClkCycles ( 1    )
+    ) i_clk_rst_gen (
+        .clk_o        ( clk    ),
+        .rst_no       ( rst_n  )
+    );
+
+    `BACKEND_NAME #(
+        .CombinedShifter      ( CombinedShifter      ),
+        .DataWidth            ( DataWidth            ),
+        .AddrWidth            ( AddrWidth            ),
+        .AxiIdWidth           ( AxiIdWidth           ),
+        .UserWidth            ( UserWidth            ),
+        .TFLenWidth           ( TFLenWidth           ),
+        .MaskInvalidData      ( MaskInvalidData      ),
+        .BufferDepth          ( BufferDepth          ),
+        .RAWCouplingAvail     ( RAWCouplingAvail     ),
+        .HardwareLegalizer    ( HardwareLegalizer    ),
+        .RejectZeroTransfers  ( RejectZeroTransfers  ),
+        .ErrorCap             ( ErrorCap             ),
+        .NumAxInFlight        ( NumAxInFlight        ),
+        .MemSysDepth          ( MemSysDepth          ),
+        .idma_req_t           ( idma_req_t           ),
+        .idma_rsp_t           ( idma_rsp_t           ),
+        .idma_eh_req_t        ( idma_pkg::idma_eh_req_t),
+        .idma_busy_t          ( idma_pkg::idma_busy_t  ),
+        `ifdef PORT_AXI4
+        .axi_req_t ( axi_req_t ),
+        .axi_rsp_t ( axi_rsp_t ),
+        `endif
+        `ifdef PORT_OBI
+        .obi_req_t ( obi_req_t ),
+        .obi_rsp_t ( obi_rsp_t ),
+        `endif
+        .write_meta_channel_t ( write_meta_channel_t ),
+        .read_meta_channel_t  ( read_meta_channel_t  )
+    ) i_idma_backend  (
+        .clk_i                ( clk             ),
+        .rst_ni               ( rst_n           ),
+        .testmode_i           ( 1'b0            ),
+        .idma_req_i           ( curr_idma_req        ),
+        .req_valid_i          ( req_valid       ),
+        .req_ready_o          ( req_ready       ),
+        .idma_rsp_o           ( curr_idma_rsp        ),
+        .rsp_valid_o          ( rsp_valid       ),
+        .rsp_ready_i          ( rsp_ready       ),
+        .idma_eh_req_i        ( eh_req_i     ),
+        .eh_req_valid_i       ( eh_req_valid_i    ),
+        .eh_req_ready_o       ( eh_req_ready_o    ),
+        `ifdef PORT_R_AXI4
+        .axi_read_req_o       ( axi_read_req    ),
+        .axi_read_rsp_i       ( axi_read_rsp    ),
+        `elsif PORT_R_OBI
+        .obi_read_req_o       ( obi_read_req    ),
+        .obi_read_rsp_i       ( obi_read_rsp    ),
+        `endif
+        `ifdef PORT_W_AXI4
+        .axi_write_req_o      ( axi_write_req   ),
+        .axi_write_rsp_i      ( axi_write_rsp   ),
+        `elsif PORT_W_OBI
+        .obi_write_req_o      ( obi_write_req   ),
+        .obi_write_rsp_i      ( obi_write_rsp   ),
+        `endif
+        .busy_o               ( idma_busy_o            )
+    );
+
+    export "DPI-C" function add_request;
+    idma_req_t new_idma_req;
+    function add_request(input int length, input int src_addr, input int dst_addr);
+        new_idma_req = '0;
+        new_idma_req.length = length;
+        new_idma_req.src_addr = src_addr;
+        new_idma_req.dst_addr = dst_addr;
+        idma_req.push_back(new_idma_req);
+    endfunction
+
+    always @(posedge clk) begin
+        if (idma_req.size() > 0) begin
+            curr_idma_req = '0;
+            curr_idma_req.dst_addr = idma_req[0].dst_addr;
+            curr_idma_req.src_addr = idma_req[0].src_addr;
+            curr_idma_req.length = idma_req[0].length;
+            `ifdef PORT_R_AXI4
+            curr_idma_req.opt.src_protocol = idma_pkg::AXI;
+            `elsif PORT_R_OBI
+            curr_idma_req.opt.src_protocol = idma_pkg::OBI;
+            `endif
+            `ifdef PORT_W_AXI4
+            curr_idma_req.opt.dst_protocol = idma_pkg::AXI;
+            `elsif PORT_W_OBI
+            curr_idma_req.opt.dst_protocol = idma_pkg::OBI;
+            `endif
+            curr_idma_req.opt.beo.decouple_aw = '0;
+            curr_idma_req.opt.beo.decouple_rw = '0;
+            curr_idma_req.opt.beo.src_max_llen = 32;
+            curr_idma_req.opt.beo.dst_max_llen = 32;
+            curr_idma_req.opt.beo.src_reduce_len = '1;
+            curr_idma_req.opt.beo.dst_reduce_len = '1;
+
+            eh_req_i = '0;
+            eh_req_valid_i = '0;
+
+            req_valid = 1;
+
+            idma_req.pop_back();
+
+            $display("Sending request");
+            while (req_ready != '1) #TA;
+            #TA req_valid = 0;
+            $display("Request sent");
+
+            rsp_ready = '1;
+            
+            while (rsp_valid != '1) #TA;
+            $display("Request complete.");
+
+            $finish;
+        end
+    end
+
+    initial begin
+        #10ns rst_n = '0;
+        #10ns rst_n = '1;
+
+        $dumpfile("idma_trace.vcd");
+        $dumpvars(0);
+
+        #500000ns $display("Terminating, no response received in time.");
+        $finish;
+    end
+
+    `ifdef PORT_R_AXI4
+    axi_read #(
+        .axi_req_t(axi_req_t),
+        .axi_rsp_t(axi_rsp_t),
+        .DataWidth(DataWidth),
+        .AddrWidth(AddrWidth),
+        .UserWidth(UserWidth),
+        .AxiIdWidth(AxiIdWidth),
+        .TA(TA),
+        .TT(TT)
+    ) i_axi_read (
+        .axi_read_req (axi_read_req),
+        .axi_read_rsp (axi_read_rsp),
+        .clk_i(clk)
+    );
+    `elsif PORT_R_OBI
+    obi_read #(
+        .obi_req_t(obi_req_t),
+        .obi_rsp_t(obi_rsp_t),
+        .TA(TA),
+        .TT(TT)
+    ) i_obi_read (
+        .obi_read_req(obi_read_req),
+        .obi_read_rsp(obi_read_rsp),
+        .clk_i(clk),
+        .rst_ni(rst_n)
+    );
+    `endif
+
+    `ifdef PORT_W_AXI4
+    axi_write #(
+        .axi_req_t(axi_req_t),
+        .axi_rsp_t(axi_rsp_t),
+        .DataWidth(DataWidth),
+        .AddrWidth(AddrWidth),
+        .UserWidth(UserWidth),
+        .AxiIdWidth(AxiIdWidth),
+        .TA(TA),
+        .TT(TT)
+    ) i_axi_write (
+        .axi_write_req(axi_write_req),
+        .axi_write_rsp(axi_write_rsp),
+        .clk_i(clk)
+    );
+    `elsif PORT_W_OBI
+    obi_write #(
+        .obi_req_t(obi_req_t),
+        .obi_rsp_t(obi_rsp_t),
+        .TA(TA),
+        .TT(TT)
+    ) i_obi_write (
+        .obi_write_req(obi_write_req),
+        .obi_write_rsp(obi_write_rsp),
+        .clk_i(clk),
+        .rst_ni(rst_n)
+    );
+    `endif
+endmodule
+
