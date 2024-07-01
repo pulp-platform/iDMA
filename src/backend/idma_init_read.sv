@@ -122,7 +122,7 @@ module idma_init_read #(
     // once valid data is applied, it can be pushed in all the selected (mask_in) buffers
     // be sure the response channel is ready
     assign in_valid          = read_rsp_i.rsp_valid & in_ready & r_dp_ready_i;
-    assign buffer_in_valid_o = in_valid ? mask_in : '0;
+    assign buffer_in_valid_o = in_valid ? (r_dp_valid_i ? mask_in : '0 ):'0;
 
     // r_dp_ready_o is triggered by the last element arriving from the read
     assign r_dp_ready_o   = r_dp_valid_i & r_dp_ready_i & read_rsp_i.rsp_valid & in_ready;
