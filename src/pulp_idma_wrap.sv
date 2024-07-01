@@ -410,7 +410,7 @@ module pulp_idma_wrap #(
         .BufferDepth         (32'd3),
         .TFLenWidth          (TFLenWidth),
         .MemSysDepth         (32'd0),
-        .CombinedShifter     (1'b1),
+        .CombinedShifter     (1'b0),
         .RAWCouplingAvail    (1'b0),
         .MaskInvalidData     (1'b0),
         .HardwareLegalizer   (1'b1),
@@ -451,16 +451,40 @@ module pulp_idma_wrap #(
         .busy_o          (idma_busy[s])
       );
 
-      // implement zero memory using init protocol
+      // use a spill register to only give responses when a request was
+      // (or is) asserted
+      spill_register #(
+                       .T(logic[-1:0])
+                       )
+      i_init_read_rsp_reflect (
+                               .clk_i,
+                               .rst_ni,
+                               .valid_i(init_read_req.req_valid),
+                               .ready_o(init_read_rsp.req_ready),
+                               .data_i('0), // not used
+                               .valid_o(init_read_rsp.rsp_valid),
+                               .ready_i(init_read_req.rsp_ready),
+                               .data_o()
+                               );
+
+      //implement zero memory using init protocol
       assign init_read_rsp.rsp_chan.init  = '0;
-      assign init_read_rsp.rsp_valid      = 1'b1;
-      assign init_read_rsp.req_ready      = 1'b1;
-
       // implement /dev/null
-      assign init_write_rsp.rsp_chan.init = '0;
-      assign init_write_rsp.rsp_valid     = 1'b1;
-      assign init_write_rsp.req_ready     = 1'b1;
+      spill_register #(
+                       .T(logic[-1:0])
+                       )
+      i_init_write_rsp_reflect (
+                                .clk_i,
+                                .rst_ni,
+                                .valid_i(init_write_req.req_valid),
+                                .ready_o(init_write_rsp.req_ready),
+                                .data_i('0), // not used
+                                .valid_o(init_write_rsp.rsp_valid),
+                                .ready_i(init_write_req.rsp_ready),
+                                .data_o()
+                                );
 
+      assign init_write_rsp.rsp_chan.init = '0;
 
       // odd channels: copy in data
     end else begin : gen_cpy_in
@@ -527,7 +551,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         .BufferDepth         (32'd3),
         .TFLenWidth          (TFLenWidth),
         .MemSysDepth         (32'd0),
-        .CombinedShifter     (1'b1),
+        .CombinedShifter     (1'b0),
         .RAWCouplingAvail    (1'b0),
         .MaskInvalidData     (1'b0),
         .HardwareLegalizer   (1'b1),
@@ -570,15 +594,38 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         .busy_o          (idma_busy[s])
       );
 
-      // implement zero memory using init protocol
+      // use a spill register to only give responses when a request was
+      // (or is) asserted
+      spill_register #(
+                              .T(logic[-1:0])
+                              )
+      i_init_read_rsp_reflect (
+                          .clk_i,
+                          .rst_ni,
+                          .valid_i(init_read_req.req_valid),
+                          .ready_o(init_read_rsp.req_ready),
+                          .data_i('0), // not used
+                          .valid_o(init_read_rsp.rsp_valid),
+                          .ready_i(init_read_req.rsp_ready),
+                          .data_o()
+                          );
+      //implement zero memory using init protocol
       assign init_read_rsp.rsp_chan.init  = '0;
-      assign init_read_rsp.rsp_valid      = 1'b1;
-      assign init_read_rsp.req_ready      = 1'b1;
-
       // implement /dev/null
+      spill_register #(
+                              .T(logic[-1:0])
+                              )
+      i_init_write_rsp_reflect (
+                               .clk_i,
+                               .rst_ni,
+                               .valid_i(init_write_req.req_valid),
+                               .ready_o(init_write_rsp.req_ready),
+                               .data_i('0), // not used
+                               .valid_o(init_write_rsp.rsp_valid),
+                               .ready_i(init_write_req.rsp_ready),
+                               .data_o()
+                               );
       assign init_write_rsp.rsp_chan.init = '0;
-      assign init_write_rsp.rsp_valid     = 1'b1;
-      assign init_write_rsp.req_ready     = 1'b1;
     end : gen_cpy_in
   end : gen_streams
 
