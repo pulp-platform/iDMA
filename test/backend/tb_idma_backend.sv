@@ -16,7 +16,6 @@
 `include "obi/typedef.svh"
 `endif
 
-`include "memory_types.svh"
 `include "idma/typedef.svh"
 
 `ifndef BACKEND_NAME

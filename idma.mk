@@ -384,6 +384,8 @@ IDMA_VLT_ARGS  := --cc \
 IDMA_VLT_TOP     ?=
 IDMA_VLT_PARAMS  ?=
 
+IDMA_VLT_TEST_DIR   := $(IDMA_ROOT)/test/backend
+
 .PRECIOUS: $(IDMA_VLT_DIR)/%_elab.log
 
 $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
@@ -399,9 +401,8 @@ $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
 	rm -f $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
 	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
-$(IDMA_VLT_DIR)/idma.f: Bender.yml
-	mkdir -p $(IDMA_VLT_DIR)
-	$(BENDER) script verilator -t rtl -t idma_simulation -t snitch_cluster -t verilator -t verilator_test -DSYNTHESIS -DVERILATOR > $@
+$(IDMA_VLT_TEST_DIR)/idma.f: Bender.yml
+	$(BENDER) script verilator -t rtl -t idma_simulation -t snitch_cluster -t verilator -t verilator_test > $@
 
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
@@ -486,6 +487,6 @@ idma_pickle_all: $(IDMA_PICKLE_ALL)
 
 idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) $(IDMA_WAVE_ALL)
 
-idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl $(IDMA_VLT_DIR)/idma.f
+idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl $(IDMA_VLT_TEST_DIR)/idma.f
 
 idma_all: idma_hw_all idma_sim_all idma_doc_all idma_pickle_all
