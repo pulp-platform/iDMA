@@ -398,6 +398,7 @@ _rsp_t ${protocol}_write_rsp_i,
                 // generate new response
                 rsp_valid_o             = 1'b1;
                 idma_rsp_o              =  '0;
+                idma_rsp_o.last         = 1'b1;
                 idma_rsp_o.error        = 1'b1;
                 idma_rsp_o.pld.err_type = idma_pkg::BACKEND;
             end
