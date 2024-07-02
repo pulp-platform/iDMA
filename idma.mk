@@ -5,7 +5,7 @@
 # Authors:
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
-BENDER      ?= ./bender
+BENDER      ?= bender
 CAT         ?= cat
 DOT         ?= dot
 GIT         ?= git
@@ -402,7 +402,9 @@ $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
 	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
 $(IDMA_VLT_TEST_DIR)/idma.f: Bender.yml
-	$(BENDER) script verilator -t rtl -t idma_simulation -t snitch_cluster -t verilator -t verilator_test > $@
+	$(BENDER) script verilator -t rtl -t snitch_cluster -t verilator -t verilator_test > $@
+	$(BENDER) script verilator -p common_verification -t simulation >> $@
+	sed -i '/rand_verif_pkg.sv/d' $@
 
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)

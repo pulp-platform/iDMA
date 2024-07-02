@@ -37,3 +37,59 @@ jobs:
           repo: github-mirror/idma
           token: ${{ secrets.GITLAB_TOKEN }}
           poll-count: 10800 # (10800/60=180min=3hours)
+
+  check-verilator:
+    runs-on: ubuntu-22.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+          cache: pip
+      -
+        name: Install Python requirements
+        run: pip install -r requirements.txt
+      -
+        name: Install Bender
+        uses: pulp-platform/pulp-actions/bender-install@v2
+        with:
+          version: 0.27.3
+      -
+        name: Install Morty
+        run: |
+          curl --proto '=https' --tlsv1.2 -sLO https://github.com/pulp-platform/morty/releases/download/v0.9.0/morty-ubuntu.22.04-x86_64.tar.gz
+          tar -xvf morty-ubuntu.22.04-x86_64.tar.gz morty
+          rm -f morty-ubuntu.22.04-x86_64.tar.gz
+          chmod 777 morty
+          echo "PATH=.:$PATH" >> ${GITHUB_ENV}
+      - name: Cache Verilator
+        uses: actions/cache@v4
+        with:
+          path: ~/verilator
+          key: ${{ runner.os }}-verilator
+      -
+        name: Install verilator
+        shell: bash
+        run: |
+          sudo apt-get install git help2man perl python3 make autoconf g++ flex bison ccache libfl2 libfl-dev
+          [ -d ~/verilator ] || git clone -b nba-enable-initial-final https://github.com/RootCubed/verilator.git ~/verilator
+          cd ~/verilator
+          git pull
+          autoconf
+          ./configure
+          make -j `nproc`
+          sudo make install
+      -
+        name: Build sim
+        run: make idma_sim_all
+      -
+        name: Run simulation
+        run: |
+          cd test/backend
+          chmod +x ./idma.sh
+          ./idma.sh
+          ./obj_dir/tb_idma ../../jobs/backend_r_axi_w_obi/simple.yml
