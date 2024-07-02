@@ -232,68 +232,52 @@ module tb_idma_backend #(
         .busy_o               ( idma_busy_o            )
     );
 
-    export "DPI-C" function add_request;
-    idma_req_t new_idma_req;
-    function add_request(input int length, input int src_addr, input int dst_addr);
-        new_idma_req = '0;
-        new_idma_req.length = length;
-        new_idma_req.src_addr = src_addr;
-        new_idma_req.dst_addr = dst_addr;
-        idma_req.push_back(new_idma_req);
+    import "DPI-C" function void idma_request_done();
+
+    // Not using regular DPI-C export here because it makes working with the idma_req_t struct much less of a hassle
+    function trigger_request;
+        // verilator public
+        input idma_req_t request;
+        idma_req.push_back(request);
     endfunction
 
-    always @(posedge clk) begin
-        if (idma_req.size() > 0) begin
-            curr_idma_req = '0;
-            curr_idma_req.dst_addr = idma_req[0].dst_addr;
-            curr_idma_req.src_addr = idma_req[0].src_addr;
-            curr_idma_req.length = idma_req[0].length;
-            `ifdef PORT_R_AXI4
-            curr_idma_req.opt.src_protocol = idma_pkg::AXI;
-            `elsif PORT_R_OBI
-            curr_idma_req.opt.src_protocol = idma_pkg::OBI;
-            `endif
-            `ifdef PORT_W_AXI4
-            curr_idma_req.opt.dst_protocol = idma_pkg::AXI;
-            `elsif PORT_W_OBI
-            curr_idma_req.opt.dst_protocol = idma_pkg::OBI;
-            `endif
-            curr_idma_req.opt.beo.decouple_aw = '0;
-            curr_idma_req.opt.beo.decouple_rw = '0;
-            curr_idma_req.opt.beo.src_max_llen = 32;
-            curr_idma_req.opt.beo.dst_max_llen = 32;
-            curr_idma_req.opt.beo.src_reduce_len = '1;
-            curr_idma_req.opt.beo.dst_reduce_len = '1;
-
-            eh_req_i = '0;
-            eh_req_valid_i = '0;
-
-            req_valid = 1;
-
-            idma_req.pop_back();
-
-            $display("Sending request");
-            while (req_ready != '1) #TA;
-            #TA req_valid = 0;
-            $display("Request sent");
-
-            rsp_ready = '1;
-            
-            while (rsp_valid != '1) #TA;
-            $display("Request complete.");
-
-            $finish;
-        end
-    end
-
     initial begin
-        #10ns rst_n = '0;
-        #10ns rst_n = '1;
-
-        $dumpfile("idma_trace.vcd");
+        $dumpfile("idma_trace.fst");
         $dumpvars(0);
 
-        #500000ns $display("Terminating, no response received in time.");
+        eh_req_i = '0;
+        eh_req_valid_i = '0;
+
+        wait (rst_n);
+        
+        #100ns;
+        
+        while (idma_req.size() > 0) begin
+            curr_idma_req = idma_req[0];
+            idma_req.pop_front();
+
+            $display("Sending request...");
+            req_valid <= #TA '1;
+            #TT;
+            while (req_ready != '1) begin @(posedge clk); #TT; end
+            @(posedge clk);
+            $display("Sent request. Waiting for response...");
+
+            req_valid <= #TA '0;
+            rsp_ready <= #TA '1;
+            #TT;
+            while (rsp_valid != '1) begin @(posedge clk); #TT; end
+            @(posedge clk);
+
+            rsp_ready <= #TA '0;
+            @(posedge clk);
+
+            $display("Request complete.");
+
+            idma_request_done();
+        end
+
+        #100ns;
         $finish;
     end
 

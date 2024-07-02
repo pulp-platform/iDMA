@@ -95,7 +95,7 @@ package idma_pkg;
         TILELINK   = 'd3,
         INIT       = 'd4,
         AXI_STREAM = 'd5
-    } protocol_e;
+    } protocol_e /* verilator public */;
 
     /// Supported Protocols type
     typedef logic[1:0] protocol_t;

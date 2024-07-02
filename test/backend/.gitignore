@@ -3,3 +3,4 @@ obj_dir
 *.vcd
 *.fst
 *.gtkw
+third_party

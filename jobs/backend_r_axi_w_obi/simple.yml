@@ -1,0 +1,18 @@
+defaults:
+  src: OBI
+  dst: AXI
+  max_src_burst: 256
+  max_dst_burst: 256
+jobs:
+  - length: 16384
+    src_addr: 0x0
+    dst_addr: 0x10000000
+  - length: 4096
+    src_addr: 0x2000
+    dst_addr: 0x18000000
+  - length: 8
+    src_addr: 0x4000
+    dst_addr: 0x1c000000
+  - length: 256
+    src_addr: 0x8000
+    dst_addr: 0x20000000

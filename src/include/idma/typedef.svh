@@ -40,7 +40,7 @@
         axi_addr_t src_addr;                                             \
         axi_addr_t dst_addr;                                             \
         options_t  opt;                                                  \
-    } idma_req_t;
+    } idma_req_t /* verilator public */;
 `define IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)                    \
     typedef struct packed {                                              \
         logic         last;                                              \
