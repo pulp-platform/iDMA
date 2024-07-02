@@ -6,7 +6,6 @@
 // - Liam Braun <libraun@student.ethz.ch>
 
 `include "drivers/obi_driver_common.svh"
-`include "../src/obi_pkg.sv"
 
 module obi_driver_slave #(
 parameter obi_pkg::obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
