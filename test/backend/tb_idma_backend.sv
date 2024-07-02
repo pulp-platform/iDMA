@@ -5,7 +5,7 @@
 // Authors:
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 // - Tobias Senti <tsenti@ethz.ch>
-// - Liam Braun <libraun@ethz.ch>
+// - Liam Braun <libraun@student.ethz.ch>
 
 `ifdef PORT_AXI4
 `include "axi/typedef.svh"
