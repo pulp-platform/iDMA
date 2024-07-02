@@ -406,6 +406,10 @@ $(IDMA_VLT_TEST_DIR)/idma.f: Bender.yml
 
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
+	rm -rf $(IDMA_VLT_TEST_DIR)/obj_dir
+	rm -f  $(IDMA_VLT_TEST_DIR)/idma.f
+	rm -f  $(IDMA_VLT_TEST_DIR)/*.vcd
+	rm -f  $(IDMA_VLT_TEST_DIR)/*.fst
 
 
 # ---------------

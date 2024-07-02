@@ -49,24 +49,43 @@ axi_driver_slave #(
 typedef axi_ax_beat #(.AW(AddrWidth), .IW(AxiIdWidth), .UW(UserWidth)) ax_beat_t;
 typedef axi_r_beat #(.DW(DataWidth), .IW(AxiIdWidth), .UW(UserWidth)) r_beat_t;
 
-task axi_process();
-forever begin
-    ax_beat_t ar_beat = new;
+task automatic process_read(ax_beat_t beat);
     r_beat_t r_beat = new;
     int v;
     int delay;
+    int actual_burst_len = beat.ax_len + 1;
+    int bytes_per_beat = 2 ** beat.ax_size;
+
+    assert(bytes_per_beat == DataWidth / 8) else $error("[AXI_R] Unsupported AXI data width");
+    assert(beat.ax_burst != axi_pkg::BURST_WRAP) else $error("[AXI_R] WRAP bursts are not supported");
+
+    
+    $display("[AXI_R] Burst length: %0d", actual_burst_len);
+
+    for (int i = 0; i < actual_burst_len; i++) begin
+        int addr = (beat.ax_burst == axi_pkg::BURST_FIXED) ? beat.ax_addr : beat.ax_addr + i * bytes_per_beat;
+        
+        idma_read(addr, v, delay);
+        r_beat.r_data = v;
+        if (i == actual_burst_len - 1) begin
+            r_beat.r_last = 1;
+        end
+        $display("[AXI_R] Sending R (beat %0d/%0d): %08x", (i + 1), actual_burst_len, r_beat.r_data);
+        driver.send_r(r_beat);
+    end
+    $display("[AXI_R] Burst done");
+endtask
+
+task automatic axi_process();
+forever begin
+    ax_beat_t ar_beat = new;
 
     driver.recv_ar(ar_beat);
-    $display("[AXI_R] Received AR, %08x", ar_beat.ax_addr);
+    $display("[AXI_R] Received AR with addr=%08x", ar_beat.ax_addr);
 
-    fork begin
-        idma_read(ar_beat.ax_addr, v, delay);
-        r_beat.r_data = v;
-        r_beat.r_last = 1;
-        $display("[AXI_R] Sending R: %08x", r_beat.r_data);
-        driver.send_r(r_beat);
-        $display("[AXI_R] Sent R");
-    end join
+    // fork begin
+    process_read(ar_beat);
+    // end join_none
 end
 endtask
 

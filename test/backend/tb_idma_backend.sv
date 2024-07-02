@@ -9,7 +9,6 @@
 
 `ifdef PORT_AXI4
 `include "axi/typedef.svh"
-`include "../include/axi/assign.svh"
 `endif
 
 `ifdef PORT_OBI

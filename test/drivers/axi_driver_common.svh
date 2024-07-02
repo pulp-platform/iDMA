@@ -8,8 +8,6 @@
 `ifndef AXI_DRIVER_COMMON_SV
 `define AXI_DRIVER_COMMON_SV
 
-`include "../src/axi_intf.sv"
-
 /// The data transferred on a beat on the AW/AR channels.
 class axi_ax_beat #(
 parameter AW = 32,

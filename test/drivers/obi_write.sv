@@ -43,7 +43,6 @@ task obi_process();
 forever begin
     obi_ar_beat a = new;
 
-    $display("[OBI_W] Waiting for write request...");
     driver.recv_w_ar(a);
     $display("[OBI_W] Received write request: %08x to %08x", a.wdata, a.addr);
 

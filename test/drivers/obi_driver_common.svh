@@ -8,9 +8,6 @@
 `ifndef OBI_DRIVER_COMMON_SV
 `define OBI_DRIVER_COMMON_SV
 
-`include "obi/assign.svh"
-`include "../src/obi_intf.sv"
-
 class obi_ar_beat;
     logic [31:0] addr;
     logic [31:0] wdata;
