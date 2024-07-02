@@ -1,8 +1,22 @@
+// Copyright 2024 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+//
+// Authors:
+// - Liam Braun <libraun@student.ethz.ch>
+
 // This file contains code from https://github.com/pulp-platform/axi.
 // This had to be made separate because Verilator does not support
 // all features used in the original file.
 
-// See copyright notices in
+// Original authors:
+// - Andreas Kurth <akurth@iis.ee.ethz.ch>
+// - Wolfgang Roenninger <wroennin@iis.ee.ethz.ch>
+// - Fabian Schuiki <fschuiki@iis.ee.ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
+// - Matheus Cavalcante <matheusd@iis.ee.ethz.ch>
+
+// See further copyright notices in
 // https://github.com/pulp-platform/axi/blob/master/src/axi_test.sv.
 
 `ifndef AXI_DRIVER_COMMON_SV
