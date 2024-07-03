@@ -18,7 +18,7 @@
 `include "register_interface/typedef.svh"
 
 `define MY_MAX(a,b) (a > b ? a : b)
-  
+
 module pulp_idma_wrap #(
   parameter int unsigned NB_CORES               = 4,
   parameter int unsigned AXI_ADDR_WIDTH         = 32,
@@ -32,12 +32,12 @@ module pulp_idma_wrap #(
   parameter int unsigned BE_WIDTH               = DATA_WIDTH / 8,
   parameter type         axi_req_t              = logic,
   parameter type         axi_resp_t             = logic,
-  // bidirectional streams: range 1 to 8                   
+  // bidirectional streams: range 1 to 8
   parameter int unsigned NUM_BIDIR_STREAMS      = 1,
   parameter int unsigned NB_OUTSND_BURSTS       = 8,
-  // queue depth per stream                   
+  // queue depth per stream
   parameter int unsigned GLOBAL_QUEUE_DEPTH     = 2,
-  // mux read ports between tcdm-tcdm and tcdm-axi?                 
+  // mux read ports between tcdm-tcdm and tcdm-axi?
   parameter bit          MUX_READ               = 1'b0,
   // 4 ports per stream if read ports muxed, otherwise 6
   localparam int unsigned NB_TCDM_PORTS_PER_STRM = 4 + (!MUX_READ) * 2
@@ -47,7 +47,7 @@ module pulp_idma_wrap #(
   input logic                    test_mode_i,
   XBAR_PERIPH_BUS.Slave          pe_ctrl_slave[NB_PE_PORTS-1:0],
   XBAR_TCDM_BUS.Slave            ctrl_slave[NB_CORES-1:0],
-  hci_core_intf.master           tcdm_master[NB_TCDM_PORTS_PER_STRM*NUM_BIDIR_STREAMS-1:0],
+  hci_core_intf.initiator        tcdm_master[NB_TCDM_PORTS_PER_STRM*NUM_BIDIR_STREAMS-1:0],
   output                         axi_req_t [NUM_BIDIR_STREAMS-1:0] ext_master_req_o,
   input                          axi_resp_t [NUM_BIDIR_STREAMS-1:0] ext_master_resp_i,
   output logic [NB_CORES-1:0]    term_event_o,
@@ -55,7 +55,7 @@ module pulp_idma_wrap #(
   output logic [NB_PE_PORTS-1:0] term_event_pe_o,
   output logic [NB_PE_PORTS-1:0] term_irq_pe_o,
   output logic                   busy_o
-); // verilog_format: on 
+); // verilog_format: on
 
   localparam int unsigned NumRegs = NB_CORES + NB_PE_PORTS;
   localparam int unsigned NumStreams = 32'd2 * NUM_BIDIR_STREAMS;
@@ -646,7 +646,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
                                                     OptionalCfg: obi_pkg::ObiMinimalOptionalConfig
                                                     };
 
-      // iDMA OBI 
+      // iDMA OBI
 
       obi_mux #(
         .SbrPortObiCfg     (sbr_obi_cfg),
@@ -675,7 +675,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
       // pass through the read req/rsp from/to dma
       assign obi_read_req_muxed  = obi_read_req_from_dma;
       assign obi_read_rsp_to_dma = obi_read_rsp_to_mux;
-      
+
       obi_rready_converter #(
                              .obi_a_chan_t(obi_a_chan_t),
                              .obi_r_chan_t(obi_r_chan_t),
@@ -699,7 +699,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
                               .rvalid_i(obi_reorg_rsp_to_rrc[s].rvalid)
                               );
     end // else: !if(MUX_READ)
-    
+
       obi_rready_converter #(
                              .obi_a_chan_t(obi_a_chan_t),
                              .obi_r_chan_t(obi_r_chan_t),
@@ -724,7 +724,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
                               );
 
 
-          
+
       obi_rready_converter #(
                              .obi_a_chan_t(obi_a_chan_t),
                              .obi_r_chan_t(obi_r_chan_t),
@@ -819,7 +819,7 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].wen   = !tcdm_master_we_3;
 
     if (!MUX_READ) begin // if we don't mux the read, we have 6*NUM_BIDIR_STREAMS interfaces and the reorg
-                         // interface goes straight to TCDM masters 5 and 4. 
+                         // interface goes straight to TCDM masters 5 and 4.
       mem_to_banks #(
         .AddrWidth(AXI_ADDR_WIDTH),
         .DataWidth(AXI_DATA_WIDTH),
