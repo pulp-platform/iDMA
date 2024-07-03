@@ -20,7 +20,7 @@ function void reset();
 endfunction
 
 task cycle_start;
-    #(TT - TA);
+    #TT;
 endtask
 
 task cycle_end;
@@ -30,62 +30,50 @@ endtask
 task recv_r_ar(
     output obi_ar_beat addr,
 );
-    cycle_end();
-    #TA;
-    sif.gnt = 1;
+    sif.gnt <= #TA 1;
     cycle_start();
     while (sif.req != '1 || sif.we != 0) begin cycle_end(); cycle_start(); end
     addr = new;
     addr.addr = sif.addr;
     cycle_end();
-    #TA;
-    sif.gnt = 0;
+    sif.gnt <= #TA 0;
 endtask
 
 task recv_w_ar(
     output obi_ar_beat data,
 );
-    cycle_end();
-    #TA;
-    sif.gnt = 1;
+    sif.gnt <= #TA 1;
     cycle_start();
     while (sif.req != '1 || sif.we != 1) begin cycle_end(); cycle_start(); end
     data = new;
     data.addr = sif.addr;
     data.wdata = sif.wdata;
     cycle_end();
-    #TA;
-    sif.gnt = 0;
+    sif.gnt <= #TA 0;
 endtask
 
 task send_r_rsp(
     input obi_r_resp data,
 );
-    cycle_end();
-    #TA;
-    sif.rdata = data.data;
-    sif.rvalid = 1;
+    sif.rdata  <= #TA data.data;
+    sif.rvalid <= #TA 1;
     cycle_start();
     // if (ObiCfg.UseRReady) begin
         while (sif.rready != 1'b1) begin cycle_end(); cycle_start(); end
     // end
     cycle_end();
-    #TA;
-    sif.rvalid = 0;
-    sif.rdata = 0;
+    sif.rvalid <= #TA 0;
+    sif.rdata  <= #TA 0;
 endtask
 
 task send_w_rsp();
-    cycle_end();
-    #TA;
-    sif.rvalid = 1;
+    sif.rvalid <= #TA 1;
     cycle_start();
     // if (ObiCfg.UseRReady) begin
         while (sif.rready != 1'b1) begin cycle_end(); cycle_start(); end
     // end
     cycle_end();
-    #TA;
-    sif.rvalid = 0;
+    sif.rvalid <= #TA 0;
 endtask
 
 endmodule
