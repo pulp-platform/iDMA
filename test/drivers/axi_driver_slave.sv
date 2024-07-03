@@ -41,7 +41,7 @@ function void reset();
 endfunction
 
 task cycle_start;
-    #(TT - TA);
+    #TT;
 endtask
 
 task cycle_end;
@@ -52,53 +52,45 @@ endtask
 task send_b (
     input b_beat_t beat
 );
-    cycle_end();
-    #TA;
-    sif.b_id    = beat.b_id;
-    sif.b_resp  = beat.b_resp;
-    sif.b_user  = beat.b_user;
-    sif.b_valid = 1;
+    sif.b_id    <= #TA beat.b_id;
+    sif.b_resp  <= #TA beat.b_resp;
+    sif.b_user  <= #TA beat.b_user;
+    sif.b_valid <= #TA 1;
     cycle_start();
     while (sif.b_ready != 1) begin cycle_end(); cycle_start(); end
     cycle_end();
-    #TA;
-    sif.b_id    = '0;
-    sif.b_resp  = '0;
-    sif.b_user  = '0;
-    sif.b_valid = 0;
+    sif.b_id    <= #TA '0;
+    sif.b_resp  <= #TA '0;
+    sif.b_user  <= #TA '0;
+    sif.b_valid <= #TA 0;
 endtask
 
 /// Issue a beat on the R channel.
 task send_r (
     input r_beat_t beat
 );
-    cycle_end();
-    #TA;
-    sif.r_id    = beat.r_id;
-    sif.r_data  = beat.r_data;
-    sif.r_resp  = beat.r_resp;
-    sif.r_last  = beat.r_last;
-    sif.r_user  = beat.r_user;
-    sif.r_valid = 1;
+    sif.r_id    <= #TA beat.r_id;
+    sif.r_data  <= #TA beat.r_data;
+    sif.r_resp  <= #TA beat.r_resp;
+    sif.r_last  <= #TA beat.r_last;
+    sif.r_user  <= #TA beat.r_user;
+    sif.r_valid <= #TA 1;
     cycle_start();
     while (sif.r_ready != 1) begin cycle_end(); cycle_start(); end
     cycle_end();
-    #TA;
-    sif.r_valid = 0;
-    sif.r_id    = '0;
-    sif.r_data  = '0;
-    sif.r_resp  = '0;
-    sif.r_last  = '0;
-    sif.r_user  = '0;
+    sif.r_valid <= #TA 0;
+    sif.r_id    <= #TA '0;
+    sif.r_data  <= #TA '0;
+    sif.r_resp  <= #TA '0;
+    sif.r_last  <= #TA '0;
+    sif.r_user  <= #TA '0;
 endtask
 
 /// Wait for a beat on the AW channel.
 task recv_aw (
     output ax_beat_t beat
 );
-    cycle_end();
-    #TA;
-    sif.aw_ready = 1;
+    sif.aw_ready <= #TA 1;
     cycle_start();
     while (sif.aw_valid != 1) begin cycle_end(); cycle_start(); end
     beat = new;
@@ -115,17 +107,14 @@ task recv_aw (
     beat.ax_atop   = sif.aw_atop;
     beat.ax_user   = sif.aw_user;
     cycle_end();
-    #TA;
-    sif.aw_ready = 0;
+    sif.aw_ready <= #(TA - 1ns) 0; // Avoid race condition once aw_ready gets set again (Verilator bug?)
 endtask
 
 /// Wait for a beat on the W channel.
 task recv_w (
     output w_beat_t beat
 );
-    cycle_end();
-    #TA;
-    sif.w_ready = 1;
+    sif.w_ready <= #TA 1;
     cycle_start();
     while (sif.w_valid != 1) begin cycle_end(); cycle_start(); end
     beat = new;
@@ -134,17 +123,14 @@ task recv_w (
     beat.w_last = sif.w_last;
     beat.w_user = sif.w_user;
     cycle_end();
-    #TA;
-    sif.w_ready = 0;
+    sif.w_ready <= #(TA - 1ns) 0; // Avoid race condition once w_ready gets set again (Verilator bug?)
 endtask
 
 /// Wait for a beat on the AR channel.
 task recv_ar (
     output ax_beat_t beat
 );
-    cycle_end();
-    #TA;
-    sif.ar_ready = 1;
+    sif.ar_ready <= #TA 1;
     cycle_start();
     while (sif.ar_valid != 1) begin cycle_end(); cycle_start(); end
     beat = new;
@@ -161,8 +147,7 @@ task recv_ar (
     beat.ax_atop   = 'X;  // Not defined on the AR channel.
     beat.ax_user   = sif.ar_user;
     cycle_end();
-    #TA;
-    sif.ar_ready  = 0;
+    sif.ar_ready  <= #(TA - 1ns) 0; // Avoid race condition once ar_ready gets set again (Verilator bug?)
 endtask
 
 endmodule

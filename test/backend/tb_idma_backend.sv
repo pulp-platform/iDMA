@@ -257,22 +257,19 @@ module tb_idma_backend #(
             idma_req.pop_front();
 
             $display("Sending request...");
-            #TA;
-            req_valid = '1;
-            #(TT - TA);
+            req_valid <= #TA '1;
+            #TT;
             while (req_ready != '1) begin @(posedge clk); #TT; end
             @(posedge clk);
             $display("Sent request. Waiting for response...");
 
-            #TA;
-            req_valid = '0;
-            rsp_ready = '1;
-            #(TT - TA);
+            req_valid <= #TA '0;
+            rsp_ready <= #TA '1;
+            #TT;
             while (rsp_valid != '1) begin @(posedge clk); #TT; end
             @(posedge clk);
 
-            #TA;
-            rsp_ready = '0;
+            rsp_ready <= #TA '0;
             @(posedge clk);
 
             $display("Request complete.");
