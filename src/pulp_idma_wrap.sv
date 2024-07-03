@@ -809,11 +809,11 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
     );
 
 
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].boffs = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].lrdy  = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].boffs = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].lrdy  = '0;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].user  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].boffs = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].lrdy  = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].boffs = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].lrdy  = '0;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].user  = '0;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].wen   = !tcdm_master_we_2;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].wen   = !tcdm_master_we_3;
@@ -921,11 +921,11 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
       })
     );
 
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].boffs = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].lrdy  = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].boffs = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].lrdy  = '0;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].user  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].boffs = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].lrdy  = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].boffs = '0;
+    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].lrdy  = '0;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].user  = '0;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].wen   = !tcdm_master_we_0;
     assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].wen   = !tcdm_master_we_1;
