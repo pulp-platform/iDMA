@@ -59,9 +59,6 @@ task automatic process_read(ax_beat_t beat);
     assert(bytes_per_beat == DataWidth / 8) else $error("[AXI_R] Unsupported AXI data width");
     assert(beat.ax_burst != axi_pkg::BURST_WRAP) else $error("[AXI_R] WRAP bursts are not supported");
 
-    
-    $display("[AXI_R] Burst length: %0d", actual_burst_len);
-
     for (int i = 0; i < actual_burst_len; i++) begin
         int addr = (beat.ax_burst == axi_pkg::BURST_FIXED) ? beat.ax_addr : beat.ax_addr + i * bytes_per_beat;
         
@@ -70,10 +67,9 @@ task automatic process_read(ax_beat_t beat);
         if (i == actual_burst_len - 1) begin
             r_beat.r_last = 1;
         end
-        $display("[AXI_R] Sending R (beat %0d/%0d): %08x", (i + 1), actual_burst_len, r_beat.r_data);
+        // $display("[AXI_R] Sending R (beat %0d/%0d): %08x", (i + 1), actual_burst_len, r_beat.r_data);
         driver.send_r(r_beat);
     end
-    $display("[AXI_R] Burst done");
 endtask
 
 task automatic axi_process();
@@ -81,7 +77,7 @@ forever begin
     ax_beat_t ar_beat = new;
 
     driver.recv_ar(ar_beat);
-    $display("[AXI_R] Received AR with addr=%08x", ar_beat.ax_addr);
+    // $display("[AXI_R] Received AR with addr=%08x", ar_beat.ax_addr);
 
     // fork begin
     process_read(ar_beat);

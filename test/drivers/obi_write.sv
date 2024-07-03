@@ -44,7 +44,7 @@ forever begin
     obi_ar_beat a = new;
 
     driver.recv_w_ar(a);
-    $display("[OBI_W] Received write request: %08x to %08x", a.wdata, a.addr);
+    // $display("[OBI_W] Received write request: %08x to %08x", a.wdata, a.addr);
 
     idma_write(a.addr, a.wdata);
 
