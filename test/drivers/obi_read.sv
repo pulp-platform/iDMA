@@ -46,15 +46,14 @@ forever begin
     int v;
     int delay;
 
-    $display("[OBI] Waiting for read request...");
     driver.recv_r_ar(a);
-    $display("[OBI] Received A, %08x", a.addr);
+    // $display("[OBI] Received A, %08x", a.addr);
 
     idma_read(a.addr, v, delay);
     
     r_resp.data = v;
     driver.send_r_rsp(r_resp);
-    $display("[OBI] Sent R");
+    // $display("[OBI] Sent R");
 end
 endtask
 

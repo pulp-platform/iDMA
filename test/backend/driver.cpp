@@ -20,6 +20,15 @@
 #include <map>
 #include <iostream>
 
+// #define DEBUG
+
+#ifdef DEBUG
+    #define DEBUG_PRINT(fmt, args...) printf("DEBUG: %s:%d: " fmt, \
+        __FILE__, __LINE__, ##args)
+#else
+    #define DEBUG_PRINT(fmt, args...)
+#endif
+
 typedef Vtb_idma_backend_idma_req_t__struct__0 idma_req_t;
 
 std::map<uint32_t, uint32_t> memory_accesses;
@@ -40,7 +49,7 @@ unsigned int num_reads = 0;
 unsigned int num_writes = 0;
 
 void idma_read(int addr, int *data, int *delay) {
-    printf("[DRIVER] Read from %08x: %08x\n", addr, curr_access_id);
+    DEBUG_PRINT("[DRIVER] Read from %08x: %08x\n", addr, curr_access_id);
     *data = curr_access_id;
     *delay = 5000;
     memory_accesses.insert({addr, curr_access_id});
@@ -50,12 +59,12 @@ void idma_read(int addr, int *data, int *delay) {
 
 void idma_write(int w_addr, int w_data) {
     uint32_t orig_addr = w_addr + currentIdmaRequest().src_addr - currentIdmaRequest().dst_addr;
-    printf("[DRIVER] Write %08x to %08x (original address: %08x)\n", w_data, w_addr, orig_addr);
+    DEBUG_PRINT("[DRIVER] Write %08x to %08x (original address: %08x)\n", w_data, w_addr, orig_addr);
     if (memory_accesses.count(orig_addr) == 0) {
-        printf("[DRIVER] Write is invalid (never read from there)\n");
+        DEBUG_PRINT("[DRIVER] Write is invalid (never read from there)\n");
         invalid_writes++;
     } else if (memory_accesses.at(orig_addr) != w_data) {
-        printf("[DRIVER] Write is invalid (wrong value)\n");
+        DEBUG_PRINT("[DRIVER] Write is invalid (wrong value)\n");
         invalid_writes++;
     } else {
         memory_accesses.erase(orig_addr);
@@ -75,7 +84,7 @@ Vtb_idma_backend_idma_pkg::protocol_e strToProtocol(std::string str) {
 }
 
 int main(int argc, char **argv) {
-    Verilated::debug(1);
+    // Verilated::debug(1);
 
     Verilated::commandArgs(argc, argv);
     Vtb_idma_backend *idma = new Vtb_idma_backend();
@@ -124,8 +133,7 @@ int main(int argc, char **argv) {
         idmaRequest.opt.beo.dst_reduce_len = 1;
 
         idmaRequest.opt.last = (i == reqCount - 1);
-        
-        // printf("Pushing request\n");
+
         pendingIdmaRequests.push_back(idmaRequest);
         idma->tb_idma_backend->trigger_request(idmaRequest.get());
     }
