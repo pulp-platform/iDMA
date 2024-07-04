@@ -35,10 +35,6 @@ std::map<uint32_t, uint32_t> memory_accesses;
 uint32_t curr_access_id = 0xA5A50000;
 uint32_t invalid_writes = 0;
 
-uint32_t copy_from = 0x1000;
-uint32_t copy_to = 0x20000;
-uint32_t copy_size = 1024 * 16;
-
 std::deque<idma_req_t> pendingIdmaRequests;
 
 const idma_req_t &currentIdmaRequest() {
@@ -61,10 +57,10 @@ void idma_write(int w_addr, int w_data) {
     uint32_t orig_addr = w_addr + currentIdmaRequest().src_addr - currentIdmaRequest().dst_addr;
     DEBUG_PRINT("[DRIVER] Write %08x to %08x (original address: %08x)\n", w_data, w_addr, orig_addr);
     if (memory_accesses.count(orig_addr) == 0) {
-        DEBUG_PRINT("[DRIVER] Write is invalid (never read from there)\n");
+        printf("[DRIVER] Write is invalid (never read from there)\n");
         invalid_writes++;
     } else if (memory_accesses.at(orig_addr) != w_data) {
-        DEBUG_PRINT("[DRIVER] Write is invalid (wrong value)\n");
+        printf("[DRIVER] Write is invalid (wrong value)\n");
         invalid_writes++;
     } else {
         memory_accesses.erase(orig_addr);
@@ -129,8 +125,8 @@ int main(int argc, char **argv) {
         idmaRequest.opt.beo.decouple_rw = 0;
         idmaRequest.opt.beo.src_max_llen = defaultMaxSrcBurst;
         idmaRequest.opt.beo.dst_max_llen = defaultMaxDstBurst;
-        idmaRequest.opt.beo.src_reduce_len = 1;
-        idmaRequest.opt.beo.dst_reduce_len = 1;
+        idmaRequest.opt.beo.src_reduce_len = 0;
+        idmaRequest.opt.beo.dst_reduce_len = 0;
 
         idmaRequest.opt.last = (i == reqCount - 1);
 

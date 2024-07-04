@@ -59,10 +59,10 @@ task send_b (
     cycle_start();
     while (sif.b_ready != 1) begin cycle_end(); cycle_start(); end
     cycle_end();
-    sif.b_id    <= #TA '0;
-    sif.b_resp  <= #TA '0;
-    sif.b_user  <= #TA '0;
-    sif.b_valid <= #TA 0;
+    sif.b_id    <= #(TA - 1ns) '0;
+    sif.b_resp  <= #(TA - 1ns) '0;
+    sif.b_user  <= #(TA - 1ns) '0;
+    sif.b_valid <= #(TA - 1ns) 0;
 endtask
 
 /// Issue a beat on the R channel.
@@ -78,12 +78,12 @@ task send_r (
     cycle_start();
     while (sif.r_ready != 1) begin cycle_end(); cycle_start(); end
     cycle_end();
-    sif.r_valid <= #TA 0;
-    sif.r_id    <= #TA '0;
-    sif.r_data  <= #TA '0;
-    sif.r_resp  <= #TA '0;
-    sif.r_last  <= #TA '0;
-    sif.r_user  <= #TA '0;
+    sif.r_valid <= #(TA - 1ns) 0;
+    sif.r_id    <= #(TA - 1ns) '0;
+    sif.r_data  <= #(TA - 1ns) '0;
+    sif.r_resp  <= #(TA - 1ns) '0;
+    sif.r_last  <= #(TA - 1ns) '0;
+    sif.r_user  <= #(TA - 1ns) '0;
 endtask
 
 /// Wait for a beat on the AW channel.

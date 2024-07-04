@@ -39,27 +39,41 @@ obi_driver_slave #(
     .sif(obi_bus)
 );
 
-task obi_process();
+semaphore chan_a;
+semaphore chan_r;
+
+task obi_process(int id);
 forever begin
     obi_ar_beat a = new;
     obi_r_resp r_resp = new;
     int v;
     int delay;
 
+    chan_a.get();
     driver.recv_r_ar(a);
-    // $display("[OBI] Received A, %08x", a.addr);
+    // $display("[OBI] [%d] Received A, %08x", id, a.addr);
 
     idma_read(a.addr, v, delay);
-    
+
+    chan_r.get();
+    chan_a.put();
+
     r_resp.data = v;
     driver.send_r_rsp(r_resp);
-    // $display("[OBI] Sent R");
+    // $display("[OBI] [%d] Sent R", id);
+    chan_r.put();
 end
 endtask
 
 initial begin
+    chan_a = new(1);
+    chan_r = new(1);
     driver.reset();
-    obi_process();
+
+    fork
+        obi_process(1);
+        obi_process(1);
+    join
 end
 
 endmodule;

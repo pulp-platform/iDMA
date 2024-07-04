@@ -49,18 +49,34 @@ axi_driver_slave #(
 typedef axi_ax_beat #(.AW(AddrWidth), .IW(AxiIdWidth), .UW(UserWidth)) ax_beat_t;
 typedef axi_r_beat #(.DW(DataWidth), .IW(AxiIdWidth), .UW(UserWidth)) r_beat_t;
 
-task automatic process_read(ax_beat_t beat);
+semaphore chan_ar;
+semaphore chan_r;
+
+task automatic axi_process();
+forever begin
+    ax_beat_t ar_beat = new;
     r_beat_t r_beat = new;
     int v;
     int delay;
-    int actual_burst_len = beat.ax_len + 1;
-    int bytes_per_beat = 2 ** beat.ax_size;
+    int actual_burst_len;
+    int bytes_per_beat;
+
+    chan_ar.get();
+
+    driver.recv_ar(ar_beat);
+    // $display("[AXI_R] Received AR with addr=%08x", ar_beat.ax_addr);
+
+    actual_burst_len = ar_beat.ax_len + 1;
+    bytes_per_beat = 2 ** ar_beat.ax_size;
 
     assert(bytes_per_beat == DataWidth / 8) else $error("[AXI_R] Unsupported AXI data width");
-    assert(beat.ax_burst != axi_pkg::BURST_WRAP) else $error("[AXI_R] WRAP bursts are not supported");
+    assert(ar_beat.ax_burst != axi_pkg::BURST_WRAP) else $error("[AXI_R] WRAP bursts are not supported");
+
+    chan_r.get();
+    chan_ar.put();
 
     for (int i = 0; i < actual_burst_len; i++) begin
-        int addr = (beat.ax_burst == axi_pkg::BURST_FIXED) ? beat.ax_addr : beat.ax_addr + i * bytes_per_beat;
+        int addr = (ar_beat.ax_burst == axi_pkg::BURST_FIXED) ? ar_beat.ax_addr : ar_beat.ax_addr + i * bytes_per_beat;
         
         idma_read(addr, v, delay);
         r_beat.r_data = v;
@@ -70,24 +86,20 @@ task automatic process_read(ax_beat_t beat);
         // $display("[AXI_R] Sending R (beat %0d/%0d): %08x", (i + 1), actual_burst_len, r_beat.r_data);
         driver.send_r(r_beat);
     end
-endtask
 
-task automatic axi_process();
-forever begin
-    ax_beat_t ar_beat = new;
-
-    driver.recv_ar(ar_beat);
-    // $display("[AXI_R] Received AR with addr=%08x", ar_beat.ax_addr);
-
-    // fork begin
-    process_read(ar_beat);
-    // end join_none
+    chan_r.put();
 end
 endtask
 
 initial begin
+    chan_ar = new(1);
+    chan_r = new(1);
     driver.reset();
-    axi_process();
+
+    fork
+        axi_process();
+        axi_process();
+    join
 end
 
 endmodule

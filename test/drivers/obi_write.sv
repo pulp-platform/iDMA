@@ -39,22 +39,38 @@ obi_driver_slave #(
     .sif(obi_bus)
 );
 
+semaphore chan_a;
+semaphore chan_r;
+
 task obi_process();
 forever begin
     obi_ar_beat a = new;
+
+    chan_a.get();
 
     driver.recv_w_ar(a);
     // $display("[OBI_W] Received write request: %08x to %08x", a.wdata, a.addr);
 
     idma_write(a.addr, a.wdata);
 
+    chan_r.get();
+    chan_a.put();
+
     driver.send_w_rsp();
+
+    chan_r.put();
 end
 endtask
 
 initial begin
+    chan_a = new(1);
+    chan_r = new(1);
     driver.reset();
-    obi_process();
+
+    fork
+        obi_process();
+        obi_process();
+    join
 end
 
 endmodule

@@ -36,7 +36,7 @@ task recv_r_ar(
     addr = new;
     addr.addr = sif.addr;
     cycle_end();
-    sif.gnt <= #TA 0;
+    sif.gnt <= #(TA - 1ns) 0;
 endtask
 
 task recv_w_ar(
@@ -49,7 +49,7 @@ task recv_w_ar(
     data.addr = sif.addr;
     data.wdata = sif.wdata;
     cycle_end();
-    sif.gnt <= #TA 0;
+    sif.gnt <= #(TA - 1ns) 0;
 endtask
 
 task send_r_rsp(
@@ -62,8 +62,8 @@ task send_r_rsp(
         while (sif.rready != 1'b1) begin cycle_end(); cycle_start(); end
     // end
     cycle_end();
-    sif.rvalid <= #TA 0;
-    sif.rdata  <= #TA 0;
+    sif.rvalid <= #(TA - 1ns) 0;
+    sif.rdata  <= #(TA - 1ns) 0;
 endtask
 
 task send_w_rsp();
@@ -73,7 +73,7 @@ task send_w_rsp();
         while (sif.rready != 1'b1) begin cycle_end(); cycle_start(); end
     // end
     cycle_end();
-    sif.rvalid <= #TA 0;
+    sif.rvalid <= #(TA - 1ns) 0;
 endtask
 
 endmodule
