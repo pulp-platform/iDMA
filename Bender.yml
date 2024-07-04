@@ -127,12 +127,6 @@ sources:
 
   # Verilator
   - target: verilator_test
-    defines:
-      PORT_AXI4: ~
-      PORT_OBI: ~
-      PORT_R_OBI: ~
-      PORT_W_AXI4: ~
-      BACKEND_NAME: idma_backend_r_obi_w_axi
     files:
       - test/backend/driver.cpp
       - test/backend/tb_idma_backend.sv
