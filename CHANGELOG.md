@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 0.6.3 - 2024-07-02
+
+### Added
+- Multichannel support in `inst64` [#46](https://github.com/pulp-platform/iDMA/pull/46)
+
+### Fixed
+- `inst64` sources are only present if the `snitch_cluster` target is set [#47](https://github.com/pulp-platform/iDMA/pull/47).
+- zero-length ND transfers are properly handled [#50](https://github.com/pulp-platform/iDMA/pull/50).
+
+
 ## 0.6.2 - 2024-05-10
 
 ### Fixed
