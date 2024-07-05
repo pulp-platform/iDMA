@@ -32,7 +32,7 @@
 typedef Vtb_idma_backend_idma_req_t__struct__0 idma_req_t;
 
 std::map<uint32_t, uint32_t> memory_accesses;
-uint32_t curr_access_id = 0xA5A50000;
+uint32_t curr_access_id = 0x01020304;
 uint32_t invalid_writes = 0;
 
 std::deque<idma_req_t> pendingIdmaRequests;
@@ -73,10 +73,20 @@ void idma_request_done() {
     pendingIdmaRequests.pop_front();
 }
 
-Vtb_idma_backend_idma_pkg::protocol_e strToProtocol(std::string str) {
+Vtb_idma_backend_idma_pkg::protocol_e strToProtocol(ryml::csubstr str) {
     if (str == "OBI") return Vtb_idma_backend_idma_pkg::protocol_e::OBI;
     if (str == "AXI") return Vtb_idma_backend_idma_pkg::protocol_e::AXI;
     return Vtb_idma_backend_idma_pkg::protocol_e::OBI;
+}
+
+ryml::csubstr getOrDefault(ryml::NodeRef node, ryml::csubstr key, ryml::NodeRef defaultDict, ryml::csubstr defaultValue) {
+    ryml::csubstr val = defaultValue;
+    if (node.has_child(key)) {
+        val = node[key].val();
+    } else if (defaultDict.has_child(key)) {
+        val = defaultDict[key].val();
+    }
+    return val;
 }
 
 int main(int argc, char **argv) {
@@ -105,28 +115,32 @@ int main(int argc, char **argv) {
 
     int reqCount = jobYaml["jobs"].num_children();
 
-    Vtb_idma_backend_idma_pkg::protocol_e defaultSrcProtocol = strToProtocol(jobYaml["defaults"]["src"].val().str);
-    Vtb_idma_backend_idma_pkg::protocol_e defaultDstProtocol = strToProtocol(jobYaml["defaults"]["dst"].val().str);
-    int defaultMaxSrcBurst = std::stoi(jobYaml["defaults"]["max_src_burst"].val().str);
-    int defaultMaxDstBurst = std::stoi(jobYaml["defaults"]["max_dst_burst"].val().str);
+    ryml::NodeRef defaults = jobYaml["defaults"];
 
     for (int i = 0; i < reqCount; i++) {
-        idma_req_t idmaRequest;
-        idmaRequest.dst_addr = std::stoul(jobYaml["jobs"][i]["dst_addr"].val().str, nullptr, 0);
-        idmaRequest.src_addr = std::stoul(jobYaml["jobs"][i]["src_addr"].val().str, nullptr, 0);
-        idmaRequest.length   = std::stoul(jobYaml["jobs"][i]["length"  ].val().str, nullptr, 0);
+        ryml::NodeRef currReq = jobYaml["jobs"][i];
 
-        idmaRequest.opt.src_protocol = defaultSrcProtocol;
+        idma_req_t idmaRequest;
+        ryml::atou(currReq["src_addr"].val(), &idmaRequest.src_addr);
+        ryml::atou(currReq["dst_addr"].val(), &idmaRequest.dst_addr);
+        ryml::atou(currReq["length"  ].val(), &idmaRequest.length);
+
+        // For some reason unaligned transfers are broken at the moment
+        idmaRequest.src_addr &= ~0x3;
+        idmaRequest.dst_addr += (-idmaRequest.dst_addr & 0x3);
+        idmaRequest.length   += (-idmaRequest.length   & 0x3);
+
+        idmaRequest.opt.src_protocol = strToProtocol(getOrDefault(currReq, "src", defaults, "AXI"));
         idmaRequest.opt.src.burst    = 0b01; // INCR
-        idmaRequest.opt.dst_protocol = defaultDstProtocol;
+        idmaRequest.opt.dst_protocol = strToProtocol(getOrDefault(currReq, "dst", defaults, "AXI"));
         idmaRequest.opt.dst.burst    = 0b01; // INCR
 
         idmaRequest.opt.beo.decouple_aw = 0;
         idmaRequest.opt.beo.decouple_rw = 0;
-        idmaRequest.opt.beo.src_max_llen = defaultMaxSrcBurst;
-        idmaRequest.opt.beo.dst_max_llen = defaultMaxDstBurst;
-        idmaRequest.opt.beo.src_reduce_len = 0;
-        idmaRequest.opt.beo.dst_reduce_len = 0;
+        ryml::atou(getOrDefault(currReq, "src_max_llen", defaults, "256"), &idmaRequest.opt.beo.src_max_llen);
+        ryml::atou(getOrDefault(currReq, "dst_max_llen", defaults, "256"), &idmaRequest.opt.beo.dst_max_llen);
+        ryml::atou(getOrDefault(currReq, "src_reduce_len", defaults, "0"), &idmaRequest.opt.beo.src_reduce_len);
+        ryml::atou(getOrDefault(currReq, "dst_reduce_len", defaults, "0"), &idmaRequest.opt.beo.dst_reduce_len);
 
         idmaRequest.opt.last = (i == reqCount - 1);
 

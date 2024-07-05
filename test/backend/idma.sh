@@ -17,5 +17,5 @@ verilator -f idma.f --timing --trace --trace-structs --trace-fst --build --exe -
     --top tb_idma_backend \
     --cc driver.cpp \
     -o tb_idma \
-    -DPORT_AXI4 -DPORT_OBI -DPORT_W_OBI -DPORT_R_AXI4 \
-    -DBACKEND_NAME=idma_backend_r_axi_w_obi
+    -DPORT_AXI4 -DPORT_R_AXI4 -DPORT_W_AXI4 \
+    -DBACKEND_NAME=idma_backend_rw_axi

@@ -242,8 +242,10 @@ module tb_idma_backend #(
     endfunction
 
     initial begin
+        `ifdef TRACING
         $dumpfile("idma_trace.fst");
         $dumpvars(0);
+        `endif
 
         eh_req_i = '0;
         eh_req_valid_i = '0;
@@ -256,7 +258,6 @@ module tb_idma_backend #(
             curr_idma_req = idma_req[0];
             idma_req.pop_front();
 
-            $display("Sending request...");
             req_valid <= #TA '1;
             #TT;
             while (req_ready != '1) begin @(posedge clk); #TT; end
@@ -276,6 +277,8 @@ module tb_idma_backend #(
 
             idma_request_done();
         end
+
+        $display("IDMA testbench done. t=%t", $time);
 
         #100ns;
         $finish;

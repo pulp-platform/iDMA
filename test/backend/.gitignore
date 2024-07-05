@@ -1,6 +1,6 @@
 obj_dir
 *.f
 *.vcd
-*.fst
+*.fst*
 *.gtkw
 third_party

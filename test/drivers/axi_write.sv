@@ -63,7 +63,7 @@ forever begin
 
     chan_aw.get();
     driver.recv_aw(aw_beat);
-    $display("[AXI_W] [%0d] Received AW, %08x (%t)", id, aw_beat.ax_addr, $time);
+    // $display("[AXI_W] [%0d] Received AW, %08x (%t)", id, aw_beat.ax_addr, $time);
     
     actual_burst_len = aw_beat.ax_len + 1;
     bytes_per_beat = 2 ** aw_beat.ax_size;
@@ -78,7 +78,7 @@ forever begin
         int addr = (aw_beat.ax_burst == axi_pkg::BURST_FIXED) ? aw_beat.ax_addr : aw_beat.ax_addr + i * bytes_per_beat;
 
         driver.recv_w(w_beat);
-        $display("[AXI_W] [%0d] Received W (beat %0d/%0d): %08x/%08x", id, (i + 1), actual_burst_len, addr, w_beat.w_data);
+        // $display("[AXI_W] [%0d] Received W (beat %0d/%0d): %08x/%08x", id, (i + 1), actual_burst_len, addr, w_beat.w_data);
         idma_write(addr, w_beat.w_data);
     end
 
@@ -88,7 +88,7 @@ forever begin
     b_beat.b_id = aw_beat.ax_id;
     b_beat.b_resp = 0;
     driver.send_b(b_beat);
-    $display("[AXI_W] [%0d] Sent B", id);
+    // $display("[AXI_W] [%0d] Sent B", id);
     chan_b.put();
 end
 endtask
