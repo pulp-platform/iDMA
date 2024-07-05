@@ -78,7 +78,8 @@ jobs:
           sudo apt-get install git help2man perl python3 make autoconf g++ flex bison ccache libfl2 libfl-dev
           [ -d ~/verilator ] || git clone -b nba-enable-initial-final https://github.com/RootCubed/verilator.git ~/verilator
           cd ~/verilator
-          git pull
+          git fetch
+          git reset origin/nba-enable-initial-final --hard
           autoconf
           ./configure
           make -j `nproc`
@@ -92,4 +93,5 @@ jobs:
           cd test/backend
           chmod +x ./idma.sh
           ./idma.sh
-          ./obj_dir/tb_idma ../../jobs/backend_r_axi_w_obi/simple.yml
+          chmod +x ./run_tests.sh
+          ./run_tests.sh
