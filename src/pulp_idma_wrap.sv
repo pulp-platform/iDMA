@@ -17,30 +17,34 @@
 `include "idma/typedef.svh"
 `include "register_interface/typedef.svh"
 
-`define MY_MAX(a,b) (a > b ? a : b)
+`define MY_MAX(a, b) (a > b ? a : b)
 
 module pulp_idma_wrap #(
-  parameter int unsigned NB_CORES               = 4,
-  parameter int unsigned AXI_ADDR_WIDTH         = 32,
-  parameter int unsigned AXI_DATA_WIDTH         = 64,
-  parameter int unsigned AXI_USER_WIDTH         = 6,
-  parameter int unsigned AXI_ID_WIDTH           = 4,
-  parameter int unsigned PE_ID_WIDTH            = 1,
-  parameter int unsigned NB_PE_PORTS            = 1,
-  parameter int unsigned DATA_WIDTH             = 32,
-  parameter int unsigned ADDR_WIDTH             = 32,
-  parameter int unsigned BE_WIDTH               = DATA_WIDTH / 8,
-  parameter type         axi_req_t              = logic,
-  parameter type         axi_resp_t             = logic,
-  // bidirectional streams: range 1 to 8
-  parameter int unsigned NUM_BIDIR_STREAMS      = 1,
-  parameter int unsigned NB_OUTSND_BURSTS       = 8,
-  // queue depth per stream
-  parameter int unsigned GLOBAL_QUEUE_DEPTH     = 2,
-  // mux read ports between tcdm-tcdm and tcdm-axi?
-  parameter bit          MUX_READ               = 1'b0,
-  // 4 ports per stream if read ports muxed, otherwise 6
-  localparam int unsigned NB_TCDM_PORTS_PER_STRM = 4 + (!MUX_READ) * 2
+    parameter  int unsigned NB_CORES               = 4,
+    parameter  int unsigned AXI_ADDR_WIDTH         = 32,
+    parameter  int unsigned AXI_DATA_WIDTH         = 64,
+    parameter  int unsigned AXI_USER_WIDTH         = 6,
+    parameter  int unsigned AXI_ID_WIDTH           = 4,
+    parameter  int unsigned PE_ID_WIDTH            = 1,
+    parameter  int unsigned NB_PE_PORTS            = 1,
+    parameter  int unsigned DATA_WIDTH             = 32,
+    parameter  int unsigned ADDR_WIDTH             = 32,
+    parameter  int unsigned BE_WIDTH               = DATA_WIDTH / 8,
+    parameter  type         axi_req_t              = logic,
+    parameter  type         axi_resp_t             = logic,
+    // bidirectional streams: range 1 to 8
+    parameter  int unsigned NUM_BIDIR_STREAMS      = 1,
+    parameter  int unsigned NB_OUTSND_BURSTS       = 8,
+    // queue depth per stream
+    parameter  int unsigned GLOBAL_QUEUE_DEPTH     = 2,
+    // mux read ports between tcdm-tcdm and tcdm-axi?
+    parameter  bit          MUX_READ               = 1'b0,
+    parameter  bit          TCDM_MEM2BANKS         = 1'b0,
+    // when using mem2banks (implies AXI_DATA_WIDTH==64):
+    // 4 ports per stream if read ports muxed, otherwise 6
+    // when not using mem2banks:
+    // 2 ports per stream if read ports muxed, otherwise 3
+    localparam int unsigned NB_TCDM_PORTS_PER_STRM = (2 + (!MUX_READ)) * (1 + TCDM_MEM2BANKS)
 ) (  // verilog_format: off // verible does not manage to align this :(
   input logic                    clk_i,
   input logic                    rst_ni,
@@ -104,11 +108,11 @@ module pulp_idma_wrap #(
 
   // Types types
   typedef logic [AXI_ADDR_WIDTH-1:0] addr_t;
-  typedef logic [ADDR_WIDTH-1:0] mem_addr_t;
+  typedef logic [ADDR_WIDTH-1:0]     mem_addr_t;
   typedef logic [AXI_DATA_WIDTH-1:0] data_t;
-  typedef logic [AXI_ID_WIDTH-1:0] id_t;
+  typedef logic [AXI_ID_WIDTH-1:0]   id_t;
   typedef logic [AXI_DATA_WIDTH/8-1:0] strb_t;
-  typedef logic [AXI_USER_WIDTH-1:0] user_t;
+  typedef logic [AXI_USER_WIDTH-1:0]   user_t;
 
   // // AXI4+ATOP channels typedefs
   //`AXI_TYPEDEF_ALL(axi_int, addr_t, id_t, data_t, strb_t, user_t)
@@ -120,10 +124,10 @@ module pulp_idma_wrap #(
   // Memory Init typedefs
   /// init read request
   typedef struct packed {
-    logic [AXI_ADDR_WIDTH-1:0]    cfg;
-    logic [AXI_DATA_WIDTH-1:0]    term;
-    logic [AXI_DATA_WIDTH/8-1:0]  strb;
-    logic [AXI_ID_WIDTH-1:0]      id;
+    logic [AXI_ADDR_WIDTH-1:0]   cfg;
+    logic [AXI_DATA_WIDTH-1:0]   term;
+    logic [AXI_DATA_WIDTH/8-1:0] strb;
+    logic [AXI_ID_WIDTH-1:0]     id;
   } init_req_chan_t;
 
   typedef struct packed {
@@ -150,9 +154,21 @@ module pulp_idma_wrap #(
 
 
   obi_req_t [NUM_BIDIR_STREAMS-1:0]
-      obi_read_req_from_dma, obi_read_req_from_rrc, obi_reorg_req_from_dma, obi_reorg_req_from_rrc, obi_write_req_from_dma, obi_write_req_from_rrc, obi_read_req_muxed;
+    obi_read_req_from_dma,
+    obi_read_req_from_rrc,
+    obi_reorg_req_from_dma,
+    obi_reorg_req_from_rrc,
+    obi_write_req_from_dma,
+    obi_write_req_from_rrc,
+    obi_read_req_muxed;
   obi_rsp_t [NUM_BIDIR_STREAMS-1:0]
-      obi_read_rsp_to_dma, obi_read_rsp_to_rrc, obi_reorg_rsp_to_dma, obi_reorg_rsp_to_rrc, obi_write_rsp_to_dma, obi_write_rsp_to_rrc, obi_read_rsp_to_mux;
+    obi_read_rsp_to_dma,
+    obi_read_rsp_to_rrc,
+    obi_reorg_rsp_to_dma,
+    obi_reorg_rsp_to_rrc,
+    obi_write_rsp_to_dma,
+    obi_write_rsp_to_rrc,
+    obi_read_rsp_to_mux;
 
 
   // BUS definitions
@@ -187,7 +203,7 @@ module pulp_idma_wrap #(
   // Register BUS definitions
   localparam int unsigned RegAddrWidth = 32'd10;
   `REG_BUS_TYPEDEF_ALL(dma_regs, logic[RegAddrWidth-1:0], logic[DATA_WIDTH-1:0],
-                       logic[BE_WIDTH-1:0])
+    logic[BE_WIDTH-1:0])
   dma_regs_req_t [NumRegs-1:0] dma_regs_req;
   dma_regs_rsp_t [NumRegs-1:0] dma_regs_rsp;
 
@@ -197,7 +213,7 @@ module pulp_idma_wrap #(
   localparam int unsigned RepWidth = 32'd32;
   localparam int unsigned StrideWidth = 32'd32;
   typedef logic [TFLenWidth-1:0] tf_len_t;
-  typedef logic [RepWidth-1:0] reps_t;
+  typedef logic [RepWidth-1:0]   reps_t;
   typedef logic [StrideWidth-1:0] strides_t;
 
   // iDMA request / response types
@@ -214,9 +230,9 @@ module pulp_idma_wrap #(
   idma_rsp_t [NumStreams-1:0] idma_rsp;
 
   logic                       one_fe_valid;
-  logic [NumStreams-1:0] fe_valid, twod_queue_valid, be_valid, be_rsp_valid;
-  logic [NumStreams-1:0] fe_ready, twod_queue_ready, be_ready, be_rsp_ready;
-  logic [NumStreams-1:0] trans_complete, midend_busy;
+  logic [NumStreams-1:0]      fe_valid, twod_queue_valid, be_valid, be_rsp_valid;
+  logic [NumStreams-1:0]      fe_ready, twod_queue_ready, be_ready, be_rsp_ready;
+  logic [NumStreams-1:0]      trans_complete, midend_busy;
   idma_pkg::idma_busy_t [NumStreams-1:0] idma_busy;
 
   logic [31:0][NumStreams-1:0] done_id, next_id;
@@ -361,7 +377,7 @@ module pulp_idma_wrap #(
 
       // Meta Channel Widths
       localparam int unsigned axi_aw_chan_width = axi_pkg::aw_width(
-          AXI_ADDR_WIDTH, AXI_ID_WIDTH, AXI_USER_WIDTH
+        AXI_ADDR_WIDTH, AXI_ID_WIDTH, AXI_USER_WIDTH
       );
       localparam int unsigned init_req_chan_width = $bits(init_req_chan_t);
       localparam int unsigned obi_a_chan_width = $bits(obi_a_chan_t);
@@ -454,35 +470,33 @@ module pulp_idma_wrap #(
       // use a spill register to only give responses when a request was
       // (or is) asserted
       spill_register #(
-                       .T(logic[-1:0])
-                       )
-      i_init_read_rsp_reflect (
-                               .clk_i,
-                               .rst_ni,
-                               .valid_i(init_read_req.req_valid),
-                               .ready_o(init_read_rsp.req_ready),
-                               .data_i('0), // not used
-                               .valid_o(init_read_rsp.rsp_valid),
-                               .ready_i(init_read_req.rsp_ready),
-                               .data_o()
-                               );
+        .T(logic [-1:0])
+      ) i_init_read_rsp_reflect (
+        .clk_i,
+        .rst_ni,
+        .valid_i(init_read_req.req_valid),
+        .ready_o(init_read_rsp.req_ready),
+        .data_i('0),  // not used
+        .valid_o(init_read_rsp.rsp_valid),
+        .ready_i(init_read_req.rsp_ready),
+        .data_o()
+      );
 
       //implement zero memory using init protocol
-      assign init_read_rsp.rsp_chan.init  = '0;
+      assign init_read_rsp.rsp_chan.init = '0;
       // implement /dev/null
       spill_register #(
-                       .T(logic[-1:0])
-                       )
-      i_init_write_rsp_reflect (
-                                .clk_i,
-                                .rst_ni,
-                                .valid_i(init_write_req.req_valid),
-                                .ready_o(init_write_rsp.req_ready),
-                                .data_i('0), // not used
-                                .valid_o(init_write_rsp.rsp_valid),
-                                .ready_i(init_write_req.rsp_ready),
-                                .data_o()
-                                );
+        .T(logic [-1:0])
+      ) i_init_write_rsp_reflect (
+        .clk_i,
+        .rst_ni,
+        .valid_i(init_write_req.req_valid),
+        .ready_o(init_write_rsp.req_ready),
+        .data_i('0),  // not used
+        .valid_o(init_write_rsp.rsp_valid),
+        .ready_i(init_write_req.rsp_ready),
+        .data_o()
+      );
 
       assign init_write_rsp.rsp_chan.init = '0;
 
@@ -491,7 +505,7 @@ module pulp_idma_wrap #(
 
       // Meta Channel Widths
       localparam int unsigned axi_ar_chan_width = axi_pkg::ar_width(
-          AXI_ADDR_WIDTH, AXI_ID_WIDTH, AXI_USER_WIDTH
+        AXI_ADDR_WIDTH, AXI_ID_WIDTH, AXI_USER_WIDTH
       );
       localparam int unsigned init_req_chan_width = $bits(init_req_chan_t);
       localparam int unsigned obi_a_chan_width = $bits(obi_a_chan_t);
@@ -502,19 +516,25 @@ module pulp_idma_wrap #(
 
       typedef struct packed {
         axi_ar_chan_t ar_chan;
-        logic [`MY_MAX(
-axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
-)-axi_ar_chan_width:0] padding;
+        logic [
+          `MY_MAX(
+          axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
+        )
+          -axi_ar_chan_width:0] padding;
       } axi_read_ar_chan_padded_t;
 
       typedef struct packed {
         init_req_chan_t req_chan;
-        logic [`MY_MAX(axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width))-init_req_chan_width:0] padding;
+        logic [
+          `MY_MAX(axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width))
+          -init_req_chan_width:0] padding;
       } init_read_req_chan_padded_t;
 
       typedef struct packed {
         obi_a_chan_t a_chan;
-        logic [`MY_MAX(axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width))-obi_a_chan_width:0] padding;
+        logic [
+          `MY_MAX(axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width))
+          -obi_a_chan_width:0] padding;
       } obi_read_a_chan_padded_t;
 
       typedef union packed {
@@ -597,34 +617,32 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
       // use a spill register to only give responses when a request was
       // (or is) asserted
       spill_register #(
-                              .T(logic[-1:0])
-                              )
-      i_init_read_rsp_reflect (
-                          .clk_i,
-                          .rst_ni,
-                          .valid_i(init_read_req.req_valid),
-                          .ready_o(init_read_rsp.req_ready),
-                          .data_i('0), // not used
-                          .valid_o(init_read_rsp.rsp_valid),
-                          .ready_i(init_read_req.rsp_ready),
-                          .data_o()
-                          );
+        .T(logic [-1:0])
+      ) i_init_read_rsp_reflect (
+        .clk_i,
+        .rst_ni,
+        .valid_i(init_read_req.req_valid),
+        .ready_o(init_read_rsp.req_ready),
+        .data_i('0),  // not used
+        .valid_o(init_read_rsp.rsp_valid),
+        .ready_i(init_read_req.rsp_ready),
+        .data_o()
+      );
       //implement zero memory using init protocol
-      assign init_read_rsp.rsp_chan.init  = '0;
+      assign init_read_rsp.rsp_chan.init = '0;
       // implement /dev/null
       spill_register #(
-                              .T(logic[-1:0])
-                              )
-      i_init_write_rsp_reflect (
-                               .clk_i,
-                               .rst_ni,
-                               .valid_i(init_write_req.req_valid),
-                               .ready_o(init_write_rsp.req_ready),
-                               .data_i('0), // not used
-                               .valid_o(init_write_rsp.rsp_valid),
-                               .ready_i(init_write_req.rsp_ready),
-                               .data_o()
-                               );
+        .T(logic [-1:0])
+      ) i_init_write_rsp_reflect (
+        .clk_i,
+        .rst_ni,
+        .valid_i(init_write_req.req_valid),
+        .ready_o(init_write_rsp.req_ready),
+        .data_i('0),  // not used
+        .valid_o(init_write_rsp.rsp_valid),
+        .ready_i(init_write_req.rsp_ready),
+        .data_o()
+      );
       assign init_write_rsp.rsp_chan.init = '0;
     end : gen_cpy_in
   end : gen_streams
@@ -636,15 +654,15 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
   for (genvar s = 0; s < NUM_BIDIR_STREAMS; s++) begin
     if (MUX_READ) begin
       localparam obi_pkg::obi_cfg_t sbr_obi_cfg = '{
-                                                    UseRReady: 1'b1,
-                                                    CombGnt: 1'b0,
-                                                    AddrWidth: AXI_ADDR_WIDTH,
-                                                    DataWidth: AXI_DATA_WIDTH,
-                                                    IdWidth: 0,
-                                                    Integrity: 1'b0,
-                                                    BeFull:    1'b1,
-                                                    OptionalCfg: obi_pkg::ObiMinimalOptionalConfig
-                                                    };
+        UseRReady: 1'b1,
+        CombGnt: 1'b0,
+        AddrWidth: AXI_ADDR_WIDTH,
+        DataWidth: AXI_DATA_WIDTH,
+        IdWidth: 0,
+        Integrity: 1'b0,
+        BeFull: 1'b1,
+        OptionalCfg: obi_pkg::ObiMinimalOptionalConfig
+      };
 
       // iDMA OBI
 
@@ -670,83 +688,80 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         .mgr_port_rsp_i (obi_read_rsp_to_mux[s])
       );
       assign obi_reorg_req_from_rrc = '0;
-      assign obi_reorg_rsp_to_rrc = '0;
+      assign obi_reorg_rsp_to_rrc   = '0;
     end else begin  // if (MUX_READ)
       // pass through the read req/rsp from/to dma
       assign obi_read_req_muxed  = obi_read_req_from_dma;
       assign obi_read_rsp_to_dma = obi_read_rsp_to_mux;
 
       obi_rready_converter #(
-                             .obi_a_chan_t(obi_a_chan_t),
-                             .obi_r_chan_t(obi_r_chan_t),
-                             .DEPTH(1)
-                             )
-      obi_rready_converter_reorg_i (
-                              .clk_i,
-                              .rst_ni,
-                              .test_mode_i,
-                              .sbr_a_chan_i(obi_reorg_req_from_dma[s].a),
-                              .req_i(obi_reorg_req_from_dma[s].req),
-                              .gnt_o(obi_reorg_rsp_to_dma[s].gnt),
-                              .rready_i(obi_reorg_req_from_dma[s].rready),
-                              .sbr_r_chan_o(obi_reorg_rsp_to_dma[s].r),
-                              .rvalid_o(obi_reorg_rsp_to_dma[s].rvalid),
-                              .mgr_a_chan_o(obi_reorg_req_from_rrc[s].a),
-                              .req_o(obi_reorg_req_from_rrc[s].req),
-                              .rready_o(obi_reorg_req_from_rrc[s].rready),
-                              .mgr_r_chan_i(obi_reorg_rsp_to_rrc[s].r),
-                              .gnt_i(obi_reorg_rsp_to_rrc[s].gnt),
-                              .rvalid_i(obi_reorg_rsp_to_rrc[s].rvalid)
-                              );
-    end // else: !if(MUX_READ)
+        .obi_a_chan_t(obi_a_chan_t),
+        .obi_r_chan_t(obi_r_chan_t),
+        .DEPTH(1)
+      ) obi_rready_converter_reorg_i (
+        .clk_i,
+        .rst_ni,
+        .test_mode_i,
+        .sbr_a_chan_i(obi_reorg_req_from_dma[s].a),
+        .req_i(obi_reorg_req_from_dma[s].req),
+        .gnt_o(obi_reorg_rsp_to_dma[s].gnt),
+        .rready_i(obi_reorg_req_from_dma[s].rready),
+        .sbr_r_chan_o(obi_reorg_rsp_to_dma[s].r),
+        .rvalid_o(obi_reorg_rsp_to_dma[s].rvalid),
+        .mgr_a_chan_o(obi_reorg_req_from_rrc[s].a),
+        .req_o(obi_reorg_req_from_rrc[s].req),
+        .rready_o(obi_reorg_req_from_rrc[s].rready),
+        .mgr_r_chan_i(obi_reorg_rsp_to_rrc[s].r),
+        .gnt_i(obi_reorg_rsp_to_rrc[s].gnt),
+        .rvalid_i(obi_reorg_rsp_to_rrc[s].rvalid)
+      );
+    end  // else: !if(MUX_READ)
 
-      obi_rready_converter #(
-                             .obi_a_chan_t(obi_a_chan_t),
-                             .obi_r_chan_t(obi_r_chan_t),
-                             .DEPTH(1)
-                             )
-      obi_rready_converter_read_i (
-                              .clk_i,
-                              .rst_ni,
-                              .test_mode_i,
-                              .sbr_a_chan_i(obi_read_req_muxed[s].a),
-                              .req_i(obi_read_req_muxed[s].req),
-                              .gnt_o(obi_read_rsp_to_mux[s].gnt),
-                              .rready_i(obi_read_req_muxed[s].rready),
-                              .sbr_r_chan_o(obi_read_rsp_to_mux[s].r),
-                              .rvalid_o(obi_read_rsp_to_mux[s].rvalid),
-                              .mgr_a_chan_o(obi_read_req_from_rrc[s].a),
-                              .req_o(obi_read_req_from_rrc[s].req),
-                              .rready_o(obi_read_req_from_rrc[s].rready),
-                              .mgr_r_chan_i(obi_read_rsp_to_rrc[s].r),
-                              .gnt_i(obi_read_rsp_to_rrc[s].gnt),
-                              .rvalid_i(obi_read_rsp_to_rrc[s].rvalid)
-                              );
+    obi_rready_converter #(
+      .obi_a_chan_t(obi_a_chan_t),
+      .obi_r_chan_t(obi_r_chan_t),
+      .DEPTH(1)
+    ) obi_rready_converter_read_i (
+      .clk_i,
+      .rst_ni,
+      .test_mode_i,
+      .sbr_a_chan_i(obi_read_req_muxed[s].a),
+      .req_i(obi_read_req_muxed[s].req),
+      .gnt_o(obi_read_rsp_to_mux[s].gnt),
+      .rready_i(obi_read_req_muxed[s].rready),
+      .sbr_r_chan_o(obi_read_rsp_to_mux[s].r),
+      .rvalid_o(obi_read_rsp_to_mux[s].rvalid),
+      .mgr_a_chan_o(obi_read_req_from_rrc[s].a),
+      .req_o(obi_read_req_from_rrc[s].req),
+      .rready_o(obi_read_req_from_rrc[s].rready),
+      .mgr_r_chan_i(obi_read_rsp_to_rrc[s].r),
+      .gnt_i(obi_read_rsp_to_rrc[s].gnt),
+      .rvalid_i(obi_read_rsp_to_rrc[s].rvalid)
+    );
 
 
 
-      obi_rready_converter #(
-                             .obi_a_chan_t(obi_a_chan_t),
-                             .obi_r_chan_t(obi_r_chan_t),
-                             .DEPTH(1)
-                             )
-      obi_rready_converter_wr_i (
-                              .clk_i,
-                              .rst_ni,
-                              .test_mode_i,
-                              .sbr_a_chan_i(obi_write_req_from_dma[s].a),
-                              .req_i(obi_write_req_from_dma[s].req),
-                              .gnt_o(obi_write_rsp_to_dma[s].gnt),
-                              .rready_i(obi_write_req_from_dma[s].rready),
-                              .sbr_r_chan_o(obi_write_rsp_to_dma[s].r),
-                              .rvalid_o(obi_write_rsp_to_dma[s].rvalid),
-                              .mgr_a_chan_o(obi_write_req_from_rrc[s].a),
-                              .req_o(obi_write_req_from_rrc[s].req),
-                              .rready_o(obi_write_req_from_rrc[s].rready),
-                              .mgr_r_chan_i(obi_write_rsp_to_rrc[s].r),
-                              .gnt_i(obi_write_rsp_to_rrc[s].gnt),
-                                 .rvalid_i(obi_write_rsp_to_rrc[s].rvalid)
-                                 );
+    obi_rready_converter #(
+      .obi_a_chan_t(obi_a_chan_t),
+      .obi_r_chan_t(obi_r_chan_t),
+      .DEPTH(1)
+    ) obi_rready_converter_wr_i (
+      .clk_i,
+      .rst_ni,
+      .test_mode_i,
+      .sbr_a_chan_i(obi_write_req_from_dma[s].a),
+      .req_i(obi_write_req_from_dma[s].req),
+      .gnt_o(obi_write_rsp_to_dma[s].gnt),
+      .rready_i(obi_write_req_from_dma[s].rready),
+      .sbr_r_chan_o(obi_write_rsp_to_dma[s].r),
+      .rvalid_o(obi_write_rsp_to_dma[s].rvalid),
+      .mgr_a_chan_o(obi_write_req_from_rrc[s].a),
+      .req_o(obi_write_req_from_rrc[s].req),
+      .rready_o(obi_write_req_from_rrc[s].rready),
+      .mgr_r_chan_i(obi_write_rsp_to_rrc[s].r),
+      .gnt_i(obi_write_rsp_to_rrc[s].gnt),
+      .rvalid_i(obi_write_rsp_to_rrc[s].rvalid)
+    );
   end
 
 
@@ -754,72 +769,22 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
   // TCDM connections
   // ------------------------------------------------------
   for (genvar s = 0; s < NUM_BIDIR_STREAMS; s++) begin
+    if (TCDM_MEM2BANKS) begin : tcdm_mem2banks
+      // Currently, mem2banks only implemented for AXI_DATA_WIDTH==64
+      // TODO: parametrize so it works for arbitrary data widths
+      initial begin : mem2banks_check_axi_width
+        if (AXI_DATA_WIDTH != 64) begin
+          $error("pulp_idma_wrap: AXI_DATA_WIDTH must be 64 when TCDM_MEM2BANKS is 1!");
+        end
+      end
 
-    logic tcdm_master_we_0;
-    logic tcdm_master_we_1;
-    logic tcdm_master_we_2;
-    logic tcdm_master_we_3;
-    logic tcdm_master_we_4;
-    logic tcdm_master_we_5;
+      logic tcdm_master_we_0;
+      logic tcdm_master_we_1;
+      logic tcdm_master_we_2;
+      logic tcdm_master_we_3;
+      logic tcdm_master_we_4;
+      logic tcdm_master_we_5;
 
-    mem_to_banks #(
-      .AddrWidth(AXI_ADDR_WIDTH),
-      .DataWidth(AXI_DATA_WIDTH),
-      .NumBanks (32'd2),
-      .HideStrb (1'b1),
-      .MaxTrans (32'd1),
-      .FifoDepth(32'd1)
-    ) i_mem_to_banks_read (
-      .clk_i,
-      .rst_ni,
-      .req_i(obi_read_req_from_rrc[s].req),
-      .gnt_o(obi_read_rsp_to_rrc[s].gnt),
-      .addr_i(obi_read_req_from_rrc[s].a.addr),
-      .wdata_i(obi_read_req_from_rrc[s].a.wdata),
-      .strb_i(obi_read_req_from_rrc[s].a.be),
-      .atop_i('0),
-      .we_i(obi_read_req_from_rrc[s].a.we),
-      .rvalid_o(obi_read_rsp_to_rrc[s].rvalid),
-      .rdata_o(obi_read_rsp_to_rrc[s].r.rdata),
-      .bank_req_o({
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].req
-      }),
-      .bank_gnt_i({
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].gnt, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].gnt
-      }),
-      .bank_addr_o({
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].add, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].add
-      }),
-      .bank_wdata_o({
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].data, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].data
-      }),
-      .bank_strb_o({
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].be, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].be
-      }),
-      .bank_atop_o(  /* NOT CONNECTED */),
-      .bank_we_o({tcdm_master_we_3, tcdm_master_we_2}),
-      .bank_rvalid_i({
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].r_valid,
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_valid
-      }),
-      .bank_rdata_i({
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].r_data,
-        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_data
-      })
-    );
-
-
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].boffs = '0;
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].lrdy  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].user  = '0;
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].boffs = '0;
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].lrdy  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].user  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].wen   = !tcdm_master_we_2;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].wen   = !tcdm_master_we_3;
-
-    if (!MUX_READ) begin // if we don't mux the read, we have 6*NUM_BIDIR_STREAMS interfaces and the reorg
-                         // interface goes straight to TCDM masters 5 and 4.
       mem_to_banks #(
         .AddrWidth(AXI_ADDR_WIDTH),
         .DataWidth(AXI_DATA_WIDTH),
@@ -827,109 +792,225 @@ axi_ar_chan_width, `MY_MAX(init_req_chan_width, obi_a_chan_width)
         .HideStrb (1'b1),
         .MaxTrans (32'd1),
         .FifoDepth(32'd1)
-      ) i_mem_to_banks_reorg (
+      ) i_mem_to_banks_write (
         .clk_i,
         .rst_ni,
-        .req_i(obi_reorg_req_from_rrc[s].req),
-        .gnt_o(obi_reorg_rsp_to_rrc[s].gnt),
-        .addr_i(obi_reorg_req_from_rrc[s].a.addr),
-        .wdata_i(obi_reorg_req_from_rrc[s].a.wdata),
-        .strb_i(obi_reorg_req_from_rrc[s].a.be),
+        .req_i(obi_write_req_from_rrc[s].req),
+        .gnt_o(obi_write_rsp_to_rrc[s].gnt),
+        .addr_i(obi_write_req_from_rrc[s].a.addr),
+        .wdata_i(obi_write_req_from_rrc[s].a.wdata),
+        .strb_i(obi_write_req_from_rrc[s].a.be),
         .atop_i('0),
-        .we_i(obi_reorg_req_from_rrc[s].a.we),
-        .rvalid_o(obi_reorg_rsp_to_rrc[s].rvalid),
-        .rdata_o(obi_reorg_rsp_to_rrc[s].r.rdata),
+        .we_i(obi_write_req_from_rrc[s].a.we),
+        .rvalid_o(obi_write_rsp_to_rrc[s].rvalid),
+        .rdata_o(obi_write_rsp_to_rrc[s].r.rdata),
         .bank_req_o({
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].req
-        }),
-        .bank_gnt_i({
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].gnt, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].gnt
-        }),
-        .bank_addr_o({
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].add, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].add
-        }),
-        .bank_wdata_o({
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].data, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].data
-        }),
-        .bank_strb_o({
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].be, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].be
-        }),
-        .bank_atop_o(  /* NOT CONNECTED */),
-        .bank_we_o({tcdm_master_we_5, tcdm_master_we_4}),
-        .bank_rvalid_i({
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].r_valid,
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].r_valid
-        }),
-        .bank_rdata_i({
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].r_data,
-          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].r_data
-        })
-      );
-
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].boffs = '0;
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].lrdy  = '0;
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].user  = '0;
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].boffs = '0;
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].lrdy  = '0;
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].user  = '0;
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].wen   = !tcdm_master_we_4;
-      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].wen   = !tcdm_master_we_5;
-
-    end
-    mem_to_banks #(
-      .AddrWidth(AXI_ADDR_WIDTH),
-      .DataWidth(AXI_DATA_WIDTH),
-      .NumBanks (32'd2),
-      .HideStrb (1'b1),
-      .MaxTrans (32'd1),
-      .FifoDepth(32'd1)
-    ) i_mem_to_banks_write (
-      .clk_i,
-      .rst_ni,
-      .req_i(obi_write_req_from_rrc[s].req),
-      .gnt_o(obi_write_rsp_to_rrc[s].gnt),
-      .addr_i(obi_write_req_from_rrc[s].a.addr),
-      .wdata_i(obi_write_req_from_rrc[s].a.wdata),
-      .strb_i(obi_write_req_from_rrc[s].a.be),
-      .atop_i('0),
-      .we_i(obi_write_req_from_rrc[s].a.we),
-      .rvalid_o(obi_write_rsp_to_rrc[s].rvalid),
-      .rdata_o(obi_write_rsp_to_rrc[s].r.rdata),
-      .bank_req_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].req
       }),
-      .bank_gnt_i({
+        .bank_gnt_i({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].gnt, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].gnt
       }),
-      .bank_addr_o({
+        .bank_addr_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].add, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].add
       }),
-      .bank_wdata_o({
+        .bank_wdata_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].data, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].data
       }),
-      .bank_strb_o({
+        .bank_strb_o({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].be, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].be
       }),
-      .bank_atop_o(  /* NOT CONNECTED */),
-      .bank_we_o({tcdm_master_we_1, tcdm_master_we_0}),
-      .bank_rvalid_i({
+        .bank_atop_o(  /* NOT CONNECTED */),
+        .bank_we_o({tcdm_master_we_1, tcdm_master_we_0}),
+        .bank_rvalid_i({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].r_valid,
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s].r_valid
       }),
-      .bank_rdata_i({
+        .bank_rdata_i({
         tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].r_data, tcdm_master[NB_TCDM_PORTS_PER_STRM*s].r_data
       })
-    );
+      );
 
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].boffs = '0;
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].lrdy  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].user  = '0;
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].boffs = '0;
-    //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].lrdy  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].user  = '0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].wen   = !tcdm_master_we_0;
-    assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].wen   = !tcdm_master_we_1;
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].boffs = '0;
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].lrdy  = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].user  = '0;
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].boffs = '0;
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].lrdy  = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].user  = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].wen   = !tcdm_master_we_0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].wen   = !tcdm_master_we_1;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].r_ready   = 1'b1;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].r_ready   = 1'b1;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].id   = '0; // TODO change?
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].id   = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+0].ecc   = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].ecc   = '0;
 
-  end
+      mem_to_banks #(
+        .AddrWidth(AXI_ADDR_WIDTH),
+        .DataWidth(AXI_DATA_WIDTH),
+        .NumBanks (32'd2),
+        .HideStrb (1'b1),
+        .MaxTrans (32'd1),
+        .FifoDepth(32'd1)
+      ) i_mem_to_banks_read (
+        .clk_i,
+        .rst_ni,
+        .req_i(obi_read_req_from_rrc[s].req),
+        .gnt_o(obi_read_rsp_to_rrc[s].gnt),
+        .addr_i(obi_read_req_from_rrc[s].a.addr),
+        .wdata_i(obi_read_req_from_rrc[s].a.wdata),
+        .strb_i(obi_read_req_from_rrc[s].a.be),
+        .atop_i('0),
+        .we_i(obi_read_req_from_rrc[s].a.we),
+        .rvalid_o(obi_read_rsp_to_rrc[s].rvalid),
+        .rdata_o(obi_read_rsp_to_rrc[s].r.rdata),
+        .bank_req_o({
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].req
+      }),
+        .bank_gnt_i({
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].gnt, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].gnt
+      }),
+        .bank_addr_o({
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].add, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].add
+      }),
+        .bank_wdata_o({
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].data, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].data
+      }),
+        .bank_strb_o({
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].be, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].be
+      }),
+        .bank_atop_o(  /* NOT CONNECTED */),
+        .bank_we_o({tcdm_master_we_3, tcdm_master_we_2}),
+        .bank_rvalid_i({
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].r_valid,
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_valid
+      }),
+        .bank_rdata_i({
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].r_data,
+        tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_data
+      })
+      );
+
+
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].boffs = '0;
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].lrdy  = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].user  = '0;
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].boffs = '0;
+      //assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].lrdy  = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].user  = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].wen   = !tcdm_master_we_2;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].wen   = !tcdm_master_we_3;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_ready   = 1'b1;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].r_ready   = 1'b1;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].id   = '0; // TODO change?
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].id   = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].ecc   = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+3].ecc   = '0;
+
+
+      if (!MUX_READ) begin // if we don't mux the read, we have 6*NUM_BIDIR_STREAMS interfaces and the reorg
+        // interface goes straight to TCDM masters 5 and 4.
+        mem_to_banks #(
+          .AddrWidth(AXI_ADDR_WIDTH),
+          .DataWidth(AXI_DATA_WIDTH),
+          .NumBanks (32'd2),
+          .HideStrb (1'b1),
+          .MaxTrans (32'd1),
+          .FifoDepth(32'd1)
+        ) i_mem_to_banks_reorg (
+          .clk_i,
+          .rst_ni,
+          .req_i(obi_reorg_req_from_rrc[s].req),
+          .gnt_o(obi_reorg_rsp_to_rrc[s].gnt),
+          .addr_i(obi_reorg_req_from_rrc[s].a.addr),
+          .wdata_i(obi_reorg_req_from_rrc[s].a.wdata),
+          .strb_i(obi_reorg_req_from_rrc[s].a.be),
+          .atop_i('0),
+          .we_i(obi_reorg_req_from_rrc[s].a.we),
+          .rvalid_o(obi_reorg_rsp_to_rrc[s].rvalid),
+          .rdata_o(obi_reorg_rsp_to_rrc[s].r.rdata),
+          .bank_req_o({
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].req, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].req
+        }),
+          .bank_gnt_i({
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].gnt, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].gnt
+        }),
+          .bank_addr_o({
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].add, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].add
+        }),
+          .bank_wdata_o({
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].data, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].data
+        }),
+          .bank_strb_o({
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].be, tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].be
+        }),
+          .bank_atop_o(  /* NOT CONNECTED */),
+          .bank_we_o({tcdm_master_we_5, tcdm_master_we_4}),
+          .bank_rvalid_i({
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].r_valid,
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].r_valid
+        }),
+          .bank_rdata_i({
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].r_data,
+          tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].r_data
+        })
+        );
+
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].boffs = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].lrdy  = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].user  = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].boffs = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].lrdy  = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].user  = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].wen   = !tcdm_master_we_4;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].wen   = !tcdm_master_we_5;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].r_ready   = 1'b1;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].r_ready   = 1'b1;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].id   = '0; // TODO change?
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].id   = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+4].ecc   = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+5].ecc   = '0;
+      end
+    end else begin : passthrough_obi_to_tcdm
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].user = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].req =  obi_write_req_from_rrc[s].req;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].wen = !obi_write_req_from_rrc[s].a.we;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].add = obi_write_req_from_rrc[s].a.addr;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].data = obi_write_req_from_rrc[s].a.wdata;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].be = obi_write_req_from_rrc[s].a.be;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].r_ready = obi_write_req_from_rrc[s].rready;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].id   = '0; // TODO change?
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s].ecc   = '0;
+        assign obi_write_rsp_to_rrc[s].gnt = tcdm_master[NB_TCDM_PORTS_PER_STRM*s].gnt;
+        assign obi_write_rsp_to_rrc[s].rvalid = tcdm_master[NB_TCDM_PORTS_PER_STRM*s].r_valid;
+        assign obi_write_rsp_to_rrc[s].r.rdata = tcdm_master[NB_TCDM_PORTS_PER_STRM*s].r_data;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].user = '0;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].req = obi_read_req_from_rrc[s].req;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].wen = !obi_read_req_from_rrc[s].a.we;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].add = obi_read_req_from_rrc[s].a.addr;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].data = obi_read_req_from_rrc[s].a.wdata;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].be = obi_read_req_from_rrc[s].a.be;
+        assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].r_ready = obi_read_req_from_rrc[s].rready;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].id   = '0;
+      assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].ecc   = '0;
+        assign obi_read_rsp_to_rrc[s].gnt = tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].gnt;
+        assign obi_read_rsp_to_rrc[s].rvalid = tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].r_valid;
+        assign obi_read_rsp_to_rrc[s].r.rdata = tcdm_master[NB_TCDM_PORTS_PER_STRM*s+1].r_data;
+        if (!MUX_READ) begin : passthrough_obi_read
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].req = obi_reorg_req_from_rrc[s].req;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].wen = !obi_reorg_req_from_rrc[s].a.we;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].add = obi_reorg_req_from_rrc[s].a.addr;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].data = obi_reorg_req_from_rrc[s].a.wdata;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].be = obi_reorg_req_from_rrc[s].a.be;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_ready = obi_read_req_from_rrc[s].rready;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].id   = '0;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].ecc   = '0;
+          assign obi_reorg_rsp_to_rrc[s].gnt = tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].gnt;
+          assign obi_reorg_rsp_to_rrc[s].rvalid = tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_valid;
+          assign obi_reorg_rsp_to_rrc[s].r.rdata = tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].r_data;
+          assign tcdm_master[NB_TCDM_PORTS_PER_STRM*s+2].user = '0;
+        end
+      end
+    end
 endmodule
 `undef MY_MAX
