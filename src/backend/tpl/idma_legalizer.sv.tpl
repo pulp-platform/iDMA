@@ -260,11 +260,11 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
     //--------------------------------------
 % if no_write_bursting or has_page_write_bursting:
     idma_legalizer_page_splitter #(
-        .OffsetWidth   ( OffsetWidth ),
-        .PageAddrWidth ( PageSize    ),
-        .addr_t        ( addr_t      ),
-        .page_len_t    ( page_len_t  ),
-        .page_addr_t   ( page_addr_t )
+        .OffsetWidth   ( OffsetWidth   ),
+        .PageAddrWidth ( PageAddrWidth ),
+        .addr_t        ( addr_t        ),
+        .page_len_t    ( page_len_t    ),
+        .page_addr_t   ( page_addr_t   )
     ) i_write_page_splitter (
     % if no_write_bursting:
         .not_bursting_i    ( 1'b1 ),
