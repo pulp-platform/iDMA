@@ -182,11 +182,11 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     //--------------------------------------
 % if no_read_bursting or has_page_read_bursting:
     idma_legalizer_page_splitter #(
-        .OffsetWidth   ( OffsetWidth ),
-        .PageAddrWidth ( PageSize    ),
-        .addr_t        ( addr_t      ),
-        .page_len_t    ( page_len_t  ),
-        .page_addr_t   ( page_addr_t )
+        .OffsetWidth   ( OffsetWidth   ),
+        .PageAddrWidth ( PageAddrWidth ),
+        .addr_t        ( addr_t        ),
+        .page_len_t    ( page_len_t    ),
+        .page_addr_t   ( page_addr_t   )
     ) i_read_page_splitter (
     % if no_read_bursting:
         .not_bursting_i    ( 1'b1 ),
