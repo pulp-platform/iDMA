@@ -7,6 +7,7 @@
 
 `include "common_cells/registers.svh"
 `include "idma/typedef.svh"
+`include "idma/tracer.svh"
 
 /// Implements the tightly-coupled frontend. This module can directly be connected
 /// to an accelerator bus in the snitch system
@@ -18,6 +19,7 @@ module idma_inst64_top #(
     parameter int unsigned NumAxInFlight   = 32'd3,
     parameter int unsigned DMAReqFifoDepth = 32'd3,
     parameter int unsigned NumChannels     = 32'd1,
+    parameter int unsigned DMATracing      = 32'd0,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -207,7 +209,6 @@ module idma_inst64_top #(
 
         assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c];
     end
-
 
 
     //--------------------------------------
@@ -506,5 +507,27 @@ module idma_inst64_top #(
     // State
     //--------------------------------------
     `FF(idma_fe_req_q, idma_fe_req_d, '0)
+
+
+    //--------------------------------------
+    // DMA Tracer
+    //--------------------------------------
+    // only activate tracer if requested
+    if (DMATracing) begin
+        // derive the name of the trace file from the hart ID
+        string trace_file;
+        initial begin
+            // We need to schedule the assignment into a safe region, otherwise
+            // `hart_id_i` won't have a value assigned at the beginning of the first
+            // delta cycle.
+            /* verilator lint_off STMTDLY */
+            #0;
+            /* verilator lint_on STMTDLY */
+            $sformat(trace_file, "dma_trace_%05x.log", hart_id_i);
+        end
+        // attach the tracer
+        `IDMA_TRACER_RW_AXI(gen_backend[0].i_idma_backend_rw_axi, trace_file);
+    end
+
 
 endmodule
