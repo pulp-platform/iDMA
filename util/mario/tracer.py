@@ -14,7 +14,7 @@ from mako.template import Template
 TRACER_BODY = '''
 // The tracer for the ${identifier} iDMA
 `define IDMA_TRACER_${identifier_cap}(__backend_inst, __out_f) <%text>\\</%text>
-`ifndef SYNTHESYS <%text>\\</%text>
+`ifndef SYNTHESIS <%text>\\</%text>
 `ifndef VERILATOR <%text>\\</%text>
     initial begin : inital_tracer_${identifier} <%text>\\</%text>
         automatic bit first_iter = 1; <%text>\\</%text>
