@@ -14,22 +14,26 @@ from mako.template import Template
 TRACER_BODY = '''
 // The tracer for the ${identifier} iDMA
 `define IDMA_TRACER_${identifier_cap}(__backend_inst, __out_f) <%text>\\</%text>
-`ifndef SYNTHESYS <%text>\\</%text>
-`ifndef VERILATOR <%text>\\</%text>
+`ifndef SYNTHESIS <%text>\\</%text>
     initial begin : inital_tracer_${identifier} <%text>\\</%text>
         automatic bit first_iter = 1; <%text>\\</%text>
         automatic integer tf; <%text>\\</%text>
         automatic `IDMA_TRACER_MAX_TYPE cnst [string]; <%text>\\</%text>
         automatic `IDMA_TRACER_MAX_TYPE meta [string]; <%text>\\</%text>
+        automatic `IDMA_TRACER_MAX_TYPE backend [string]; <%text>\\</%text>
         automatic `IDMA_TRACER_MAX_TYPE busy [string]; <%text>\\</%text>
         automatic `IDMA_TRACER_MAX_TYPE bus [string]; <%text>\\</%text>
         automatic string trace; <%text>\\</%text>
+`ifndef VERILATOR <%text>\\</%text>
         #0; <%text>\\</%text>
+`endif <%text>\\</%text>
         tf = $fopen(__out_f, "w"); <%text>\\</%text>
         $display("[iDMA Tracer] Logging %s to %s", `"__backend_inst`", __out_f); <%text>\\</%text>
         forever begin <%text>\\</%text>
             @(posedge __backend_inst``.clk_i); <%text>\\</%text>
-            if(__backend_inst``.rst_ni & |__backend_inst``.busy_o) begin <%text>\\</%text>
+            if(__backend_inst``.rst_ni & (|__backend_inst``.busy_o | <%text>\\</%text>
+                                          __backend_inst``.req_valid_i | <%text>\\</%text>
+                                          __backend_inst``.rsp_valid_o)) begin <%text>\\</%text>
                 /* Trace */ <%text>\\</%text>
                 trace = "{"; <%text>\\</%text>
                 /* Constants */ <%text>\\</%text>
@@ -55,6 +59,13 @@ TRACER_BODY = '''
                 meta = '{ <%text>\\</%text>
                     "time" : $time() <%text>\\</%text>
                 }; <%text>\\</%text>
+                backend = '{ <%text>\\</%text>
+                    "req_valid"  : __backend_inst``.req_valid_i, <%text>\\</%text>
+                    "req_ready"  : __backend_inst``.req_ready_o, <%text>\\</%text>
+                    "rsp_valid"  : __backend_inst``.rsp_valid_o, <%text>\\</%text>
+                    "rsp_ready"  : __backend_inst``.rsp_ready_i, <%text>\\</%text>
+                    "req_length" : __backend_inst``.idma_req_i.length <%text>\\</%text>
+                }; <%text>\\</%text>
                 busy = '{ <%text>\\</%text>
                     "buffer"      : __backend_inst``.busy_o.buffer_busy, <%text>\\</%text>
                     "r_dp"        : __backend_inst``.busy_o.r_dp_busy, <%text>\\</%text>
@@ -71,6 +82,7 @@ ${signals}
                 /* Assembly */ <%text>\\</%text>
                 `IDMA_TRACER_STR_ASSEMBLY(cnst, first_iter); <%text>\\</%text>
                 `IDMA_TRACER_STR_ASSEMBLY(meta, 1); <%text>\\</%text>
+                `IDMA_TRACER_STR_ASSEMBLY(backend, 1); <%text>\\</%text>
                 `IDMA_TRACER_STR_ASSEMBLY(busy, 1); <%text>\\</%text>
                 `IDMA_TRACER_STR_ASSEMBLY(bus, 1); <%text>\\</%text>
                 `IDMA_TRACER_CLEAR_COND(first_iter); <%text>\\</%text>
@@ -79,7 +91,6 @@ ${signals}
             end <%text>\\</%text>
         end <%text>\\</%text>
     end <%text>\\</%text>
-`endif <%text>\\</%text>
 `endif
 '''
 
