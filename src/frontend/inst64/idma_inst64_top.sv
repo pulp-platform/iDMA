@@ -513,7 +513,7 @@ module idma_inst64_top #(
     // DMA Tracer
     //--------------------------------------
     // only activate tracer if requested
-    if (DMATracing) begin
+    if (DMATracing) begin : gen_tracer
         // derive the name of the trace file from the hart ID
         string trace_file;
         initial begin
