@@ -514,20 +514,21 @@ module idma_inst64_top #(
     //--------------------------------------
     // only activate tracer if requested
     if (DMATracing) begin : gen_tracer
-        // derive the name of the trace file from the hart ID
-        string trace_file;
-        initial begin
-            // We need to schedule the assignment into a safe region, otherwise
-            // `hart_id_i` won't have a value assigned at the beginning of the first
-            // delta cycle.
-            /* verilator lint_off STMTDLY */
-            #0;
-            /* verilator lint_on STMTDLY */
-            $sformat(trace_file, "dma_trace_%05x.log", hart_id_i);
+        for (genvar c = 0; c < NumChannels; c++) begin : gen_channels
+            // derive the name of the trace file from the hart and channel IDs
+            string trace_file;
+            initial begin
+                // We need to schedule the assignment into a safe region, otherwise
+                // `hart_id_i` won't have a value assigned at the beginning of the first
+                // delta cycle.
+                /* verilator lint_off STMTDLY */
+                #0;
+                /* verilator lint_on STMTDLY */
+                $sformat(trace_file, "dma_trace_%05x_%05x.log", hart_id_i, c);
+            end
+            // attach the tracer
+            `IDMA_TRACER_RW_AXI(gen_backend[c].i_idma_backend_rw_axi, trace_file);
         end
-        // attach the tracer
-        `IDMA_TRACER_RW_AXI(gen_backend[0].i_idma_backend_rw_axi, trace_file);
     end
-
 
 endmodule
