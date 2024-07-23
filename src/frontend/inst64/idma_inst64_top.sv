@@ -521,9 +521,9 @@ module idma_inst64_top #(
                 // We need to schedule the assignment into a safe region, otherwise
                 // `hart_id_i` won't have a value assigned at the beginning of the first
                 // delta cycle.
-                /* verilator lint_off STMTDLY */
+`ifndef VERILATOR
                 #0;
-                /* verilator lint_on STMTDLY */
+`endif
                 $sformat(trace_file, "dma_trace_%05x_%05x.log", hart_id_i, c);
             end
             // attach the tracer

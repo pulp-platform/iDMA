@@ -15,7 +15,6 @@ TRACER_BODY = '''
 // The tracer for the ${identifier} iDMA
 `define IDMA_TRACER_${identifier_cap}(__backend_inst, __out_f) <%text>\\</%text>
 `ifndef SYNTHESIS <%text>\\</%text>
-`ifndef VERILATOR <%text>\\</%text>
     initial begin : inital_tracer_${identifier} <%text>\\</%text>
         automatic bit first_iter = 1; <%text>\\</%text>
         automatic integer tf; <%text>\\</%text>
@@ -25,7 +24,9 @@ TRACER_BODY = '''
         automatic `IDMA_TRACER_MAX_TYPE busy [string]; <%text>\\</%text>
         automatic `IDMA_TRACER_MAX_TYPE bus [string]; <%text>\\</%text>
         automatic string trace; <%text>\\</%text>
+`ifndef VERILATOR <%text>\\</%text>
         #0; <%text>\\</%text>
+`endif <%text>\\</%text>
         tf = $fopen(__out_f, "w"); <%text>\\</%text>
         $display("[iDMA Tracer] Logging %s to %s", `"__backend_inst`", __out_f); <%text>\\</%text>
         forever begin <%text>\\</%text>
@@ -90,7 +91,6 @@ ${signals}
             end <%text>\\</%text>
         end <%text>\\</%text>
     end <%text>\\</%text>
-`endif <%text>\\</%text>
 `endif
 '''
 
