@@ -162,14 +162,14 @@ module idma_${identifier} #(
     end
 
     // observational registers
-    for (genvar c = 0; c < NumStreams; c++) begin
+    for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
         assign dma_hw2reg[i].status[c]  = {midend_busy_i[c], busy_i[c]};
         assign dma_hw2reg[i].next_id[c] = next_id_i;
         assign dma_hw2reg[i].done_id[c] = done_id_i[c];
     end
 
     // tie-off unused channels
-    for (genvar c = NumStreams; c < MaxNumStreams; c++) begin
+    for (genvar c = NumStreams; c < MaxNumStreams; c++) begin : gen_hw2reg_unused
         assign dma_hw2reg[i].status[c]  = '0;
         assign dma_hw2reg[i].next_id[c] = '0;
         assign dma_hw2reg[i].done_id[c] = '0;
