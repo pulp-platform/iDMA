@@ -205,7 +205,7 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
 
         .reduce_len_i      ( opt_tf_q.src_reduce_len ),
         .max_llen_i        ( opt_tf_q.src_max_llen   ),
-      
+
         .addr_i            ( r_tf_q.addr             ),
         .num_bytes_to_pb_o ( r_page_num_bytes_to_pb  )
     );
@@ -283,7 +283,7 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
 
         .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
         .max_llen_i        ( opt_tf_q.dst_max_llen   ),
-      
+
         .addr_i            ( w_tf_q.addr             ),
         .num_bytes_to_pb_o ( w_page_num_bytes_to_pb  )
     );
@@ -488,7 +488,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             };
             // determine shift amount
             if (CombinedShifter) begin
-                opt_tf_d.read_shift  = req_i.src_addr[OffsetWidth-1:0] - req_i.dst_addr[OffsetWidth-1:0];
+                opt_tf_d.read_shift  = req_i.src_addr[OffsetWidth-1:0] -
+                                       req_i.dst_addr[OffsetWidth-1:0];
                 opt_tf_d.write_shift = '0;
             end else begin
                 opt_tf_d.read_shift  =   req_i.src_addr[OffsetWidth-1:0];
@@ -606,7 +607,7 @@ ${database[protocol]['legalizer_write_data_path']}
     // only advance to next state if:
     // * rw_coupled: both machines advance
     // * rw_decoupled: either machine advances
- 
+
     always_comb begin : proc_legalizer_flow_control
         if ( opt_tf_q.decouple_rw\
         % if len(used_non_bursting_or_force_decouple_read_protocols) != 0:
@@ -645,7 +646,7 @@ ${database[protocol]['legalizer_write_data_path']}
             w_valid_o = w_tf_q.valid & r_ready_i & w_ready_i & !flush_i;
         end
     end
-    
+
     // load next idma request: if both machines are done!
     assign ready_o = r_done & w_done & r_ready_i & w_ready_i & !flush_i;
 

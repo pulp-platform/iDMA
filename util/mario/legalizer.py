@@ -43,13 +43,13 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         for rp in used_read_prots:
             # format DB entry
             read_meta = indent_block(db[rp]['legalizer_read_meta_channel'], 3 - srp, 4)
-            db[rp]['legalizer_read_meta_channel'] = read_meta
+            db[rp]['legalizer_read_meta_channel'] = read_meta[:read_meta.rfind('\n')]
 
         # Indent write meta channel and data path
         for wp in used_write_prots:
             # format DB entry
             write_meta = indent_block(db[wp]['legalizer_write_meta_channel'], 3 - swp, 4)
-            db[wp]['legalizer_write_meta_channel'] = write_meta
+            db[wp]['legalizer_write_meta_channel'] = write_meta[:write_meta.rfind('\n')]
             # if datapath exists
             if 'legalizer_write_data_path' in db[wp]:
                 # format DB entry
