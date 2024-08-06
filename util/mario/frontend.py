@@ -13,6 +13,7 @@ from mako.template import Template
 
 NUM_PROT_BITS = 3
 
+
 def render_register(content: dict):
     """Render a register"""
     return '''    {{ name: "{name:}"
