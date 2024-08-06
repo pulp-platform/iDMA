@@ -87,15 +87,16 @@ module idma_${identifier} #(
       .devmode_i ( 1'b1                 )
     );
 
+    logic read_happens;
     // DMA backpressure
     always_comb begin : proc_dma_backpressure
       // ready signal
       dma_ctrl_rsp_o[i]       = dma_ctrl_rsp[i];
-      dma_ctrl_rsp_o[i].ready = arb_ready[i];
+      dma_ctrl_rsp_o[i].ready = read_happens ? arb_ready[i] : dma_ctrl_rsp[i];
     end
 
     // valid signals
-    logic read_happens;
+
     always_comb begin : proc_launch
         read_happens = 1'b0;
         for (int c = 0; c < NumStreams; c++) begin
@@ -159,13 +160,13 @@ module idma_${identifier} #(
       // Disable higher dimensions
       if ( dma_reg2hw[i].conf.enable_nd.q == 0) begin
 % for nd in range(0, num_dim-1):
-        arb_dma_req[i].d_req[${nd}].reps = '0;
+        arb_dma_req[i].d_req[${nd}].reps = ${"'0" if nd != num_dim-2 else "'d1"};
 % endfor
       end
 % for nd in range(1, num_dim-1):
       else if ( dma_reg2hw[i].conf.enable_nd.q == ${nd}) begin
 % for snd in range(nd, num_dim-1):
-        arb_dma_req[i].d_req[${snd}].reps = '0;
+        arb_dma_req[i].d_req[${snd}].reps = 'd1;
 % endfor
       end
 % endfor
