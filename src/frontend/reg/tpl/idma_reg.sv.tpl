@@ -113,6 +113,10 @@ module idma_${identifier} #(
       arb_dma_req[i]${sep}dst_addr = {dma_reg2hw[i].dst_addr_high.q, dma_reg2hw[i].dst_addr_low.q};
 % endif
 
+      // Protocols
+      arb_dma_req[i]${sep}src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol);
+      arb_dma_req[i]${sep}dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol);
+
       // Current backend only supports incremental burst
       arb_dma_req[i]${sep}opt.src.burst = axi_pkg::BURST_INCR;
       arb_dma_req[i]${sep}opt.dst.burst = axi_pkg::BURST_INCR;
