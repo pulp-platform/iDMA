@@ -60,6 +60,17 @@ module idma_${identifier} #(
   // register signals
   reg_rsp_t [NumRegs-1:0] dma_ctrl_rsp;
 
+  always_comb begin
+      stream_idx_o = '0;
+      for (int r = 0; r < NumRegs; r++) begin
+          for (int c = 0; c < NumStreams; c++) begin
+              if (dma_reg2hw[r].next_id[c].re) begin
+                  stream_idx_o = c;
+              end
+          end
+      end
+  end
+
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
 
@@ -87,12 +98,8 @@ module idma_${identifier} #(
     logic read_happens;
     always_comb begin : proc_launch
         read_happens = 1'b0;
-        stream_idx_o = '0;
         for (int c = 0; c < NumStreams; c++) begin
             read_happens |= dma_reg2hw[i].next_id[c].re;
-            if (dma_reg2hw[i].next_id[c].re) begin
-                stream_idx_o = c;
-            end
         end
         arb_valid[i] = read_happens;
     end
@@ -114,8 +121,8 @@ module idma_${identifier} #(
 % endif
 
       // Protocols
-      arb_dma_req[i]${sep}src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol);
-      arb_dma_req[i]${sep}dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol);
+      arb_dma_req[i]${sep}opt.src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol);
+      arb_dma_req[i]${sep}opt.dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol);
 
       // Current backend only supports incremental burst
       arb_dma_req[i]${sep}opt.src.burst = axi_pkg::BURST_INCR;
