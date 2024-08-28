@@ -513,6 +513,7 @@ module idma_inst64_top #(
     // DMA Tracer
     //--------------------------------------
     // only activate tracer if requested
+`ifndef SYNTHESIS
     if (DMATracing) begin : gen_tracer
         for (genvar c = 0; c < NumChannels; c++) begin : gen_channels
             // derive the name of the trace file from the hart and channel IDs
@@ -530,5 +531,6 @@ module idma_inst64_top #(
             `IDMA_TRACER_RW_AXI(gen_backend[c].i_idma_backend_rw_axi, trace_file);
         end
     end
+`endif
 
 endmodule
