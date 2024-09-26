@@ -39,6 +39,7 @@
         tf_len_t   length;                                               \
         axi_addr_t src_addr;                                             \
         axi_addr_t dst_addr;                                             \
+        axi_addr_t dst_mask;                                             \
         options_t  opt;                                                  \
     } idma_req_t;
 `define IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)                    \

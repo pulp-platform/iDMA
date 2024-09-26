@@ -271,6 +271,7 @@ module tb_idma_desc64_top
                 // overwrite protocols
                 current_stimulus.burst.opt.src_protocol = idma_pkg::AXI;
                 current_stimulus.burst.opt.dst_protocol = idma_pkg::AXI;
+                current_stimulus.burst.dst_mask = '0;
 
                 current_stimuli_group.push_back(current_stimulus);
                 golden_queue.push_back('{
@@ -302,6 +303,7 @@ module tb_idma_desc64_top
                     // overwrite protocols
                     current_stimulus.burst.opt.src_protocol = idma_pkg::AXI;
                     current_stimulus.burst.opt.dst_protocol = idma_pkg::AXI;
+                    current_stimulus.burst.dst_mask = '0;
 
                     // chain descriptor
                     current_stimuli_group[$].next = current_stimulus.base;
