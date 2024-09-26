@@ -299,6 +299,7 @@ _rsp_t ${protocol}_write_rsp_i,
         addr_t   addr;
         logic    valid;
         addr_t   base_addr;
+        addr_t   mask;
     } idma_mut_tf_t;
 
 
