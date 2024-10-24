@@ -56,6 +56,7 @@ module dma_core_wrap #(
   // iDMA request / response types
   `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, axi_slv_id_t, addr_t, tf_len_t)
   `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
+  `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, tf_len_t, tf_len_t)
 
   `REG_BUS_TYPEDEF_ALL(dma_regs, addr_t, data_t, strb_t)
 
@@ -141,8 +142,6 @@ module dma_core_wrap #(
     assign idma_rsp_ready    = 1'b1;
 
   end else begin : gen_two_d
-
-    `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, tf_len_t, tf_len_t)
 
     idma_nd_req_t idma_nd_req,       idma_nd_req_d;
     logic         idma_nd_req_valid, idma_nd_req_valid_d;
