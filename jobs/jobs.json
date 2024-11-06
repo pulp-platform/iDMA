@@ -199,6 +199,54 @@
         "testbench" : "tb_idma_backend_rw_axi_rw_axis",
         "synth_top" : "idma_backend_synth_rw_axi_rw_axis"
     },
+    "rw_axil_rw_init": {
+        "jobs" : {
+            "simple"          : "backend_rw_axil_rw_init/simple.txt"
+    },
+        "params" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 32,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 12,
+            "NumAxInFlight"       : 2,
+            "BufferDepth"         : 3,
+            "TFLenWidth"          : 32,
+            "MemSysDepth"         : 0,
+            "CombinedShifter"     : 0,
+            "MaskInvalidData"     : 1,
+            "RAWCouplingAvail"    : 0,
+            "HardwareLegalizer"   : 1,
+            "RejectZeroTransfers" : 1,
+            "ErrorHandling"       : 0
+        },
+        "proc_id" : "rw_axil_rw_init",
+        "testbench" : "tb_idma_backend_rw_axil_rw_init",
+        "synth_top" : "idma_backend_synth_rw_axil_rw_init"
+    },
+    "r_obi_w_init": {
+        "jobs" : {
+            "simple"          : "backend_r_obi_w_init/simple.txt"
+    },
+        "params" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 32,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 12,
+            "NumAxInFlight"       : 3,
+            "BufferDepth"         : 3,
+            "TFLenWidth"          : 32,
+            "MemSysDepth"         : 0,
+            "CombinedShifter"     : 0,
+            "MaskInvalidData"     : 1,
+            "RAWCouplingAvail"    : 0,
+            "HardwareLegalizer"   : 1,
+            "RejectZeroTransfers" : 1,
+            "ErrorHandling"       : 0
+        },
+        "proc_id" : "r_obi_w_init",
+        "testbench" : "tb_idma_backend_r_obi_w_init",
+        "synth_top" : "idma_backend_synth_r_obi_w_init"
+    },
     "4d_extension" : {
         "jobs" : {
             "simple"    : "4d_extension/simple.txt",
