@@ -376,8 +376,10 @@ module idma_inst64_top #(
                 // manipulate the source register
                 idma_inst64_snitch_pkg::DMSRC : begin
                     idma_fe_req_d.burst_req.src_addr[31:0] = acc_req_i.data_arga[31:0];
+                   if (AxiAddrWidth > 32) begin
                     idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:32] =
                         acc_req_i.data_argb[AxiAddrWidth-1-32:0];
+                    end
                     acc_req_ready_o = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMSRC";
@@ -386,8 +388,10 @@ module idma_inst64_top #(
                 // manipulate the destination register
                 idma_inst64_snitch_pkg::DMDST : begin
                     idma_fe_req_d.burst_req.dst_addr[31:0] = acc_req_i.data_arga[31:0];
+                   if (AxiAddrWidth > 32) begin
                     idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:32] =
                         acc_req_i.data_argb[AxiAddrWidth-1-32:0];
+                   end
                     acc_req_ready_o = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMDST";
