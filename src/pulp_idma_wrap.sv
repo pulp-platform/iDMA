@@ -225,7 +225,8 @@ module pulp_idma_wrap #(
 
   logic [StreamWidth-1:0] stream_idx;
 
-  idma_nd_req_t [NumStreams-1:0] twod_req, twod_req_queue;
+  idma_nd_req_t twod_req;
+  idma_nd_req_t [NumStreams-1:0] twod_req_queue;
   idma_req_t [NumStreams-1:0] idma_req;
   idma_rsp_t [NumStreams-1:0] idma_rsp;
 
@@ -235,7 +236,7 @@ module pulp_idma_wrap #(
   logic [NumStreams-1:0]      trans_complete, midend_busy;
   idma_pkg::idma_busy_t [NumStreams-1:0] idma_busy;
 
-  logic [31:0][NumStreams-1:0] done_id, next_id;
+  logic [NumStreams-1:0][31:0] done_id, next_id;
 
   // ------------------------------------------------------
   // FRONTEND
@@ -245,7 +246,6 @@ module pulp_idma_wrap #(
     periph_to_reg #(
       .AW   (RegAddrWidth),
       .DW   (DATA_WIDTH),
-      .BW   (BE_WIDTH),
       .IW   (PE_ID_WIDTH),
       .req_t(dma_regs_req_t),
       .rsp_t(dma_regs_rsp_t)
@@ -453,7 +453,7 @@ module pulp_idma_wrap #(
         .idma_rsp_o      (idma_rsp[s]),
         .rsp_valid_o     (be_rsp_valid[s]),
         .rsp_ready_i     (be_rsp_ready[s]),
-        .idma_eh_req_i   ('b0),
+        .idma_eh_req_i   (1'b0),
         .eh_req_valid_i  (1'b0),
         .eh_req_ready_o  (  /* NOT CONNECTED */),
         .init_read_req_o (init_read_req),
@@ -598,7 +598,7 @@ module pulp_idma_wrap #(
         .idma_rsp_o      (idma_rsp[s]),
         .rsp_valid_o     (be_rsp_valid[s]),
         .rsp_ready_i     (be_rsp_ready[s]),
-        .idma_eh_req_i   ('b0),
+        .idma_eh_req_i   (1'b0),
         .eh_req_valid_i  (1'b0),
         .eh_req_ready_o  (  /* NOT CONNECTED */),
         .axi_read_req_o  (dma_req[s]),
