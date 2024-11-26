@@ -1,5 +1,6 @@
-Bender.yml
-include
-*.sv
-!idma_generated.sv
-*.hjson
+# Deactivated by deploy.py
+# Bender.yml
+# include
+# *.sv
+# !idma_generated.sv
+# *.hjson
