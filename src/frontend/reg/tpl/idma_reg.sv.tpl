@@ -38,6 +38,11 @@ module idma_${identifier} #(
   input  logic       req_ready_i,
   input  cnt_width_t next_id_i,
   output stream_t    stream_idx_o,
+  output logic       smmu_f_bare,
+  output logic       smmu_f_exe,
+  output logic       smmu_f_user,
+  output logic       smmu_f_update_tlb,
+  output logic       smmu_pt_root_adr,
   /// Status signals
   input  cnt_width_t           [NumStreams-1:0] done_id_i,
   input  idma_pkg::idma_busy_t [NumStreams-1:0] busy_i,
@@ -127,6 +132,13 @@ module idma_${identifier} #(
       arb_dma_req[i]${sep}opt.beo.dst_max_llen   = dma_reg2hw[i].conf.dst_max_llen.q;
       arb_dma_req[i]${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.q;
       arb_dma_req[i]${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.q;
+
+      // SMMU Options
+      smmu_f_bare           = dma_reg2hw[i].sMMU.f_bare;
+      smmu_f_exe            = dma_reg2hw[i].sMMU.f_exe;
+      smmu_f_user           = dma_reg2hw[i].sMMU.f_user;
+      smmu_f_update_tlb     = dma_reg2hw[i].sMMU.f_update_tlb;
+      smmu_pt_root_adr      = {dma_reg2hw[i].sMMU_root_pt_h , dma_reg2hw[i].sMMU_root_pt_l};
 
 % if num_dim != 1:
       // ND connections
