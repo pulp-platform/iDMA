@@ -55,6 +55,51 @@ ${params}
         }
       ]
     },
+    { name: "sMMU",
+      desc: "Configuration Register for the SMMU",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "0",
+          name: "f_exe",
+          desc: "All PTE required to have set the executable flag"
+        },
+        { bits: "1",
+          name: "f_user",
+          desc: "All PTE required to have set the user flag"
+        },
+        { bits: "2",
+          name: "f_bare",
+          desc: "The virtual adress is a bare adress and can be translated directly"
+        },
+        { bits: "3",
+          name: "f_update_tlb",
+          desc: "Should this request result in a TLB update or not? (Only if the policy allows it)"
+        }
+      ]
+    },
+    { name: "sMMU_root_pt_h",
+      desc: "High Word of the root of the page table",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "root_pt_h",
+          desc: "High 32 bit of the root adress of the page table"
+        }
+      ]
+    },
+    { name: "sMMU_root_pt_l",
+      desc: "Low Word of the root of the page table (needs to be page aligned)",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "root_pt_l",
+          desc: "Low 32 bit of the root adress of the page table (page aligned)"
+        }
+      ]
+    },
     { multireg:
       { name: "status",
         desc: "DMA Status",
