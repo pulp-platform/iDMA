@@ -134,11 +134,11 @@ module idma_${identifier} #(
       arb_dma_req[i]${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.q;
 
       // SMMU Options
-      smmu_f_bare           = dma_reg2hw[i].sMMU.f_bare.q;
-      smmu_f_exe            = dma_reg2hw[i].sMMU.f_exe.q;
-      smmu_f_user           = dma_reg2hw[i].sMMU.f_user.q;
-      smmu_f_update_tlb     = dma_reg2hw[i].sMMU.f_update_tlb.q;
-      smmu_pt_root_adr      = {dma_reg2hw[i].sMMU_root_pt_h.q , dma_reg2hw[i].sMMU_root_pt_l.q};
+      smmu_f_bare           = dma_reg2hw[i].smmu.f_bare.q;
+      smmu_f_exe            = dma_reg2hw[i].smmu.f_exe.q;
+      smmu_f_user           = dma_reg2hw[i].smmu.f_user.q;
+      smmu_f_update_tlb     = dma_reg2hw[i].smmu.f_update_tlb.q;
+      smmu_pt_root_adr      = {dma_reg2hw[i].smmu_root_pt_h.q , dma_reg2hw[i].smmu_root_pt_l.q};
 
 % if num_dim != 1:
       // ND connections

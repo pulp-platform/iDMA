@@ -55,7 +55,7 @@ ${params}
         }
       ]
     },
-    { name: "sMMU",
+    { name: "smmu",
       desc: "Configuration Register for the SMMU",
       swaccess: "rw",
       hwaccess: "hro",
@@ -78,7 +78,7 @@ ${params}
         }
       ]
     },
-    { name: "sMMU_root_pt_h",
+    { name: "smmu_root_pt_h",
       desc: "High Word of the root of the page table",
       swaccess: "rw",
       hwaccess: "hro",
@@ -89,7 +89,7 @@ ${params}
         }
       ]
     },
-    { name: "sMMU_root_pt_l",
+    { name: "smmu_root_pt_l",
       desc: "Low Word of the root of the page table (needs to be page aligned)",
       swaccess: "rw",
       hwaccess: "hro",
