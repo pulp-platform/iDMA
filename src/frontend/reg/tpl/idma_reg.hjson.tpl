@@ -63,7 +63,7 @@ ${params}
         { bits: "0",
           name: "dummy",
           desc: "dummy flag"
-        },
+        }
       ]
     },
     { name: "smmu",
