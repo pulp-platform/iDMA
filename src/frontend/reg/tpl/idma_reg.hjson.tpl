@@ -55,6 +55,17 @@ ${params}
         }
       ]
     },
+    { name: "dummy_register",
+      desc: "Dummy Register to prevent that the core overwrites the smmu config register while writing the dma conf register!",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "0",
+          name: "dummy",
+          desc: "dummy flag"
+        },
+      ]
+    },
     { name: "smmu",
       desc: "Configuration Register for the SMMU",
       swaccess: "rw",
