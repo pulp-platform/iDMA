@@ -62,6 +62,8 @@ module idma_${identifier} #(
   logic     [NumRegs-1:0] arb_valid;
   logic     [NumRegs-1:0] arb_ready;
 
+  logic   dummy;
+
   // register signals
   reg_rsp_t [NumRegs-1:0] dma_ctrl_rsp;
 
@@ -139,6 +141,7 @@ module idma_${identifier} #(
       smmu_f_user           = dma_reg2hw[i].smmu.f_user.q;
       smmu_f_update_tlb     = dma_reg2hw[i].smmu.f_update_tlb.q;
       smmu_pt_root_adr      = {dma_reg2hw[i].smmu_root_pt_h.q , dma_reg2hw[i].smmu_root_pt_l.q};
+      dummy                 = dma_reg2hw[i].dummy_register.dummy.q;
 
 % if num_dim != 1:
       // ND connections
