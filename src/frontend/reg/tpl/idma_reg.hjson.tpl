@@ -55,14 +55,14 @@ ${params}
         }
       ]
     },
-    { name: "dummy_register",
-      desc: "Dummy Register to prevent that the core overwrites the smmu config register while writing the dma conf register!",
+    { name: "dummy_register_1",
+      desc: "Dummy Register to align for 64 bit! TODO: Update Driver to avoid writing 64 Bit!",
       swaccess: "rw",
       hwaccess: "hro",
       fields: [
-        { bits: "0",
-          name: "dummy",
-          desc: "dummy flag"
+        { bits: "31:0",
+          name: "dummy_bits_1",
+          desc: "Dummy Bits"
         }
       ]
     },
@@ -86,6 +86,17 @@ ${params}
         { bits: "3",
           name: "f_update_tlb",
           desc: "Should this request result in a TLB update or not? (Only if the policy allows it)"
+        }
+      ]
+    },
+    { name: "dummy_register_2",
+      desc: "Dummy Register to align for 64 bit! TODO: Update Driver to avoid writing 64 Bit!",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "dummy_bits_2",
+          desc: "Dummy Bits"
         }
       ]
     },
