@@ -629,10 +629,10 @@ _rsp_t ${protocol}_write_rsp_i,
     // Add fall-through register to allow the input to be ready if the output is not. This
     // does not add a cycle of delay
 % if not one_read_port:
-    assign r_meta_req_tagged = '{
-        src_protocol: r_req.r_dp_req.src_protocol,
-        ar_req:       r_req.ar_req
-    };
+    always_comb begin : assign_r_meta_req
+        r_meta_req_tagged.src_protocol = r_req.r_dp_req.src_protocol;
+        r_meta_req_tagged.ar_req       = r_req.ar_req;
+    end
 % endif
 
     fall_through_register #(
@@ -777,10 +777,10 @@ _rsp_t ${protocol}_write_rsp_i,
     // R-AW channel coupler
     //--------------------------------------
 % if not one_write_port:
-    assign w_meta_req_tagged = '{
-        dst_protocol: w_req.w_dp_req.dst_protocol,
-        aw_req:       w_req.aw_req
-    };
+    always_comb begin : assign_tagged_w_req // need to have an always_comb block for Questa to not crap itself
+        w_meta_req_tagged.dst_protocol = w_req.w_dp_req.dst_protocol;
+        w_meta_req_tagged.aw_req = w_req.aw_req;
+    end
 % endif
 
     if (RAWCouplingAvail) begin : gen_r_aw_coupler
