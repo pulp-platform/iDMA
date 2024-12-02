@@ -41,7 +41,7 @@ jobs:
       run: scripts/list-contributors | tee contributions.txt
     -
       name: Upload contributions.txt
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: contributions
         path: contributions.txt
@@ -68,7 +68,7 @@ jobs:
       run: scripts/list-todos | tee open_todos.txt
     -
       name: Upload todos.txt
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: open_todos
         path: open_todos.txt
