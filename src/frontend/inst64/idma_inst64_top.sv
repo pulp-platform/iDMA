@@ -433,9 +433,9 @@ module idma_inst64_top #(
                     end
                 end
 
-              // status of the DMA
-              idma_inst64_snitch_pkg::DMSTATI,
-              idma_inst64_snitch_pkg::DMSTAT: begin
+                // status of the DMA
+                idma_inst64_snitch_pkg::DMSTATI,
+                idma_inst64_snitch_pkg::DMSTAT: begin
                     // Parse the status index from the register or immediate.
                     unique casez (acc_req_i.data_op)
                         idma_inst64_snitch_pkg::DMSTATI : begin
@@ -469,27 +469,35 @@ module idma_inst64_top #(
                         acc_res_valid   = 1'b1;
                         acc_req_ready_o = 1'b1;
                     end
-              end
+                end
 
-              // manipulate the strides
-              idma_inst64_snitch_pkg::DMSTR : begin
-                  idma_fe_req_d.d_req[0].src_strides = acc_req_i.data_arga;
-                  idma_fe_req_d.d_req[0].dst_strides = acc_req_i.data_argb;
-                  acc_req_ready_o = 1'b1;
-                  is_dma_op       = 1'b1;
-                  dma_op_name     = "DMSTR";
-              end
+                // manipulate the strides
+                idma_inst64_snitch_pkg::DMSTR : begin
+                    idma_fe_req_d.d_req[0].src_strides = acc_req_i.data_arga;
+                    idma_fe_req_d.d_req[0].dst_strides = acc_req_i.data_argb;
+                    acc_req_ready_o = 1'b1;
+                    is_dma_op       = 1'b1;
+                    dma_op_name     = "DMSTR";
+                end
 
-              // manipulate the strides
-              idma_inst64_snitch_pkg::DMREP : begin
-                  idma_fe_req_d.d_req[0].reps = acc_req_i.data_arga;
-                  acc_req_ready_o = 1'b1;
-                  is_dma_op       = 1'b1;
-                  dma_op_name     = "DMREP";
-              end
+                // manipulate the repetitions
+                idma_inst64_snitch_pkg::DMREP : begin
+                    idma_fe_req_d.d_req[0].reps = acc_req_i.data_arga;
+                    acc_req_ready_o = 1'b1;
+                    is_dma_op       = 1'b1;
+                    dma_op_name     = "DMREP";
+                end
 
-              default:;
-          endcase
+                // write the multicast mask in the destination user signal
+                idma_inst64_snitch_pkg::DMMCAST : begin
+                    idma_fe_req_d.burst_req.dst_mask[31:0] = acc_req_i.data_arga[31:0];
+                    acc_req_ready_o = 1'b1;
+                    is_dma_op       = 1'b1;
+                    dma_op_name     = "DMMCAST";
+                end
+
+                default:;
+            endcase
         end
     end
 

@@ -56,7 +56,7 @@ legalizer_write_meta_channel: |
         prot: opt_tf_q.dst_axi_opt.prot,
         qos: opt_tf_q.dst_axi_opt.qos,
         region: opt_tf_q.dst_axi_opt.region,
-        user: '0,
+        user: w_tf_q.mask,
         atop: '0
     };
 legalizer_write_data_path: |
