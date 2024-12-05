@@ -72,7 +72,7 @@ def render_reg_hjson(fe_ids: dict, tpl_file: str) -> str:
         # higher register depends on the bit-width: 32-bit-case just add alignment marks
         if fe_ids[fe_id][0] == '32':
             for i in range(0, 3 * int(fe_ids[fe_id][1])):
-                align_regs.append(f'    {{ skipto: "{hex(8*i + 0xE0)}" }},\n')
+                align_regs.append(f'    {{ skipto: "{hex(8*i + 0xD0)}" }},\n')
 
             # assemble regs
             regs = low_regs + align_regs
@@ -107,7 +107,7 @@ def render_reg_hjson(fe_ids: dict, tpl_file: str) -> str:
             regs[1::2] = high_regs
 
             # render
-            regs = '    { skipto: "0xE0" },\n' + ''.join(regs)[:-2]
+            regs = '    { skipto: "0xD0" },\n' + ''.join(regs)[:-2]
 
         # unsupported bit width
         else:
