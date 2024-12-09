@@ -24,6 +24,10 @@ module idma_inst64_top #(
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
     parameter type         axi_res_t       = logic,
+    parameter type         init_req_t      = logic,
+    parameter type         init_rsp_t      = logic,
+    parameter type         obi_req_t       = logic,
+    parameter type         obi_res_t       = logic,
     parameter type         acc_req_t       = logic,
     parameter type         acc_res_t       = logic,
     parameter type         dma_events_t    = logic
@@ -34,6 +38,12 @@ module idma_inst64_top #(
     // AXI4 bus
     output axi_req_t    [NumChannels-1:0] axi_req_o,
     input  axi_res_t    [NumChannels-1:0] axi_res_i,
+    // Memory Init
+    output init_req_t   [NumChannels-1:0] init_req_o,
+    input  init_res_t   [NumChannels-1:0] init_res_i,
+    // OBI interconnect
+    output obi_req_t    [NumChannels-1:0] obi_req_o,
+    input  obi_res_t    [NumChannels-1:0] obi_res_i,
     // debug output
     output logic        [NumChannels-1:0] busy_o,
     // accelerator interface
@@ -102,6 +112,14 @@ module idma_inst64_top #(
     axi_req_t [NumChannels-1:0] axi_read_req, axi_write_req;
     axi_res_t [NumChannels-1:0] axi_read_rsp, axi_write_rsp;
 
+    // internal Init channels
+    init_req_t [NumChannels-1:0] init_read_req, init_write_req;
+    init_res_t [NumChannels-1:0] init_read_rsp, init_write_rsp;
+
+    // internal OBI channels
+    obi_req_t [NumChannels-1:0] obi_read_req, obi_write_req;
+    obi_res_t [NumChannels-1:0] obi_read_rsp, obi_write_rsp;
+
     // backend signals
     idma_req_t [NumChannels-1:0] idma_req;
     logic      [NumChannels-1:0] idma_req_valid;
@@ -149,7 +167,7 @@ module idma_inst64_top #(
     // Backend instantiation
     //--------------------------------------
     for (genvar c = 0; c < NumChannels; c++) begin : gen_backend
-        idma_backend_rw_axi #(
+        idma_backend_rw_axi_rw_init_rw_obi #(
             .DataWidth            ( AxiDataWidth                ),
             .AddrWidth            ( AxiAddrWidth                ),
             .UserWidth            ( AxiUserWidth                ),
@@ -171,41 +189,53 @@ module idma_inst64_top #(
             .idma_busy_t          ( idma_pkg::idma_busy_t       ),
             .axi_req_t            ( axi_req_t                   ),
             .axi_rsp_t            ( axi_res_t                   ),
+            .init_req_t           ( init_req_t                  ),
+            .init_rsp_t           ( init_res_t                  ),
+            .obi_req_t            ( obi_req_t                   ),
+            .obi_rsp_t            ( obi_res_t                   ),
             .read_meta_channel_t  ( read_meta_channel_t         ),
             .write_meta_channel_t ( write_meta_channel_t        )
-        ) i_idma_backend_rw_axi (
+        ) i_idma_backend_rw_axi_rw_init_rw_obi (
             .clk_i,
             .rst_ni,
             .testmode_i,
-            .idma_req_i      ( idma_req       [c] ),
-            .req_valid_i     ( idma_req_valid [c] ),
-            .req_ready_o     ( idma_req_ready [c] ),
-            .idma_rsp_o      ( idma_rsp       [c] ),
-            .rsp_valid_o     ( idma_rsp_valid [c] ),
-            .rsp_ready_i     ( idma_rsp_ready [c] ),
-            .idma_eh_req_i   ( '0                 ),
-            .eh_req_valid_i  ( 1'b0               ),
-            .eh_req_ready_o  ( /* NC */           ),
-            .axi_read_req_o  ( axi_read_req   [c] ),
-            .axi_read_rsp_i  ( axi_read_rsp   [c] ),
-            .axi_write_req_o ( axi_write_req  [c] ),
-            .axi_write_rsp_i ( axi_write_rsp  [c] ),
-            .busy_o          ( idma_busy      [c] )
+            .idma_req_i       ( idma_req       [c] ),
+            .req_valid_i      ( idma_req_valid [c] ),
+            .req_ready_o      ( idma_req_ready [c] ),
+            .idma_rsp_o       ( idma_rsp       [c] ),
+            .rsp_valid_o      ( idma_rsp_valid [c] ),
+            .rsp_ready_i      ( idma_rsp_ready [c] ),
+            .idma_eh_req_i    ( '0                 ),
+            .eh_req_valid_i   ( 1'b0               ),
+            .eh_req_ready_o   ( /* NC */           ),
+            .axi_read_req_o   ( axi_read_req   [c] ),
+            .axi_read_rsp_i   ( axi_read_rsp   [c] ),
+            .init_read_req_o  ( init_read_req  [c] ),
+            .init_read_rsp_i  ( init_read_rsp  [c] ),
+            .obi_read_req_o   ( obi_read_req   [c] ),
+            .obi_read_rsp_i   ( obi_read_rsp   [c] ),
+            .axi_write_req_o  ( axi_write_req  [c] ), 
+            .axi_write_rsp_i  ( axi_write_rsp  [c] ),
+            .init_write_req_o ( init_write_req [c] ),
+            .init_write_rsp_i ( init_write_rsp [c] ),
+            .obi_write_req_o  ( obi_write_req  [c] ),
+            .obi_write_rsp_i  ( obi_write_rsp  [c] ),
+            .busy_o           ( idma_busy      [c] )
         );
 
-        axi_rw_join #(
-            .axi_req_t  ( axi_req_t ),
-            .axi_resp_t ( axi_res_t )
-        ) i_axi_rw_join (
-            .clk_i,
-            .rst_ni,
-            .slv_read_req_i   ( axi_read_req  [c] ),
-            .slv_read_resp_o  ( axi_read_rsp  [c] ),
-            .slv_write_req_i  ( axi_write_req [c] ),
-            .slv_write_resp_o ( axi_write_rsp [c] ),
-            .mst_req_o        ( axi_req_o     [c] ),
-            .mst_resp_i       ( axi_res_i     [c] )
-        );
+        // axi_rw_join #(
+        //     .axi_req_t  ( axi_req_t ),
+        //     .axi_resp_t ( axi_res_t )
+        // ) i_axi_rw_join (
+        //     .clk_i,
+        //     .rst_ni,
+        //     .slv_read_req_i   ( axi_read_req   [c] ),
+        //     .slv_read_resp_o  ( axi_read_rsp   [c] ),
+        //     .slv_write_req_i  ( axi_write_req  [c] ),
+        //     .slv_write_resp_o ( axi_write_rsp  [c] ),
+        //     .mst_req_o        ( axi_req_o      [c] ),
+        //     .mst_resp_i       ( axi_res_i      [c] )
+        // );
 
         assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c];
     end
