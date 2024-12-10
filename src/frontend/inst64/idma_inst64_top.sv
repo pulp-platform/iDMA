@@ -453,12 +453,12 @@ module idma_inst64_top #(
                     // 5. acknowledge acc request (qready)
                     if (acc_res_ready) begin
                         idma_fe_req_valid [idma_fe_sel_chan] = 1'b1;
-                        if (idma_fe_req_ready) begin
+                        if (idma_fe_req_ready[idma_fe_sel_chan]) begin
                             acc_res.id      = acc_req_i.id;
-                            acc_res.data    = next_id;
+                            acc_res.data    = next_id[idma_fe_sel_chan];
                             acc_res.error   = 1'b0;
                             acc_res_valid   = 1'b1;
-                            acc_req_ready_o = idma_fe_req_ready;
+                            acc_req_ready_o = idma_fe_req_ready[idma_fe_sel_chan];
                         end
                     end
                 end
