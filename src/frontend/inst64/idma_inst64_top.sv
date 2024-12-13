@@ -65,7 +65,7 @@ module idma_inst64_top #(
     localparam int unsigned TFLenWidth   = AxiAddrWidth;
     localparam int unsigned RepWidth     = 32'd32;
     localparam int unsigned NumDim       = 32'd2;
-    localparam int unsigned BufferDepth  = 32'd16;
+    localparam int unsigned BufferDepth  = 32'd64;
 
     // derived constants and types
     localparam int unsigned StrbWidth    = AxiDataWidth / 32'd8;
