@@ -65,7 +65,7 @@ module idma_inst64_top #(
     localparam int unsigned TFLenWidth   = AxiAddrWidth;
     localparam int unsigned RepWidth     = 32'd32;
     localparam int unsigned NumDim       = 32'd2;
-    localparam int unsigned BufferDepth  = 32'd3;
+    localparam int unsigned BufferDepth  = 32'd64;
 
     // derived constants and types
     localparam int unsigned StrbWidth    = AxiDataWidth / 32'd8;
@@ -452,7 +452,7 @@ module idma_inst64_top #(
                     // 4. send acc response (pvalid)
                     // 5. acknowledge acc request (qready)
                     if (acc_res_ready) begin
-                        idma_fe_req_valid [idma_fe_sel_chan] = 1'b1;
+                        idma_fe_req_valid[idma_fe_sel_chan] = 1'b1;
                         if (idma_fe_req_ready[idma_fe_sel_chan]) begin
                             acc_res.id      = acc_req_i.id;
                             acc_res.data    = next_id[idma_fe_sel_chan];
