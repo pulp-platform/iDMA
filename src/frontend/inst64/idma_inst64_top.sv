@@ -30,7 +30,9 @@ module idma_inst64_top #(
     parameter type         obi_res_t       = logic,
     parameter type         acc_req_t       = logic,
     parameter type         acc_res_t       = logic,
-    parameter type         dma_events_t    = logic
+    parameter type         dma_events_t    = logic,
+    parameter axi_pkg::xbar_cfg_t Cfg      = '0,
+    parameter type         addr_rule_t     = axi_pkg::xbar_rule_64_t
 ) (
     input  logic                          clk_i,
     input  logic                          rst_ni,
@@ -57,7 +59,9 @@ module idma_inst64_top #(
     // hart id of the frankensnitch
     input  logic [31:0]                   hart_id_i,
     // performance output
-    output dma_events_t [NumChannels-1:0] events_o
+    output dma_events_t [NumChannels-1:0] events_o,
+    // address decode map
+    input  rule_t [Cfg.NoAddrRules-1:0]   addr_map_i
 );
 
     // constants
@@ -349,6 +353,60 @@ module idma_inst64_top #(
         .data_o  ( acc_res_o       )
     );
 
+    //--------------------------------------
+    // Address decode
+    //--------------------------------------
+    logic [Cfg.NoSlvPorts-1:0][$clog2(Cfg.NoMstPorts)-1:0] default_port;
+    localparam bit EnableDefaultMstPort = 1'b1;
+    assign default_port = '{default: SoCDMAOut};
+    // address decoder for write address / source address
+    addr_decode #(
+      .NoIndices  ( Cfg.NoMstPorts  ),
+      .NoRules    ( Cfg.NoAddrRules ),
+      .addr_t     ( addr_t          ),
+      .rule_t     ( rule_t          )
+    ) i_idma_aw_decode (
+      .addr_i           ( idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] ),
+      .addr_map_i       ( addr_map_i                 ),
+      .idx_o            ( idx_aw                     ),
+      .dec_valid_o      ( idx_aw_valid               ),
+      .dec_error_o      ( idx_aw_error               ),
+      .en_default_idx_i ( '1   ),
+      .default_idx_i    ( default_port[0]      )
+    );
+    // address decoder for read address / destination address
+    addr_decode #(
+      .NoIndices  ( Cfg.NoMstPorts  ),
+      .addr_t     ( addr_t          ),
+      .NoRules    ( Cfg.NoAddrRules ),
+      .rule_t     ( rule_t          )
+    ) i_idma_ar_decode (
+      .addr_i           ( idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:0] ),
+      .addr_map_i       ( addr_map_i                 ),
+      .idx_o            ( idx_ar                     ),
+      .dec_valid_o      ( idx_ar_valid               ),
+      .dec_error_o      ( idx_ar_error               ),
+      .en_default_idx_i ( EnableDefaultMstPort   ),
+      .default_idx_i    ( default_port[0]      )
+    );
+    //TODO: rename signals
+    assign slv_aw_select = (idx_aw_error) ?
+        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_aw);
+    assign slv_ar_select = (idx_ar_error) ?
+        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_ar);
+
+    unique casez (slv_aw_select)
+        TCDMDMA : begin
+            idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::OBI;
+
+        end
+        ZeroMemory : begin
+            idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
+        end
+        SoCDMAOut : begin
+            idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::AXI;
+        end
+    endcase
 
     //--------------------------------------
     // Instruction decode
