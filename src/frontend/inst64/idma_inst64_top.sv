@@ -356,49 +356,51 @@ module idma_inst64_top #(
     //--------------------------------------
     // Address decode
     //--------------------------------------
-    logic [Cfg.NoSlvPorts-1:0][$clog2(Cfg.NoMstPorts)-1:0] default_port;
-    localparam bit EnableDefaultMstPort = 1'b1;
-    assign default_port = '{default: SoCDMAOut};
-    // address decoder for write address / source address
+    // logic [Cfg.NoSlvPorts-1:0][$clog2(Cfg.NoMstPorts)-1:0] default_port;
+    // localparam bit EnableDefaultMstPort = 1'b1;
+    // assign default_port = '{default: SoCDMAOut};
+
+    // address decoder for source address
+    // if (opt.beo.init_set)
+    //  src_protocol = INIT
     addr_decode #(
       .NoIndices  ( Cfg.NoMstPorts  ),
       .NoRules    ( Cfg.NoAddrRules ),
       .addr_t     ( addr_t          ),
       .rule_t     ( rule_t          )
-    ) i_idma_aw_decode (
+    ) i_idma_src_decode (
       .addr_i           ( idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] ),
       .addr_map_i       ( addr_map_i                 ),
-      .idx_o            ( idx_aw                     ),
-      .dec_valid_o      ( idx_aw_valid               ),
-      .dec_error_o      ( idx_aw_error               ),
-      .en_default_idx_i ( '1   ),
-      .default_idx_i    ( default_port[0]      )
+      .idx_o            ( idx_src                     ),
+      .dec_valid_o      ( idx_src_valid               ),
+      .dec_error_o      ( idx_src_error               ),
+      .en_default_idx_i ( 1'b1   ),
+      .default_idx_i    ( SoCDMAOut      )
     );
-    // address decoder for read address / destination address
+    // address decoder for destination address
     addr_decode #(
       .NoIndices  ( Cfg.NoMstPorts  ),
       .addr_t     ( addr_t          ),
       .NoRules    ( Cfg.NoAddrRules ),
       .rule_t     ( rule_t          )
-    ) i_idma_ar_decode (
+    ) i_idma_dst_decode (
       .addr_i           ( idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:0] ),
       .addr_map_i       ( addr_map_i                 ),
-      .idx_o            ( idx_ar                     ),
-      .dec_valid_o      ( idx_ar_valid               ),
-      .dec_error_o      ( idx_ar_error               ),
-      .en_default_idx_i ( EnableDefaultMstPort   ),
-      .default_idx_i    ( default_port[0]      )
+      .idx_o            ( idx_dst                     ),
+      .dec_valid_o      ( idx_dst_valid               ),
+      .dec_error_o      ( idx_dst_error               ),
+      .en_default_idx_i ( 1'b1   ),
+      .default_idx_i    ( SoCDMAOut      )
     );
-    //TODO: rename signals
-    assign slv_aw_select = (idx_aw_error) ?
-        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_aw);
-    assign slv_ar_select = (idx_ar_error) ?
-        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_ar);
 
-    unique casez (slv_aw_select)
+    assign src_select = (idx_src_error) ?
+        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_src);
+    assign ar_select = (idx_dst_error) ?
+        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_dst);
+
+    unique casez (src_select)
         TCDMDMA : begin
             idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::OBI;
-
         end
         ZeroMemory : begin
             idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
