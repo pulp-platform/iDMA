@@ -460,14 +460,16 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 length: req_i.length,
                 addr:   req_i.src_addr,
                 valid:   1'b1,
-                base_addr: req_i.src_addr
+                base_addr: req_i.src_addr,
+                default: '0
             };
             // destination or write
             w_tf_d = '{
                 length: req_i.length,
                 addr:   req_i.dst_addr,
                 valid:   1'b1,
-                base_addr: req_i.dst_addr
+                base_addr: req_i.dst_addr,
+                mask: req_i.dst_mask
             };
             // options
             opt_tf_d = '{

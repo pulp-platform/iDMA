@@ -17,5 +17,6 @@ package idma_inst64_snitch_pkg;
   localparam logic [31:0] DMSTAT             = 32'b0000101?????00000000?????0101011;
   localparam logic [31:0] DMSTR              = 32'b0000110??????????000000000101011;
   localparam logic [31:0] DMREP              = 32'b000011100000?????000000000101011;
+  localparam logic [31:0] DMMCAST            = 32'b000100000000?????000000000101011;
 
 endpackage
