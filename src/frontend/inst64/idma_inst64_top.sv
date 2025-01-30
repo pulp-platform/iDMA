@@ -31,7 +31,6 @@ module idma_inst64_top #(
     parameter type         acc_req_t       = logic,
     parameter type         acc_res_t       = logic,
     parameter type         dma_events_t    = logic,
-    parameter axi_pkg::xbar_cfg_t Cfg      = '0,
     parameter type         addr_rule_t     = axi_pkg::xbar_rule_64_t
 ) (
     input  logic                          clk_i,
@@ -42,7 +41,7 @@ module idma_inst64_top #(
     input  axi_res_t    [NumChannels-1:0] axi_res_i,
     // Memory Init
     output init_req_t   [NumChannels-1:0] init_req_o,
-    input  init_res_t   [NumChannels-1:0] init_res_i,
+    input  init_rsp_t   [NumChannels-1:0] init_res_i,
     // OBI interconnect
     output obi_req_t    [NumChannels-1:0] obi_req_o,
     input  obi_res_t    [NumChannels-1:0] obi_res_i,
@@ -61,7 +60,7 @@ module idma_inst64_top #(
     // performance output
     output dma_events_t [NumChannels-1:0] events_o,
     // address decode map
-    input  rule_t [Cfg.NoAddrRules-1:0]   addr_map_i
+    input  addr_rule_t [Cfg.NoAddrRules-1:0]   addr_map_i
 );
 
     // constants
@@ -70,6 +69,7 @@ module idma_inst64_top #(
     localparam int unsigned RepWidth     = 32'd32;
     localparam int unsigned NumDim       = 32'd2;
     localparam int unsigned BufferDepth  = 32'd64;
+    localparam int unsigned NumRules     = 32'd4;
 
     // derived constants and types
     localparam int unsigned StrbWidth    = AxiDataWidth / 32'd8;
@@ -118,11 +118,13 @@ module idma_inst64_top #(
 
     // internal Init channels
     init_req_t [NumChannels-1:0] init_read_req, init_write_req;
-    init_res_t [NumChannels-1:0] init_read_rsp, init_write_rsp;
+    init_rsp_t [NumChannels-1:0] init_read_rsp, init_write_rsp;
+    logic      [7:0]             init_read_rsp_byte;
 
     // internal OBI channels
     obi_req_t [NumChannels-1:0] obi_read_req, obi_write_req;
     obi_res_t [NumChannels-1:0] obi_read_rsp, obi_write_rsp;
+    logic     [NumChannels-1:0] obi_we_q,     obi_we_d; 
 
     // backend signals
     idma_req_t [NumChannels-1:0] idma_req;
@@ -147,6 +149,7 @@ module idma_inst64_top #(
 
     // frontend state
     logic [1:0] idma_fe_cfg;
+    logic [1:0] idma_fe_init_cfg;
     logic [1:0] idma_fe_status;
     logic [2:0] idma_fe_sel_chan;
     logic       idma_fe_twod;
@@ -166,6 +169,13 @@ module idma_inst64_top #(
     logic     acc_res_valid;
     logic     acc_res_ready;
 
+    // decoder signals
+    logic [NumRules-1:0] idx_src;
+    logic                idx_src_valid;
+    logic                idx_src_error;
+    logic [NumRules-1:0] idx_dst;
+    logic                idx_dst_valid;
+    logic                idx_dst_error;
 
     //--------------------------------------
     // Backend instantiation
@@ -194,7 +204,7 @@ module idma_inst64_top #(
             .axi_req_t            ( axi_req_t                   ),
             .axi_rsp_t            ( axi_res_t                   ),
             .init_req_t           ( init_req_t                  ),
-            .init_rsp_t           ( init_res_t                  ),
+            .init_rsp_t           ( init_rsp_t                  ),
             .obi_req_t            ( obi_req_t                   ),
             .obi_rsp_t            ( obi_res_t                   ),
             .read_meta_channel_t  ( read_meta_channel_t         ),
@@ -227,19 +237,64 @@ module idma_inst64_top #(
             .busy_o           ( idma_busy      [c] )
         );
 
-        // axi_rw_join #(
-        //     .axi_req_t  ( axi_req_t ),
-        //     .axi_resp_t ( axi_res_t )
-        // ) i_axi_rw_join (
-        //     .clk_i,
-        //     .rst_ni,
-        //     .slv_read_req_i   ( axi_read_req   [c] ),
-        //     .slv_read_resp_o  ( axi_read_rsp   [c] ),
-        //     .slv_write_req_i  ( axi_write_req  [c] ),
-        //     .slv_write_resp_o ( axi_write_rsp  [c] ),
-        //     .mst_req_o        ( axi_req_o      [c] ),
-        //     .mst_resp_i       ( axi_res_i      [c] )
-        // );
+        axi_rw_join #(
+            .axi_req_t  ( axi_req_t ),
+            .axi_resp_t ( axi_res_t )
+        ) i_axi_rw_join (
+            .clk_i,
+            .rst_ni,
+            .slv_read_req_i   ( axi_read_req   [c] ),
+            .slv_read_resp_o  ( axi_read_rsp   [c] ),
+            .slv_write_req_i  ( axi_write_req  [c] ),
+            .slv_write_resp_o ( axi_write_rsp  [c] ),
+            .mst_req_o        ( axi_req_o      [c] ),
+            .mst_resp_i       ( axi_res_i      [c] )
+        );
+
+        // INIT setup
+        spill_register #(
+            .T       ( init_req_t  )
+        ) i_spill_register_init (
+            .clk_i,
+            .rst_ni,
+            .valid_i ( init_read_req[c].req_valid         ),
+            .ready_o ( init_read_rsp[c].req_ready         ),
+            .data_i  ( init_read_req[c].req_chan.cfg[7:0] ),
+            .valid_o ( init_read_rsp[c].rsp_valid         ),
+            .ready_i ( init_read_req[c].rsp_ready         ),
+            .data_o  ( init_read_rsp_byte                 )
+        ); 
+        
+        assign init_read_rsp[c].rsp_chan.init = {{StrbWidth}{init_read_rsp_byte}};
+
+        // OBI mux read or write    
+        assign obi_we_q[c] = obi_write_req[c].a.we;
+        `FF(obi_we_q[c], obi_we_d[c], '0)
+
+        stream_mux #(
+            .DATA_T       ( obi_req_t ),
+            .N_INP        ( 32'd2  )
+        ) i_obi_rw_mux (
+            .inp_data_i   ( {obi_write_req[c],          obi_read_req[c]       } ),
+            .inp_valid_i  ( {(obi_write_req[c] != '0), (obi_read_req[c] != '0)} ),
+            .inp_ready_o  ( {obi_write_rsp[c].gnt,      obi_read_rsp[c].gnt   } ),
+            .inp_sel_i    ( obi_write_req[c].a.we       ),
+            .oup_data_o   ( obi_req_o[c]                                        ),
+            .oup_valid_o  (                                                     ),
+            .oup_ready_i  ( obi_res_i[c].gnt                                    )
+        );
+
+        stream_demux #(
+            .DATA_T      ( obi_res_t ),
+            .N_OUP       ( 32'd2 )
+        ) i_stream_demux (
+            .inp_valid_i ( obi_res_i[c].rvalid ),
+            .inp_ready_o ( obi_req_o[c].rready ),
+            .oup_sel_i   ( obi_we_d[c]                      ),
+            .oup_valid_o ( {obi_write_res[c].rvalid , obi_read_res[c].rvalid } ),
+            .oup_ready_i ( {obi_write_req[c].rready ,  obi_read_req[c].rready    } )
+        );
+
 
         assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c];
     end
@@ -353,62 +408,37 @@ module idma_inst64_top #(
         .data_o  ( acc_res_o       )
     );
 
-    //--------------------------------------
-    // Address decode
-    //--------------------------------------
-    // logic [Cfg.NoSlvPorts-1:0][$clog2(Cfg.NoMstPorts)-1:0] default_port;
-    // localparam bit EnableDefaultMstPort = 1'b1;
-    // assign default_port = '{default: SoCDMAOut};
-
-    // address decoder for source address
-    // if (opt.beo.init_set)
-    //  src_protocol = INIT
+    // Address Decode
     addr_decode #(
-      .NoIndices  ( Cfg.NoMstPorts  ),
-      .NoRules    ( Cfg.NoAddrRules ),
-      .addr_t     ( addr_t          ),
-      .rule_t     ( rule_t          )
+    .NoIndices  ( 32'd2  ),
+    .NoRules    ( 32'd2 ),
+    .addr_t     ( addr_t          ),
+    .rule_t     ( addr_rule_t          )
     ) i_idma_src_decode (
-      .addr_i           ( idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] ),
-      .addr_map_i       ( addr_map_i                 ),
-      .idx_o            ( idx_src                     ),
-      .dec_valid_o      ( idx_src_valid               ),
-      .dec_error_o      ( idx_src_error               ),
-      .en_default_idx_i ( 1'b1   ),
-      .default_idx_i    ( SoCDMAOut      )
+    .addr_i           ( idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] ),
+    .addr_map_i       ( addr_map_i                 ),
+    .idx_o            ( idx_src                     ),
+    .dec_valid_o      ( idx_src_valid               ),
+    .dec_error_o      ( idx_src_error               ),
+    .en_default_idx_i ( 1'b1   ),
+    .default_idx_i    ( 32'd4      )
     );
     // address decoder for destination address
     addr_decode #(
-      .NoIndices  ( Cfg.NoMstPorts  ),
-      .addr_t     ( addr_t          ),
-      .NoRules    ( Cfg.NoAddrRules ),
-      .rule_t     ( rule_t          )
+    .NoIndices  ( 32'd2  ),
+    .addr_t     ( addr_t          ),
+    .NoRules    ( 32'd2 ),
+    .rule_t     ( addr_rule_t          )
     ) i_idma_dst_decode (
-      .addr_i           ( idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:0] ),
-      .addr_map_i       ( addr_map_i                 ),
-      .idx_o            ( idx_dst                     ),
-      .dec_valid_o      ( idx_dst_valid               ),
-      .dec_error_o      ( idx_dst_error               ),
-      .en_default_idx_i ( 1'b1   ),
-      .default_idx_i    ( SoCDMAOut      )
+    .addr_i           ( idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:0] ),
+    .addr_map_i       ( addr_map_i                 ),
+    .idx_o            ( idx_dst                     ),
+    .dec_valid_o      ( idx_dst_valid               ),
+    .dec_error_o      ( idx_dst_error               ),
+    .en_default_idx_i ( 1'b1   ),
+    .default_idx_i    ( 32'd4      )
     );
 
-    assign src_select = (idx_src_error) ?
-        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_src);
-    assign ar_select = (idx_dst_error) ?
-        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(idx_dst);
-
-    unique casez (src_select)
-        TCDMDMA : begin
-            idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::OBI;
-        end
-        ZeroMemory : begin
-            idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
-        end
-        SoCDMAOut : begin
-            idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::AXI;
-        end
-    endcase
 
     //--------------------------------------
     // Instruction decode
@@ -523,6 +553,55 @@ module idma_inst64_top #(
                     end
                 end
 
+                // use init for memset 
+                idma_inst64_snitch_pkg::DMINIT : begin
+                    // Parse the transfer parameters from the register or immediate.
+                    unique casez (acc_req_i.data_op)
+                        idma_inst64_snitch_pkg::DMINIT : begin
+                            idma_fe_init_cfg   = acc_req_i.data_op[21:20];
+                            idma_fe_sel_chan   = acc_req_i.data_op[24:22];
+                        end
+                        default:;
+                    endcase
+
+                    dma_op_name = "DMINIT";
+                    is_dma_op   = 1'b1;
+                    idma_fe_req_d.burst_req.opt.axi_id       = idma_fe_sel_chan;
+                    idma_fe_req_d.burst_req.length           = acc_req_i.data_arga;
+                    idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
+                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::INIT;
+
+                    // save correct value as src addr, depending on cfg
+                    case (idma_fe_init_cfg)
+                        2'b00 : idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] = 0;
+                        2'b01 : idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] = 'b11111111;
+                        // else: DMSRC already added the value to idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0]
+                    endcase
+
+                    // set strides and reps
+                    // 1 byte value is repeated 'size' times
+                    idma_fe_req_d.d_req[0].src_strides = 0;
+                    idma_fe_req_d.d_req[0].dst_strides = 1'b1;
+                    idma_fe_req_d.d_req[0].reps = acc_req_i.data_arga;
+
+                    // Perform the following sequence:
+                    // 1. wait for acc response channel to be ready (pready)
+                    // 2. request twod transfer (valid)
+                    // 3. wait for twod transfer to be accepted (ready)
+                    // 4. send acc response (pvalid)
+                    // 5. acknowledge acc request (qready)
+                    if (acc_res_ready) begin
+                        idma_fe_req_valid[idma_fe_sel_chan] = 1'b1;
+                        if (idma_fe_req_ready[idma_fe_sel_chan]) begin
+                            acc_res.id      = acc_req_i.id;
+                            acc_res.data    = next_id[idma_fe_sel_chan];
+                            acc_res.error   = 1'b0;
+                            acc_res_valid   = 1'b1;
+                            acc_req_ready_o = idma_fe_req_ready[idma_fe_sel_chan];
+                        end
+                    end
+                end
+
               // status of the DMA
               idma_inst64_snitch_pkg::DMSTATI,
               idma_inst64_snitch_pkg::DMSTAT: begin
@@ -581,6 +660,39 @@ module idma_inst64_top #(
               default:;
           endcase
         end
+
+        //----------------
+        // Address decode
+        //----------------
+
+        if (idma_fe_req_d.burst_req.opt.src_protocol != idma_pkg::INIT) begin
+
+            assign idx_src = (idx_src_error) ? 32'd4 : (idx_src);
+            assign idx_dst = (idx_dst_error) ? 32'd4 : (idx_dst);
+
+            
+            unique casez (idx_src)
+                32'd0, 32'd2: begin //TCDM
+                    idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::OBI;
+                end
+                32'd1, 32'd3 : begin //ZeroMem
+                end
+                default : begin //SoCDMAOut
+                    idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::AXI;
+                end
+            endcase
+            unique casez (idx_dst)
+                32'd0, 32'd2: begin //TCDM
+                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::OBI;
+                end
+                32'd1, 32'd3 : begin //ZeroMem
+                end
+                default : begin //SoCDMAOut
+                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
+                end
+            endcase
+        end    
+        
     end
 
     // twod handling
