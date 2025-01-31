@@ -24,8 +24,12 @@ module idma_inst64_top #(
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
     parameter type         axi_res_t       = logic,
+    parameter type         init_req_chan_t = logic,
+    parameter type         init_rsp_chan_t = logic,
     parameter type         init_req_t      = logic,
     parameter type         init_rsp_t      = logic,
+    parameter type         obi_a_chan_t    = logic,
+    parameter type         obi_r_chan_t    = logic,
     parameter type         obi_req_t       = logic,
     parameter type         obi_res_t       = logic,
     parameter type         acc_req_t       = logic,
@@ -101,7 +105,17 @@ module idma_inst64_top #(
     } axi_read_meta_channel_t;
 
     typedef struct packed {
-        axi_read_meta_channel_t axi;
+        obi_a_chan_t a_chan;
+    } obi_read_meta_channel_t;
+
+    typedef struct packed {
+        init_req_chan_t req_chan;
+    } init_read_meta_channel_t;
+
+    typedef struct packed {
+        axi_read_meta_channel_t  axi;
+        obi_read_meta_channel_t  obi;
+        init_read_meta_channel_t init;
     } read_meta_channel_t;
 
     typedef struct packed {
@@ -109,7 +123,17 @@ module idma_inst64_top #(
     } axi_write_meta_channel_t;
 
     typedef struct packed {
-        axi_write_meta_channel_t axi;
+        obi_a_chan_t a_chan;
+    } obi_write_meta_channel_t;
+
+    typedef struct packed {
+        init_req_chan_t req_chan;
+    } init_write_meta_channel_t;
+
+    typedef struct packed {
+        axi_write_meta_channel_t  axi;
+        obi_write_meta_channel_t  obi;
+        init_write_meta_channel_t init;
     } write_meta_channel_t;
 
     // internal AXI channels
@@ -285,7 +309,6 @@ module idma_inst64_top #(
         );
 
         stream_demux #(
-            .DATA_T      ( obi_res_t ),
             .N_OUP       ( 32'd2 )
         ) i_stream_demux (
             .inp_valid_i ( obi_res_i[c].rvalid ),
@@ -730,7 +753,7 @@ module idma_inst64_top #(
                 $sformat(trace_file, "dma_trace_%05x_%05x.log", hart_id_i, c);
             end
             // attach the tracer
-            `IDMA_TRACER_RW_AXI(gen_backend[c].i_idma_backend_rw_axi, trace_file);
+            `IDMA_TRACER_RW_AXI(gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
         end
     end
 `endif
