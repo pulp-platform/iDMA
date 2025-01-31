@@ -60,7 +60,7 @@ module idma_inst64_top #(
     // performance output
     output dma_events_t [NumChannels-1:0] events_o,
     // address decode map
-    input  addr_rule_t [Cfg.NoAddrRules-1:0]   addr_map_i
+    input  addr_rule_t [3:0]              addr_map_i
 );
 
     // constants
@@ -291,7 +291,7 @@ module idma_inst64_top #(
             .inp_valid_i ( obi_res_i[c].rvalid ),
             .inp_ready_o ( obi_req_o[c].rready ),
             .oup_sel_i   ( obi_we_d[c]                      ),
-            .oup_valid_o ( {obi_write_res[c].rvalid , obi_read_res[c].rvalid } ),
+            .oup_valid_o ( {obi_write_rsp[c].rvalid , obi_read_rsp[c].rvalid } ),
             .oup_ready_i ( {obi_write_req[c].rready ,  obi_read_req[c].rready    } )
         );
 
