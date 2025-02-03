@@ -292,8 +292,8 @@ module idma_inst64_top #(
         assign init_read_rsp[c].rsp_chan.init = {{StrbWidth}{init_read_rsp_byte}};
 
         // OBI mux read or write    
-        assign obi_we_q[c] = obi_write_req[c].a.we;
-        `FF(obi_we_q[c], obi_we_d[c], '0)
+        assign obi_we_d[c] = obi_write_req[c].a.we;
+        `FF(obi_we_q[c], obi_we_d[c], '0, clk_i, rst_ni)
 
         stream_mux #(
             .DATA_T       ( obi_req_t ),
@@ -302,7 +302,7 @@ module idma_inst64_top #(
             .inp_data_i   ( {obi_write_req[c],          obi_read_req[c]       } ),
             .inp_valid_i  ( {(obi_write_req[c] != '0), (obi_read_req[c] != '0)} ),
             .inp_ready_o  ( {obi_write_rsp[c].gnt,      obi_read_rsp[c].gnt   } ),
-            .inp_sel_i    ( obi_write_req[c].a.we       ),
+            .inp_sel_i    ( obi_we_d[c]                                         ),
             .oup_data_o   ( obi_req_o[c]                                        ),
             .oup_valid_o  (                                                     ),
             .oup_ready_i  ( obi_res_i[c].gnt                                    )
@@ -313,7 +313,7 @@ module idma_inst64_top #(
         ) i_stream_demux (
             .inp_valid_i ( obi_res_i[c].rvalid ),
             .inp_ready_o ( obi_req_o[c].rready ),
-            .oup_sel_i   ( obi_we_d[c]                      ),
+            .oup_sel_i   ( obi_we_q[c]                      ),
             .oup_valid_o ( {obi_write_rsp[c].rvalid , obi_read_rsp[c].rvalid } ),
             .oup_ready_i ( {obi_write_req[c].rready ,  obi_read_req[c].rready    } )
         );
