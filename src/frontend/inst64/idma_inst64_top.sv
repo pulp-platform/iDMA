@@ -73,7 +73,7 @@ module idma_inst64_top #(
     localparam int unsigned RepWidth     = 32'd32;
     localparam int unsigned NumDim       = 32'd2;
     localparam int unsigned BufferDepth  = 32'd64;
-    localparam int unsigned NumRules     = 32'd4;
+    localparam int unsigned NumRules     = 32'd5;
 
     // derived constants and types
     localparam int unsigned StrbWidth    = AxiDataWidth / 32'd8;
@@ -149,6 +149,7 @@ module idma_inst64_top #(
     obi_req_t [NumChannels-1:0] obi_read_req, obi_write_req;
     obi_res_t [NumChannels-1:0] obi_read_rsp, obi_write_rsp;
     logic     [NumChannels-1:0] obi_we_q,     obi_we_d; 
+    logic                       obi_req_o_rready;
 
     // backend signals
     idma_req_t [NumChannels-1:0] idma_req;
@@ -194,12 +195,12 @@ module idma_inst64_top #(
     logic     acc_res_ready;
 
     // decoder signals
-    logic [NumRules-1:0] idx_src;
-    logic                idx_src_valid;
-    logic                idx_src_error;
-    logic [NumRules-1:0] idx_dst;
-    logic                idx_dst_valid;
-    logic                idx_dst_error;
+    logic [$clog2(NumRules)-1:0] idx_src;
+    logic                        idx_src_valid;
+    logic                        idx_src_error;
+    logic [$clog2(NumRules)-1:0] idx_dst;
+    logic                        idx_dst_valid;
+    logic                        idx_dst_error;
 
     //--------------------------------------
     // Backend instantiation
@@ -310,13 +311,14 @@ module idma_inst64_top #(
 
         stream_demux #(
             .N_OUP       ( 32'd2 )
-        ) i_stream_demux (
+        ) i_obi_rw_demux (
             .inp_valid_i ( obi_res_i[c].rvalid ),
-            .inp_ready_o ( obi_req_o[c].rready ),
-            .oup_sel_i   ( obi_we_q[c]                      ),
+            .inp_ready_o ( obi_req_o_rready ),
+            .oup_sel_i   ( obi_we_d[c]                      ),
             .oup_valid_o ( {obi_write_rsp[c].rvalid , obi_read_rsp[c].rvalid } ),
             .oup_ready_i ( {obi_write_req[c].rready ,  obi_read_req[c].rready    } )
         );
+        assign obi_req_o[c].rready = obi_req_o_rready;
 
 
         assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c];
@@ -433,33 +435,33 @@ module idma_inst64_top #(
 
     // Address Decode
     addr_decode #(
-    .NoIndices  ( 32'd2  ),
-    .NoRules    ( 32'd2 ),
-    .addr_t     ( addr_t          ),
-    .rule_t     ( addr_rule_t          )
+    .NoIndices  ( $clog2(NumRules) ),
+    .NoRules    ( NumRules         ),
+    .addr_t     ( addr_t           ),
+    .rule_t     ( addr_rule_t      )
     ) i_idma_src_decode (
     .addr_i           ( idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] ),
-    .addr_map_i       ( addr_map_i                 ),
-    .idx_o            ( idx_src                     ),
-    .dec_valid_o      ( idx_src_valid               ),
-    .dec_error_o      ( idx_src_error               ),
-    .en_default_idx_i ( 1'b1   ),
-    .default_idx_i    ( 32'd4      )
+    .addr_map_i       ( addr_map_i                                         ),
+    .idx_o            ( idx_src                                            ),
+    .dec_valid_o      ( idx_src_valid                                      ),
+    .dec_error_o      ( idx_src_error                                      ),
+    .en_default_idx_i ( 1'b1                                               ),
+    .default_idx_i    ( 32'd4                                              )
     );
     // address decoder for destination address
     addr_decode #(
-    .NoIndices  ( 32'd2  ),
-    .addr_t     ( addr_t          ),
-    .NoRules    ( 32'd2 ),
-    .rule_t     ( addr_rule_t          )
+    .NoIndices  ( $clog2(NumRules) ),
+    .addr_t     ( addr_t           ),
+    .NoRules    ( NumRules         ),
+    .rule_t     ( addr_rule_t      )
     ) i_idma_dst_decode (
     .addr_i           ( idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:0] ),
-    .addr_map_i       ( addr_map_i                 ),
-    .idx_o            ( idx_dst                     ),
-    .dec_valid_o      ( idx_dst_valid               ),
-    .dec_error_o      ( idx_dst_error               ),
-    .en_default_idx_i ( 1'b1   ),
-    .default_idx_i    ( 32'd4      )
+    .addr_map_i       ( addr_map_i                                         ),
+    .idx_o            ( idx_dst                                            ),
+    .dec_valid_o      ( idx_dst_valid                                      ),
+    .dec_error_o      ( idx_dst_error                                      ),
+    .en_default_idx_i ( 1'b1                                               ),
+    .default_idx_i    ( 32'd4                                              )
     );
 
 
