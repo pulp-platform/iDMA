@@ -274,13 +274,15 @@ bender-rm:
 ## Register
 ## --------------
 
-.PHONY: gen_regs reg32_2d_regs reg64_regs desc64_regs regs_clean
+.PHONY: gen_regs reg32_2d_regs reg32_rt_regs reg64_regs desc64_regs regs_clean
 
 REG_PATH ?= $(shell $(BENDER) path register_interface)
 REG_TOOL ?= $(REG_PATH)/vendor/lowrisc_opentitan/util/regtool.py
 
 REG32_2D_FE_DIR = src/frontends/register_32bit_2d/
 REG32_2D_HJSON = $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.hjson
+REG32_RT_FE_DIR = src/frontends/register_32bit_rt/
+REG32_RT_HJSON = $(REG32_RT_FE_DIR)/idma_reg32_rt_frontend.hjson
 REG64_FE_DIR = src/frontends/register_64bit/
 REG64_HJSON = $(REG64_FE_DIR)/idma_reg64_frontend.hjson
 DESC64_FE_DIR = src/frontends/desc64/
@@ -288,7 +290,7 @@ DESC64_HJSON = $(DESC64_FE_DIR)/idma_desc64_frontend.hjson
 
 REG_HTML_STRING = "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n"
 
-gen_regs: reg32_2d_regs reg64_regs desc64_regs
+gen_regs: reg32_2d_regs reg32_rt_regs reg64_regs desc64_regs
 
 reg32_2d_regs:
 	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -t $(REG32_2D_FE_DIR) -r
@@ -297,6 +299,14 @@ reg32_2d_regs:
 	$(PYTHON) $(REG_TOOL) $(REG32_2D_HJSON) -d >> $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
 	printf "</html>\n" >> $(REG32_2D_FE_DIR)/idma_reg32_2d_frontend.html
 	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG32_2D_FE_DIR)
+
+reg32_rt_regs:
+	$(PYTHON) $(REG_TOOL) $(REG32_RT_HJSON) -t $(REG32_RT_FE_DIR) -r
+	$(PYTHON) $(REG_TOOL) $(REG32_RT_HJSON) -D > $(REG32_RT_FE_DIR)/idma_reg32_rt_frontend.h
+	printf $(REG_HTML_STRING) > $(REG32_RT_FE_DIR)/idma_reg32_rt_frontend.html
+	$(PYTHON) $(REG_TOOL) $(REG32_RT_HJSON) -d >> $(REG32_RT_FE_DIR)/idma_reg32_rt_frontend.html
+	printf "</html>\n" >> $(REG32_RT_FE_DIR)/idma_reg32_rt_frontend.html
+	cp $(REG_PATH)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $(REG32_RT_FE_DIR)
 
 reg64_regs:
 	$(PYTHON) $(REG_TOOL) $(REG64_HJSON) -t $(REG64_FE_DIR) -r

@@ -1,0 +1,240 @@
+// Copyright 2022 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+// Licensed under Solderpad Hardware License, Version 0.51
+
+{
+  name: "idma_reg32_2d_frontend",
+  clock_primary: "clk_i",
+  reset_primary: "rst_ni",
+  bus_interfaces: [
+    { protocol: "reg_iface",
+      direction: "device"
+    }
+  ],
+
+  regwidth: "32",
+  param_list: [
+    { name: "NumEvents",
+      desc: "Number of transfer events the DMA will handle autonomously",
+      type: "int",
+      default: "5",
+      local: "true"
+    }
+  ],
+
+  registers: [
+    { name: "src_addr",
+      desc: "Source Address",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "src_addr",
+          desc: "Source Address"
+        }
+      ]
+    },
+    { name: "dst_addr",
+      desc: "Destination Address",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "dst_addr",
+          desc: "Destination Address"
+        }
+      ]
+    },
+    { name: "num_bytes",
+      desc: "Number of bytes",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "num_bytes",
+          desc: "Number of bytes"
+        }
+      ]
+    },
+    { name: "conf",
+      desc: "Configuration Register for DMA settings",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "0",
+          name: "decouple",
+          desc: "Decouple enable"
+        },
+        { bits: "1",
+          name: "deburst",
+          desc: "Deburst enable"
+        },
+        { bits: "2",
+          name: "serialize",
+          desc: "Serialize enable"
+        },
+        { bits: "3",
+          name: "twod",
+          desc: "2D transfer"
+        }
+      ]
+    },
+    { name: "stride_src",
+      desc: "Source Stride",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "stride_src",
+          desc: "Source Stride"
+        }
+      ]
+    },
+    { name: "stride_dst"
+      desc: "Destination Stride",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "stride_dst",
+          desc: "Destination Stride"
+        }
+      ]
+    },
+    { name: "num_repetitions"
+      desc: "Number of 2D repetitions",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "num_repetitions",
+          desc: "Number of 2D repetitions",
+          resval: "1"
+        }
+      ]
+    },
+    { name: "status",
+      desc: "DMA Status",
+      swaccess: "ro",
+      hwaccess: "hwo",
+      hwext: "true",
+      fields: [
+        { bits: "15:0",
+          name: "busy",
+          desc: "DMA busy"
+        }
+      ]
+    },
+    { name: "next_id",
+      desc: "Next ID, launches transfer, returns 0 if transfer not set up properly.",
+      swaccess: "ro",
+      hwaccess: "hrw",
+      hwext: "true",
+      hwre: "true",
+      fields: [
+        { bits: "31:0",
+          name: "next_id",
+          desc: "Next ID, launches transfer, returns 0 if transfer not set up properly."
+        }
+      ]
+    },
+    { name: "done",
+      desc: "Get ID of finished transactions.",
+      swaccess: "ro",
+      hwaccess: "hrw",
+      hwext: "true",
+      hwre: "true",
+      fields: [
+        { bits: "31:0",
+          name: "done",
+          desc: "Get ID of finished transactions."
+        }
+      ]
+    }
+    { multireg:
+      { name:     "rt_event_counts"
+        desc:     "RT event counts"
+        swaccess: "ro"
+        hwaccess: "hrw"
+        count:    "NumEvents"
+ 	cname:    "rt_event_counts"
+        fields: [
+          { bits: "31:0", resval: "0", name: "rt_event_counts", desc: "RT event counts" }
+        ]
+      }
+    }
+    { multireg:
+      { name:     "rt_src_addr"
+        desc:     "RT src addr"
+        swaccess: "rw"
+        hwaccess: "hrw"
+        count:    "NumEvents"
+	cname:     "rt_src_addr"
+        fields: [
+          { bits: "31:0", resval: "0", name: "rt_src_addr", desc: "RT src addr" }
+        ]
+      }
+    }
+    { multireg:
+      { name:     "rt_dst_addr"
+        desc:     "RT dst addr"
+        swaccess: "rw"
+        hwaccess: "hrw"
+        count:    "NumEvents"
+ 	cname:     "rt_dst_addr"
+        fields: [
+          { bits: "31:0", resval: "0", name: "rt_dst_addr", desc: "RT dst addr" }
+        ]
+      }
+    }
+    { multireg:
+      { name:     "rt_length"
+        desc:     "RT length"
+        swaccess: "rw"
+        hwaccess: "hrw"
+        count:    "NumEvents"
+	cname:    "rt_length"
+        fields: [
+          { bits: "31:0", resval: "0", name: "rt_length", desc: "RT length" }
+        ]
+      }
+    }
+    { multireg:
+      { name:     "rt_src_1d_stride"
+        desc:     "RT src 1d stride"
+        swaccess: "rw"
+        hwaccess: "hrw"
+        count:    "NumEvents"
+	cname:    "rt_src_1d_stride"
+        fields: [
+          { bits: "31:0", resval: "0", name: "rt_src_1d_stride", desc: "RT src 1d stride" }
+        ]
+      }
+    }
+    { multireg:
+      { name:     "rt_dst_1d_stride"
+        desc:     "RT dst 1d stride"
+        swaccess: "rw"
+        hwaccess: "hrw"
+        count:    "NumEvents"
+	cname:    "rt_dst_1d_stride"
+        fields: [
+          { bits: "31:0", resval: "0", name: "rt_dst_1d_stride", desc: "RT dst 1d stride" }
+        ]
+      }
+    }
+    { multireg:
+      { name:     "rt_num_1d_reps"
+        desc:     "RT num 1d reps"
+        swaccess: "rw"
+        hwaccess: "hrw"
+        count:    "NumEvents"
+	cname:    "rt_num_1d_reps"
+        fields: [
+          { bits: "31:0", resval: "0", name: "rt_num_1d_reps", desc: "RT num 1d reps" }
+        ]
+      }
+    }
+]
+}

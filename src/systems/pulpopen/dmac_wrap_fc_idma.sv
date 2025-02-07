@@ -34,7 +34,8 @@ module dmac_wrap_fc_idma #(
   parameter int unsigned TwoDMidend          = 1, // Leave this on for now
   parameter int unsigned NB_OUTSND_BURSTS    = 8,
   parameter int unsigned GLOBAL_QUEUE_DEPTH  = 16,
-  parameter int unsigned BACKEND_QUEUE_DEPTH = 16
+  parameter int unsigned BACKEND_QUEUE_DEPTH = 16,
+  parameter int unsigned RtMidend            = 0
 ) (
   input logic                      clk_i,
   input logic                      rst_ni,
@@ -51,6 +52,7 @@ module dmac_wrap_fc_idma #(
   localparam int unsigned SlvIdxWidth = AXI_ID_WIDTH_MST_1 - $clog2(NUM_STREAMS);
 
   localparam int unsigned NumRegs = 1;
+  localparam int unsigned NumEvents = 5;
 
   // AXI4+ATOP types
   typedef logic [AXI_ADDR_WIDTH-1:0]   addr_t;
@@ -149,23 +151,43 @@ module dmac_wrap_fc_idma #(
   `REG_BUS_ASSIGN_TO_REQ(dma_regs_req, regbus_sdma_cfg)
   `REG_BUS_ASSIGN_FROM_RSP(regbus_sdma_cfg, dma_regs_rsp)
 
-  idma_reg32_2d_frontend #(
-    .NumRegs        ( NumRegs        ),
-    .IdCounterWidth ( 28             ),
-    .dma_regs_req_t ( dma_regs_req_t ),
-    .dma_regs_rsp_t ( dma_regs_rsp_t ),
-    .burst_req_t    ( idma_nd_req_t  )
-  ) i_idma_reg32_2d_frontend (
-    .clk_i,
-    .rst_ni,
-    .dma_ctrl_req_i   ( dma_regs_req   ),
-    .dma_ctrl_rsp_o   ( dma_regs_rsp   ),
-    .burst_req_o      ( twod_req       ),
-    .valid_o          ( fe_valid       ),
-    .ready_i          ( fe_ready       ),
-    .backend_idle_i   ( ~busy_o        ),
-    .trans_complete_i ( trans_complete )
-  );
+  if (RtMidend) begin : gen_regs_rt_midend
+    idma_reg32_rt_frontend #(
+      .NumRegs        ( NumRegs        ),
+      .IdCounterWidth ( 28             ),
+      .dma_regs_req_t ( dma_regs_req_t ),
+      .dma_regs_rsp_t ( dma_regs_rsp_t ),
+      .burst_req_t    ( idma_nd_req_t  )
+    ) i_idma_reg32_2d_frontend (
+      .clk_i,
+      .rst_ni,
+      .dma_ctrl_req_i   ( dma_regs_req   ),
+      .dma_ctrl_rsp_o   ( dma_regs_rsp   ),
+      .burst_req_o      ( twod_req       ),
+      .valid_o          ( fe_valid       ),
+      .ready_i          ( fe_ready       ),
+      .backend_idle_i   ( ~busy_o        ),
+      .trans_complete_i ( trans_complete )
+    );
+  end else begin : gen_regs_no_rt_midend
+    idma_reg32_2d_frontend #(
+      .NumRegs        ( NumRegs        ),
+      .IdCounterWidth ( 28             ),
+      .dma_regs_req_t ( dma_regs_req_t ),
+      .dma_regs_rsp_t ( dma_regs_rsp_t ),
+      .burst_req_t    ( idma_nd_req_t  )
+    ) i_idma_reg32_2d_frontend (
+      .clk_i,
+      .rst_ni,
+      .dma_ctrl_req_i   ( dma_regs_req   ),
+      .dma_ctrl_rsp_o   ( dma_regs_rsp   ),
+      .burst_req_o      ( twod_req       ),
+      .valid_o          ( fe_valid       ),
+      .ready_i          ( fe_ready       ),
+      .backend_idle_i   ( ~busy_o        ),
+      .trans_complete_i ( trans_complete )
+    );
+  end
 
   // interrupts and events (currently broadcast tx_cplt event only)
   assign term_event_o    = |trans_complete ? '1 : '0;
@@ -199,35 +221,84 @@ module dmac_wrap_fc_idma #(
 
   localparam logic [1:0][31:0] RepWidths = '{default: 32'd32};
 
-  idma_nd_midend #(
-    .NumDim       ( NumDim        ),
-    .addr_t       ( addr_t        ),
-    .idma_req_t   ( idma_req_t    ),
-    .idma_rsp_t   ( idma_rsp_t    ),
-    .idma_nd_req_t( idma_nd_req_t ),
-    .RepWidths    ( RepWidths     )
-  ) i_idma_2D_midend (
-    .clk_i,
-    .rst_ni,
+  if (RtMidend) begin : gen_rt_midend
+     idma_rd_midend #(
+      .NumEvents    ( NumEvents     ),
+      .NumOutstanding ( NB_OUTSND_BURSTS ),              
+      .addr_t       ( addr_t        ),
+      .idma_rsp_t   ( idma_rsp_t    ),
+      .idma_nd_req_t( idma_nd_req_t )
+    ) i_idma_rt_midend (
+      .clk_i,
+      .rst_ni,
 
-    .nd_req_i         ( twod_req_queue   ),
-    .nd_req_valid_i   ( twod_queue_valid ),
-    .nd_req_ready_o   ( twod_queue_ready ),
+      .event_counts_i   ( rt_event_counts ),
+      // linear bursts               
+      .src_addr_i       ( rt_src_addr ),
+      .dst_addr_i       ( rt_dst_addr ),
+      .length_i         ( rt_length   ),
+      // 1d bursts               
+      .src_1d_stride_i  ( rt_src_1d_stride ),
+      .dst_1d_stride_i  ( rt_dst_1d_stride ),
+      .num_1d_reps_i    ( ),
+      // 2d bursts (currently not supported)
+      .src_2d_stride_i  ( '0 ),
+      .dst_2d_stride_i  ( '0 ),
+      .num_2d_reps_i    ( '0 ),
 
-    .nd_rsp_o         (/*NOT CONNECTED*/ ),
-    .nd_rsp_valid_o   ( trans_complete   ),
-    .nd_rsp_ready_i   ( 1'b1             ), // Always ready to accept completed transfers
-
-    .burst_req_o      ( burst_req        ),
-    .burst_req_valid_o( be_valid         ),
-    .burst_req_ready_i( be_ready         ),
-
-    .burst_rsp_i      ( idma_rsp         ),
-    .burst_rsp_valid_i( be_rsp_valid     ),
-    .burst_rsp_ready_o( be_rsp_ready     ),
-
-    .busy_o           ( midend_busy      )
-  );
+      // enable               
+      .event_ena_i      ( rt_event_enable ),
+      .event_counts_o   ( rt_event_count  ),      
+          
+      .nd_req_i         ( twod_req_queue   ),
+      .nd_req_valid_i   ( twod_queue_valid ),
+      .nd_req_ready_o   ( twod_queue_ready ),
+    
+      .nd_req_o         ( burst_req ),
+      .nd_req_valid_o   ( be_valid  ),
+      .nd_req_ready_i   ( be_ready  ),
+    
+      .burst_rsp_o      ( /*NOT CONNECTED*/ ),
+      .burst_rsp_valid_o( trans_complete    ),
+      .burst_rsp_ready_i( 1'b1              ),
+    
+      .burst_rsp_i      ( idma_rsp     ),
+      .burst_rsp_valid_i( be_rsp_valid ),
+      .burst_rsp_ready_o( be_rsp_ready ),
+    
+      .busy_o           ( midend_busy )
+    );
+  end else begin : gen_no_rt_midend  
+    idma_nd_midend #(
+      .NumDim       ( NumDim        ),
+      .addr_t       ( addr_t        ),
+      .idma_req_t   ( idma_req_t    ),
+      .idma_rsp_t   ( idma_rsp_t    ),
+      .idma_nd_req_t( idma_nd_req_t ),
+      .RepWidths    ( RepWidths     )
+    ) i_idma_2D_midend (
+      .clk_i,
+      .rst_ni,
+    
+      .nd_req_i         ( twod_req_queue   ),
+      .nd_req_valid_i   ( twod_queue_valid ),
+      .nd_req_ready_o   ( twod_queue_ready ),
+    
+      .nd_rsp_o         (/*NOT CONNECTED*/ ),
+      .nd_rsp_valid_o   ( trans_complete   ),
+      .nd_rsp_ready_i   ( 1'b1             ), // Always ready to accept completed transfers
+    
+      .burst_req_o      ( burst_req        ),
+      .burst_req_valid_o( be_valid         ),
+      .burst_req_ready_i( be_ready         ),
+    
+      .burst_rsp_i      ( idma_rsp         ),
+      .burst_rsp_valid_i( be_rsp_valid     ),
+      .burst_rsp_ready_o( be_rsp_ready     ),
+    
+      .busy_o           ( midend_busy      )
+    );
+  end
 
   // ------------------------------------------------------
   // BACKEND
