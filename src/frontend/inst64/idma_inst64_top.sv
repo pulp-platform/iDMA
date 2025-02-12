@@ -19,6 +19,7 @@ module idma_inst64_top #(
     parameter int unsigned NumAxInFlight   = 32'd3,
     parameter int unsigned DMAReqFifoDepth = 32'd3,
     parameter int unsigned NumChannels     = 32'd1,
+    parameter bit          TCDMAliasEnable = 1'b0,
     parameter int unsigned DMATracing      = 32'd0,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
@@ -43,9 +44,6 @@ module idma_inst64_top #(
     // AXI4 bus
     output axi_req_t    [NumChannels-1:0] axi_req_o,
     input  axi_res_t    [NumChannels-1:0] axi_res_i,
-    // Memory Init
-    output init_req_t   [NumChannels-1:0] init_req_o,
-    input  init_rsp_t   [NumChannels-1:0] init_res_i,
     // OBI interconnect
     output obi_req_t    [NumChannels-1:0] obi_req_o,
     input  obi_res_t    [NumChannels-1:0] obi_res_i,
@@ -64,7 +62,7 @@ module idma_inst64_top #(
     // performance output
     output dma_events_t [NumChannels-1:0] events_o,
     // address decode map
-    input  addr_rule_t [3:0]              addr_map_i
+    input  addr_rule_t [TCDMAliasEnable:0] addr_map_i
 );
 
     // constants
@@ -143,7 +141,8 @@ module idma_inst64_top #(
     // internal Init channels
     init_req_t [NumChannels-1:0] init_read_req, init_write_req;
     init_rsp_t [NumChannels-1:0] init_read_rsp, init_write_rsp;
-    logic      [7:0]             init_read_rsp_byte;
+    logic [NumChannels-1:0][7:0] init_read_req_byte;
+    logic [NumChannels-1:0][7:0] init_read_rsq_byte;
 
     // internal OBI channels
     obi_req_t [NumChannels-1:0] obi_read_req, obi_write_req;
@@ -195,10 +194,12 @@ module idma_inst64_top #(
     logic     acc_res_ready;
 
     // decoder signals
-    logic [$clog2(NumRules)-1:0] idx_src;
+    localparam int unsigned NoRules = (1 + TCDMAliasEnable);
+    localparam int unsigned NoIndices = 1;
+    logic [NoIndices-1:0] idx_src;
     logic                        idx_src_valid;
     logic                        idx_src_error;
-    logic [$clog2(NumRules)-1:0] idx_dst;
+    logic [NoIndices-1:0] idx_dst;
     logic                        idx_dst_valid;
     logic                        idx_dst_error;
 
@@ -216,7 +217,7 @@ module idma_inst64_top #(
             .TFLenWidth           ( TFLenWidth                  ),
             .MemSysDepth          ( 32'd16                      ),
             .CombinedShifter      ( 1'b1                        ),
-            .RAWCouplingAvail     ( 1'b1                        ),
+            .RAWCouplingAvail     ( 1'b0                        ),
             .MaskInvalidData      ( 1'b0                        ),
             .HardwareLegalizer    ( 1'b1                        ),
             .RejectZeroTransfers  ( 1'b1                        ),
@@ -278,7 +279,7 @@ module idma_inst64_top #(
 
         // INIT setup
         spill_register #(
-            .T       ( init_req_t  )
+            .T       ( logic [7:0] )
         ) i_spill_register_init (
             .clk_i,
             .rst_ni,
@@ -287,25 +288,25 @@ module idma_inst64_top #(
             .data_i  ( init_read_req[c].req_chan.cfg[7:0] ),
             .valid_o ( init_read_rsp[c].rsp_valid         ),
             .ready_i ( init_read_req[c].rsp_ready         ),
-            .data_o  ( init_read_rsp_byte                 )
+            .data_o  ( init_read_req_byte[c]             )
         ); 
         
-        assign init_read_rsp[c].rsp_chan.init = {{StrbWidth}{init_read_rsp_byte}};
+        assign init_read_rsp[c].rsp_chan.init = {{StrbWidth}{init_read_req_byte[c]}};
 
-        // OBI mux read or write    
-        assign obi_we_d[c] = obi_write_req[c].a.we;
+        // prefer read request if both were valid (but shouldn't happen)
+        assign obi_we_d[c] = (~obi_read_req[c].req & obi_write_req[c].req);
+    
         `FF(obi_we_q[c], obi_we_d[c], '0, clk_i, rst_ni)
-
         stream_mux #(
-            .DATA_T       ( obi_req_t ),
+            .DATA_T       ( obi_a_chan_t ),
             .N_INP        ( 32'd2  )
         ) i_obi_rw_mux (
-            .inp_data_i   ( {obi_write_req[c],          obi_read_req[c]       } ),
-            .inp_valid_i  ( {(obi_write_req[c] != '0), (obi_read_req[c] != '0)} ),
+            .inp_data_i   ( {obi_write_req[c].a,        obi_read_req[c].a     } ),
+            .inp_valid_i  ( {obi_write_req[c].req,      obi_read_req[c].req   } ),
             .inp_ready_o  ( {obi_write_rsp[c].gnt,      obi_read_rsp[c].gnt   } ),
             .inp_sel_i    ( obi_we_d[c]                                         ),
-            .oup_data_o   ( obi_req_o[c]                                        ),
-            .oup_valid_o  (                                                     ),
+            .oup_data_o   ( obi_req_o[c].a                                      ),
+            .oup_valid_o  ( obi_req_o[c].req                                    ),
             .oup_ready_i  ( obi_res_i[c].gnt                                    )
         );
 
@@ -313,13 +314,19 @@ module idma_inst64_top #(
             .N_OUP       ( 32'd2 )
         ) i_obi_rw_demux (
             .inp_valid_i ( obi_res_i[c].rvalid ),
-            .inp_ready_o ( obi_req_o_rready ),
-            .oup_sel_i   ( obi_we_d[c]                      ),
+            .inp_ready_o ( /*obi_req_o_rready*/ ),
+            .oup_sel_i   ( obi_we_q[c]                      ),
             .oup_valid_o ( {obi_write_rsp[c].rvalid , obi_read_rsp[c].rvalid } ),
             .oup_ready_i ( {obi_write_req[c].rready ,  obi_read_req[c].rready    } )
         );
-        assign obi_req_o[c].rready = obi_req_o_rready;
 
+        always_comb begin : gen_obi_response
+            if (obi_we_q[c]) begin
+                assign obi_write_rsp[c].r = obi_res_i[c].r;
+            end else begin
+                assign obi_read_rsp[c].r = obi_res_i[c].r;
+            end
+        end
 
         assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c];
     end
@@ -435,8 +442,8 @@ module idma_inst64_top #(
 
     // Address Decode
     addr_decode #(
-    .NoIndices  ( $clog2(NumRules) ),
-    .NoRules    ( NumRules         ),
+    .NoIndices  ( NoIndices ),
+    .NoRules    ( NoRules        ),
     .addr_t     ( addr_t           ),
     .rule_t     ( addr_rule_t      )
     ) i_idma_src_decode (
@@ -446,13 +453,13 @@ module idma_inst64_top #(
     .dec_valid_o      ( idx_src_valid                                      ),
     .dec_error_o      ( idx_src_error                                      ),
     .en_default_idx_i ( 1'b1                                               ),
-    .default_idx_i    ( 32'd4                                              )
+    .default_idx_i    ( idma_pkg::ToSoC                                              )
     );
     // address decoder for destination address
     addr_decode #(
-    .NoIndices  ( $clog2(NumRules) ),
+    .NoIndices  ( NoIndices ),
     .addr_t     ( addr_t           ),
-    .NoRules    ( NumRules         ),
+    .NoRules    ( NoRules        ),
     .rule_t     ( addr_rule_t      )
     ) i_idma_dst_decode (
     .addr_i           ( idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:0] ),
@@ -461,7 +468,7 @@ module idma_inst64_top #(
     .dec_valid_o      ( idx_dst_valid                                      ),
     .dec_error_o      ( idx_dst_error                                      ),
     .en_default_idx_i ( 1'b1                                               ),
-    .default_idx_i    ( 32'd4                                              )
+    .default_idx_i    ( idma_pkg::ToSoC                                              )
     );
 
 
@@ -692,25 +699,28 @@ module idma_inst64_top #(
 
         if (idma_fe_req_d.burst_req.opt.src_protocol != idma_pkg::INIT) begin
 
-            assign idx_src = (idx_src_error) ? 32'd4 : (idx_src);
-            assign idx_dst = (idx_dst_error) ? 32'd4 : (idx_dst);
+            // error handling
+            // assign idx_src = (idx_src_error) ? 32'd4 : (idx_src);
+            // assign idx_dst = (idx_dst_error) ? 32'd4 : (idx_dst);
 
             
             unique casez (idx_src)
-                32'd0, 32'd2: begin //TCDM
-                    idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::OBI;
+                idma_pkg::ToSoC : begin //SoCDMAOut
+                    idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::AXI;
                 end
-                32'd1, 32'd3 : begin //ZeroMem
+                idma_pkg::TCDMDMA : begin //TCDM
+                    idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::OBI;
                 end
                 default : begin //SoCDMAOut
                     idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::AXI;
                 end
             endcase
             unique casez (idx_dst)
-                32'd0, 32'd2: begin //TCDM
-                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::OBI;
+                idma_pkg::ToSoC : begin //SoCDMAOut
+                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
                 end
-                32'd1, 32'd3 : begin //ZeroMem
+                idma_pkg::TCDMDMA : begin //TCDM
+                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::OBI;
                 end
                 default : begin //SoCDMAOut
                     idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
