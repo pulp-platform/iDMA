@@ -1,0 +1,197 @@
+// Copyright 2023 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Authors:
+// - Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+{
+  name: "idma_reg64_1d",
+  clock_primary: "clk_i",
+  reset_primary: "rst_ni",
+  bus_interfaces: [
+    { protocol: "reg_iface",
+      direction: "device"
+    }
+  ],
+  regwidth: "32",
+  param_list: [
+    { name: "num_dims",
+      desc: "Number of dimensions available",
+      type: "int",
+      default: "1"
+    }
+  ],
+  registers: [
+    { name: "conf",
+      desc: "Configuration Register for DMA settings",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "0",
+          name: "decouple_aw",
+          desc: "Decouple R-AW"
+        },
+        { bits: "1",
+          name: "decouple_rw",
+          desc: "Decouple R-W"
+        },
+        { bits: "2",
+          name: "src_reduce_len",
+          desc: "Reduce maximal source burst length"
+        },
+        { bits: "3",
+          name: "dst_reduce_len",
+          desc: "Reduce maximal destination burst length"
+        }
+        { bits: "6:4",
+          name: "src_max_llen",
+          desc: "Maximal logarithmic source burst length"
+        }
+        { bits: "9:7",
+          name: "dst_max_llen",
+          desc: "Maximal logarithmic destination burst length"
+        }
+        { bits: "10:10",
+          name: "enable_nd",
+          desc: "ND-extension enabled"
+        }
+        { bits: "13:11",
+          name: "src_protocol",
+          desc: "Selection of the source protocol"
+        }
+        { bits: "16:14",
+          name: "dst_protocol",
+          desc: "Selection of the destination protocol"
+        }
+      ]
+    },
+    { multireg:
+      { name: "status",
+        desc: "DMA Status",
+        swaccess: "ro",
+        hwaccess: "hwo",
+        count: "16",
+        cname: "status",
+        hwext: "true",
+        compact: "false",
+        fields: [
+          { bits: "9:0",
+            name: "busy",
+            desc: "DMA busy"
+          }
+        ]
+      }
+    },
+    { multireg:
+      { name: "next_id",
+        desc: "Next ID, launches transfer, returns 0 if transfer not set up properly.",
+        swaccess: "ro",
+        hwaccess: "hrw",
+        hwre: "true",
+        count: "16",
+        cname: "next_id",
+        hwext: "true",
+        compact: "false",
+        fields: [
+          { bits: "31:0",
+            name: "next_id",
+            desc: "Next ID, launches transfer, returns 0 if transfer not set up properly."
+          }
+        ]
+      }
+    },
+    { multireg:
+      { name: "done_id",
+        desc: "Get ID of finished transactions.",
+        swaccess: "ro",
+        hwaccess: "hwo",
+        count: "16",
+        cname: "done_id",
+        hwext: "true",
+        compact: "false",
+        fields: [
+          { bits: "31:0",
+            name: "done_id",
+            desc: "Get ID of finished transactions."
+          }
+        ]
+      }
+    },
+    { skipto: "0xD0" },
+    { name: "dst_addr_low"
+      desc: "Low destination address",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "dst_addr_low",
+          desc: "Low destination address",
+          resval: "0"
+        }
+      ]
+    },
+    { name: "dst_addr_high"
+      desc: "High destination address",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "dst_addr_high",
+          desc: "High destination address",
+          resval: "0"
+        }
+      ]
+    },
+    { name: "src_addr_low"
+      desc: "Low source address",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "src_addr_low",
+          desc: "Low source address",
+          resval: "0"
+        }
+      ]
+    },
+    { name: "src_addr_high"
+      desc: "High source address",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "src_addr_high",
+          desc: "High source address",
+          resval: "0"
+        }
+      ]
+    },
+    { name: "length_low"
+      desc: "Low transfer length in byte",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "length_low",
+          desc: "Low transfer length in byte",
+          resval: "0"
+        }
+      ]
+    },
+    { name: "length_high"
+      desc: "High transfer length in byte",
+      swaccess: "rw",
+      hwaccess: "hro",
+      fields: [
+        { bits: "31:0",
+          name: "length_high",
+          desc: "High transfer length in byte",
+          resval: "0"
+        }
+      ]
+    }
+  ]
+}
+
