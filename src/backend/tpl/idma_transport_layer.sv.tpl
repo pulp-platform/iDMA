@@ -370,21 +370,34 @@ ${rendered_read_ports[read_port]}
     end
 
     always_comb begin : gen_read_multiplexer
-        case(r_dp_req_i.src_protocol)
+        if (r_dp_valid_i) begin
+            case(r_dp_req_i.src_protocol)
 % for rp in used_read_protocols:
-        idma_pkg::${database[rp]['protocol_enum']}: begin
-            r_chan_valid_o  = ${rp}_r_chan_valid;
-            r_chan_ready_o  = ${rp}_r_chan_ready;
+            idma_pkg::${database[rp]['protocol_enum']}: begin
+                r_chan_valid_o  = ${rp}_r_chan_valid;
+                r_chan_ready_o  = ${rp}_r_chan_ready;
 
-            r_dp_ready_o    = ${rp}_r_dp_ready;
-            r_dp_rsp_o      = ${rp}_r_dp_rsp;
-            r_dp_valid_o    = ${rp}_r_dp_valid;
+                r_dp_ready_o    = ${rp}_r_dp_ready;
+                r_dp_rsp_o      = ${rp}_r_dp_rsp;
+                r_dp_valid_o    = ${rp}_r_dp_valid;
 
-            buffer_in       = ${rp}_buffer_in;
-            buffer_in_valid = ${rp}_buffer_in_valid;
-        end
+                buffer_in       = ${rp}_buffer_in;
+                buffer_in_valid = ${rp}_buffer_in_valid;
+            end
 % endfor
-        default: begin
+            default: begin
+                r_chan_valid_o  = 1'b0;
+                r_chan_ready_o  = 1'b0;
+
+                r_dp_ready_o    = 1'b0;
+                r_dp_rsp_o      = '0;
+                r_dp_valid_o    = 1'b0;
+
+                buffer_in       = '0;
+                buffer_in_valid = '0;
+            end
+            endcase
+        end else begin
             r_chan_valid_o  = 1'b0;
             r_chan_ready_o  = 1'b0;
 
@@ -395,7 +408,6 @@ ${rendered_read_ports[read_port]}
             buffer_in       = '0;
             buffer_in_valid = '0;
         end
-        endcase
     end
 
 % endif
@@ -553,7 +565,7 @@ ${rendered_write_ports[write_port]}
         .valid_i ( w_dp_rsp_mux_valid ),
         .ready_o ( w_dp_rsp_mux_ready ),
         .data_i  ( w_dp_rsp_mux       ),
-     
+
         .valid_o ( w_dp_rsp_valid ),
         .ready_i ( w_dp_rsp_ready ),
         .data_o  ( w_dp_rsp_o     )
