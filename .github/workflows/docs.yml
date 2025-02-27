@@ -60,7 +60,7 @@ jobs:
         run: make idma_doc_all
       -
         name: Create publish docs
-        uses: actions/upload-pages-artifact@v2.0.0
+        uses: actions/upload-pages-artifact@v3
         with:
           path: target/doc/html
 
