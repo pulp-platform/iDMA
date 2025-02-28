@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+
+## 0.6.4 - 2025-02-28
+
+### Added
+- Add tracing support to `inst64` [#52](https://github.com/pulp-platform/iDMA/pull/52).
+
+### Changed
+- Various fixes and small changes to upstream PULPv2/Chimera features. Combining PRs #49, #55, #56, #57 in [#66](https://github.com/pulp-platform/iDMA/pull/66).
+- Minor changes to fix linting [#54](https://github.com/pulp-platform/iDMA/pull/54).
+- Expand tracer to track more signals, increase Verilator support [#52](https://github.com/pulp-platform/iDMA/pull/52).
+
+### Fixed
+- Ensuring `r_dp_valid_i` is ready before accepting data [#67](https://github.com/pulp-platform/iDMA/pull/67).
+- Updated `upload-pages-artifact` to `v3` [#68](https://github.com/pulp-platform/iDMA/pull/68) and `upload-artifact` to `v4` to restore CI.
+- Fix `DMCPY` instruction in `inst64` front-end for multi-channel DMA operation [#65](https://github.com/pulp-platform/iDMA/pull/65).
+- Ensure correct `PageAddrWidth` in `legalizer` for transfers without bursts; fixes issue [#53](https://github.com/pulp-platform/iDMA/issues/51) and was merged as [#53](https://github.com/pulp-platform/iDMA/pull/53).
+
+
 ## 0.6.3 - 2024-07-02
 
 ### Added
