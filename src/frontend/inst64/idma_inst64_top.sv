@@ -70,7 +70,7 @@ module idma_inst64_top #(
     localparam int unsigned TFLenWidth   = AxiAddrWidth;
     localparam int unsigned RepWidth     = 32'd32;
     localparam int unsigned NumDim       = 32'd2;
-    localparam int unsigned BufferDepth  = 32'd64;
+    localparam int unsigned BufferDepth  = 32'd16;
     localparam int unsigned NumRules     = 32'd5;
 
     // derived constants and types
@@ -314,7 +314,7 @@ module idma_inst64_top #(
             .N_OUP       ( 32'd2 )
         ) i_obi_rw_demux (
             .inp_valid_i ( obi_res_i[c].rvalid ),
-            .inp_ready_o ( /*obi_req_o_rready*/ ),
+            .inp_ready_o ( obi_req_o[c].rready ),
             .oup_sel_i   ( obi_we_q[c]                      ),
             .oup_valid_o ( {obi_write_rsp[c].rvalid , obi_read_rsp[c].rvalid } ),
             .oup_ready_i ( {obi_write_req[c].rready ,  obi_read_req[c].rready    } )
@@ -587,21 +587,16 @@ module idma_inst64_top #(
 
                 // use init for memset 
                 idma_inst64_snitch_pkg::DMINIT : begin
-                    // Parse the transfer parameters from the register or immediate.
-                    unique casez (acc_req_i.data_op)
-                        idma_inst64_snitch_pkg::DMINIT : begin
-                            idma_fe_init_cfg   = acc_req_i.data_op[21:20];
-                            idma_fe_sel_chan   = acc_req_i.data_op[24:22];
-                        end
-                        default:;
-                    endcase
+                    // Parse the transfer parameters from the immediate.
+                    idma_fe_init_cfg   = acc_req_i.data_op[21:20];
+                    idma_fe_sel_chan   = acc_req_i.data_op[24:22];
+                        
 
                     dma_op_name = "DMINIT";
                     is_dma_op   = 1'b1;
                     idma_fe_req_d.burst_req.opt.axi_id       = idma_fe_sel_chan;
                     idma_fe_req_d.burst_req.length           = acc_req_i.data_arga;
                     idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
-                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::INIT;
 
                     // save correct value as src addr, depending on cfg
                     case (idma_fe_init_cfg)
@@ -609,12 +604,6 @@ module idma_inst64_top #(
                         2'b01 : idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0] = 'b11111111;
                         // else: DMSRC already added the value to idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:0]
                     endcase
-
-                    // set strides and reps
-                    // 1 byte value is repeated 'size' times
-                    idma_fe_req_d.d_req[0].src_strides = 0;
-                    idma_fe_req_d.d_req[0].dst_strides = 1'b1;
-                    idma_fe_req_d.d_req[0].reps = acc_req_i.data_arga;
 
                     // Perform the following sequence:
                     // 1. wait for acc response channel to be ready (pready)
@@ -715,19 +704,18 @@ module idma_inst64_top #(
                     idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::AXI;
                 end
             endcase
-            unique casez (idx_dst)
-                idma_pkg::ToSoC : begin //SoCDMAOut
-                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
-                end
-                idma_pkg::TCDMDMA : begin //TCDM
-                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::OBI;
-                end
-                default : begin //SoCDMAOut
-                    idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
-                end
-            endcase
         end    
-        
+        unique casez (idx_dst)
+            idma_pkg::ToSoC : begin //SoCDMAOut
+                idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
+            end
+            idma_pkg::TCDMDMA : begin //TCDM
+                idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::OBI;
+            end
+            default : begin //SoCDMAOut
+                idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
+            end
+        endcase
     end
 
     // twod handling
