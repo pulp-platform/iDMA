@@ -228,7 +228,7 @@ read_template: |
         .read_meta_chan_t ( read_meta_channel_t ),
         .read_req_t       ( ${req_t} ),
         .read_rsp_t       ( ${rsp_t} )
-    ) i_idma_axis_read (
+    ) i_idma_axis_read${mh} (
         .r_dp_req_i        ( r_dp_req_i ),
         .r_dp_req_valid_i  ( ${r_dp_valid_i} ),
         .r_dp_req_ready_o  ( ${r_dp_ready_o} ),
@@ -258,7 +258,7 @@ write_template: |
         .write_meta_channel_t ( write_meta_channel_t ),
         .write_req_t          ( ${req_t} ),
         .write_rsp_t          ( ${rsp_t} )
-    ) i_idma_axis_write (
+    ) i_idma_axis_write${mh} (
         .clk_i              ( clk_i ),
         .rst_ni             ( rst_ni ),
         .w_dp_req_i         ( w_dp_req_i ),
