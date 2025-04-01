@@ -95,6 +95,8 @@ module idma_backend_synth_${name_uniqueifier} #(
     input  addr_t                  req_dst_addr_i,
     input  idma_pkg::protocol_e    req_src_protocol_i,
     input  idma_pkg::protocol_e    req_dst_protocol_i,
+    input  idma_pkg::multihead_t   req_src_head_i,
+    input  idma_pkg::multihead_t   req_dst_head_i,
     input  id_t                    req_axi_id_i,
     input  axi_pkg::burst_t        req_src_burst_i,
     input  axi_pkg::cache_t        req_src_cache_i,
@@ -364,6 +366,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.length                 = req_length_i;
     assign idma_req.opt.src_protocol       = req_src_protocol_i;
     assign idma_req.opt.dst_protocol       = req_dst_protocol_i;
+    assign idma_req.opt.src_head           = req_src_head_i;
+    assign idma_req.opt.dst_head           = req_dst_head_i;
     assign idma_req.opt.axi_id             = req_axi_id_i;
     assign idma_req.opt.dst.cache          = req_dst_cache_i;
     assign idma_req.opt.dst.burst          = req_dst_burst_i;
