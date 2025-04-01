@@ -476,6 +476,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             opt_tf_d = '{
                 src_protocol:   req_i.opt.src_protocol,
                 dst_protocol:   req_i.opt.dst_protocol,
+                src_head:       req_i.opt.src_head,
+                dst_head:       req_i.opt.dst_head,
                 read_shift:     '0,
                 write_shift:    '0,
                 decouple_rw:    req_i.opt.beo.decouple_rw,
@@ -529,6 +531,7 @@ ${database[protocol]['legalizer_read_meta_channel']}
     // assign the signals needed to set-up the read data path
     assign r_req_o.r_dp_req = '{
         src_protocol: opt_tf_q.src_protocol,
+        src_head:     opt_tf_q.src_head,
         offset:       r_addr_offset,
         tailer:       OffsetWidth'(r_num_bytes + r_addr_offset),
         shift:        opt_tf_q.read_shift,
@@ -545,6 +548,7 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
     % else:
         w_req_o.w_dp_req = '{
             dst_protocol: opt_tf_q.dst_protocol,
+            dst_head:     opt_tf_q.dst_head,
             offset:       w_addr_offset,
             tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
             shift:        opt_tf_q.write_shift,
@@ -579,6 +583,7 @@ ${database[protocol]['legalizer_write_data_path']}
         default:
             w_req_o.w_dp_req = '{
                 dst_protocol: opt_tf_q.dst_protocol,
+                dst_head:     opt_tf_q.dst_head,
                 offset:       w_addr_offset,
                 tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
                 shift:        opt_tf_q.write_shift,

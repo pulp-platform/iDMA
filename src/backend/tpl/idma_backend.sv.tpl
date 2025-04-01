@@ -127,13 +127,13 @@ module idma_backend_${name_uniqueifier} #(
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_req_t ${protocol}_read_req_i,
+_req_t ${mh_format['ar'][protocol]}${protocol}_read_req_i,
 % else:
     output ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_req_t ${protocol}_read_req_o,
+_req_t ${mh_format['ar'][protocol]}${protocol}_read_req_o,
 % endif
     /// ${database[protocol]['full_name']} read response
 % if database[protocol]['passive_req'] == 'true':
@@ -141,13 +141,13 @@ _req_t ${protocol}_read_req_o,
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_rsp_t ${protocol}_read_rsp_o,
+_rsp_t ${mh_format['ar'][protocol]}${protocol}_read_rsp_o,
 % else:
     input  ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_rsp_t ${protocol}_read_rsp_i,
+_rsp_t ${mh_format['ar'][protocol]}${protocol}_read_rsp_i,
 % endif
 % endfor
 % for protocol in used_write_protocols:
@@ -157,13 +157,13 @@ _rsp_t ${protocol}_read_rsp_i,
 % if database[protocol]['read_slave'] == 'true':
 _write\
 % endif
-_req_t ${protocol}_write_req_o,
+_req_t ${mh_format['aw'][protocol]}${protocol}_write_req_o,
     /// ${database[protocol]['full_name']} write response
     input  ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _write\
 % endif
-_rsp_t ${protocol}_write_rsp_i,
+_rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % endfor
 
     /// iDMA busy flags
@@ -198,12 +198,13 @@ _rsp_t ${protocol}_write_rsp_i,
     /// - `decouple_aw`: If the transfer has the AW decoupled from the R
     /// - `is_single`: Is this transfer just one beat long? `(len == 0)`
     typedef struct packed {
-        idma_pkg::protocol_e src_protocol;
-        offset_t             offset;
-        offset_t             tailer;
-        offset_t             shift;
-        logic                decouple_aw;
-        logic                is_single;
+        idma_pkg::protocol_e  src_protocol;
+        idma_pkg::multihead_t src_head;
+        offset_t              offset;
+        offset_t              tailer;
+        offset_t              shift;
+        logic                 decouple_aw;
+        logic                 is_single;
     } r_dp_req_t;
 
     /// The datapath read response type provides feedback from the read part of the datapath:
@@ -225,12 +226,13 @@ _rsp_t ${protocol}_write_rsp_i,
     /// - `num_beats`: The number of beats this burst consist of
     /// - `is_single`: Is this transfer just one beat long? `(len == 0)`
     typedef struct packed {
-        idma_pkg::protocol_e dst_protocol;
-        offset_t             offset;
-        offset_t             tailer;
-        offset_t             shift;
-        axi_pkg::len_t       num_beats;
-        logic                is_single;
+        idma_pkg::protocol_e  dst_protocol;
+        idma_pkg::multihead_t dst_head;
+        offset_t              offset;
+        offset_t              tailer;
+        offset_t              shift;
+        axi_pkg::len_t        num_beats;
+        logic                 is_single;
     } w_dp_req_t;
 
     /// The datapath write response type provides feedback from the write part of the datapath:
@@ -248,8 +250,9 @@ _rsp_t ${protocol}_write_rsp_i,
     } idma_r_req_t;
 % if not one_read_port:
     typedef struct packed {
-        idma_pkg::protocol_e src_protocol;
-        read_meta_channel_t  ar_req;
+        idma_pkg::protocol_e  src_protocol;
+        idma_pkg::multihead_t src_head;
+        read_meta_channel_t   ar_req;
     } read_meta_channel_tagged_t;
 % endif
 
@@ -268,8 +271,9 @@ _rsp_t ${protocol}_write_rsp_i,
     } idma_w_req_t;
 % if not one_write_port:
     typedef struct packed {
-        idma_pkg::protocol_e dst_protocol;
-        write_meta_channel_t aw_req;
+        idma_pkg::protocol_e  dst_protocol;
+        idma_pkg::multihead_t dst_head;
+        write_meta_channel_t  aw_req;
     } write_meta_channel_tagged_t;
 % endif
 
@@ -278,6 +282,8 @@ _rsp_t ${protocol}_write_rsp_i,
     typedef struct packed {
         idma_pkg::protocol_e    src_protocol;
         idma_pkg::protocol_e    dst_protocol;
+        idma_pkg::multihead_t   src_head;
+        idma_pkg::multihead_t   dst_head;
         offset_t                read_shift;
         offset_t                write_shift;
         logic                   decouple_rw;
@@ -469,21 +475,23 @@ _rsp_t ${protocol}_write_rsp_i,
         // assemble read datapath request
         assign r_req.r_dp_req = '{
             src_protocol: idma_req_i.opt.src_protocol,
-            offset:      idma_req_i.src_addr[OffsetWidth-1:0],
-            tailer:      OffsetWidth'(idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0]),
-            shift:       OffsetWidth'(idma_req_i.src_addr[OffsetWidth-1:0]),
-            decouple_aw: idma_req_i.opt.beo.decouple_aw,
-            is_single:   len == '0
+            src_head:     idma_req_i.opt.src_head,
+            offset:       idma_req_i.src_addr[OffsetWidth-1:0],
+            tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0]),
+            shift:        OffsetWidth'(idma_req_i.src_addr[OffsetWidth-1:0]),
+            decouple_aw:  idma_req_i.opt.beo.decouple_aw,
+            is_single:    len == '0
         };
 
         // assemble write datapath request
         assign w_req.w_dp_req = '{
             dst_protocol: idma_req_i.opt.dst_protocol,
-            offset:    idma_req_i.dst_addr[OffsetWidth-1:0],
-            tailer:    OffsetWidth'(idma_req_i.length + idma_req_i.dst_addr[OffsetWidth-1:0]),
-            shift:     OffsetWidth'(- idma_req_i.dst_addr[OffsetWidth-1:0]),
-            num_beats: len,
-            is_single: len == '0
+            dst_head:     idma_req_i.opt.src_head,
+            offset:       idma_req_i.dst_addr[OffsetWidth-1:0],
+            tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.dst_addr[OffsetWidth-1:0]),
+            shift:        OffsetWidth'(- idma_req_i.dst_addr[OffsetWidth-1:0]),
+            num_beats:    len,
+            is_single:    len == '0
         };
 
         // if the legalizer is bypassed; every burst is the last of the 1D transfer
@@ -632,6 +640,7 @@ _rsp_t ${protocol}_write_rsp_i,
 % if not one_read_port:
     always_comb begin : assign_r_meta_req
         r_meta_req_tagged.src_protocol = r_req.r_dp_req.src_protocol;
+        r_meta_req_tagged.src_head = r_req.r_dp_req.src_head;
         r_meta_req_tagged.ar_req       = r_req.ar_req;
     end
 % endif
@@ -780,6 +789,7 @@ _rsp_t ${protocol}_write_rsp_i,
 % if not one_write_port:
     always_comb begin : assign_tagged_w_req // need to have an always_comb block for Questa to not crap itself
         w_meta_req_tagged.dst_protocol = w_req.w_dp_req.dst_protocol;
+        w_meta_req_tagged.dst_head = w_req.w_dp_req.dst_head;
         w_meta_req_tagged.aw_req = w_req.aw_req;
     end
 % endif
