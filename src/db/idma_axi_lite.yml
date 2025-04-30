@@ -6,7 +6,7 @@
 # - Tobias Senti <tsenti@ethz.ch>
 
 prefix: "axil"
-protocol_enum: "AXI_LITE"
+protocol_enum: "AXILITE"
 full_name: "AXI-Lite"
 tb_define: "PROT_AXI4_LITE"
 bursts: "not_supported"

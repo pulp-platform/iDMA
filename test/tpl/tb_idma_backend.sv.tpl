@@ -433,7 +433,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
         axi_pkg::resp_t werr[addr_t];
     } dummy_mem_t;
 
-    % for protocol in unused_protocols:
+    % for protocol in sorted(unused_protocols):
         % if protocol == 'axi':
     dummy_mem_t i_axi_sim_mem;
         % else:

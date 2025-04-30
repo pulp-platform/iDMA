@@ -235,7 +235,7 @@
         while (now < length_i) begin
             case(protocol)
             idma_pkg::AXI: read_byte_axi_mem (data, addr_i + now);
-            idma_pkg::AXI_LITE: read_byte_axi_lite_axi_mem (data, addr_i + now); 
+            idma_pkg::AXILITE: read_byte_axi_lite_axi_mem (data, addr_i + now); 
             idma_pkg::OBI: read_byte_obi_axi_mem (data, addr_i + now);
             idma_pkg::TILELINK: read_byte_tilelink_axi_mem (data, addr_i + now);
             idma_pkg::AXI_STREAM: read_byte_axis_axi_mem(data, addr_i + now);
@@ -317,8 +317,8 @@
                     model.write_byte   ( to_write, now_r.src_addr + now, idma_pkg::AXI);
                     write_byte_axi_mem ( to_write, now_r.src_addr + now);
                 end
-                idma_pkg::AXI_LITE: begin
-                    model.write_byte            ( -to_write, now_r.src_addr + now, idma_pkg::AXI_LITE);
+                idma_pkg::AXILITE: begin
+                    model.write_byte            ( -to_write, now_r.src_addr + now, idma_pkg::AXILITE);
                     write_byte_axi_lite_axi_mem ( -to_write, now_r.src_addr + now);
                 end
                 idma_pkg::OBI: begin

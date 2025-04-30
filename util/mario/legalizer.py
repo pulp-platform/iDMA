@@ -84,9 +84,9 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'has_pow2_write_bursting':
                 has_pow2_write_bursting,
             'used_non_bursting_write_protocols':
-                prot_key(used_read_prots, 'bursts', 'not_supported', db),
-            'used_non_bursting_read_protocols':
                 prot_key(used_write_prots, 'bursts', 'not_supported', db),
+            'used_non_bursting_read_protocols':
+                prot_key(used_read_prots, 'bursts', 'not_supported', db),
             'used_non_bursting_or_force_decouple_read_protocols':
                 prot_force_decouple(used_read_prots, db),
             'used_non_bursting_or_force_decouple_write_protocols':

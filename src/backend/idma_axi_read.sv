@@ -141,7 +141,7 @@ module idma_axi_read #(
     // a barrel shifter is a concatenation of the same array with twice and a normal
     // shift. Optimized for Synopsys DesignWare.
     assign buffer_in_o = read_rsp_i.r.data;
-    assign mask_in     = {read_aligned_in_mask, read_aligned_in_mask} >> r_dp_req_i.shift;
+    assign mask_in     = strb_t'({read_aligned_in_mask, read_aligned_in_mask} >> r_dp_req_i.shift);
 
 
     //--------------------------------------

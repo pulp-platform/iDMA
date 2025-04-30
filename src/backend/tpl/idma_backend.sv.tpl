@@ -911,22 +911,22 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
     `IDMA_NONSYNTH_BLOCK(
     initial begin : proc_assert_params
         axi_addr_width : assert(AddrWidth >= 32'd12) else
-            $fatal(1, "Parameter `AddrWidth` has to be >= 12!");
+            $fatal(1, "Parameter AddrWidth has to be >= 12!");
         axi_id_width   : assert(AxiIdWidth > 32'd0) else
-            $fatal(1, "Parameter `AxiIdWidth` has to be > 0!");
+            $fatal(1, "Parameter AxiIdWidth has to be > 0!");
         axi_data_width : assert(DataWidth inside {32'd16, 32'd32, 32'd64, 32'd128, 32'd256,
-                                                  32'd512, 32'd1028}) else
-            $fatal(1, "Parameter `DataWidth` has to be at least 16 and inside the AXI4 spec!");
+                                                  32'd512, 32'd1024}) else
+            $fatal(1, "Parameter DataWidth has to be at least 16 and inside the AXI4 spec!");
         axi_user_width : assert(UserWidth > 32'd0) else
-            $fatal(1, "Parameter `UserWidth` has to be > 0!");
+            $fatal(1, "Parameter UserWidth has to be > 0!");
         num_ax_in_flight : assert(NumAxInFlight > 32'd1) else
-            $fatal(1, "Parameter `NumAxInFlight` has to be > 1!");
+            $fatal(1, "Parameter NumAxInFlight has to be > 1!");
         buffer_depth : assert(BufferDepth > 32'd1) else
-            $fatal(1, "Parameter `BufferDepth` has to be > 1!");
+            $fatal(1, "Parameter BufferDepth has to be > 1!");
         tf_len_width : assert(TFLenWidth >= 32'd12) else
-            $fatal(1, "Parameter `BufferDepth` has to be >= 12!");
+            $fatal(1, "Parameter BufferDepth has to be >= 12!");
         tf_len_width_max : assert(TFLenWidth <= AddrWidth) else
-            $fatal(1, "Parameter `TFLenWidth` has to be <= `AddrWidth`!");
+            $fatal(1, "Parameter TFLenWidth has to be <= AddrWidth!");
     end
     )
 

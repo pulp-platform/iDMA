@@ -26,7 +26,7 @@ jobs:
     steps:
     -
       name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     -
       name: Check license
       uses: pulp-platform/pulp-actions/lint-license@v2
@@ -44,7 +44,7 @@ jobs:
     steps:
     -
       name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     -
       name: Run Verible
       uses: chipsalliance/verible-linter-action@main
@@ -83,10 +83,10 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       -
         name: Install Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: 3.9
       -
@@ -101,10 +101,10 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       -
         name: Install Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: 3.9
       -
@@ -118,15 +118,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       -
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         if: ${{ github.event_name == 'push' }}
       -
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         if: ${{ github.event_name == 'pull_request' }}
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       -
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
           cache: 'pip'
@@ -142,10 +142,10 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       -
         name: Install Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
             python-version: '3.9'
             cache: 'pip'

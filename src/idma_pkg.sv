@@ -83,7 +83,7 @@ package idma_pkg;
 
     /// Supported Protocols
     /// - `AXI`: Full AXI
-    /// - `AXI_LITE`: AXI Lite
+    /// - `AXILITE`: AXI Lite
     /// - `OBI`: OBI
     /// - `TILELINK`: TileLink-UH
     /// - `INIT`: Init protocol
@@ -91,7 +91,7 @@ package idma_pkg;
     typedef enum logic[2:0] {
         AXI        = 'd0,
         OBI        = 'd1,
-        AXI_LITE   = 'd2,
+        AXILITE    = 'd2,
         TILELINK   = 'd3,
         INIT       = 'd4,
         AXI_STREAM = 'd5

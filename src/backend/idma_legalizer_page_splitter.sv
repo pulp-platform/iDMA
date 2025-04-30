@@ -41,7 +41,7 @@ module idma_legalizer_page_splitter #(
     end
 
     // calculate the page size in byte
-    assign page_size = (1 << page_addr_width);
+    assign page_size = page_len_t'(1 << page_addr_width);
 
     // this is written very confusing due to system verilog not allowing variable
     // length ranges.

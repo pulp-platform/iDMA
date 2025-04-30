@@ -216,6 +216,7 @@ _rsp_t ${protocol}_write_rsp_i,
         buffer_out_ready, buffer_out_ready_shifted;
 
     // shifted data flowing into the buffer
+    byte_t [2*StrbWidth-1:0] buffer_in_tmp;
     byte_t [StrbWidth-1:0]\
 % if not one_read_port:
     % for p in used_read_protocols:
@@ -225,6 +226,7 @@ _rsp_t ${protocol}_write_rsp_i,
 
         buffer_in, buffer_in_shifted;
     // aligned and coalesced data leaving the buffer
+    byte_t [2*StrbWidth-1:0] buffer_out_tmp;
     byte_t [StrbWidth-1:0] buffer_out, buffer_out_shifted;
 % if not one_read_port:
 
@@ -415,7 +417,8 @@ ${rendered_read_ports[read_port]}
     // Read Barrel shifter
     //--------------------------------------
 
-    assign buffer_in_shifted = {buffer_in, buffer_in} >> (r_dp_req_i.shift * 8);
+    assign buffer_in_tmp = {buffer_in, buffer_in} >> (r_dp_req_i.shift * 8);
+    assign buffer_in_shifted = buffer_in_tmp[$bits(buffer_in_shifted)/8-1:0];
 
     //--------------------------------------
     // Buffer
@@ -443,9 +446,10 @@ ${rendered_read_ports[read_port]}
     // Write Barrel shifter
     //--------------------------------------
 
-    assign buffer_out_shifted       = {buffer_out, buffer_out}             >>  (w_dp_req_i.shift*8);
-    assign buffer_out_valid_shifted = {buffer_out_valid, buffer_out_valid} >>   w_dp_req_i.shift;
-    assign buffer_out_ready_shifted = {buffer_out_ready, buffer_out_ready} >> - w_dp_req_i.shift;
+    assign buffer_out_tmp           = {buffer_out, buffer_out} >> (w_dp_req_i.shift*8);
+    assign buffer_out_shifted       = buffer_out_tmp[$bits(buffer_out_shifted)/8-1:0];
+    assign buffer_out_valid_shifted = strb_t'({buffer_out_valid, buffer_out_valid} >>   w_dp_req_i.shift);
+    assign buffer_out_ready_shifted = strb_t'({buffer_out_ready, buffer_out_ready} >> - w_dp_req_i.shift);
 
 % if not one_write_port:
     //--------------------------------------

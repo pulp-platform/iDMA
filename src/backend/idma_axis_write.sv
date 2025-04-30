@@ -157,20 +157,9 @@ module idma_axis_write #(
     //--------------------------------------
     // connect w_dp response payload
     assign w_dp_rsp_o = '0;
+    assign w_dp_rsp_valid_o = 1'b1;
 
-    //--------------------------------------
-    // Handshake fork into write request and response
-    //--------------------------------------
-
-    stream_fork #(
-        .N_OUP ( 2 )
-    ) i_write_stream_fork (
-        .clk_i   ( clk_i ),
-        .rst_ni  ( rst_ni ),
-        .valid_i ( ready_to_write ),
-        .ready_o ( write_ready ),
-        .valid_o ( { w_dp_rsp_valid_o, write_req_o.tvalid } ),
-        .ready_i ( { w_dp_rsp_ready_i, write_rsp_i.tready } )
-    );
+    assign write_req_o.tvalid = ready_to_write;
+    assign write_ready = write_rsp_i.tready;
 
 endmodule
