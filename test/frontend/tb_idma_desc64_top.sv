@@ -5,8 +5,8 @@
 // Authors:
 // - Axel Vanoni <axvanoni@ethz.ch>
 
-`include "register_interface/typedef.svh"
-`include "register_interface/assign.svh"
+`include "apb/typedef.svh"
+`include "apb/assign.svh"
 `include "idma/typedef.svh"
 `include "axi/typedef.svh"
 `include "axi/assign.svh"
@@ -15,11 +15,11 @@
 
 /// VIP for the descriptor-based frontend
 module tb_idma_desc64_top
-    import idma_desc64_reg_pkg::IDMA_DESC64_DESC_ADDR_OFFSET;
-    import idma_desc64_reg_pkg::IDMA_DESC64_STATUS_OFFSET;
+    // import idma_desc64_reg_pkg::IDMA_DESC64_DESC_ADDR_OFFSET;
+    // import idma_desc64_reg_pkg::IDMA_DESC64_STATUS_OFFSET;
     import rand_verif_pkg::rand_wait;
     import axi_pkg::*;
-    import reg_test::reg_driver; #(
+    import apb_test::apb_driver; #(
     parameter integer NumberOfTests              = 100,
     parameter integer SimulationTimeoutCycles    = 100000,
     parameter integer ChainedDescriptors         = -1,
@@ -52,7 +52,7 @@ module tb_idma_desc64_top
     typedef axi_test::axi_w_beat  #(.DW(64), .UW(1))         w_beat_t;
     typedef axi_test::axi_b_beat  #(.IW(3),  .UW(1))         b_beat_t;
 
-    `REG_BUS_TYPEDEF_ALL(reg, /* addr */ addr_t, /* data */ logic [63:0], /* strobe */ logic [7:0])
+    `APB_TYPEDEF_ALL(apb, /* addr */ addr_t, /* data */ logic [63:0], /* strobe */ logic [7:0])
     `AXI_TYPEDEF_ALL(axi, /* addr */ addr_t, /* id */ axi_id_t, /* data */ logic [63:0], /* strb */ logic [7:0], /* user */ logic [0:0])
 
     // iDMA struct definitions
@@ -123,17 +123,17 @@ module tb_idma_desc64_top
     );
 
     // dut signals and module
-    REG_BUS #(
+    APB_BUS #(
         .ADDR_WIDTH(64),
         .DATA_WIDTH(64)
-    ) i_reg_iface_bus (clk);
+    ) i_apb_bus (clk);
 
-    reg_driver #(
-        .AW(64),
-        .DW(64),
+    apb_driver #(
+        .ADDR_WIDTH(64),
+        .DATA_WIDTH(64),
         .TA(APPL_DELAY),
         .TT(ACQ_DELAY)
-    ) i_reg_iface_driver = new (i_reg_iface_bus);
+    ) i_apb_driver = new (i_apb_bus);
 
     axi_resp_t dma_master_response;
     axi_req_t dma_master_request;
@@ -154,8 +154,8 @@ module tb_idma_desc64_top
         .TT(ACQ_DELAY)
     ) i_axi_iface_driver = new (i_axi_iface_bus);
 
-    reg_rsp_t dma_slave_response;
-    reg_req_t dma_slave_request;
+    apb_rsp_t dma_slave_response;
+    apb_req_t dma_slave_request;
 
     idma_req_t dma_be_req;
 
@@ -176,8 +176,8 @@ module tb_idma_desc64_top
         .axi_req_t       (axi_req_t),
         .axi_ar_chan_t   (axi_ar_chan_t),
         .axi_r_chan_t    (axi_r_chan_t),
-        .reg_rsp_t       (reg_rsp_t),
-        .reg_req_t       (reg_req_t),
+        .apb_rsp_t       (apb_rsp_t),
+        .apb_req_t       (apb_req_t),
         .InputFifoDepth  (InputFifoDepth),
         .PendingFifoDepth(PendingFifoDepth),
         .BackendDepth    (BackendDepth),
@@ -220,14 +220,16 @@ module tb_idma_desc64_top
         .axi_rsp_o  ( dma_master_response  )
     );
 
-    assign dma_slave_request.addr  = i_reg_iface_bus.addr;
-    assign dma_slave_request.write = i_reg_iface_bus.write;
-    assign dma_slave_request.wdata = i_reg_iface_bus.wdata;
-    assign dma_slave_request.wstrb = i_reg_iface_bus.wstrb;
-    assign dma_slave_request.valid = i_reg_iface_bus.valid;
-    assign i_reg_iface_bus.rdata   = dma_slave_response.rdata;
-    assign i_reg_iface_bus.ready   = dma_slave_response.ready;
-    assign i_reg_iface_bus.error   = dma_slave_response.error;
+    assign dma_slave_request.paddr   = i_apb_bus.paddr;
+    assign dma_slave_request.pprot   = i_apb_bus.pprot;
+    assign dma_slave_request.psel    = i_apb_bus.psel;
+    assign dma_slave_request.penable = i_apb_bus.penable;
+    assign dma_slave_request.pwrite  = i_apb_bus.pwrite;
+    assign dma_slave_request.pwdata  = i_apb_bus.pwdata;
+    assign dma_slave_request.pstrb   = i_apb_bus.pstrb;
+    assign i_apb_bus.pready          = dma_slave_response.pready;
+    assign i_apb_bus.prdata          = dma_slave_response.prdata;
+    assign i_apb_bus.pslverr         = dma_slave_response.pslverr;
 
     `AXI_ASSIGN_FROM_REQ(i_axi_iface_bus, dma_master_request);
     `AXI_ASSIGN_FROM_RESP(i_axi_iface_bus, dma_master_response);
@@ -366,7 +368,7 @@ module tb_idma_desc64_top
 
     task apply_stimuli();
         fork
-            regbus_slave_interaction();
+            apb_slave_interaction();
             backend_tx_done_notifier();
             backend_acceptor();
         join
@@ -381,10 +383,10 @@ module tb_idma_desc64_top
         join
     endtask
 
-    // regbus slave interaction (we're acting as master)
-    task regbus_slave_interaction();
+    // apb slave interaction (we're acting as master)
+    task apb_slave_interaction();
         automatic stimulus_t current_stimulus_group[$];
-        i_reg_iface_driver.reset_master();
+        i_apb_driver.reset_master();
         @(posedge rst_n);
 
         forever begin
@@ -395,11 +397,11 @@ module tb_idma_desc64_top
             wait (generated_stimuli.size() > '0);
             current_stimulus_group = generated_stimuli.pop_front();
 
-            i_reg_iface_driver.send_write(
-                .addr (IDMA_DESC64_DESC_ADDR_OFFSET) ,
+            i_apb_driver.write(
+                .addr (0), // TODO IDMA_DESC64_DESC_ADDR_OFFSET) ,
                 .data (current_stimulus_group[0].base),
                 .strb (8'hff)                         ,
-                .error(error)
+                .err  (error)
             );
             inflight_stimuli.push_back(current_stimulus_group);
         end
@@ -689,10 +691,10 @@ module tb_idma_desc64_top
                 forever begin
                     automatic logic [63:0] status;
                     automatic logic error;
-                    i_reg_iface_driver.send_read(
-                        .addr(IDMA_DESC64_STATUS_OFFSET),
+                    i_apb_driver.read(
+                        .addr(8), // TODO: IDMA_DESC64_STATUS_OFFSET),
                         .data(status),
-                        .error(error)
+                        .err(error)
                     );
                     if (status[0] != 1'b1) break;
                 end

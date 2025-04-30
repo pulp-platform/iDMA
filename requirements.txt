@@ -9,3 +9,4 @@ recommonmark
 sphinxcontrib-svg2pdfconverter
 pylint
 flatdict
+peakrdl

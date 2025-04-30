@@ -10,75 +10,82 @@
 /// This module implements backpressure via ready/valid handshakes
 /// for the regbus registers and exposes it to the descriptor fifo
 module idma_desc64_reg_wrapper
-import idma_desc64_reg_pkg::idma_desc64_reg2hw_t;
-import idma_desc64_reg_pkg::idma_desc64_hw2reg_t; #(
-    parameter type reg_req_t  = logic,
-    parameter type reg_rsp_t  = logic
+import idma_desc64_reg_pkg::idma_desc64_reg__out_t;
+import idma_desc64_reg_pkg::idma_desc64_reg__in_t; #(
+    parameter type apb_req_t  = logic,
+    parameter type apb_rsp_t  = logic
 ) (
-    input  logic                clk_i             ,
-    input  logic                rst_ni            ,
-    input  reg_req_t            reg_req_i         ,
-    output reg_rsp_t            reg_rsp_o         ,
-    output idma_desc64_reg2hw_t reg2hw_o          ,
-    input  idma_desc64_hw2reg_t hw2reg_i          ,
-    input  logic                devmode_i         ,
-    output logic                input_addr_valid_o,
-    input  logic                input_addr_ready_i
+    input  logic                  clk_i             ,
+    input  logic                  rst_ni            ,
+    input  apb_req_t              apb_req_i         ,
+    output apb_rsp_t              apb_rsp_o         ,
+    output idma_desc64_reg__out_t reg2hw_o          ,
+    input  idma_desc64_reg__in_t  hw2reg_i          ,
+    input  logic                  devmode_i         ,
+    output logic                  input_addr_valid_o,
+    input  logic                  input_addr_ready_i
 );
 
     import idma_desc64_reg_pkg::IDMA_DESC64_DESC_ADDR_OFFSET;
 
-    reg_req_t request;
-    reg_rsp_t response;
+    // reg_req_t request;
+    // reg_rsp_t response;
+    logic     apb_psel, apb_psel_q, apb_penable, apb_pready;
     logic     input_addr_valid_q, input_addr_valid_d;
 
-    idma_desc64_reg_top #(
-        .reg_req_t (reg_req_t),
-        .reg_rsp_t (reg_rsp_t)
-    ) i_register_file_controller (
-        .clk_i     (clk_i)    ,
-        .rst_ni    (rst_ni)   ,
-        .reg_req_i (request),
-        .reg_rsp_o (response) ,
+    idma_desc64_reg i_register_file_controller (
+        .clk       (clk_i)    ,
+        .arst_n    (rst_ni)   ,
+
+        .s_apb_psel    (apb_psel) ,
+        .s_apb_penable (apb_penable) ,
+        .s_apb_pwrite  (apb_req_i.pwrite) ,
+        .s_apb_pprot   (apb_req_i.pprot) ,
+        .s_apb_paddr   (apb_req_i.paddr) ,
+        .s_apb_pwdata  (apb_req_i.pwdata) ,
+        .s_apb_pstrb   (apb_req_i.pstrb) ,
+        .s_apb_pready  (apb_pready) ,
+        .s_apb_prdata  (apb_rsp_o.prdata) ,
+        .s_apb_pslverr (apb_rsp_o.pslverr) ,
+
+        // .reg_req_i (request),
+        // .reg_rsp_o (response) ,
         .reg2hw    (reg2hw_o) ,
-        .hw2reg    (hw2reg_i) ,
-        .devmode_i (devmode_i)
+        .hw2reg    (hw2reg_i)
     );
 
-    assign request.addr    = reg_req_i.addr;
-    assign request.write   = reg_req_i.write;
-    assign request.wdata   = reg_req_i.wdata;
-    assign request.wstrb   = reg_req_i.wstrb;
-    assign reg_rsp_o.rdata = response.rdata;
-    assign reg_rsp_o.error = response.error;
+    assign apb_penable = apb_psel_q & apb_req_i.penable;
 
     always_comb begin
-        if (reg_req_i.addr == IDMA_DESC64_DESC_ADDR_OFFSET) begin
-            request.valid = reg_req_i.valid && input_addr_ready_i;
+        if (apb_req_i.paddr == IDMA_DESC64_DESC_ADDR_OFFSET) begin
+            apb_psel = apb_req_i.psel & input_addr_ready_i;
         end else begin
-            request.valid = reg_req_i.valid;
+            apb_psel = apb_req_i.psel;
         end
     end
 
+    assign input_addr_valid_o = input_addr_valid_q;
+
     always_comb begin
         // only take into account the fifo if a write is going to it
-        if (reg_req_i.addr == IDMA_DESC64_DESC_ADDR_OFFSET) begin
-            reg_rsp_o.ready = response.ready && input_addr_ready_i;
-            input_addr_valid_o = reg2hw_o.desc_addr.qe || input_addr_valid_q;
+        if (apb_req_i.paddr == IDMA_DESC64_DESC_ADDR_OFFSET) begin
+            apb_rsp_o.pready = apb_pready & (input_addr_ready_i | ~input_addr_valid_q);
         end else begin
-            reg_rsp_o.ready = response.ready;
-            input_addr_valid_o = '0;
+            apb_rsp_o.pready = apb_pready;
         end
     end
 
     always_comb begin
         input_addr_valid_d = input_addr_valid_q;
-        if (reg2hw_o.desc_addr.qe && !input_addr_ready_i) begin
-            input_addr_valid_d = 1'b1;
-        end else if (input_addr_ready_i) begin
+        if (input_addr_ready_i) begin
             input_addr_valid_d = '0;
         end
+        if (reg2hw_o.desc_addr.swmod) begin
+            input_addr_valid_d = 1'b1;
+        end
     end
+
     `FF(input_addr_valid_q, input_addr_valid_d, '0);
+    `FF(apb_psel_q, apb_psel, '0);
 
 endmodule
