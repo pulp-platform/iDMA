@@ -16,8 +16,8 @@
 
 /// Benchmarking TB for the descriptor-based frontend
 module tb_idma_desc64_bench
-    import idma_desc64_reg_pkg::IDMA_DESC64_DESC_ADDR_OFFSET;
-    import idma_desc64_reg_pkg::IDMA_DESC64_STATUS_OFFSET;
+    import idma_desc64_reg_pkg::IDMA_DESC64_REG_DESC_ADDR_BASE_ADDR;
+    import idma_desc64_reg_pkg::IDMA_DESC64_REG_STATUS_BASE_ADDR;
     import rand_verif_pkg::rand_wait;
     import axi_pkg::*;
     import reg_test::reg_driver; #(
@@ -610,7 +610,7 @@ module tb_idma_desc64_bench
             current_stimulus_group = generated_stimuli.pop_front();
 
             i_reg_iface_driver.send_write(
-                .addr (IDMA_DESC64_DESC_ADDR_OFFSET) ,
+                .addr(IDMA_DESC64_REG_DESC_ADDR_BASE_ADDR) ,
                 .data (current_stimulus_group[0].base),
                 .strb (8'hff)                         ,
                 .error(error)
@@ -849,7 +849,7 @@ module tb_idma_desc64_bench
                     automatic logic [63:0] status;
                     automatic logic error;
                     i_reg_iface_driver.send_read(
-                        .addr(IDMA_DESC64_STATUS_OFFSET),
+                        .addr(IDMA_DESC64_REG_STATUS_BASE_ADDR),
                         .data(status),
                         .error(error)
                     );
