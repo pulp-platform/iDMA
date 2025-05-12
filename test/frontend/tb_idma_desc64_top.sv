@@ -15,8 +15,8 @@
 
 /// VIP for the descriptor-based frontend
 module tb_idma_desc64_top
-    // import idma_desc64_reg_pkg::IDMA_DESC64_DESC_ADDR_OFFSET;
-    // import idma_desc64_reg_pkg::IDMA_DESC64_STATUS_OFFSET;
+    import idma_desc64_addrmap_pkg::IDMA_DESC64_REG_DESC_ADDR_REG_OFFSET;
+    import idma_desc64_addrmap_pkg::IDMA_DESC64_REG_STATUS_REG_OFFSET;
     import rand_verif_pkg::rand_wait;
     import axi_pkg::*;
     import apb_test::apb_driver; #(
@@ -398,7 +398,7 @@ module tb_idma_desc64_top
             current_stimulus_group = generated_stimuli.pop_front();
 
             i_apb_driver.write(
-                .addr (0), // TODO IDMA_DESC64_DESC_ADDR_OFFSET) ,
+                .addr (IDMA_DESC64_REG_DESC_ADDR_REG_OFFSET),
                 .data (current_stimulus_group[0].base),
                 .strb (8'hff)                         ,
                 .err  (error)
@@ -692,7 +692,7 @@ module tb_idma_desc64_top
                     automatic logic [63:0] status;
                     automatic logic error;
                     i_apb_driver.read(
-                        .addr(8), // TODO: IDMA_DESC64_STATUS_OFFSET),
+                        .addr(idma_desc64_addrmap_pkg::IDMA_DESC64_REG_STATUS_REG_OFFSET),
                         .data(status),
                         .err(error)
                     );

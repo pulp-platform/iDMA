@@ -10,3 +10,4 @@ sphinxcontrib-svg2pdfconverter
 pylint
 flatdict
 peakrdl
+peakrdl-rawheader @ git+https://github.com/micprog/PeakRDL-rawheader.git
