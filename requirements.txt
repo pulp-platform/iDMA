@@ -10,3 +10,4 @@ recommonmark
 sphinxcontrib-svg2pdfconverter
 pylint
 peakrdl
+peakrdl-rawheader==0.2.2
