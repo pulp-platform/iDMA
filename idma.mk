@@ -200,16 +200,14 @@ $(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc_reg_top.sv $(ID
 $(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl
 	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@)
 
-$(IDMA_HTML_DIR)/regs/idma_%.html: $(IDMA_HTML_DIR)/regs/reg_html.css $(IDMA_REG_CUST_ALL)
-	if [ -a "$(IDMA_FE_DIR)/$*/idma_$*.hjson" ]; then \
-		$(PRINTF) "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n" > $@; \
-		$(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -d >> $@; \
-		$(PRINTF) "</html>\n" >> $@; \
-	else \
-		$(PRINTF) "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n" > $@; \
-		$(PYTHON) $(IDMA_REGTOOL) $(IDMA_RTL_DIR)/idma_$*.hjson -d >> $@; \
-		$(PRINTF) "</html>\n" >> $@; \
-	fi
+$(IDMA_HTML_DIR)/regs/idma_reg%d_reg/index.html:
+	$(PEAKRDL) html $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_reg$*d_reg \
+	  -P SysAddrWidth=$(call regwidth,$*) \
+	  -P NumDims=$(call dimension,$*) \
+	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+
+$(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
+	$(PEAKRDL) html $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_desc64_reg
 
 idma_reg_clean:
 	rm -rf $(IDMA_HTML_DIR)/regs
@@ -223,7 +221,7 @@ IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_pkg.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
-IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y.html)
+IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
 IDMA_HJSON_ALL   += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y.hjson)
 
 
