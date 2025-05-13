@@ -173,8 +173,8 @@ module idma_${identifier} #(
 % for nd in range(0, num_dim-1):
 % if bit_width == '32':
       arb_dma_req[i].d_req[${nd}].reps = dma_reg2hw[i].dim[${nd}].reps[0].reps.value;
-      arb_dma_req[i].d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride.src_stride.value;
-      arb_dma_req[i].d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride.dst_stride.value;
+      arb_dma_req[i].d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value;
+      arb_dma_req[i].d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value;
 % else:
       arb_dma_req[i].d_req[${nd}].reps = {dma_reg2hw[i].dim[${nd}].reps[1].reps.value,
                                       dma_reg2hw[i].dim[${nd}].reps[0].reps.value };
@@ -213,9 +213,12 @@ module idma_${identifier} #(
 
     // tie-off unused channels
     for (genvar c = NumStreams; c < MaxNumStreams; c++) begin : gen_hw2reg_unused
-        assign dma_hw2reg[i].status[c]  = '0;
-        assign dma_hw2reg[i].next_id[c] = '0;
-        assign dma_hw2reg[i].done_id[c] = '0;
+        assign dma_hw2reg[i].status[c].rd_data = '0;
+        assign dma_hw2reg[i].status[c].rd_ack  = '0;
+        assign dma_hw2reg[i].next_id[c].rd_data.next_id = '0;
+        assign dma_hw2reg[i].next_id[c].rd_ack = '0;
+        assign dma_hw2reg[i].done_id[c].rd_data.done_id = '0;
+        assign dma_hw2reg[i].done_id[c].rd_ack = '0;
     end
 
   end
