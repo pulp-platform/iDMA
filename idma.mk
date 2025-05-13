@@ -17,6 +17,7 @@ SPHINXBUILD ?= sphinx-build
 VCS         ?= vcs
 VERILATOR   ?= verilator
 VLOGAN      ?= vlogan
+SED  	    ?= sed
 
 # Shell
 SHELL := /bin/bash
@@ -187,7 +188,7 @@ $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(ID
 	  -P NumDims=$(call dimension,$*) \
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
 
-$(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc_reg_top.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv:
+$(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv:
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif apb4-flat \
 	  --module-name idma_desc64_reg_top \
@@ -258,6 +259,8 @@ $(IDMA_PICKLE_DIR)/%.sv: $(IDMA_PICKLE_DIR)/sources.json
 	else \
 		$(CAT) $(IDMA_CF_PKG) $@.pre > $@; \
 	fi
+	# Hack apb_pkg::prot_t to logic [2:0]
+	$(SED) -i 's/apb_pkg::prot_t/logic [2:0]/g' $@
 	rm -f $@.pre
 
 $(IDMA_HTML_DIR)/%/index.html: $(IDMA_PICKLE_DIR)/%.sv
@@ -404,13 +407,15 @@ IDMA_VLT_PARAMS  ?=
 $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
 	mkdir -p $(IDMA_VLT_DIR)
 	# We need a dedicated pickle here to set the defines
-	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
+	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR -D ASSERTS_OFF --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
 	# Hack cf_math_pkg in
 	if grep -q "package cf_math_pkg;" "$(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre"; then \
   		$(CAT) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
 	else \
 		$(CAT) $(IDMA_CF_PKG) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
 	fi
+	# Hack apb_pkg::prot_t to logic [2:0]
+	$(SED) -i 's/apb_pkg::prot_t/logic [2:0]/g' $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv
 	rm -f $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
 	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
