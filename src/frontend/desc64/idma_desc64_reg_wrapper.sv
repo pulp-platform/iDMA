@@ -32,7 +32,7 @@ import idma_desc64_reg_pkg::idma_desc64_reg__in_t; #(
     logic     apb_psel, apb_psel_q, apb_penable, apb_pready;
     logic     input_addr_valid_q, input_addr_valid_d;
 
-    idma_desc64_reg i_register_file_controller (
+    idma_desc64_reg_top i_register_file_controller (
         .clk       (clk_i)    ,
         .arst_n    (rst_ni)   ,
 
@@ -40,15 +40,16 @@ import idma_desc64_reg_pkg::idma_desc64_reg__in_t; #(
         .s_apb_penable (apb_penable) ,
         .s_apb_pwrite  (apb_req_i.pwrite) ,
         .s_apb_pprot   (apb_req_i.pprot) ,
-        .s_apb_paddr   (apb_req_i.paddr) ,
+        .s_apb_paddr   (
+            apb_req_i.paddr[idma_desc64_reg_pkg::IDMA_DESC64_REG_TOP_MIN_ADDR_WIDTH-1:0]) ,
         .s_apb_pwdata  (apb_req_i.pwdata) ,
         .s_apb_pstrb   (apb_req_i.pstrb) ,
         .s_apb_pready  (apb_pready) ,
         .s_apb_prdata  (apb_rsp_o.prdata) ,
         .s_apb_pslverr (apb_rsp_o.pslverr) ,
 
-        .reg2hw    (reg2hw_o) ,
-        .hw2reg    (hw2reg_i)
+        .hwif_out    (reg2hw_o) ,
+        .hwif_in     (hw2reg_i)
     );
 
     assign apb_penable = apb_psel_q & apb_req_i.penable;
@@ -77,7 +78,7 @@ import idma_desc64_reg_pkg::idma_desc64_reg__in_t; #(
         if (input_addr_ready_i) begin
             input_addr_valid_d = '0;
         end
-        if (reg2hw_o.desc_addr.swmod) begin
+        if (reg2hw_o.desc_addr.desc_addr.swmod) begin
             input_addr_valid_d = 1'b1;
         end
     end
