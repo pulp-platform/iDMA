@@ -123,17 +123,17 @@ module tb_idma_desc64_top
     );
 
     // dut signals and module
-    APB_BUS #(
+    APB_DV #(
         .ADDR_WIDTH(64),
         .DATA_WIDTH(64)
-    ) i_apb_bus (clk);
+    ) i_apb_iface_bus (clk);
 
     apb_driver #(
         .ADDR_WIDTH(64),
         .DATA_WIDTH(64),
         .TA(APPL_DELAY),
         .TT(ACQ_DELAY)
-    ) i_apb_driver = new (i_apb_bus);
+    ) i_apb_driver = new (i_apb_iface_bus);
 
     axi_resp_t dma_master_response;
     axi_req_t dma_master_request;
@@ -154,7 +154,7 @@ module tb_idma_desc64_top
         .TT(ACQ_DELAY)
     ) i_axi_iface_driver = new (i_axi_iface_bus);
 
-    apb_rsp_t dma_slave_response;
+    apb_resp_t dma_slave_response;
     apb_req_t dma_slave_request;
 
     idma_req_t dma_be_req;
@@ -176,7 +176,7 @@ module tb_idma_desc64_top
         .axi_req_t       (axi_req_t),
         .axi_ar_chan_t   (axi_ar_chan_t),
         .axi_r_chan_t    (axi_r_chan_t),
-        .apb_rsp_t       (apb_rsp_t),
+        .apb_rsp_t       (apb_resp_t),
         .apb_req_t       (apb_req_t),
         .InputFifoDepth  (InputFifoDepth),
         .PendingFifoDepth(PendingFifoDepth),
@@ -217,19 +217,33 @@ module tb_idma_desc64_top
         .clk_i      ( clk          ),
         .rst_ni     ( rst_n        ),
         .axi_req_i  ( dma_master_request  ),
-        .axi_rsp_o  ( dma_master_response  )
+        .axi_rsp_o  ( dma_master_response  ),
+        .mon_w_valid_o (),
+        .mon_w_addr_o (),
+        .mon_w_data_o (),
+        .mon_w_id_o (),
+        .mon_w_user_o (),
+        .mon_w_beat_count_o (),
+        .mon_w_last_o (),
+        .mon_r_valid_o (),
+        .mon_r_addr_o (),
+        .mon_r_data_o (),
+        .mon_r_id_o (),
+        .mon_r_user_o (),
+        .mon_r_beat_count_o (),
+        .mon_r_last_o ()
     );
 
-    assign dma_slave_request.paddr   = i_apb_bus.paddr;
-    assign dma_slave_request.pprot   = i_apb_bus.pprot;
-    assign dma_slave_request.psel    = i_apb_bus.psel;
-    assign dma_slave_request.penable = i_apb_bus.penable;
-    assign dma_slave_request.pwrite  = i_apb_bus.pwrite;
-    assign dma_slave_request.pwdata  = i_apb_bus.pwdata;
-    assign dma_slave_request.pstrb   = i_apb_bus.pstrb;
-    assign i_apb_bus.pready          = dma_slave_response.pready;
-    assign i_apb_bus.prdata          = dma_slave_response.prdata;
-    assign i_apb_bus.pslverr         = dma_slave_response.pslverr;
+    assign dma_slave_request.paddr   = i_apb_iface_bus.paddr;
+    assign dma_slave_request.pprot   = i_apb_iface_bus.pprot;
+    assign dma_slave_request.psel    = i_apb_iface_bus.psel;
+    assign dma_slave_request.penable = i_apb_iface_bus.penable;
+    assign dma_slave_request.pwrite  = i_apb_iface_bus.pwrite;
+    assign dma_slave_request.pwdata  = i_apb_iface_bus.pwdata;
+    assign dma_slave_request.pstrb   = i_apb_iface_bus.pstrb;
+    assign i_apb_iface_bus.pready          = dma_slave_response.pready;
+    assign i_apb_iface_bus.prdata          = dma_slave_response.prdata;
+    assign i_apb_iface_bus.pslverr         = dma_slave_response.pslverr;
 
     `AXI_ASSIGN_FROM_REQ(i_axi_iface_bus, dma_master_request);
     `AXI_ASSIGN_FROM_RESP(i_axi_iface_bus, dma_master_response);
