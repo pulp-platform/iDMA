@@ -157,7 +157,8 @@ module idma_obi_write #(
     // Write response
     //--------------------------------------
     // connect w_dp response payload
-    assign w_dp_rsp_o = '0;
+    assign w_dp_rsp_o.resp = '0;
+    assign w_dp_rsp_o.user = '0;
 
     // w_dp_valid_o is triggered once the write answer is here
     assign w_dp_valid_o = write_rsp_i.rvalid;

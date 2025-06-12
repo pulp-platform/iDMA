@@ -29,7 +29,7 @@ IDMA_BASE_IDS    := \
 IDMA_OCCAMY_IDS  := \
 					r_obi_rw_init_w_axi \
 					r_axi_rw_init_rw_obi
-IDMA_ADD_IDS     ?=
+IDMA_ADD_IDS     ?= rw_axi_rw_init_rw_obi
 IDMA_BACKEND_IDS := $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
 
 # generated frontends
