@@ -469,7 +469,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 addr:   req_i.dst_addr,
                 valid:   1'b1,
                 base_addr: req_i.dst_addr,
-                mask: req_i.dst_mask
+                user: req_i.user,
+                default: '0
             };
             // options
             opt_tf_d = '{
