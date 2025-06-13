@@ -16,8 +16,8 @@ module idma_desc64_synth #(
     parameter type         axi_req_t        = idma_desc64_synth_pkg::axi_req_t,
     parameter type         axi_ar_chan_t    = idma_desc64_synth_pkg::axi_ar_chan_t,
     parameter type         axi_r_chan_t     = idma_desc64_synth_pkg::axi_r_chan_t,
-    parameter type         reg_rsp_t        = idma_desc64_synth_pkg::reg_rsp_t,
-    parameter type         reg_req_t        = idma_desc64_synth_pkg::reg_req_t,
+    parameter type         apb_rsp_t        = idma_desc64_synth_pkg::apb_resp_t,
+    parameter type         apb_req_t        = idma_desc64_synth_pkg::apb_req_t,
     parameter int unsigned InputFifoDepth   = idma_desc64_synth_pkg::InputFifoDepth,
     parameter int unsigned PendingFifoDepth = idma_desc64_synth_pkg::PendingFifoDepth
 )(
@@ -27,8 +27,8 @@ module idma_desc64_synth #(
     input  axi_rsp_t              master_rsp_i    ,
     input  logic [AxiIdWidth-1:0] axi_ar_id_i     ,
     input  logic [AxiIdWidth-1:0] axi_aw_id_i     ,
-    input  reg_req_t              slave_req_i     ,
-    output reg_rsp_t              slave_rsp_o     ,
+    input  apb_req_t              slave_req_i     ,
+    output apb_rsp_t              slave_rsp_o     ,
     output idma_req_t             idma_req_o      ,
     output logic                  idma_req_valid_o,
     input  logic                  idma_req_ready_i,
@@ -49,8 +49,8 @@ module idma_desc64_synth #(
     .axi_rsp_t        ( axi_rsp_t        ),
     .axi_ar_chan_t    ( axi_ar_chan_t    ),
     .axi_r_chan_t     ( axi_r_chan_t     ),
-    .reg_req_t        ( reg_req_t        ),
-    .reg_rsp_t        ( reg_rsp_t        ),
+    .apb_req_t        ( apb_req_t        ),
+    .apb_rsp_t        ( apb_rsp_t        ),
     .InputFifoDepth   ( InputFifoDepth   ),
     .PendingFifoDepth ( PendingFifoDepth )
   ) i_dma_desc64 (

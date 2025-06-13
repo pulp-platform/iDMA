@@ -5,7 +5,7 @@ Frontend for Ariane (CVA6) ready for Linux use.
 
 .. only:: html
 
-- `descriptor-based frontend <../regs/idma_desc64.html>`_
+- `descriptor-based frontend <../regs/idma_desc64_reg/index.html>`_
 
 Morty docs:
 
