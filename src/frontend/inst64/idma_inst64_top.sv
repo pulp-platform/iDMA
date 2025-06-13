@@ -6,6 +6,7 @@
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 `include "common_cells/registers.svh"
+`include "common_cells/assertions.svh"
 `include "idma/typedef.svh"
 `include "idma/tracer.svh"
 
@@ -73,7 +74,7 @@ module idma_inst64_top #(
 
     // iDMA backend types
     `IDMA_TYPEDEF_OPTIONS_T(options_t, id_t)
-    `IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, addr_t, options_t)
+    `IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, addr_t, options_t, user_t)
     `IDMA_TYPEDEF_ERR_PAYLOAD_T(err_payload_t, addr_t)
     `IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)
 
@@ -325,6 +326,15 @@ module idma_inst64_top #(
     //--------------------------------------
     logic            is_dma_op;
     logic [12*8-1:0] dma_op_name;
+    user_t           decoded_user;
+
+    // Helper to avoid parsing the user field inside the always comb block
+    if(AxiUserWidth > 32) begin : gen_parseUser64bit
+        assign decoded_user[31:0] = acc_req_i.data_arga[31:0];
+        assign decoded_user[AxiUserWidth-1:32] = acc_req_i.data_argb[AxiUserWidth-33:0];
+    end else begin : gen_parseUser32bit
+        assign decoded_user[AxiUserWidth-1:0] = acc_req_i.data_arga[AxiUserWidth-1:0];
+    end
 
     always_comb begin : proc_fe_inst_decode
 
@@ -488,12 +498,13 @@ module idma_inst64_top #(
                     dma_op_name     = "DMREP";
                 end
 
-                // write the multicast mask in the destination user signal
-                idma_inst64_snitch_pkg::DMMCAST : begin
-                    idma_fe_req_d.burst_req.dst_mask[31:0] = acc_req_i.data_arga[31:0];
+                // write the user field
+                idma_inst64_snitch_pkg::DMUSER : begin
+                    // Assign the user bits according to the size of AxiUserWidth
+                    idma_fe_req_d.burst_req.user = decoded_user;
                     acc_req_ready_o = 1'b1;
                     is_dma_op       = 1'b1;
-                    dma_op_name     = "DMMCAST";
+                    dma_op_name     = "DMUSER";
                 end
 
                 default:;
@@ -540,5 +551,11 @@ module idma_inst64_top #(
         end
     end
 `endif
+
+    //--------------------------------------
+    // ASSERTION
+    //--------------------------------------
+    // The DMUSER field op-code supports axi user field width only up to 64 Bits.
+    `ASSERT_INIT(CheckAxiUserField, AxiUserWidth <= 64);
 
 endmodule

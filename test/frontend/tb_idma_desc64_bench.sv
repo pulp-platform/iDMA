@@ -462,7 +462,7 @@ module tb_idma_desc64_bench
                 // overwrite protocols
                 current_stimulus.burst.opt.src_protocol = idma_pkg::AXI;
                 current_stimulus.burst.opt.dst_protocol = idma_pkg::AXI;
-                current_stimulus.burst.dst_mask = '0;
+                current_stimulus.burst.user = '0;
 
                 current_stimulus.base = base_current;
                 current_stimuli_group.push_back(current_stimulus);
@@ -503,7 +503,7 @@ module tb_idma_desc64_bench
                     // overwrite protocols
                     current_stimulus.burst.opt.src_protocol = idma_pkg::AXI;
                     current_stimulus.burst.opt.dst_protocol = idma_pkg::AXI;
-                    current_stimulus.burst.dst_mask = '0;
+                    current_stimulus.burst.user = '0;
 
                     current_stimulus.base = base_current;
                     contiguous += 1;

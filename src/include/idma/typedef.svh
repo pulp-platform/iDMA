@@ -34,12 +34,12 @@
         idma_pkg::err_type_t err_type;                                   \
         axi_addr_t           burst_addr;                                 \
     } err_payload_t;
-`define IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, axi_addr_t, options_t)  \
+`define IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, axi_addr_t, options_t, user_t = logic)  \
     typedef struct packed {                                              \
         tf_len_t   length;                                               \
         axi_addr_t src_addr;                                             \
         axi_addr_t dst_addr;                                             \
-        axi_addr_t dst_mask;                                             \
+        user_t     user;                                                 \
         options_t  opt;                                                  \
     } idma_req_t;
 `define IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)                    \
