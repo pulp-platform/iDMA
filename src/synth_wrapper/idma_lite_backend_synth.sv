@@ -173,7 +173,7 @@ module idma_lite_backend_synth #(
 
     // DUT instantiation
     idma_backend #(
-        .Protocol            ( idma_pkg::AXI_LITE      ),
+        .Protocol            ( idma_pkg::AXILITE      ),
         .DataWidth           ( DataWidth               ),
         .AddrWidth           ( AddrWidth               ),
         .AxiIdWidth          ( AxiIdWidth              ),

@@ -82,11 +82,11 @@ package idma_pkg;
 
     /// Supported Protocols
     /// - `AXI`: Full AXI
-    /// - `AXI_LITE`: AXI Lite
+    /// - `AXILITE`: AXI Lite
     /// - `OBI`: OBI
     typedef enum logic[1:0] {
         AXI,
-        AXI_LITE,
+        AXILITE,
         OBI
     } protocol_e;
 

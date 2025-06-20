@@ -305,7 +305,7 @@ module tb_idma_lite_backend import idma_pkg::*; #(
     //--------------------------------------
     // the backend
     idma_backend #(
-        .Protocol            ( idma_pkg::AXI_LITE  ),
+        .Protocol            ( idma_pkg::AXILITE  ),
         .DataWidth           ( DataWidth           ),
         .AddrWidth           ( AddrWidth           ),
         .AxiIdWidth          ( AxiIdWidth          ),

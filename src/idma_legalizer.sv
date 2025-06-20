@@ -342,7 +342,7 @@ module idma_legalizer #(
             user:   '0,
             atop:   '0
         };
-    end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_axi_lite_ar_aw_req
+    end else if (Protocol == idma_pkg::AXILITE) begin : gen_axi_lite_ar_aw_req
         // assign the signals for the read meta channel
         assign r_req_o.ar_req = '{
             addr:   { r_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
@@ -391,7 +391,7 @@ module idma_legalizer #(
             num_beats: w_req_o.aw_req.len,
             is_single: w_req_o.aw_req.len == '0
         };
-    end else if (Protocol == idma_pkg::AXI_LITE | Protocol == idma_pkg::OBI) begin
+    end else if (Protocol == idma_pkg::AXILITE | Protocol == idma_pkg::OBI) begin
       : gen_axi_lite_obi_w_dp_req
         assign w_req_o.w_dp_req = '{
             offset:    w_addr_offset,

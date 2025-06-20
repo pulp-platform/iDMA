@@ -395,7 +395,7 @@ module idma_backend #(
                 user:   '0,
                 atop:   '0
             };
-        end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_axi_lite_ar_aw_req
+        end else if (Protocol == idma_pkg::AXILITE) begin : gen_axi_lite_ar_aw_req
             // assemble AR request
             assign r_req.ar_req = '{
                 addr:   { idma_req_i.src_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
@@ -622,7 +622,7 @@ module idma_backend #(
             .valid_o   ( /* NOT CONNECTED */             ),
             .ready_i   ( w_dp_rsp_valid & w_dp_rsp_ready )
         );
-    end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_last_flag_bypass
+    end else if (Protocol == idma_pkg::AXILITE) begin : gen_last_flag_bypass
         //For AXI-Lite every transfer is last
         assign w_super_last = 1'b1;
         assign w_last_burst = 1'b1;
@@ -679,7 +679,7 @@ module idma_backend #(
             .w_dp_busy_o     ( busy_o.w_dp_busy   ),
             .buffer_busy_o   ( busy_o.buffer_busy )
         );
-    end else if (Protocol == idma_pkg::AXI_LITE) begin : gen_axi_lite_transport_layer
+    end else if (Protocol == idma_pkg::AXILITE) begin : gen_axi_lite_transport_layer
         idma_axi_lite_transport_layer #(
             .DataWidth          ( DataWidth       ),
             .BufferDepth        ( BufferDepth     ),
