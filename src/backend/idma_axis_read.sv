@@ -119,7 +119,7 @@ module idma_axis_read #(
 
     // once valid data is applied, it can be pushed in all the selected (mask_in) buffers
     // be sure the response channel is ready
-    assign in_valid          = read_req_i.tvalid & in_ready & r_dp_rsp_ready_i;
+    assign in_valid          = read_req_i.tvalid & in_ready & r_dp_rsp_ready_i  & r_dp_req_valid_i;
     assign buffer_in_valid_o = in_valid ? mask_in : '0;
 
     // r_dp_ready_o is triggered by the last element arriving from the read
