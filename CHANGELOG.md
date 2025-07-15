@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## 0.6.5 - 2025-07-15
+
+### Added
+- Add generalized multicast capabilities to Snitch DMA [#74](https://github.com/pulp-platform/iDMA/pull/74) and [#77](https://github.com/pulp-platform/iDMA/pull/77).
+
+### Fixed
+- Fix GitHub actions [#76](https://github.com/pulp-platform/iDMA/pull/76).
+- Various linting and compatibility fixes [#76](https://github.com/pulp-platform/iDMA/pull/76).
+- Fix performance issue in `idma_axis_write` [#76](https://github.com/pulp-platform/iDMA/pull/76).
+- Fix buffering invalid data with `idma_backend_rw_axi_rw_axis` [#79](https://github.com/pulp-platform/iDMA/pull/79).
+
+### Changed
+- Change protocol enum of AXI_LITE to AXILITE, otherwise it collides with AXI interface names [#76](https://github.com/pulp-platform/iDMA/pull/76).
+- Change assertions in `idma_error_handler` to not be sequential logic instead always_comb block [#76](https://github.com/pulp-platform/iDMA/pull/76).
+
+
 ## 0.6.4 - 2025-02-28
 
 ### Added
