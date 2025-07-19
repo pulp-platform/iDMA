@@ -10,12 +10,14 @@ CAT         ?= cat
 DOT         ?= dot
 GIT         ?= git
 MORTY       ?= morty
+PEAKRDL     ?= peakrdl
 PRINTF      ?= printf
 PYTHON      ?= python3
 SPHINXBUILD ?= sphinx-build
 VCS         ?= vcs
 VERILATOR   ?= verilator
 VLOGAN      ?= vlogan
+SED  	    ?= sed
 
 # Shell
 SHELL := /bin/bash
@@ -162,52 +164,65 @@ IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontend
 IDMA_FE_REGS     := desc64
 IDMA_FE_REGS     += $(IDMA_FE_IDS)
 
-# customize the HJSON
-$(IDMA_RTL_DIR)/idma_%.hjson: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.hjson.tpl
-	$(call idma_gen,reg_hjson,$(IDMA_FE_DIR)/reg/tpl/idma_reg.hjson.tpl,,,$*,$@)
-
-IDMA_REG_CUST_ALL += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_RTL_DIR)/idma_$Y.hjson)
-
 # ----
 
-$(IDMA_HTML_DIR)/regs/reg_html.css:
-	mkdir -p $(IDMA_HTML_DIR)/regs
-	cp $(IDMA_REG_DIR)/vendor/lowrisc_opentitan/util/reggen/reg_html.css $@
+regwidth = $(word 1,$(subst _, ,$1))
+dimension = $(word 2,$(subst _, ,$1))
+log2dimension = $(shell echo $$(( $$( echo "obase=2;$$(($(1)-1))" | bc | wc -c ) - 1 )) )
 
-$(IDMA_RTL_DIR)/idma_%_reg_pkg.sv $(IDMA_RTL_DIR)/idma_%_reg_top.sv: $(IDMA_REG_CUST_ALL)
-	if [ -a "$(IDMA_FE_DIR)/$*/idma_$*.hjson" ]; then \
-	    $(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -t $(IDMA_RTL_DIR) -r; \
-	else \
-	    $(PYTHON) $(IDMA_REGTOOL) $(IDMA_RTL_DIR)/idma_$*.hjson -t $(IDMA_RTL_DIR) -r; \
-	fi
+$(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv:
+	$(PEAKRDL) regblock $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_RTL_DIR) \
+	  --default-reset arst_n --cpuif apb4-flat \
+	  --module-name idma_reg$*d_reg_top \
+	  --package idma_reg$*d_reg_pkg \
+	  -P SysAddrWidth=$(call regwidth,$*) \
+	  -P NumDims=$(call dimension,$*) \
+	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+	$(PEAKRDL) raw-header $(IDMA_FE_DIR)/reg/idma_reg.rdl \
+	  --format svpkg \
+	  -o $(IDMA_RTL_DIR)/idma_reg$*d_addrmap_pkg.sv \
+	  --base_name idma_reg$*d \
+	  --license_str="Copyright 2025 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51" \
+	  -P SysAddrWidth=$(call regwidth,$*) \
+	  -P NumDims=$(call dimension,$*) \
+	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+
+$(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc_reg_top.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv:
+	$(PEAKRDL) regblock $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_RTL_DIR) \
+	  --default-reset arst_n --cpuif apb4-flat \
+	  --module-name idma_desc64_reg_top \
+	  --package idma_desc64_reg_pkg
+	$(PEAKRDL) raw-header $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl \
+	  --format svpkg \
+	  -o $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv \
+	  --base_name idma_desc64 \
+	  --license_str="Copyright 2025 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51"
 
 $(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl
 	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@)
 
-$(IDMA_HTML_DIR)/regs/idma_%.html: $(IDMA_HTML_DIR)/regs/reg_html.css $(IDMA_REG_CUST_ALL)
-	if [ -a "$(IDMA_FE_DIR)/$*/idma_$*.hjson" ]; then \
-		$(PRINTF) "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n" > $@; \
-		$(PYTHON) $(IDMA_REGTOOL) $(IDMA_FE_DIR)/$*/idma_$*.hjson -d >> $@; \
-		$(PRINTF) "</html>\n" >> $@; \
-	else \
-		$(PRINTF) "<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" href="reg_html.css">\n</head>\n" > $@; \
-		$(PYTHON) $(IDMA_REGTOOL) $(IDMA_RTL_DIR)/idma_$*.hjson -d >> $@; \
-		$(PRINTF) "</html>\n" >> $@; \
-	fi
+$(IDMA_HTML_DIR)/regs/idma_reg%d_reg/index.html:
+	$(PEAKRDL) html $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_reg$*d_reg \
+	  -P SysAddrWidth=$(call regwidth,$*) \
+	  -P NumDims=$(call dimension,$*) \
+	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+
+$(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
+	$(PEAKRDL) html $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_desc64_reg
 
 idma_reg_clean:
 	rm -rf $(IDMA_HTML_DIR)/regs
 	rm -f  $(IDMA_RTL_DIR)/*_reg_top.sv
 	rm -f  $(IDMA_RTL_DIR)/*_reg_pkg.sv
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
-	rm -f  $(IDMA_RTL_DIR)/*.hjson
 	rm -f  $(IDMA_REG_CUST_ALL)
 
 # assemble the required files
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
+IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_pkg.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
-IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y.html)
+IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
 IDMA_HJSON_ALL   += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y.hjson)
 
 
@@ -243,6 +258,8 @@ $(IDMA_PICKLE_DIR)/%.sv: $(IDMA_PICKLE_DIR)/sources.json
 	else \
 		$(CAT) $(IDMA_CF_PKG) $@.pre > $@; \
 	fi
+	# Hack apb_pkg::prot_t to logic [2:0]
+	$(SED) -i 's/apb_pkg::prot_t/logic [2:0]/g' $@
 	rm -f $@.pre
 
 $(IDMA_HTML_DIR)/%/index.html: $(IDMA_PICKLE_DIR)/%.sv
@@ -389,13 +406,15 @@ IDMA_VLT_PARAMS  ?=
 $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
 	mkdir -p $(IDMA_VLT_DIR)
 	# We need a dedicated pickle here to set the defines
-	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
+	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR -D ASSERTS_OFF --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
 	# Hack cf_math_pkg in
 	if grep -q "package cf_math_pkg;" "$(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre"; then \
   		$(CAT) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
 	else \
 		$(CAT) $(IDMA_CF_PKG) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
 	fi
+	# Hack apb_pkg::prot_t to logic [2:0]
+	$(SED) -i 's/apb_pkg::prot_t/logic [2:0]/g' $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv
 	rm -f $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
 	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
@@ -480,7 +499,7 @@ idma_doc_all: idma_spinx_doc
 
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
-idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) $(IDMA_WAVE_ALL)
+idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_WAVE_ALL)
 
 idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl
 
