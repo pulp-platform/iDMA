@@ -178,9 +178,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// Datapath poison signal
     input  logic dp_poison_i,
 
-    /// Response channel valid and ready
-    output logic r_chan_ready_o,
-    output logic r_chan_valid_o,
+    /// Write channel valid, ready and first
+    output logic w_chan_valid_o,
+    output logic w_chan_ready_o,
+    output logic w_chan_first_o,
 
     /// Read part of the datapath is busy
     output logic r_dp_busy_o,
@@ -241,8 +242,6 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if not one_read_port:
     // Read multiplexed signals
     % for protocol in used_read_protocols:
-    logic ${mh_format['ar'][protocol]}${protocol}_r_chan_valid;
-    logic ${mh_format['ar'][protocol]}${protocol}_r_chan_ready;
     logic ${mh_format['ar'][protocol]}${protocol}_r_dp_valid;
     logic ${mh_format['ar'][protocol]}${protocol}_r_dp_ready;
     r_dp_rsp_t ${mh_format['ar'][protocol]}${protocol}_r_dp_rsp;
@@ -253,6 +252,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if not one_write_port:
     // Write multiplexed signals
     % for protocol in used_write_protocols:
+    logic ${mh_format['aw'][protocol]}${protocol}_w_chan_valid;
+    logic ${mh_format['aw'][protocol]}${protocol}_w_chan_ready;
+    logic ${mh_format['aw'][protocol]}${protocol}_w_chan_first;
     logic ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp_valid;
     logic ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp_ready;
     logic ${mh_format['aw'][protocol]}${protocol}_w_dp_ready;
@@ -310,8 +312,8 @@ ${rendered_read_ports[read_port]}
 % for rp in used_read_protocols:
     % if mh_format['ar'][rp] == '':
             idma_pkg::${database[rp]['protocol_enum']}: begin
-                r_chan_valid_o  = ${rp}_r_chan_valid;
-                r_chan_ready_o  = ${rp}_r_chan_ready;
+                //r_chan_valid_o  = ${rp}_r_chan_valid;
+                //r_chan_ready_o  = ${rp}_r_chan_ready;
 
                 r_dp_ready_o    = ${rp}_r_dp_ready;
                 r_dp_rsp_o      = ${rp}_r_dp_rsp;
@@ -322,8 +324,8 @@ ${rendered_read_ports[read_port]}
             end
     % else:
             idma_pkg::${database[rp]['protocol_enum']}: begin
-                r_chan_valid_o  = ${rp}_r_chan_valid [r_dp_req_i.src_head];
-                r_chan_ready_o  = ${rp}_r_chan_ready [r_dp_req_i.src_head];
+                //r_chan_valid_o  = ${rp}_r_chan_valid [r_dp_req_i.src_head];
+                //r_chan_ready_o  = ${rp}_r_chan_ready [r_dp_req_i.src_head];
 
                 r_dp_ready_o    = ${rp}_r_dp_ready [r_dp_req_i.src_head];
                 r_dp_rsp_o      = ${rp}_r_dp_rsp [r_dp_req_i.src_head];
@@ -335,8 +337,8 @@ ${rendered_read_ports[read_port]}
     % endif
 % endfor
             default: begin
-                r_chan_valid_o  = 1'b0;
-                r_chan_ready_o  = 1'b0;
+                //r_chan_valid_o  = 1'b0;
+                //r_chan_ready_o  = 1'b0;
 
                 r_dp_ready_o    = 1'b0;
                 r_dp_rsp_o      = '0;
@@ -347,8 +349,8 @@ ${rendered_read_ports[read_port]}
             end
             endcase
         end else begin
-            r_chan_valid_o  = 1'b0;
-            r_chan_ready_o  = 1'b0;
+            //r_chan_valid_o  = 1'b0;
+            //r_chan_ready_o  = 1'b0;
 
             r_dp_ready_o    = 1'b0;
             r_dp_rsp_o      = '0;
@@ -473,15 +475,24 @@ ${rendered_read_ports[read_port]}
     % if mh_format['aw'][wp] == '':
             w_dp_req_ready   = ${wp}_w_dp_ready;
             buffer_out_ready = ${wp}_buffer_out_ready;
+            w_chan_valid_o   = ${wp}_w_chan_valid;
+            w_chan_ready_o   = ${wp}_w_chan_ready;
+            w_chan_first_o   = ${wp}_w_chan_first;
     % else:
             w_dp_req_ready   = ${wp}_w_dp_ready [w_dp_req_i.dst_head];
             buffer_out_ready = ${wp}_buffer_out_ready [w_dp_req_i.dst_head];
+            w_chan_valid_o   = ${wp}_w_chan_valid [w_dp_req_i.dst_head];
+            w_chan_ready_o   = ${wp}_w_chan_ready [w_dp_req_i.dst_head];
+            w_chan_first_o   = ${wp}_w_chan_first [w_dp_req_i.dst_head];
     % endif
         end
 % endfor
         default: begin
             w_dp_req_ready   = 1'b0;
             buffer_out_ready = '0;
+            w_chan_valid_o   = 1'b0;
+            w_chan_ready_o   = 1'b0;
+            w_chan_first_o   = 1'b0;
         end
         endcase
     end
