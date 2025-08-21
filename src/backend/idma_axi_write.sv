@@ -68,6 +68,10 @@ module idma_axi_write #(
     /// AXI4+ATOP write manager port response
     input  write_rsp_t write_rsp_i,
 
+    output logic w_chan_valid_o,
+    output logic w_chan_ready_o,
+    output logic w_chan_first_o,
+
     /// Data from buffer
     input  byte_t [StrbWidth-1:0] buffer_out_i,
     /// Valid from buffer
@@ -256,6 +260,10 @@ module idma_axi_write #(
         end
     end
 
+    // Channel management signals
+    assign w_chan_valid_o = write_req_o.w_valid;
+    assign w_chan_ready_o = write_rsp_i.w_ready;
+    assign w_chan_first_o = first_w;
 
     //--------------------------------------
     // Write response
