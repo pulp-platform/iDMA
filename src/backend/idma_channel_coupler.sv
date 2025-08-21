@@ -31,14 +31,12 @@ module idma_channel_coupler #(
     /// Testmode in
     input  logic testmode_i,
 
-    /// R response valid
-    input  logic r_rsp_valid_i,
-    /// R response ready
-    input  logic r_rsp_ready_i,
-    /// First R response
-    input  logic r_rsp_first_i,
-    /// Did the read originate from a decoupled request
-    input  logic r_decouple_aw_i,
+    /// W request valid
+    input  logic w_req_valid_i,
+    /// W request ready
+    input  logic w_req_ready_i,
+    /// First W request
+    input  logic w_req_first_i,
     /// Is the `AW` in the queue a decoupled request?
     input  logic aw_decouple_aw_i,
 
@@ -87,8 +85,11 @@ module idma_channel_coupler #(
     // counter to keep track of AR to send
     cnt_t aw_to_send_d, aw_to_send_q;
 
-    // first signal -> an R has arrived that needs to free an AW
-    assign first = r_rsp_valid_i & r_rsp_ready_i & r_rsp_first_i & !r_decouple_aw_i;
+    logic aw_stall_d, aw_stall_q;
+
+    // first signal -> a W has data that needs to free an AW
+    assign first = w_req_valid_i & w_req_first_i & ~aw_stall_q;
+    assign aw_stall_d = w_req_valid_i & ~w_req_ready_i;
 
     // stream fifo to hold AWs back
     stream_fifo_optimal_wrap #(
@@ -180,6 +181,7 @@ module idma_channel_coupler #(
 
     // state
     `FF(aw_to_send_q, aw_to_send_d, '0, clk_i, rst_ni)
+    `FF(aw_stall_q, aw_stall_d, '0, clk_i, rst_ni)
 
 
 endmodule
