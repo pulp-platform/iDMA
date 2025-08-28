@@ -458,7 +458,7 @@ stream_fifo #(
     .ready_i   (master_rsp_i.aw_ready)
 );
 
-`FF(w_counter_q, w_counter_d, '0);
+`FF(w_counter_q, w_counter_d, '0)
 
 
 assign idma_rsp_ready_o = next_wb_addr_ready && next_wb_addr_valid;
@@ -468,8 +468,8 @@ assign irq_o            = do_irq_out && master_req_o.b_ready && master_rsp_i.b_v
 // and empty in lockstep. Capacity is tested at the idma_req fifo, the
 // other two ready signals are ignored.
 // pragma translate_off
-`ASSERT_IF(NoIrqDropped, do_irq_ready, do_irq_valid);
-`ASSERT_IF(NoAddrDropped, feedback_addr_ready, feedback_addr_valid);
+`ASSERT_IF(NoIrqDropped, do_irq_ready, do_irq_valid)
+`ASSERT_IF(NoAddrDropped, feedback_addr_ready, feedback_addr_valid)
 // pragma translate_on
 
 endmodule

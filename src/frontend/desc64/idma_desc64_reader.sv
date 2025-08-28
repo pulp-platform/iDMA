@@ -97,8 +97,8 @@ end else if (DataWidth == 128) begin : gen_128_data_path
         end
     end
 
-    `FF(first_half_of_descriptor_q, first_half_of_descriptor_d, 128'b0);
-    `FF(irq_addr_valid_q, irq_addr_valid_d, 1'b0);
+    `FF(first_half_of_descriptor_q, first_half_of_descriptor_d, 128'b0)
+    `FF(irq_addr_valid_q, irq_addr_valid_d, 1'b0)
 end else if (DataWidth == 64) begin : gen_64_data_path
     logic [1:0]       fetch_counter_q, fetch_counter_d;
     logic [2:0][63:0] descriptor_data_q, descriptor_data_d;
@@ -128,8 +128,8 @@ end else if (DataWidth == 64) begin : gen_64_data_path
         end
     end
 
-    `FF(descriptor_data_q, descriptor_data_d, 192'b0);
-    `FF(fetch_counter_q, fetch_counter_d, 2'b0);
+    `FF(descriptor_data_q, descriptor_data_d, 192'b0)
+    `FF(fetch_counter_q, fetch_counter_d, 2'b0)
 end else if (DataWidth == 32) begin : gen_32_data_path
     logic [2:0]       fetch_counter_q, fetch_counter_d;
     logic [6:0][31:0] descriptor_data_q, descriptor_data_d;

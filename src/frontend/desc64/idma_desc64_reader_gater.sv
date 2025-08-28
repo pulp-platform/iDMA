@@ -50,8 +50,8 @@ always_comb begin
     end
 end
 
-`FF(n_to_flush_q, n_to_flush_d, 'b0);
-`FF(engage_q, engage_d, 'b0);
+`FF(n_to_flush_q, n_to_flush_d, 'b0)
+`FF(engage_q, engage_d, 'b0)
 
 assign r_valid_o = flush ? 1'b0 : r_valid_i;
 assign r_ready_o = flush ? 1'b1 : r_ready_i;
