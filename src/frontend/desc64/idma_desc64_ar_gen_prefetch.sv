@@ -231,11 +231,11 @@ end
 
 assign queued_address_ready_o = !take_from_next && (!base_valid_q || next_addr_valid_this_cycle);
 
-`FF(inflight_counter_q, inflight_counter_d, '0);
-`FF(base_addr_q, base_addr_d, '0);
-`FF(next_addr_valid_q, next_addr_valid_d, 1'b0);
-`FF(base_valid_q, base_valid_d, 1'b0);
-`FF(flush_q, flush_d, 1'b0);
+`FF(inflight_counter_q, inflight_counter_d, '0)
+`FF(base_addr_q, base_addr_d, '0)
+`FF(next_addr_valid_q, next_addr_valid_d, 1'b0)
+`FF(base_valid_q, base_valid_d, 1'b0)
+`FF(flush_q, flush_d, 1'b0)
 assign flush_d = flush;
 
 stream_fifo #(

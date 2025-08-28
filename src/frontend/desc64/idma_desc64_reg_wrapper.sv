@@ -79,6 +79,6 @@ import idma_desc64_reg_pkg::idma_desc64_hw2reg_t; #(
             input_addr_valid_d = '0;
         end
     end
-    `FF(input_addr_valid_q, input_addr_valid_d, '0);
+    `FF(input_addr_valid_q, input_addr_valid_d, '0)
 
 endmodule
