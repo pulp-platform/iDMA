@@ -6,11 +6,19 @@
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 // - Tobias Senti <tsenti@ethz.ch>
 
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
 `include "axi/typedef.svh"
+% endif
+% if ('axi_stream' in used_read_protocols) or ('axi_stream' in used_write_protocols):
 `include "axi_stream/typedef.svh"
-`include "idma/typedef.svh"
+% endif
+% if ('obi' in used_read_protocols) or ('obi' in used_write_protocols):
 `include "obi/typedef.svh"
+% endif
+% if ('tilelink' in used_read_protocols) or ('tilelink' in used_write_protocols):
 `include "tilelink/typedef.svh"
+% endif
+`include "idma/typedef.svh"
 
 /// Synthesis wrapper for the iDMA backend. Unpacks all the interfaces to simple logic vectors
 module idma_backend_synth_${name_uniqueifier} #(
@@ -18,9 +26,9 @@ module idma_backend_synth_${name_uniqueifier} #(
     parameter int unsigned DataWidth           = 32'd32,
     /// Address width
     parameter int unsigned AddrWidth           = 32'd32,
-    /// AXI user width
+    /// User width
     parameter int unsigned UserWidth           = 32'd1,
-    /// AXI ID width
+    /// Transaction ID width
     parameter int unsigned AxiIdWidth          = 32'd1,
     /// Number of transaction that can be in-flight concurrently
     parameter int unsigned NumAxInFlight       = 32'd3,
@@ -52,7 +60,7 @@ module idma_backend_synth_${name_uniqueifier} #(
 %endif
     /// Should hardware legalization be present? (recommended)
     /// If not, software legalization is required to ensure the transfers are
-    /// AXI4-conformal
+    /// bus-spec conformal
     parameter bit          HardwareLegalizer   = 1'b1,
     /// Reject zero-length transfers
     parameter bit          RejectZeroTransfers = 1'b1,
@@ -95,6 +103,7 @@ module idma_backend_synth_${name_uniqueifier} #(
     input  addr_t                  req_dst_addr_i,
     input  idma_pkg::protocol_e    req_src_protocol_i,
     input  idma_pkg::protocol_e    req_dst_protocol_i,
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
     input  id_t                    req_axi_id_i,
     input  axi_pkg::burst_t        req_src_burst_i,
     input  axi_pkg::cache_t        req_src_cache_i,
@@ -108,6 +117,7 @@ module idma_backend_synth_${name_uniqueifier} #(
     input  axi_pkg::prot_t         req_dst_prot_i,
     input  axi_pkg::qos_t          req_dst_qos_i,
     input  axi_pkg::region_t       req_dst_region_i,
+% endif
     input  logic                   req_decouple_aw_i,
     input  logic                   req_decouple_rw_i,
     input  logic [2:0]             req_src_max_llen_i,
@@ -119,7 +129,9 @@ module idma_backend_synth_${name_uniqueifier} #(
     output logic                   rsp_valid_o,
     input  logic                   rsp_ready_i,
 
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
     output axi_pkg::resp_t         rsp_cause_o,
+% endif
     output idma_pkg::err_type_t    rsp_err_type_o,
     output addr_t                  rsp_burst_addr_o,
     output logic                   rsp_error_o,
@@ -166,7 +178,7 @@ ${database[protocol]['typedefs']}
     % endif
 % endfor
 
-    /// Option struct: AXI4 id as well as AXI and backend options
+    /// Option struct: transaction id and protocol/backend options
     /// - `last`: a flag can be set if this transfer is the last of a set of transfers
     `IDMA_TYPEDEF_OPTIONS_T(options_t, id_t)
 
@@ -177,10 +189,18 @@ ${database[protocol]['typedefs']}
     `IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, addr_t, options_t)
 
     /// 1D iDMA response payload:
-    /// - `cause`: the AXI response
+    /// - `cause`: protocol response code
     /// - `err_type`: type of the error: read, write, internal, ...
     /// - `burst_addr`: the burst address where the issue error occurred
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
     `IDMA_TYPEDEF_ERR_PAYLOAD_T(err_payload_t, addr_t)
+% else:
+    typedef struct packed {
+        logic [1:0]           cause;
+        idma_pkg::err_type_t  err_type;
+        addr_t                burst_addr;
+    } err_payload_t;
+% endif
 
     /// 1D iDMA response type:
     /// - `last`: the response of the request that was marked with the `opt.last` flag
@@ -364,6 +384,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.length                 = req_length_i;
     assign idma_req.opt.src_protocol       = req_src_protocol_i;
     assign idma_req.opt.dst_protocol       = req_dst_protocol_i;
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
     assign idma_req.opt.axi_id             = req_axi_id_i;
     assign idma_req.opt.dst.cache          = req_dst_cache_i;
     assign idma_req.opt.dst.burst          = req_dst_burst_i;
@@ -377,6 +398,11 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.opt.src.lock           = req_src_lock_i;
     assign idma_req.opt.src.prot           = req_src_prot_i;
     assign idma_req.opt.src.region         = req_src_region_i;
+% else:
+    assign idma_req.opt.axi_id             = '0;
+    assign idma_req.opt.dst                = '0;
+    assign idma_req.opt.src                = '0;
+% endif
     assign idma_req.opt.beo.dst_reduce_len = req_dst_reduce_len_i;
     assign idma_req.opt.beo.src_reduce_len = req_src_reduce_len_i;
     assign idma_req.opt.beo.dst_max_llen   = req_dst_max_llen_i;
@@ -385,7 +411,9 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.opt.beo.decouple_aw    = req_decouple_aw_i;
     assign idma_req.opt.last               = req_last_i;
 
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
     assign rsp_cause_o      = idma_rsp.pld.cause;
+% endif
     assign rsp_err_type_o   = idma_rsp.pld.err_type;
     assign rsp_burst_addr_o = idma_rsp.pld.burst_addr;
     assign rsp_error_o      = idma_rsp.error;

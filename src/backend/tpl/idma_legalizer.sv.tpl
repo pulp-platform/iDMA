@@ -665,10 +665,12 @@ ${database[protocol]['legalizer_write_data_path']}
     //--------------------------------------
     // Assertions
     //--------------------------------------
-    // only support the decomposition of incremental bursts
+    // only support the decomposition of incremental bursts (AXI only)
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
     `ASSERT_NEVER(OnlyIncrementalBurstsSRC, (ready_o & valid_i &
                   req_i.opt.src.burst != axi_pkg::BURST_INCR), clk_i, !rst_ni)
     `ASSERT_NEVER(OnlyIncrementalBurstsDST, (ready_o & valid_i &
                   req_i.opt.dst.burst != axi_pkg::BURST_INCR), clk_i, !rst_ni)
+% endif
 
 endmodule

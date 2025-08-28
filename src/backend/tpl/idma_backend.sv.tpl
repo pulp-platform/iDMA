@@ -6,7 +6,9 @@
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 // - Tobias Senti <tsenti@ethz.ch>
 
+% if ('axi' in used_read_protocols) or ('axi' in used_write_protocols):
 `include "axi/typedef.svh"
+% endif
 `include "idma/guard.svh"
 
 /// The iDMA backend implements an arbitrary 1D copy engine
@@ -15,9 +17,9 @@ module idma_backend_${name_uniqueifier} #(
     parameter int unsigned DataWidth        = 32'd16,
     /// Address width
     parameter int unsigned AddrWidth        = 32'd24,
-    /// AXI user width
+    /// User width
     parameter int unsigned UserWidth        = 32'd1,
-    /// AXI ID width
+    /// Transaction ID width
     parameter int unsigned AxiIdWidth       = 32'd1,
     /// Number of transaction that can be in-flight concurrently
     parameter int unsigned NumAxInFlight    = 32'd2,
@@ -44,7 +46,7 @@ module idma_backend_${name_uniqueifier} #(
     parameter bit MaskInvalidData            = 1'b1,
     /// Should hardware legalization be present? (recommended)
     /// If not, software legalization is required to ensure the transfers are
-    /// AXI4-conformal
+    /// Bus-spec conformal
     parameter bit HardwareLegalizer          = 1'b1,
     /// Reject zero-length transfers
     parameter bit RejectZeroTransfers        = 1'b1,
@@ -207,11 +209,11 @@ _rsp_t ${protocol}_write_rsp_i,
     } r_dp_req_t;
 
     /// The datapath read response type provides feedback from the read part of the datapath:
-    /// - `resp`: The response from the R channel of the AXI4 manager interface
-    /// - `last`: The last flag from the R channel of the AXI4 manager interface
+    /// - `resp`: Protocol-agnostic response code (matches AXI encoding width when AXI is used)
+    /// - `last`: The last flag of the read response channel
     /// - `first`: Is the current item first beat in the burst
     typedef struct packed {
-        axi_pkg::resp_t resp;
+        logic [1:0]     resp;
         logic           last;
         logic           first;
     } r_dp_rsp_t;
@@ -229,15 +231,15 @@ _rsp_t ${protocol}_write_rsp_i,
         offset_t             offset;
         offset_t             tailer;
         offset_t             shift;
-        axi_pkg::len_t       num_beats;
+        tf_len_t             num_beats;
         logic                is_single;
     } w_dp_req_t;
 
     /// The datapath write response type provides feedback from the write part of the datapath:
-    /// - `resp`: The response from the B channel of the AXI4 manager interface
-    /// - `user`: The user field from the B channel of the AXI4 manager interface
+    /// - `resp`: Protocol-agnostic response code
+    /// - `user`: User field propagated to the write response (when supported)
     typedef struct packed {
-        axi_pkg::resp_t resp;
+        logic [1:0]   resp;
         user_t          user;
     } w_dp_rsp_t;
 
@@ -462,7 +464,7 @@ _rsp_t ${protocol}_write_rsp_i,
         );
 
         // local signal holding the length -> explicitly only doing the computation once
-        axi_pkg::len_t len;
+        tf_len_t len;
         assign len = ((idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0] -
                      'd1) >> OffsetWidth);
 
@@ -917,7 +919,7 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
             $fatal(1, "Parameter AxiIdWidth has to be > 0!");
         axi_data_width : assert(DataWidth inside {32'd16, 32'd32, 32'd64, 32'd128, 32'd256,
                                                   32'd512, 32'd1024}) else
-            $fatal(1, "Parameter DataWidth has to be at least 16 and inside the AXI4 spec!");
+            $fatal(1, "Parameter DataWidth has to be at least 16 and a supported bus width!");
         axi_user_width : assert(UserWidth > 32'd0) else
             $fatal(1, "Parameter UserWidth has to be > 0!");
         num_ax_in_flight : assert(NumAxInFlight > 32'd1) else
