@@ -122,9 +122,9 @@ always_comb begin : proc_ar
     axi_ar_chan_o.burst = axi_pkg::BURST_INCR;
 end
 
-`FF(inflight_q, inflight_d, 1'b0);
-`FF(next_addr_from_desc_valid_q, next_addr_from_desc_valid_d, 1'b0);
-`FF(next_addr_q, next_addr_d, '1);
+`FF(inflight_q, inflight_d, 1'b0)
+`FF(next_addr_from_desc_valid_q, next_addr_from_desc_valid_d, 1'b0)
+`FF(next_addr_q, next_addr_d, '1)
 
 assign feedback_addr_o       = ar_addr;
 assign feedback_addr_valid_o = axi_ar_chan_ready_i && axi_ar_chan_valid_o;
