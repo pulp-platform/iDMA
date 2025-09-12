@@ -97,6 +97,9 @@ package idma_pkg;
         AXI_STREAM = 'd5
     } protocol_e;
 
+    /// Multihead channel selection type
+    typedef logic[7:0] multihead_t;
+
     /// Supported Protocols type
     typedef logic[1:0] protocol_t;
 
