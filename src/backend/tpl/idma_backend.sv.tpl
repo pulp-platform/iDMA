@@ -83,6 +83,8 @@ module idma_backend_${name_uniqueifier} #(
     % endif
 % endfor
 ,
+    /// Burst Len (for actual burst length do 8 byte * 2^(Burst_len))
+    parameter int unsigned Burst_len = 4'd5,
     /// Address Read Channel type
     parameter type read_meta_channel_t  = logic,
     /// Address Write Channel type
@@ -424,6 +426,7 @@ _rsp_t ${protocol}_write_rsp_i,
             .CombinedShifter   ( CombinedShifter   ),
             .DataWidth         ( DataWidth         ),
             .AddrWidth         ( AddrWidth         ),
+            .Burst_len         ( Burst_len         ),
             .idma_req_t        ( idma_req_t        ),
             .idma_r_req_t      ( idma_r_req_t      ),
             .idma_w_req_t      ( idma_w_req_t      ),
