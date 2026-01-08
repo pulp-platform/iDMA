@@ -21,6 +21,8 @@ module idma_legalizer_${name_uniqueifier} #(
     parameter int unsigned DataWidth       = 32'd16,
     /// Address width
     parameter int unsigned AddrWidth       = 32'd24,
+    /// Burst Len (for actual burst length do 8 byte * 2^(Burst_len))
+    parameter int unsigned Burst_len = 4'd5,
     /// 1D iDMA request type:
     /// - `length`: the length of the transfer in bytes
     /// - `*_addr`: the source / target byte addresses of the transfer
@@ -182,6 +184,7 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     //--------------------------------------
 % if no_read_bursting or has_page_read_bursting:
     idma_legalizer_page_splitter #(
+        .Burst_len     ( Burst_len     ),
         .OffsetWidth   ( OffsetWidth   ),
         .PageAddrWidth ( PageAddrWidth ),
         .addr_t        ( addr_t        ),
@@ -260,6 +263,7 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
     //--------------------------------------
 % if no_write_bursting or has_page_write_bursting:
     idma_legalizer_page_splitter #(
+        .Burst_len     ( Burst_len     ),
         .OffsetWidth   ( OffsetWidth   ),
         .PageAddrWidth ( PageAddrWidth ),
         .addr_t        ( addr_t        ),
