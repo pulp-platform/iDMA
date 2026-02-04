@@ -25,7 +25,8 @@ IDMA_BASE_IDS    := \
 					rw_axi \
 					r_obi_w_axi \
 					r_axi_w_obi \
-					rw_axi_rw_axis
+					rw_axi_rw_axis \
+					rw_obi
 IDMA_OCCAMY_IDS  := \
 					r_obi_rw_init_w_axi \
 					r_axi_rw_init_rw_obi
