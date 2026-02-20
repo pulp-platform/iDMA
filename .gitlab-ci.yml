@@ -21,8 +21,10 @@ init:
 idma:
   stage: idma
   needs: [ init ]
-  except:
-    - /^__deploy__.*$/
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^__deploy__/
+      when: never
+    - when: always
   trigger:
     include:
       - artifact: nonfree/ci/ci.yml

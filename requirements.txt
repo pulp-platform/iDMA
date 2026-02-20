@@ -1,4 +1,5 @@
 GitPython
+pre-commit
 hjson
 tabulate
 pyyaml
@@ -8,4 +9,3 @@ sphinx-rtd-theme
 recommonmark
 sphinxcontrib-svg2pdfconverter
 pylint
-flatdict
