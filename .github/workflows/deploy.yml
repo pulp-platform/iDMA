@@ -8,9 +8,8 @@
 name: deploy
 
 on:
-  push:
-    branches-ignore:
-      - '__deploy__**'
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
 

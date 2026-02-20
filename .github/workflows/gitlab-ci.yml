@@ -9,20 +9,14 @@
 name: gitlab-ci
 
 on:
-  push:
-    branches-ignore:
-      - '__deploy__**'
-  pull_request:
-    branches-ignore:
-      - '__deploy__**'
+  workflow_call:
   workflow_dispatch:
-    branches-ignore:
-      - '__deploy__**'
 
 jobs:
 
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 200
     steps:
       -
         name: Mirror and check

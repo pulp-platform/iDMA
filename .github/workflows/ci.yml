@@ -1,0 +1,48 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+name: ci
+
+on:
+  push:
+    branches-ignore:
+      - '__deploy__**'
+  pull_request:
+    branches-ignore:
+      - '__deploy__**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  lint:
+    uses: ./.github/workflows/lint.yml
+    secrets: inherit
+
+  build:
+    needs: lint
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  analyze:
+    needs: lint
+    uses: ./.github/workflows/analyze.yml
+    secrets: inherit
+
+  gitlab-ci:
+    needs: build
+    uses: ./.github/workflows/gitlab-ci.yml
+    secrets: inherit
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
