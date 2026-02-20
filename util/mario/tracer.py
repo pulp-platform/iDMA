@@ -8,8 +8,19 @@
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 """ MARIO tracer interaction"""
-import flatdict
 from mako.template import Template
+
+
+def _flatten_dict(d, parent_key='', delimiter='_'):
+    """Flatten a nested dict, joining keys with *delimiter*."""
+    items = []
+    for k, v in d.items():
+        new_key = f'{parent_key}{delimiter}{k}' if parent_key else k
+        if isinstance(v, dict):
+            items.extend(_flatten_dict(v, new_key, delimiter).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 TRACER_BODY = '''
 // The tracer for the ${identifier} iDMA
@@ -110,14 +121,14 @@ def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
 
         # handle read ports
         for read_prot in prot_ids[prot_id]['ar']:
-            sig_dict = flatdict.FlatDict(db[read_prot]['trace_signals']['read'], delimiter='_')
+            sig_dict = _flatten_dict(db[read_prot]['trace_signals']['read'])
             for signal in sig_dict:
                 signals += '                    '
                 signals += f'"{read_prot}_{signal}": __backend_inst``.{sig_dict[signal]}'
                 signals += ', \\\n'
 
         for write_prot in prot_ids[prot_id]['aw']:
-            sig_dict = flatdict.FlatDict(db[write_prot]['trace_signals']['write'], delimiter='_')
+            sig_dict = _flatten_dict(db[write_prot]['trace_signals']['write'])
             for signal in sig_dict:
                 signals += '                    '
                 signals += f'"{write_prot}_{signal}": __backend_inst``.{sig_dict[signal]}'
