@@ -61,6 +61,10 @@ module idma_axil_write #(
     /// AXI Lite write manager port response
     input  write_rsp_t write_rsp_i,
 
+    output logic w_chan_valid_o,
+    output logic w_chan_ready_o,
+    output logic w_chan_first_o,
+
     /// Data from buffer
     input  byte_t [StrbWidth-1:0] buffer_out_i,
     /// Valid from buffer
@@ -160,6 +164,11 @@ module idma_axil_write #(
 
     // we are ready for the next transfer internally, once the w last signal is applied
     assign w_dp_ready_o = write_happening;
+
+    // Channel management signals
+    assign w_chan_valid_o = write_req_o.w_valid;
+    assign w_chan_ready_o = write_rsp_i.w_ready;
+    assign w_chan_first_o = 1'b1; // always first, no bursting
 
     //--------------------------------------
     // Write response

@@ -84,8 +84,8 @@ read_template: |
         .read_meta_ready_o ( ${read_meta_ready} ),
         .read_req_o        ( ${read_request} ),
         .read_rsp_i        ( ${read_response} ),
-        .r_chan_valid_o    ( ${r_chan_valid} ),
-        .r_chan_ready_o    ( ${r_chan_ready} ),
+        .r_chan_valid_o    ( /*${r_chan_valid}*/ ),
+        .r_chan_ready_o    ( /*${r_chan_ready}*/ ),
         .buffer_in_o       ( ${buffer_in} ),
         .buffer_in_valid_o ( ${buffer_in_valid} ),
         .buffer_in_ready_i ( buffer_in_ready )
@@ -115,6 +115,9 @@ write_template: |
         .aw_ready_o         ( ${write_meta_ready}  ),
         .write_req_o        ( ${write_request} ),
         .write_rsp_i        ( ${write_response} ),
+        .w_chan_valid_o     ( ${w_chan_valid} ),
+        .w_chan_ready_o     ( ${w_chan_ready} ),
+        .w_chan_first_o     ( ${w_chan_first} ),
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} )

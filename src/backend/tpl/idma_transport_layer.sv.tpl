@@ -172,9 +172,12 @@ _rsp_t ${protocol}_write_rsp_i,
     /// Datapath poison signal
     input  logic dp_poison_i,
 
-    /// Response channel valid and ready
-    output logic r_chan_ready_o,
-    output logic r_chan_valid_o,
+    // /// Response channel valid and ready
+    // output logic r_chan_ready_o,
+    // output logic r_chan_valid_o,
+    output logic w_chan_valid_o,
+    output logic w_chan_ready_o,
+    output logic w_chan_first_o,
 
     /// Read part of the datapath is busy
     output logic r_dp_busy_o,
@@ -231,7 +234,7 @@ _rsp_t ${protocol}_write_rsp_i,
 % if not one_read_port:
 
     // Read multiplexed signals
-    logic\
+    // logic\
     % for index, protocol in enumerate(used_read_protocols):
  ${protocol}_r_chan_valid\
         % if index == len(used_read_protocols)-1:
@@ -240,7 +243,7 @@ _rsp_t ${protocol}_write_rsp_i,
 ,\
         % endif
     %endfor
-    logic\
+    // logic\
     % for index, protocol in enumerate(used_read_protocols):
  ${protocol}_r_chan_ready\
         % if index == len(used_read_protocols)-1:
@@ -290,6 +293,33 @@ _rsp_t ${protocol}_write_rsp_i,
 % if not one_write_port:
 
     // Write multiplexed signals
+    logic\
+    % for index, protocol in enumerate(used_write_protocols):
+ ${protocol}_w_chan_valid\
+        % if index == len(used_write_protocols)-1:
+;
+        % else:
+,\
+        % endif
+    %endfor
+    logic\
+    % for index, protocol in enumerate(used_write_protocols):
+ ${protocol}_w_chan_ready\
+        % if index == len(used_write_protocols)-1:
+;
+        % else:
+,\
+        % endif
+    %endfor
+    logic\
+    % for index, protocol in enumerate(used_write_protocols):
+ ${protocol}_w_chan_first\
+        % if index == len(used_write_protocols)-1:
+;
+        % else:
+,\
+        % endif
+    %endfor
     logic\
     % for index, protocol in enumerate(used_write_protocols):
  ${protocol}_w_dp_rsp_valid\
@@ -376,8 +406,8 @@ ${rendered_read_ports[read_port]}
             case(r_dp_req_i.src_protocol)
 % for rp in used_read_protocols:
             idma_pkg::${database[rp]['protocol_enum']}: begin
-                r_chan_valid_o  = ${rp}_r_chan_valid;
-                r_chan_ready_o  = ${rp}_r_chan_ready;
+                //r_chan_valid_o  = ${rp}_r_chan_valid;
+                //r_chan_ready_o  = ${rp}_r_chan_ready;
 
                 r_dp_ready_o    = ${rp}_r_dp_ready;
                 r_dp_rsp_o      = ${rp}_r_dp_rsp;
@@ -388,8 +418,8 @@ ${rendered_read_ports[read_port]}
             end
 % endfor
             default: begin
-                r_chan_valid_o  = 1'b0;
-                r_chan_ready_o  = 1'b0;
+                //r_chan_valid_o  = 1'b0;
+                //r_chan_ready_o  = 1'b0;
 
                 r_dp_ready_o    = 1'b0;
                 r_dp_rsp_o      = '0;
@@ -400,8 +430,8 @@ ${rendered_read_ports[read_port]}
             end
             endcase
         end else begin
-            r_chan_valid_o  = 1'b0;
-            r_chan_ready_o  = 1'b0;
+            //r_chan_valid_o  = 1'b0;
+            //r_chan_ready_o  = 1'b0;
 
             r_dp_ready_o    = 1'b0;
             r_dp_rsp_o      = '0;
@@ -475,11 +505,17 @@ ${rendered_read_ports[read_port]}
         idma_pkg::${database[wp]['protocol_enum']}: begin
             w_dp_req_ready   = ${wp}_w_dp_ready;
             buffer_out_ready = ${wp}_buffer_out_ready;
+            w_chan_valid_o   = ${wp}_w_chan_valid;
+            w_chan_ready_o   = ${wp}_w_chan_ready;
+            w_chan_first_o   = ${wp}_w_chan_first;
         end
 % endfor
         default: begin
             w_dp_req_ready   = 1'b0;
             buffer_out_ready = '0;
+            w_chan_valid_o   = 1'b0;
+            w_chan_ready_o   = 1'b0;
+            w_chan_first_o   = 1'b0;
         end
         endcase
     end
