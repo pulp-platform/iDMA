@@ -1,4 +1,5 @@
 GitPython
+pre-commit
 hjson
 tabulate
 pyyaml

@@ -1,0 +1,25 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Matches rules enforced by util/lint-commits.py in CI.
+
+[general]
+ignore=body-is-missing
+
+# Subject line: max 100 characters
+[title-max-length]
+line-length=100
+
+# Subject line: no trailing period
+[title-trailing-punctuation]
+
+# Subject line: must be capitalized, with optional "area: " prefix
+# Valid:   "Fix bug in backend"
+# Valid:   "backend: Fix bug in AXI read path"
+# Invalid: "fixup! something"  "lowercase start"
+[title-match-regex]
+regex=^([a-zA-Z_\-]+(/[a-zA-Z_\-]+)*: )?[A-Z]
+
+# Body: second line must be blank
+[body-first-line-empty]

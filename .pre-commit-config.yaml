@@ -1,0 +1,29 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Run `pre-commit install && pre-commit install --hook-type commit-msg` to enable locally.
+
+default_language_version:
+  python: python3.11
+
+repos:
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        stages: [commit-msg]
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        args: ['--max-line-length=100', '--extend-ignore=E128']
+        files: ^util/
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ['-c', '.github/yamllint-conf.yml']
+        files: (^Bender\.yml$|^src/db/.*\.yml$)
