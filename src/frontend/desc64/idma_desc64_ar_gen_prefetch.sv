@@ -239,7 +239,7 @@ assign queued_address_ready_o = !take_from_next && (!base_valid_q || next_addr_v
 assign flush_d = flush;
 
 stream_fifo #(
-    .FALL_THROUGH(1'b1),
+    .FALL_THROUGH(1'b0),
     .DEPTH       (NSpeculation),
     .T           (addr_t)
 ) i_speculation_fifo (
