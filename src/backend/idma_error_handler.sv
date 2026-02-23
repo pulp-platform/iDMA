@@ -249,11 +249,13 @@ module idma_error_handler #(
                     rsp_valid_o          = 1'b1;
                     // block read datapath response on write error
                     r_dp_ready_o         = 1'b0;
-                    // go to one of the wait states
-                    if (w_last_burst_i) begin
-                        state_d = WAIT_LAST_W;
-                    end else begin
-                        state_d  = WAIT;
+                    // go to one of the wait states once response is accepted
+                    if (rsp_ready_i) begin
+                        if (w_last_burst_i) begin
+                            state_d = WAIT_LAST_W;
+                        end else begin
+                            state_d  = WAIT;
+                        end
                     end
                 end
 
@@ -269,8 +271,10 @@ module idma_error_handler #(
                     rsp_valid_o          = 1'b1;
                     // block write datapath response on read error
                     w_dp_ready_o         = 1'b0;
-                    // go to wait state
-                    state_d              = WAIT;
+                    // go to wait state once response is accepted
+                    if (rsp_ready_i) begin
+                        state_d          = WAIT;
+                    end
                 end
             end
 
@@ -311,29 +315,31 @@ module idma_error_handler #(
             // error happened on the last write burst of a 1D transfer. We need to emit an extra
             // response post error handling.
             WAIT_LAST_W : begin
-                // continue case (~error reporting)
-                if (eh_i == idma_pkg::CONTINUE) begin
-                    eh_ready_o = 1'b1;
-                    state_d = EMIT_EXTRA_RSP;
-                end
-                // abort
-                if (eh_i == idma_pkg::ABORT) begin
-                    // in the case we have multiple outstanding 1D transfers in the datapath:
-                    // - the transfers are small no flush required
-                    // - some transfers might complete properly so no flush allowed!
-                    // in this case just continue
-                    if (num_outst_q > 'd1) begin
+                if (eh_valid_i) begin
+                    // continue case (~error reporting)
+                    if (eh_i == idma_pkg::CONTINUE) begin
                         eh_ready_o = 1'b1;
-                        state_d    = EMIT_EXTRA_RSP;
-                    // we are aborting a long transfer (it is still in the legalizer and
-                    // therefore the only active transfer in the datapath)
-                    end else if (num_outst_q == 'd1) begin
-                        eh_ready_o = 1'b1;
-                        state_d    = LEG_FLUSH;
-                    // the counter is 0 -> no transfer in the datapath. This is an impossible
-                    // state
-                    end else begin
-                        `ASSERT_I(inactive_tf_wait_last_w, rst_ni !== 1'b1)
+                        state_d = EMIT_EXTRA_RSP;
+                    end
+                    // abort
+                    if (eh_i == idma_pkg::ABORT) begin
+                        // in the case we have multiple outstanding 1D transfers in the datapath:
+                        // - the transfers are small no flush required
+                        // - some transfers might complete properly so no flush allowed!
+                        // in this case just continue
+                        if (num_outst_q > 'd1) begin
+                            eh_ready_o = 1'b1;
+                            state_d    = EMIT_EXTRA_RSP;
+                        // we are aborting a long transfer (it is still in the legalizer and
+                        // therefore the only active transfer in the datapath)
+                        end else if (num_outst_q == 'd1) begin
+                            eh_ready_o = 1'b1;
+                            state_d    = LEG_FLUSH;
+                        // the counter is 0 -> no transfer in the datapath. This is an impossible
+                        // state
+                        end else begin
+                            `ASSERT_I(inactive_tf_wait_last_w, rst_ni !== 1'b1)
+                        end
                     end
                 end
             end
