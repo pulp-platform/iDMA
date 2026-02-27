@@ -108,23 +108,23 @@ For AXI, the legalizer ensures bursts do not cross 4 KiB page boundaries and res
 
 If `HardwareLegalizer=1` and software submits a transfer crossing a page boundary, the legalizer splits it automatically. With `HardwareLegalizer=0`, such a transfer would violate the protocol and cause undefined bus behavior.
 
-### Datapath Request Types
+**Example**: A 5000-byte AXI transfer starting at address `0xFF8`. The 4 KiB page boundary is at `0x1000`, only 8 bytes away. The legalizer emits: burst 1 (8 bytes at `0xFF8` — reaches page boundary), burst 2 (4096 bytes at `0x1000`), burst 3 (896 bytes at `0x2000`). Each burst stays within a single 4 KiB page and respects the 256-beat limit.
 
-The legalizer emits `r_dp_req_t` and `w_dp_req_t` structs containing `offset` (bus-word alignment), `tailer` (padding bytes at the end), `shift` (barrel shifter amount), and `is_single` (single-beat flag). These flow through decoupling FIFOs to the transport layer.
+### Datapath Control Signals
+
+The legalizer communicates with the transport layer through internal control signals (`offset`, `tailer`, `shift`, `is_single`) that describe how each burst should be realigned. These are not visible to software — they flow through decoupling FIFOs between the two stages.
 
 ### Software Legalization
 
-When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple `stream_fork` that synchronizes the read and write paths. In this mode, software is responsible for ensuring all transfers are already legal for the target protocol (e.g., no AXI page-boundary crossings). This saves area but increases software complexity.
-
-Use `HardwareLegalizer=0` only when software pre-splits all transfers into protocol-legal bursts (e.g., an RTOS DMA driver that already handles AXI page boundaries). This saves ~1-2K gates but moves responsibility to the driver.
+When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple `stream_fork` that synchronizes the read and write paths. In this mode, software is responsible for ensuring all transfers are already legal for the target protocol (e.g., no AXI page-boundary crossings). Use this only when software pre-splits all transfers into protocol-legal bursts (e.g., an RTOS DMA driver that already handles AXI page boundaries). This saves ~1–2K gates but moves burst-splitting responsibility to the driver.
 
 ## Transport Layer
 
 ### Architecture
 
-The transport layer contains the read channel, byte-granular data buffer, and write channel. Data flows as: **read port** -> **read barrel shifter** -> **dataflow element (buffer)** -> **write barrel shifter** -> **write port**.
+The transport layer is responsible for moving data from source to destination, handling the byte-lane realignment that arises when source and destination addresses have different bus-word offsets. It contains the read channel, byte-granular data buffer, and write channel. Data flows as: **read port** -> **read barrel shifter** -> **dataflow element (buffer)** -> **write barrel shifter** -> **write port**.
 
-The buffer (`idma_dataflow_element`) is an array of independent FIFOs, one per byte lane (`StrbWidth` FIFOs of depth `BufferDepth`). This byte-granular design allows data to enter and leave the buffer at arbitrary byte-lane positions, enabling misaligned transfers without additional alignment stages.
+The buffer (`idma_dataflow_element`) is an array of independent FIFOs, one per byte lane (`StrbWidth` = `DataWidth / 8`, i.e., the number of byte lanes; `StrbWidth` FIFOs of depth `BufferDepth`). This byte-granular design allows data to enter and leave the buffer at arbitrary byte-lane positions, enabling misaligned transfers without additional alignment stages.
 
 ### Data Realignment
 
@@ -135,6 +135,8 @@ When `CombinedShifter=1`, both shifts are folded into a single operation before 
 ## Channel Coupler
 
 The R-AW channel coupler (`idma_channel_coupler`) holds back AW requests until the first corresponding R beat arrives. Without coupling, the DMA could issue a write address before the read data arrives, which wastes write-side resources and can increase interconnect pressure — particularly problematic in shared-bus fabrics. With coupling enabled, the write address is only sent once data is available, preventing write-before-read ordering hazards. Controlled by `RAWCouplingAvail` (enables the hardware) and `decouple_aw` (per-transfer opt-in via `backend_options_t`). Only available for AXI-to-AXI variants.
+
+Despite the name, `decouple_aw` actually *enables* R-AW coupling (holding AW until R data arrives). The name refers to the backend option struct field (`beo.decouple_aw`), where setting it to 1 activates the coupling logic.
 
 ## Error Handler
 

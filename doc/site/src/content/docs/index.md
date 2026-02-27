@@ -23,20 +23,20 @@ All iDMA layers communicate through a small set of struct types defined via macr
 
 ### Backend Options (`backend_options_t`)
 
-Defined in `idma_pkg.sv`:
+These options control how aggressively the backend pipelines read and write operations. The defaults (all zero) are safe; enable decoupling for higher throughput at the cost of complexity. Defined in `idma_pkg.sv`:
 
 | Field | Width | Description |
 |-------|-------|-------------|
-| `decouple_aw` | 1 | Send AWs only after first corresponding R arrives |
-| `decouple_rw` | 1 | Fully decouple R and W channels (can cause deadlocks) |
-| `src_max_llen` | 3 | Maximum log-length of a source burst |
-| `dst_max_llen` | 3 | Maximum log-length of a destination burst |
-| `src_reduce_len` | 1 | Reduce source burst length |
-| `dst_reduce_len` | 1 | Reduce destination burst length |
+| `decouple_aw` | 1 | Enable R-AW coupling: hold write addresses until read data arrives (safer, prevents write-before-read). Set to 1 for higher throughput on AXI-to-AXI transfers |
+| `decouple_rw` | 1 | Fully decouple read and write channels (highest throughput, but risks deadlock if the buffer fills — only safe when `BufferDepth` is large enough) |
+| `src_max_llen` | 3 | Maximum source burst length as log2(beats). 0 = single beat (full debursting), 3 = 8 beats, 7 = 128 beats. Lower values generate more bursts but cross fewer page boundaries |
+| `dst_max_llen` | 3 | Maximum destination burst length as log2(beats). Same encoding as `src_max_llen` |
+| `src_reduce_len` | 1 | When set, the legalizer shortens source bursts beyond what page-boundary splitting requires. Used for bandwidth throttling or to match narrow interconnect capabilities |
+| `dst_reduce_len` | 1 | When set, the legalizer shortens destination bursts (same effect as `src_reduce_len` but for the write side) |
 
 ### AXI Options (`axi_options_t`)
 
-Defined in `idma_pkg.sv`, carried per-direction in `options_t.src` and `options_t.dst`:
+AXI sideband signals that travel with each burst. These are pass-through to the bus — iDMA does not interpret them, but the interconnect may use them for routing, caching, and protection decisions. Defined in `idma_pkg.sv`, carried per-direction in `options_t.src` and `options_t.dst`:
 
 | Field | Width | Description |
 |-------|-------|-------------|
@@ -62,7 +62,7 @@ From `protocol_e` in `idma_pkg.sv`:
 
 ## Code Generation
 
-iDMA uses the **MARIO** framework (`util/mario/`) to generate all RTL from Mako templates and YAML protocol databases.
+Code generation is necessary because each protocol combination (read from AXI, write to OBI, etc.) requires different bus interface logic, legalizer rules, and transport layer wiring. Rather than maintaining N² hand-written variants, iDMA uses the **MARIO** framework (`util/mario/`) to generate all RTL from Mako templates and YAML protocol databases.
 
 **Key locations**:
 - `src/db/*.yml` — Per-protocol capability databases (e.g., `idma_axi.yml`, `idma_obi.yml`, `idma_tilelink.yml`). These define burst modes, page sizes, meta-channel types, and legalizer rules for each protocol.
@@ -146,9 +146,9 @@ typedef struct packed {
 ## Quick Links
 
 - **Architecture**
-  - [Backend](./architecture/backend/) — 1D transfer execution, legalizer, transport layer
-  - [Midend](./architecture/midend/) — ND decomposition, round-trip, multicore splitting
   - [Frontend](./architecture/frontend/) — register, Snitch ISA, descriptor-ring interfaces
+  - [Midend](./architecture/midend/) — ND decomposition, round-trip, multicore splitting
+  - [Backend](./architecture/backend/) — 1D transfer execution, legalizer, transport layer
 - **Guides**
   - [System Integration](./guides/system-integration/) — wiring iDMA into an SoC
   - [Error Handling](./guides/error-handling/) — error types, FSM, software handling

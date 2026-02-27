@@ -11,17 +11,19 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 
 ## Xdma Instruction Set
 
+All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` — `rd` receives the transfer ID, `rs1` provides the length.
+
 | Instruction | Operands | Description |
 |-------------|----------|-------------|
 | `DMSRC` | `rs1` (low 32b), `rs2` (high bits) | Set source address |
 | `DMDST` | `rs1` (low 32b), `rs2` (high bits) | Set destination address |
 | `DMCPYI` | `rd` = transfer ID, `rs1` = length, imm = {channel, config} | Launch transfer (immediate config). Returns transfer ID in `rd` |
 | `DMCPY` | `rd` = transfer ID, `rs1` = length, `rs2` = {channel, config} | Launch transfer (register config). Returns transfer ID in `rd` |
-| `DMSTATI` | imm = {channel, status_sel} | Query status (immediate). Returns status in `rd` |
-| `DMSTAT` | `rs2` = {channel, status_sel} | Query status (register). Returns status in `rd` |
+| `DMSTATI` | `rd` = status value, imm = {channel, status_sel} | Query status (immediate). Returns status in `rd` |
+| `DMSTAT` | `rd` = status value, `rs2` = {channel, status_sel} | Query status (register). Returns status in `rd` |
 | `DMSTR` | `rs1` = src_stride, `rs2` = dst_stride | Set 2D strides |
 | `DMREP` | `rs1` = repetitions | Set 2D repetition count |
-| `DMUSER` | `rs1`, `rs2` | Set AXI user field (up to 64 bits) |
+| `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
 
 **Status select values** (`DMSTAT`/`DMSTATI`):
 - `0`: Completed transfer ID
@@ -31,20 +33,8 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 
 **Config field** (`DMCPY`/`DMCPYI`):
 - Bit 0: Reserved
-- Bit 1: Enable 2D mode (use previously set strides/reps)
+- Bit 1: Enable 2D mode (use previously set strides/reps). If 2D mode is enabled but `DMSTR`/`DMREP` were not called since the last transfer, the previously set stride and repetition values are reused. On reset, these default to zero
 - Bits 4:2: Channel select — `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
-
-:::note[Instruction format]
-All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` — `rd` receives the transfer ID, `rs1` provides the length.
-:::
-
-:::note[DMUSER width]
-When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits.
-:::
-
-:::note[2D mode defaults]
-If 2D mode is enabled (config bit 1 = 1) but `DMSTR`/`DMREP` were not called since the last transfer, the previously set stride and repetition values are reused. On reset, these default to zero.
-:::
 
 ## Parameters
 
@@ -83,7 +73,7 @@ loop:
 
 ## Internal Architecture
 
-The `idma_inst64_top` module instantiates `NumChannels` independent backends, each paired with an ND midend (`NumDim=2`, `BufferDepth=3`). The frontend instruction decoder fills an `idma_nd_req_t` struct from the instruction stream and routes it to the selected channel's request FIFO. A per-channel transfer ID generator tracks issue and retire events. An `axi_rw_join` module merges the separate read/write AXI ports from each backend into a single AXI manager port.
+The `idma_inst64_top` module instantiates `NumChannels` independent backends, each paired with an ND midend (`NumDim=2`, `BufferDepth=3`). The frontend instruction decoder fills an `idma_nd_req_t` struct from the instruction stream and routes it to the selected channel's request FIFO. A per-channel transfer ID generator tracks issue and retire events. Each backend produces separate AXI read and write manager ports. The `axi_rw_join` module merges them into a single AXI manager port for connection to the SoC interconnect.
 
 ## Source Files
 

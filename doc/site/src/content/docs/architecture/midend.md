@@ -27,7 +27,7 @@ When a lower dimension completes all its repetitions, the midend increments the 
 | Parameter | Description |
 |-----------|-------------|
 | `NumDim` | Number of dimensions. Must be >= 2 (dimension 1 is the 1D burst handled by the backend) |
-| `RepWidths` | Per-dimension counter widths: `logic [NumDim-1:0][31:0]`. Controls the maximum repetition count for each dimension |
+| `RepWidths` | Per-dimension counter widths — an array specifying the counter width for each dimension. For example, with `NumDim=3` and `RepWidths = '{32, 16, 8}`, dimension 1 supports up to 2³² repetitions, dimension 2 up to 2¹⁶, etc. |
 
 ### Request Types
 
@@ -52,7 +52,7 @@ typedef struct packed {
 
 ### Worked Example: 2D Transfer
 
-Consider a 2D transfer copying a 64-byte row, repeated 4 times with a source stride of 128 bytes:
+Consider a 2D transfer copying a 64-byte row repeated 4 times with different source and destination pitches. For this transfer, the request parameters are:
 
 ```
 NumDim     = 2
@@ -71,7 +71,9 @@ The ND midend emits 4 sequential 1D transfers:
 | 2 | `base_src + 256` | `base_dst + 128` | 64 |
 | 3 | `base_src + 384` | `base_dst + 192` | 64 |
 
-If all `reps` for a dimension are zero, that dimension is bypassed (marked as a "zero stage") and an `ND_MIDEND` error response is generated.
+:::note[Zero repetitions]
+If all repetition counts for a dimension are zero, that dimension is treated as a no-op ("zero stage"). The midend signals this as an `ND_MIDEND` error in the response.
+:::
 
 ## RT Midend
 
@@ -89,7 +91,7 @@ It contains `NumEvents` countdown counters, each triggering an ND transfer when 
 
 ### Operation
 
-1. Software configures each event channel with: source/destination addresses, transfer length, 2D strides/repetitions, and a countdown threshold
+1. Software configures each event channel with: source/destination addresses, transfer length, 2D strides/repetitions, and a countdown threshold. Configuration is submitted through the module's `nd_req_i` port — software sends ND requests with an event channel ID. The countdown threshold and enable signals are separate input ports
 2. Each enabled counter decrements every clock cycle
 3. On overflow (reaching zero), the counter's pre-configured ND request is submitted to the arbiter
 4. A round-robin arbiter (`stream_arbiter`) selects among triggered events
@@ -102,7 +104,7 @@ It contains `NumEvents` countdown counters, each triggering an ND transfer when 
 
 Use MP_DIST when your SoC has multiple memory banks and you want a single transfer to be distributed across backends, each serving a contiguous address region (e.g., tightly-coupled data memory in a cluster).
 
-The distributed midend (`idma_mp_dist_midend`) splits a single transfer across `NumBEs` backends based on address regions. Each backend owns a contiguous `RegionWidth`-byte slice within the range `[RegionStart, RegionEnd)`.
+The distributed midend (`idma_mp_dist_midend`) splits a single transfer across `NumBEs` backends based on address regions. Each backend owns a contiguous `RegionWidth`-byte slice within the range `[RegionStart, RegionEnd)`. The following parameters control the address region mapping:
 
 | Parameter | Description |
 |-----------|-------------|
@@ -119,7 +121,7 @@ The midend uses a `stream_fork` to fan out the request to all backends simultane
 
 Use MP_SPLIT when a single transfer may span multiple address regions that require separate handling (e.g., crossing from one memory bank to another), and you want the hardware to serialize the sub-transfers automatically.
 
-The split midend (`idma_mp_split_midend`) serializes a transfer that spans multiple `RegionWidth` boundaries into a sequence of region-aligned sub-transfers for a single backend. It uses a two-state FSM (`Idle` / `Busy`) to emit the first region-clipped transfer immediately, then iterates through remaining regions.
+The split midend (`idma_mp_split_midend`) serializes a transfer that spans multiple `RegionWidth` boundaries into a sequence of region-aligned sub-transfers for a single backend. It uses a two-state FSM (`Idle` / `Busy`) to emit the first region-clipped transfer immediately, then iterates through remaining regions. The following parameters define the region layout:
 
 | Parameter | Description |
 |-----------|-------------|
