@@ -17,7 +17,7 @@ This guide covers the practical steps for integrating iDMA into a system-on-chip
 
 Select a frontend, midend, and backend based on your requirements:
 
-- **Backend**: Pick the variant matching your bus protocols — see the [variant matrix](../architecture/backend/#variant-matrix). The backend page also covers [legalizer splitting rules](../architecture/backend/#splitting-rules) and [error handling](../architecture/backend/#error-handler) constraints.
+- **Backend**: Pick the variant matching your bus protocols — see the [variant matrix](../architecture/backend/#variant-matrix). If your SoC uses AXI4 throughout, `rw_axi` is the standard choice. Use `r_obi_w_axi` when reading from OBI-attached memory but writing via AXI. The Occamy variants (`r_obi_rw_init_w_axi`, `r_axi_rw_init_rw_obi`) add the INIT protocol for efficient memory zeroing. The backend page also covers [legalizer splitting rules](../architecture/backend/#splitting-rules) and [error handling](../architecture/backend/#error-handler) constraints.
 - **Frontend**: Choose based on your SoC's control interface — see the [frontend comparison](../architecture/frontend/#choosing-a-frontend)
 - **Midend**: Use the [ND midend](../architecture/midend/#nd-midend) for 2D/3D transfers, [RT midend](../architecture/midend/#rt-midend) for periodic transfers, or skip the midend entirely for 1D-only systems
 
@@ -44,6 +44,8 @@ typedef logic [StrideWidth-1:0] strides_t;
 `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, reps_t, strides_t)
 ```
 
+The `IDMA_TYPEDEF_FULL_REQ_T` macro is a convenience wrapper that internally invokes `IDMA_TYPEDEF_OPTIONS_T` and `IDMA_TYPEDEF_REQ_T`. Use the `FULL_` variants for integration — they define all intermediate types automatically.
+
 ### 3. Instantiate
 
 Wire the three layers together. The key connections are:
@@ -51,7 +53,7 @@ Wire the three layers together. The key connections are:
 - Midend `burst_req_o` / `burst_req_valid_o` / `burst_req_ready_i` -> Backend request input
 - Backend `idma_rsp_o` / `rsp_valid_o` / `rsp_ready_i` -> back through midend to frontend
 
-Skeleton:
+The following skeleton shows how the three layers connect. Signal types come from the macros defined in step 2 above — `fe_req` is `idma_nd_req_t`, `be_req` is `idma_req_t`:
 
 ```verilog
 // Frontend -> Midend -> Backend

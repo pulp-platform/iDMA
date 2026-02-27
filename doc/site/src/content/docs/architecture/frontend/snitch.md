@@ -15,8 +15,8 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 |-------------|----------|-------------|
 | `DMSRC` | `rs1` (low 32b), `rs2` (high bits) | Set source address |
 | `DMDST` | `rs1` (low 32b), `rs2` (high bits) | Set destination address |
-| `DMCPYI` | `rs1` = length, imm = {channel, config} | Launch transfer (immediate config). Returns transfer ID in `rd` |
-| `DMCPY` | `rs1` = length, `rs2` = {channel, config} | Launch transfer (register config). Returns transfer ID in `rd` |
+| `DMCPYI` | `rd` = transfer ID, `rs1` = length, imm = {channel, config} | Launch transfer (immediate config). Returns transfer ID in `rd` |
+| `DMCPY` | `rd` = transfer ID, `rs1` = length, `rs2` = {channel, config} | Launch transfer (register config). Returns transfer ID in `rd` |
 | `DMSTATI` | imm = {channel, status_sel} | Query status (immediate). Returns status in `rd` |
 | `DMSTAT` | `rs2` = {channel, status_sel} | Query status (register). Returns status in `rd` |
 | `DMSTR` | `rs1` = src_stride, `rs2` = dst_stride | Set 2D strides |
@@ -33,6 +33,18 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 - Bit 0: Reserved
 - Bit 1: Enable 2D mode (use previously set strides/reps)
 - Bits 4:2: Channel select — `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
+
+:::note[Instruction format]
+All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` — `rd` receives the transfer ID, `rs1` provides the length.
+:::
+
+:::note[DMUSER width]
+When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits.
+:::
+
+:::note[2D mode defaults]
+If 2D mode is enabled (config bit 1 = 1) but `DMSTR`/`DMREP` were not called since the last transfer, the previously set stride and repetition values are reused. On reset, these default to zero.
+:::
 
 ## Parameters
 

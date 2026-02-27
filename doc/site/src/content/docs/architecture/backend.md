@@ -9,6 +9,10 @@ The backend is the lowest layer of the iDMA pipeline. It takes 1D transfer reque
 
 ![Backend Architecture](/fig/backend.svg)
 
+### Transfer Lifecycle
+
+When a 1D transfer request arrives at the backend, it flows through three stages. First, the **legalizer** splits the request into protocol-legal bus bursts — respecting page boundaries, maximum burst lengths, and alignment constraints. Each burst produces a set of control signals (offset, tailer, shift) that describe how the data needs to be realigned. Second, the **transport layer** executes each burst: the read channel fetches data from the source, barrel shifters realign byte lanes, the data buffer absorbs timing differences, and the write channel stores data at the destination. Third, the **error handler** (if enabled) monitors bus responses and reports faults to software. The backend signals completion through `idma_rsp_t` once all bursts of a transfer have finished.
+
 ## Parameters
 
 | Parameter | Default | Description |
@@ -18,7 +22,7 @@ The backend is the lowest layer of the iDMA pipeline. It takes 1D transfer reque
 | `UserWidth` | 1 | AXI user signal width. Must be > 0 |
 | `AxiIdWidth` | 1 | AXI ID width. Must be > 0 |
 | `NumAxInFlight` | 2 | Number of concurrent in-flight transactions. Must be > 1 |
-| `BufferDepth` | 2 | Depth of the internal reorder buffer. 2 = minimal, **3 = recommended** (handles misaligned transfers efficiently) |
+| `BufferDepth` | 2 | Depth of the internal reorder buffer. 2 = minimal, **3 = recommended** because depth-2 buffers stall on misaligned transfers where read and write offsets differ, requiring an extra buffer slot for the alignment pipeline |
 | `TFLenWidth` | 24 | Transfer length width. Max transfer size is `2^TFLenWidth` bytes. Must be >= 12 and <= AddrWidth |
 | `MemSysDepth` | 0 | Depth of the attached memory system (additional pipeline stages) |
 | `CombinedShifter` | 0 | Use a single barrel shifter instead of two (saves area, data no longer word-aligned in buffer) |
@@ -35,6 +39,8 @@ The maximum number of transfers in-flight at any point is:
 MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth
 ```
 
+This determines how many 1D bursts can be in-flight simultaneously — `BufferDepth` entries in the data buffer, `NumAxInFlight` transactions on the bus, and `MemSysDepth` stages in the external memory system.
+
 ## Interface
 
 ### Port Groups
@@ -49,6 +55,8 @@ MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth
 | **Busy** | `busy_o` | out | Per-subunit busy flags (`idma_busy_t`) |
 
 ### Busy Signal (`idma_busy_t`)
+
+Software can poll the busy signal to determine which subunit is still active. All flags must be zero for the backend to be fully idle:
 
 ```verilog
 typedef struct packed {
@@ -98,6 +106,8 @@ The legalizer is pure control path: it does not touch the data. It computes page
 
 For AXI, the legalizer ensures bursts do not cross 4 KiB page boundaries and respect the 256-beat maximum. TileLink uses power-of-2 aligned bursts with a 2048 B page size (limited by the TLToAXI4 bridge for AXI compliance); in TLToAXI4 compatibility mode, write bursts are further limited to 32 beats and never cross page boundaries. For non-bursting protocols (OBI, INIT, AXI Stream), each transfer is a single bus-width beat. The effective page size is `min(max_beats * StrbWidth, page_size)`.
 
+If `HardwareLegalizer=1` and software submits a transfer crossing a page boundary, the legalizer splits it automatically. With `HardwareLegalizer=0`, such a transfer would violate the protocol and cause undefined bus behavior.
+
 ### Datapath Request Types
 
 The legalizer emits `r_dp_req_t` and `w_dp_req_t` structs containing `offset` (bus-word alignment), `tailer` (padding bytes at the end), `shift` (barrel shifter amount), and `is_single` (single-beat flag). These flow through decoupling FIFOs to the transport layer.
@@ -105,6 +115,8 @@ The legalizer emits `r_dp_req_t` and `w_dp_req_t` structs containing `offset` (b
 ### Software Legalization
 
 When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple `stream_fork` that synchronizes the read and write paths. In this mode, software is responsible for ensuring all transfers are already legal for the target protocol (e.g., no AXI page-boundary crossings). This saves area but increases software complexity.
+
+Use `HardwareLegalizer=0` only when software pre-splits all transfers into protocol-legal bursts (e.g., an RTOS DMA driver that already handles AXI page boundaries). This saves ~1-2K gates but moves responsibility to the driver.
 
 ## Transport Layer
 

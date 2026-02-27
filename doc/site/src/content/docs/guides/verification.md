@@ -19,7 +19,7 @@ iDMA uses a SystemVerilog testbench driven by **job files** that describe transf
 
 ### Golden Model
 
-The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that simulates DMA transfers at the byte granularity. It replicates the legalizer's burst splitting logic (page boundaries, maximum burst lengths) and error handling behavior (continue/abort semantics). After each transfer, the testbench compares the hardware memory state against the model's expected state to detect mismatches.
+The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that simulates DMA transfers at the byte granularity. It replicates the legalizer's burst splitting logic (page boundaries, maximum burst lengths) and error handling behavior (continue/abort semantics). After each transfer, the testbench compares the hardware memory state against the model's expected state to detect mismatches. The golden model uses the `max_src_len` and `max_dst_len` fields from the job file to configure burst splitting — these must match the protocol's actual limits for comparisons to pass.
 
 ## Job File Format
 
@@ -78,22 +78,43 @@ rc0x8       #   read error at 0x8, action: continue
 rc0xc       #   read error at 0xc, action: continue
 ```
 
+### Writing Custom Job Files
+
+To create a custom test, write a text file following the format above. Each field is on its own line, with transfers concatenated back-to-back (no blank lines between them). The `max_src_len` and `max_dst_len` fields control burst splitting in the golden model — set to 256 for AXI (matching the protocol maximum) or 1 for single-beat protocols (OBI, INIT, AXI Stream).
+
 ## Available Test Suites
 
 Each backend variant has its own set of job files under `jobs/<variant>/`:
+
+**Basic** — start here for bring-up and sanity checks:
 
 | Job File | Description |
 |----------|-------------|
 | `simple.txt` | Minimal transfer (2 bytes), basic sanity check |
 | `small.txt` | A few short transfers |
+| `tiny.txt` | Very small (sub-word) transfers |
+
+**Stress** — increasing transfer sizes for throughput and boundary testing:
+
+| Job File | Description |
+|----------|-------------|
 | `medium.txt` | Mixed lengths, some with AW decoupling |
 | `large.txt` | Longer transfers approaching page boundaries |
 | `huge.txt` | Large transfers spanning multiple pages |
+
+**Pattern** — specific address and access patterns:
+
+| Job File | Description |
+|----------|-------------|
 | `linear.txt` | Sequential address patterns |
 | `mixed.txt` | Varied source/destination alignments |
 | `same_dst.txt` | Multiple transfers to the same destination |
-| `tiny.txt` | Very small (sub-word) transfers |
 | `zero_transfer.txt` | Zero-length transfer (tests `RejectZeroTransfers`) |
+
+**Error** — error injection and handling:
+
+| Job File | Description |
+|----------|-------------|
 | `error_simple.txt` | Transfers with injected read/write errors and continue/abort actions |
 | `error_mixed.txt` | Complex error scenarios with multiple error types |
 
@@ -126,6 +147,10 @@ questa-2023.4 vsim -c -t 1ps -voptargs=+acc \
 ```
 
 Replace `backend_rw_axi` and `tb_idma_backend_rw_axi` with the desired variant. The `+job_file` plusarg points to the job file describing the test sequence.
+
+### Debugging Failures
+
+If a simulation fails, the testbench prints the first mismatching address and expected vs. actual values. To debug further, open the waveform in the Questa GUI by removing the `-c` flag from the vsim command. Check the `busy_o` flags to identify which subunit stalled, and examine the legalizer's burst splitting against the golden model's expectations.
 
 ### VCS
 

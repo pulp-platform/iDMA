@@ -5,9 +5,11 @@ description: A modular DMA engine for heterogeneous PULP-platform SoCs.
 
 ## Overview
 
-iDMA is a modular, protocol-agnostic DMA engine designed for integration into heterogeneous systems-on-chip built on the PULP platform. Its three-layer architecture — Frontend, Midend, Backend — cleanly separates the transfer interface, multi-dimensional decomposition, and transport protocol concerns.
+Modern SoCs need to move data between memory regions, peripherals, and accelerators — often across different bus protocols (AXI, OBI, TileLink) and with multi-dimensional access patterns (2D tile copies, strided accesses). A hardwired DMA engine offloads this work from the CPU, but supporting multiple protocols and transfer shapes in a single design is complex.
 
-**Getting started?** If you're integrating iDMA into an SoC, start with the [System Integration](./guides/system-integration/) guide. For understanding the internal architecture, begin with the [Backend](./architecture/backend/) page.
+iDMA solves this with a modular, protocol-agnostic DMA engine designed for heterogeneous PULP-platform SoCs. Its three-layer architecture — Frontend, Midend, Backend — cleanly separates the software interface, multi-dimensional decomposition, and transport protocol execution. Each layer is independently configurable and swappable, so the same infrastructure supports everything from a minimal 32-bit OBI system to a 512-bit AXI cluster with ISA-coupled transfers.
+
+**Getting started?** If you're **integrating iDMA into an SoC**, start with the [System Integration](./guides/system-integration/) guide — it covers type macros, wiring, and parameter presets. If you're **understanding the architecture**, begin with the [Frontend](./architecture/frontend/) overview and follow the pipeline through to the [Backend](./architecture/backend/).
 
 ## Architecture at a Glance
 
@@ -49,14 +51,14 @@ Defined in `idma_pkg.sv`, carried per-direction in `options_t.src` and `options_
 
 From `protocol_e` in `idma_pkg.sv`:
 
-| Enum Value | Protocol | Description |
-|------------|----------|-------------|
-| 0 | `AXI` | Full AXI4 |
-| 1 | `OBI` | OBI |
-| 2 | `AXILITE` | AXI4-Lite |
-| 3 | `TILELINK` | TileLink-UH |
-| 4 | `INIT` | Init protocol (Occamy) |
-| 5 | `AXI_STREAM` | AXI Stream |
+| Enum Value | Protocol | Description | Use Case |
+|------------|----------|-------------|----------|
+| 0 | `AXI` | Full AXI4 | General-purpose high-bandwidth interconnects |
+| 1 | `OBI` | OBI | Simple low-gate-count interconnects (PULP clusters) |
+| 2 | `AXILITE` | AXI4-Lite | Register-mapped peripherals |
+| 3 | `TILELINK` | TileLink-UH | TileLink-based SoCs (via TLToAXI4 bridge) |
+| 4 | `INIT` | Init protocol (Occamy) | Efficient memory zeroing without read-modify-write |
+| 5 | `AXI_STREAM` | AXI Stream | Streaming peripherals (e.g., network interfaces, DSP chains) |
 
 ## Code Generation
 
@@ -79,6 +81,8 @@ iDMA uses the **MARIO** framework (`util/mario/`) to generate all RTL from Mako 
 
 ### Transfer Request (`idma_req_t`)
 
+The transfer request is what frontends produce and backends consume. It carries the source/destination addresses, transfer length, and all protocol options:
+
 ```verilog
 `IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, axi_addr_t, options_t)
 // Expands to:
@@ -92,6 +96,8 @@ typedef struct packed {
 ```
 
 ### Transfer Options (`options_t`)
+
+Transfer options carry protocol selection, AXI sideband signals, and backend engine options. Every transfer request embeds one `options_t`:
 
 ```verilog
 `IDMA_TYPEDEF_OPTIONS_T(options_t, axi_id_t)
@@ -109,6 +115,8 @@ typedef struct packed {
 
 ### Transfer Response (`idma_rsp_t`)
 
+The response indicates whether a transfer completed successfully or encountered an error. Frontends receive one response per submitted transfer:
+
 ```verilog
 `IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)
 // Expands to:
@@ -120,6 +128,8 @@ typedef struct packed {
 ```
 
 ### Error Payload (`err_payload_t`)
+
+The error payload identifies the faulting burst address and error source. It is only meaningful when `idma_rsp_t.error` is asserted:
 
 ```verilog
 `IDMA_TYPEDEF_ERR_PAYLOAD_T(err_payload_t, axi_addr_t)

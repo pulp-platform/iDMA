@@ -20,10 +20,11 @@ The frontend is the topmost layer of the iDMA pipeline. It provides the software
 | **Data Width** | Any | 64-bit | Any (typically 64–512 bit) |
 | **ND Support** | Yes (2D via `reg64_2d`) | No (1D only) | Yes (2D, `NumDim=2`) |
 | **Key Advantage** | Simple, portable | Hardware-managed queue, low CPU overhead | Single-cycle launch, zero register overhead |
+| **Error Visibility** | Status register (poll `done_id`, check response) | IRQ (if `flags.irq` set) | Poll via `DMSTAT` |
 
 ## Common Pattern
 
-All frontends produce `idma_req_t` (or `idma_nd_req_t` for ND-capable frontends) and consume `idma_rsp_t`. This makes frontends interchangeable without modifying the midend or backend — swap the frontend module and adjust the bus interface.
+All frontends produce `idma_req_t` (or `idma_nd_req_t` for ND-capable frontends) and consume `idma_rsp_t`. Frontends are interchangeable at the `idma_req_t` / `idma_rsp_t` boundary, but each has a different control plane: register bus, AXI (descriptor fetch), or accelerator interface. Switching frontends requires re-wiring the host-side interface.
 
 ## Generated Variants
 
