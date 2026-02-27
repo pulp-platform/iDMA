@@ -99,6 +99,15 @@ Each backend variant has its own set of job files under `jobs/<variant>/`:
 
 ## Running Simulations
 
+### Prerequisites
+
+Before running any simulation, the generated RTL and simulation scripts must exist:
+
+```bash
+make idma_hw_all    # Generate RTL into target/rtl/
+make idma_sim_all   # Generate compile.tcl and start.tcl into target/sim/vsim/
+```
+
 ### Compile
 
 ```bash

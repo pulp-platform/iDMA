@@ -5,7 +5,7 @@ description: The midend decomposes multi-dimensional and round-trip transfers in
 
 ## Overview
 
-The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** — for systems that only need 1D transfers, the frontend can drive the backend directly.
+The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** — for systems that only need 1D transfers, the frontend can drive the backend directly. See the [System Integration](../guides/system-integration/) guide for wiring examples showing how the midend connects to the frontend and backend.
 
 Four midend variants are available:
 

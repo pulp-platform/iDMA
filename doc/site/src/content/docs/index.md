@@ -7,6 +7,8 @@ description: A modular DMA engine for heterogeneous PULP-platform SoCs.
 
 iDMA is a modular, protocol-agnostic DMA engine designed for integration into heterogeneous systems-on-chip built on the PULP platform. Its three-layer architecture — Frontend, Midend, Backend — cleanly separates the transfer interface, multi-dimensional decomposition, and transport protocol concerns.
 
+**Getting started?** If you're integrating iDMA into an SoC, start with the [System Integration](./guides/system-integration/) guide. For understanding the internal architecture, begin with the [Backend](./architecture/backend/) page.
+
 ## Architecture at a Glance
 
 iDMA's pipeline flows from **Frontend** (software interface) through an optional **Midend** (ND/RT decomposition) to the **Backend** (bus transactions). All RTL is generated from Mako templates and YAML protocol databases by the MARIO code generation framework. The backend handles burst legalization, data realignment, and error handling autonomously.
@@ -15,7 +17,65 @@ iDMA's pipeline flows from **Frontend** (software interface) through an optional
 
 ## Core Data Types
 
-All iDMA layers communicate through a small set of struct types defined via macros in `typedef.svh`.
+All iDMA layers communicate through a small set of struct types defined via macros in `typedef.svh`. The key option structs are summarized below; full type definitions are in the [expandable section](#type-definitions) at the bottom of this page.
+
+### Backend Options (`backend_options_t`)
+
+Defined in `idma_pkg.sv`:
+
+| Field | Width | Description |
+|-------|-------|-------------|
+| `decouple_aw` | 1 | Send AWs only after first corresponding R arrives |
+| `decouple_rw` | 1 | Fully decouple R and W channels (can cause deadlocks) |
+| `src_max_llen` | 3 | Maximum log-length of a source burst |
+| `dst_max_llen` | 3 | Maximum log-length of a destination burst |
+| `src_reduce_len` | 1 | Reduce source burst length |
+| `dst_reduce_len` | 1 | Reduce destination burst length |
+
+### AXI Options (`axi_options_t`)
+
+Defined in `idma_pkg.sv`, carried per-direction in `options_t.src` and `options_t.dst`:
+
+| Field | Width | Description |
+|-------|-------|-------------|
+| `burst` | 2 | AXI burst type (FIXED=00, INCR=01, WRAP=10) |
+| `cache` | 4 | AXI cache attributes (bufferable, modifiable, read-alloc, write-alloc) |
+| `lock` | 1 | AXI lock (not used by most frontends, tied to 0) |
+| `prot` | 3 | AXI protection flags |
+| `qos` | 4 | AXI QoS priority |
+| `region` | 4 | AXI region identifier |
+
+## Supported Protocols
+
+From `protocol_e` in `idma_pkg.sv`:
+
+| Enum Value | Protocol | Description |
+|------------|----------|-------------|
+| 0 | `AXI` | Full AXI4 |
+| 1 | `OBI` | OBI |
+| 2 | `AXILITE` | AXI4-Lite |
+| 3 | `TILELINK` | TileLink-UH |
+| 4 | `INIT` | Init protocol (Occamy) |
+| 5 | `AXI_STREAM` | AXI Stream |
+
+## Code Generation
+
+iDMA uses the **MARIO** framework (`util/mario/`) to generate all RTL from Mako templates and YAML protocol databases.
+
+**Key locations**:
+- `src/db/*.yml` — Per-protocol capability databases (e.g., `idma_axi.yml`, `idma_obi.yml`, `idma_tilelink.yml`). These define burst modes, page sizes, meta-channel types, and legalizer rules for each protocol.
+- `src/backend/tpl/` — Backend templates (backend, legalizer, transport layer)
+- `src/frontend/tpl/` — Register frontend templates
+- `test/tpl/` — Testbench and trace templates
+- `util/gen_idma.py` — Entry point. Reads YAML databases, invokes MARIO modules, renders Mako templates.
+- `util/mario/` — Generation modules: `backend.py`, `frontend.py`, `legalizer.py`, `transport_layer.py`, `synth.py`, `testbench.py`, `wave.py`, `tracer.py`
+
+**Workflow**: `make idma_hw_all` runs `gen_idma.py`, which reads the YAML databases, instantiates the MARIO modules, and renders the Mako templates into SystemVerilog. Generated output is written to `target/rtl/` and is committed to the repository. After modifying templates or databases, always regenerate and commit the result.
+
+## Type Definitions
+
+<details>
+<summary>Full type macro expansions (click to expand)</summary>
 
 ### Transfer Request (`idma_req_t`)
 
@@ -47,19 +107,6 @@ typedef struct packed {
 } options_t;
 ```
 
-### Backend Options (`backend_options_t`)
-
-Defined in `idma_pkg.sv`:
-
-| Field | Width | Description |
-|-------|-------|-------------|
-| `decouple_aw` | 1 | Send AWs only after first corresponding R arrives |
-| `decouple_rw` | 1 | Fully decouple R and W channels (can cause deadlocks) |
-| `src_max_llen` | 3 | Maximum log-length of a source burst |
-| `dst_max_llen` | 3 | Maximum log-length of a destination burst |
-| `src_reduce_len` | 1 | Reduce source burst length |
-| `dst_reduce_len` | 1 | Reduce destination burst length |
-
 ### Transfer Response (`idma_rsp_t`)
 
 ```verilog
@@ -84,22 +131,7 @@ typedef struct packed {
 } err_payload_t;
 ```
 
-## Supported Protocols
-
-From `protocol_e` in `idma_pkg.sv`:
-
-| Enum Value | Protocol | Description |
-|------------|----------|-------------|
-| 0 | `AXI` | Full AXI4 |
-| 1 | `OBI` | OBI |
-| 2 | `AXILITE` | AXI4-Lite |
-| 3 | `TILELINK` | TileLink-UH |
-| 4 | `INIT` | Init protocol (Occamy) |
-| 5 | `AXI_STREAM` | AXI Stream |
-
-## Code Generation
-
-iDMA uses the **MARIO** framework (`util/mario/`) to generate all RTL. Protocol capabilities are described in YAML databases (`src/db/*.yml`), and Mako templates (`*.tpl`) render the final SystemVerilog. Run `make idma_hw_all` to regenerate everything into `target/rtl/`.
+</details>
 
 ## Quick Links
 

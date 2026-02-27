@@ -30,8 +30,9 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 - `3`: Backend FIFO full flag
 
 **Config field** (`DMCPY`/`DMCPYI`):
+- Bit 0: Reserved
 - Bit 1: Enable 2D mode (use previously set strides/reps)
-- Bits 4:2: Channel select (for multi-channel configurations)
+- Bits 4:2: Channel select — `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
 
 ## Parameters
 
