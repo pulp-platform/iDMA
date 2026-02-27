@@ -16,8 +16,6 @@ export default defineConfig({
         {
           label: 'Architecture',
           items: [
-            { label: 'Backend', slug: 'architecture/backend' },
-            { label: 'Midend', slug: 'architecture/midend' },
             {
               label: 'Frontend',
               items: [
@@ -27,6 +25,8 @@ export default defineConfig({
                 { label: 'Descriptor Frontend', slug: 'architecture/frontend/descriptor' },
               ],
             },
+            { label: 'Midend', slug: 'architecture/midend' },
+            { label: 'Backend', slug: 'architecture/backend' },
           ],
         },
         {

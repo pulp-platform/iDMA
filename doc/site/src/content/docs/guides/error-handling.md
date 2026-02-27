@@ -20,7 +20,7 @@ From `err_type_e` in `idma_pkg.sv`:
 
 ## Error Response
 
-When an error occurs, the `idma_rsp_t` response is populated:
+When an error occurs, the `idma_rsp_t` response is populated. These structs flow from the error handler to the frontend:
 
 ```verilog
 typedef struct packed {
@@ -50,6 +50,8 @@ The error handler (`idma_error_handler`) implements a 5-state FSM:
 | `EMIT_EXTRA_RSP` | Send the completion response that was deferred due to the error | -> `IDLE` when response is accepted |
 | `LEG_FLUSH` | Flush the legalizer: drain remaining bursts, poison data, then kill the active transfer | -> `EMIT_EXTRA_RSP` when datapath is idle |
 
+The `WAIT_LAST_W` state exists because write errors on the last burst of a transfer require special handling. Normally, the backend emits a completion response when the last write finishes. But if that last write *also* faults, the error response must be sent *before* the completion response, requiring an extra `EMIT_EXTRA_RSP` state.
+
 Read errors have higher priority than write errors — if both occur simultaneously, the read error is reported first.
 
 ## Actions
@@ -59,7 +61,11 @@ Software responds to an error via the `idma_eh_req_t` interface:
 | Action | Value | Behavior |
 |--------|-------|----------|
 | `CONTINUE` | `1'b0` | Complete the remaining bursts of the current 1D transfer normally. Data for the faulting burst is undefined |
-| `ABORT` | `1'b1` | Abort the current 1D transfer. The legalizer is flushed (remaining bursts suppressed) and the datapath drains. If multiple 1D transfers are outstanding, abort degrades to continue (flushing could corrupt other transfers) |
+| `ABORT` | `1'b1` | Abort the current 1D transfer. The legalizer is flushed (remaining bursts suppressed) and the datapath drains. If multiple 1D transfers are outstanding, abort degrades to continue (see below) |
+
+**Data integrity on CONTINUE**: When a read error occurs, the data for that burst is undefined (whatever the bus returned). The buffer may contain partial or garbage data. If CONTINUE is selected, subsequent bursts are read normally but the faulting burst's data is corrupted in the destination.
+
+**ABORT degradation**: When multiple 1D transfers are queued in the legalizer, aborting would require flushing transfers that may have already issued bus requests. Since AXI requires all issued bursts to complete, flushing mid-stream would leave the bus in an inconsistent state. Therefore, ABORT only takes effect when a single transfer is outstanding; otherwise it degrades to CONTINUE.
 
 ## Software Handling Pattern
 
@@ -68,6 +74,14 @@ Software responds to an error via the `idma_eh_req_t` interface:
 3. **Check `rsp.error`**: If 0, transfer completed successfully
 4. **Read error details**: Extract `rsp.pld.err_type`, `rsp.pld.cause`, and `rsp.pld.burst_addr`
 5. **Issue action**: Write CONTINUE or ABORT to the error handler request interface (`idma_eh_req_i` + `eh_req_valid_i`), then wait for the final completion response
+
+## Error Visibility by Frontend
+
+How errors reach software depends on the frontend:
+
+- **Register frontend**: Exposes error status through the `idma_rsp_t` response — poll `done_id` then check the response
+- **Descriptor frontend**: Signals errors via IRQ (if `flags.irq` is set in the descriptor)
+- **Snitch frontend**: Returns error information through `DMSTAT` polling
 
 ## Constraints
 

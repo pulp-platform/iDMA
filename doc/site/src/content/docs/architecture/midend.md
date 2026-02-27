@@ -20,6 +20,8 @@ Four midend variants are available:
 
 The ND midend (`idma_nd_midend`) decomposes an N-dimensional transfer into a sequence of 1D transfers. It uses cascaded repetition counters (one per dimension above the first) and a popcount-based stride selector to determine which address stride to apply after each 1D burst.
 
+When a lower dimension completes all its repetitions, the midend increments the next-higher dimension's counter and applies its stride. A popcount of the "dimension complete" signals selects which stride to add to the address — ensuring that when multiple dimensions overflow simultaneously, all their strides are applied.
+
 ### Parameters
 
 | Parameter | Description |
@@ -73,7 +75,9 @@ If all `reps` for a dimension are zero, that dimension is bypassed (marked as a 
 
 ## RT Midend
 
-The RT midend (`idma_rt_midend`) supports event-driven periodic transfers. It contains `NumEvents` countdown counters, each triggering an ND transfer when its counter reaches zero. A round-robin arbiter selects among ready events, and a bypass path allows non-periodic transfers to pass through.
+The RT midend (`idma_rt_midend`) supports event-driven periodic transfers. It is designed for periodic data movement — sensor sampling at fixed intervals, display buffer refresh, or ring-buffer rotation. Each event channel triggers its pre-configured transfer when its countdown reaches zero, without CPU intervention.
+
+It contains `NumEvents` countdown counters, each triggering an ND transfer when its counter reaches zero. A round-robin arbiter selects among ready events, and a bypass path allows non-periodic transfers to pass through.
 
 ### Parameters
 
@@ -96,6 +100,8 @@ The RT midend (`idma_rt_midend`) supports event-driven periodic transfers. It co
 
 ### MP_DIST
 
+Use MP_DIST when your SoC has multiple memory banks and you want a single transfer to be distributed across backends, each serving a contiguous address region (e.g., tightly-coupled data memory in a cluster).
+
 The distributed midend (`idma_mp_dist_midend`) splits a single transfer across `NumBEs` backends based on address regions. Each backend owns a contiguous `RegionWidth`-byte slice within the range `[RegionStart, RegionEnd)`.
 
 | Parameter | Description |
@@ -110,6 +116,8 @@ The distributed midend (`idma_mp_dist_midend`) splits a single transfer across `
 The midend uses a `stream_fork` to fan out the request to all backends simultaneously. Backends whose region does not overlap the transfer receive a suppressed request (valid deasserted, ready tied high). Completion is signaled only when all involved backends have finished.
 
 ### MP_SPLIT
+
+Use MP_SPLIT when a single transfer may span multiple address regions that require separate handling (e.g., crossing from one memory bank to another), and you want the hardware to serialize the sub-transfers automatically.
 
 The split midend (`idma_mp_split_midend`) serializes a transfer that spans multiple `RegionWidth` boundaries into a sequence of region-aligned sub-transfers for a single backend. It uses a two-state FSM (`Idle` / `Busy`) to emit the first region-clipped transfer immediately, then iterates through remaining regions.
 
