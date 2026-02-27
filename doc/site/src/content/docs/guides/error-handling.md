@@ -67,19 +67,23 @@ Software responds to an error via the `idma_eh_req_t` interface:
 
 **ABORT degradation**: When multiple 1D transfers are queued in the legalizer, aborting would require flushing transfers that may have already issued bus requests. Since AXI requires all issued bursts to complete, flushing mid-stream would leave the bus in an inconsistent state. Therefore, ABORT only takes effect when a single transfer is outstanding; otherwise it degrades to CONTINUE.
 
+### Worked Example
+
+The DMA reads 256 bytes starting at `0x1000`. At address `0x1040`, the slave returns SLVERR. The error handler reports: `err_type = BUS_READ`, `cause = SLVERR`, `burst_addr = 0x1000` (the burst base, not `0x1040`). Software issues CONTINUE. The remaining bursts complete normally, but the 64-byte burst containing `0x1040` has undefined data at the destination.
+
 ## Software Handling Pattern
 
 1. **Launch transfer**: Submit `idma_req_t` through the frontend
 2. **Wait for response**: Poll or wait for `rsp_valid`
 3. **Check `rsp.error`**: If 0, transfer completed successfully
 4. **Read error details**: Extract `rsp.pld.err_type`, `rsp.pld.cause`, and `rsp.pld.burst_addr`
-5. **Issue action**: Write CONTINUE or ABORT to the error handler request interface (`idma_eh_req_i` + `eh_req_valid_i`), then wait for the final completion response
+5. **Issue action**: Write CONTINUE or ABORT to the error handler request interface (`idma_eh_req_i` + `eh_req_valid_i`), then wait for the final completion response. Note: this is a raw backend port. How it is exposed depends on the frontend: in register-based systems, the SoC typically connects it to a dedicated control register. In Snitch systems, the response is returned through `DMSTAT` polling. The descriptor frontend does not expose an error handler action interface — errors are reported via IRQ only
 
 ## Error Visibility by Frontend
 
 How errors reach software depends on the frontend:
 
-- **Register frontend**: Exposes error status through the `idma_rsp_t` response — poll `done_id` then check the response
+- **Register frontend**: Poll `done_id` until it advances. The corresponding `idma_rsp_t` is emitted on the backend's response port. If `rsp.error == 1`, the error payload fields indicate the cause. The SoC wrapper must route the response to a readable status register
 - **Descriptor frontend**: Signals errors via IRQ (if `flags.irq` is set in the descriptor)
 - **Snitch frontend**: Returns error information through `DMSTAT` polling
 

@@ -18,8 +18,8 @@ The register frontend (`idma_reg64_2d`) exposes a standard memory-mapped registe
 ## Programming Sequence
 
 1. **Write transfer parameters**: Set `src_addr`, `dst_addr`, `num_bytes`, and optionally `reps`/`src_stride`/`dst_stride` for 2D mode
-2. **Write configuration**: Set `conf` with the desired stream index, decouple flags, and burst options
-3. **Read `next_id[stream]`**: This read atomically launches the transfer and returns the assigned transfer ID. The register port stalls (backpressures the bus) until the backend accepts the request
+2. **Write configuration**: Set `conf` with the desired decouple flags, protocol selection, and ND mode enable. Stream selection is implicit in which `next_id[stream]` register you read in the next step
+3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID. The register port stalls (backpressures the bus) until the backend accepts the request
 4. **Poll `done_id[stream]`**: Wait until `done_id >= next_id` to confirm completion
 
 :::caution[Side-effect read]
@@ -49,11 +49,44 @@ The register bus is 32 bits wide. 64-bit values (addresses, lengths, strides) ar
 
 ### Configuration Register (`conf`)
 
-Transfer configuration: `decouple_aw` (bit 0), `decouple_rw` (bit 1), `src_reduce_len` (bit 2), `dst_reduce_len` (bit 3), `src_max_llen` (bits 6:4), `dst_max_llen` (bits 9:7), `enable_nd` (bit 10), `src_protocol` (bits 13:11), `dst_protocol` (bits 16:14).
+| Bits | Field | Description |
+|------|-------|-------------|
+| 0 | `decouple_aw` | Enable R-AW coupling (hold write addresses until read data arrives) |
+| 1 | `decouple_rw` | Fully decouple read and write channels |
+| 2 | `src_reduce_len` | Shorten source bursts beyond page-boundary splitting |
+| 3 | `dst_reduce_len` | Shorten destination bursts |
+| 6:4 | `src_max_llen` | Max source burst length as log2(beats) |
+| 9:7 | `dst_max_llen` | Max destination burst length as log2(beats) |
+| 10 | `enable_nd` | Enable ND mode (use previously set `reps`/`src_stride`/`dst_stride`) |
+| 13:11 | `src_protocol` | Source protocol select (`protocol_e` enum) |
+| 16:14 | `dst_protocol` | Destination protocol select (`protocol_e` enum) |
 
 ## Multi-Port Arbitration
 
 When `NumRegs > 1`, multiple register ports can submit transfers concurrently. An internal round-robin arbiter serializes requests to the single backend interface. Each port stalls independently on its `next_id` read until its request is accepted. This allows multiple cores to share a single DMA without software-level locking.
+
+## Worked Example: 1 KiB Transfer
+
+The following register writes launch a 1 KiB AXI-to-AXI transfer from `0x8000_0000` to `0xC000_0000` with R-AW coupling enabled, on stream 0:
+
+```
+// 1. Write transfer parameters
+write(src_addr_low,  0x80000000);
+write(src_addr_high, 0x00000000);
+write(dst_addr_low,  0xC0000000);
+write(dst_addr_high, 0x00000000);
+write(num_bytes_low, 1024);
+write(num_bytes_high, 0);
+
+// 2. Write configuration: decouple_aw=1, everything else default (AXI=0)
+write(conf, 0x1);  // bit 0 = decouple_aw
+
+// 3. Read next_id[0] — launches the transfer, returns transfer ID
+tid = read(next_id_0);
+
+// 4. Poll for completion
+while (read(done_id_0) < tid);
+```
 
 ## Source Files
 

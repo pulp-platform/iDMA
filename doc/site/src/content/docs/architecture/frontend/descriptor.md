@@ -9,7 +9,7 @@ The descriptor frontend (`idma_desc64_top`) uses a linked list of transfer descr
 
 ## Descriptor Format
 
-The descriptor frontend's reshaper (`idma_desc64_reshaper`) maps flag bits to backend options, but also hardcodes some values. Notably, `src_max_llen` and `dst_max_llen` are always set to 0 (full debursting), and `lock`, `prot`, `qos`, `region` are zeroed. These options cannot be controlled per-descriptor.
+The descriptor frontend's reshaper (`idma_desc64_reshaper`) maps flag bits to backend options, but also hardcodes some values. Notably, `src_max_llen` and `dst_max_llen` are always set to 0 (full debursting: every transfer is broken into single-beat bus transactions, maximum protocol compliance at the cost of throughput), and `lock`, `prot`, `qos`, `region` are zeroed. These options cannot be controlled per-descriptor.
 
 Each descriptor is a 256-bit packed struct stored in shared memory. The fields are laid out MSB-first (flags at the top, dest_addr at the bottom in a packed representation):
 
@@ -42,18 +42,27 @@ Descriptors must be in memory accessible to the DMA's AXI read port. If the CPU 
 
 ## Descriptor Chain Example
 
-A two-descriptor chain that transfers 64 bytes, then 128 bytes, then stops:
+A two-descriptor chain that transfers 64 bytes, then 128 bytes, then stops. Assume the descriptors are allocated at addresses `0x4000` and `0x4020` (32 bytes apart, naturally aligned):
 
-```c
-// Each descriptor is 32 bytes (256 bits), naturally aligned.
-descriptor_t chain[2];
-chain[0] = '{src_addr: 0x1000, dest_addr: 0x2000, length: 64,
-             next: &chain[1], flags: 0};
-chain[1] = '{src_addr: 0x1100, dest_addr: 0x2100, length: 128,
-             next: 64'hFFFF_FFFF_FFFF_FFFF, flags: 1};  // flags[0]=1: IRQ on completion
+```
+// Descriptor at address 0x4000:
+//   src_addr  = 0x1000
+//   dest_addr = 0x2000
+//   next      = 0x4020           (address of the second descriptor)
+//   length    = 64
+//   flags     = 0x00000000       (no IRQ, INCR burst, no decoupling)
+
+// Descriptor at address 0x4020:
+//   src_addr  = 0x1100
+//   dest_addr = 0x2100
+//   next      = 0xFFFFFFFF_FFFFFFFF  (end of chain)
+//   length    = 128
+//   flags     = 0x00000001       (IRQ on completion)
 ```
 
 ## Parameters
+
+The descriptor frontend is configured through module parameters at instantiation time:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -70,7 +79,7 @@ chain[1] = '{src_addr: 0x1100, dest_addr: 0x2100, length: 128,
 1. **Allocate descriptors** in memory accessible to both CPU and DMA (e.g., uncached or coherent region)
 2. **Fill descriptor fields**: Set `src_addr`, `dest_addr`, `length`, `flags` for each transfer
 3. **Chain descriptors**: Set each descriptor's `next` field to the address of the following descriptor. Use `0xFFFFFFFF_FFFFFFFF` to mark the end of the chain
-4. **Write first descriptor address** to the `desc_addr` register (via the register bus slave interface)
+4. **Write first descriptor address** to the `desc_addr` register. This register is part of the descriptor frontend's own small register file (separate from the descriptor memory). Writing a non-zero address to it triggers the fetch engine
 5. **Hardware fetches autonomously**: The frontend reads descriptors over AXI, submits them to the backend, and follows the `next` pointer chain
 6. **Wait for completion**: Poll the status register (bit 0 = busy) or wait for the IRQ (if `flags.irq` is set)
 

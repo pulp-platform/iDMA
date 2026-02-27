@@ -114,6 +114,12 @@ Recommended parameter presets:
 | `HardwareLegalizer` | 0 | 1 | 1 |
 | `ErrorCap` | `NO_ERROR_HANDLING` | `ERROR_HANDLING` | `ERROR_HANDLING` |
 
+**Minimum Area** sacrifices throughput for gate count — single shifter, no coupling, software legalization. **Balanced** adds hardware legalization and coupling for correct-by-default behavior. **High Throughput** uses deep FIFOs and wide buses to saturate memory bandwidth.
+
+:::caution[Parameter misconfiguration]
+Setting `RAWCouplingAvail=1` on a mixed-protocol backend (e.g., `r_obi_w_axi`) where the write protocol has no AW channel will cause synthesis errors. Set `ErrorCap=ERROR_HANDLING` only on single-read/single-write AXI variants (`rw_axi`), or the design will `$fatal` during elaboration.
+:::
+
 ## Real-World Examples
 
 The following SoCs provide canonical integration examples spanning different bus protocols, data widths, and frontend styles.

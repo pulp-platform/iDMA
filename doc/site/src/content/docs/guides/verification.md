@@ -19,7 +19,7 @@ iDMA uses a SystemVerilog testbench driven by **job files** that describe transf
 
 ### Golden Model
 
-The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that simulates DMA transfers at the byte granularity. It replicates the legalizer's burst splitting logic (page boundaries, maximum burst lengths) and error handling behavior (continue/abort semantics). After each transfer, the testbench compares the hardware memory state against the model's expected state to detect mismatches. The golden model uses the `max_src_len` and `max_dst_len` fields from the job file to configure burst splitting — these must match the protocol's actual limits for comparisons to pass.
+The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that simulates DMA transfers at the byte granularity. It replicates the legalizer's burst splitting logic (page boundaries, maximum burst lengths) and error handling behavior (continue/abort semantics). After each transfer, the testbench compares the hardware memory state against the model's expected state to detect mismatches. The golden model uses the `max_src_len` and `max_dst_len` fields from the job file to configure burst splitting — these must match the protocol's actual limits for comparisons to pass. If `max_src_len`/`max_dst_len` don't match the protocol's actual burst limits, the golden model will split bursts differently than the hardware legalizer, causing false mismatches.
 
 ## Job File Format
 
@@ -82,6 +82,31 @@ rc0xc       #   read error at 0xc, action: continue
 
 To create a custom test, write a text file following the format above. Each field is on its own line, with transfers concatenated back-to-back (no blank lines between them). The `max_src_len` and `max_dst_len` fields control burst splitting in the golden model — set to 256 for AXI (matching the protocol maximum) or 1 for single-beat protocols (OBI, INIT, AXI Stream).
 
+Here is an example with two back-to-back transfers in a single job file (64 bytes followed by 128 bytes, no errors):
+
+```
+64
+0x0
+0x1000
+0
+0
+256
+256
+0
+0
+0
+128
+0x100
+0x2000
+0
+0
+256
+256
+1
+0
+0
+```
+
 ## Available Test Suites
 
 Each backend variant has its own set of job files under `jobs/<variant>/`:
@@ -118,11 +143,13 @@ Each backend variant has its own set of job files under `jobs/<variant>/`:
 | `error_simple.txt` | Transfers with injected read/write errors and continue/abort actions |
 | `error_mixed.txt` | Complex error scenarios with multiple error types |
 
+For initial bring-up, start with `simple.txt` on the `rw_axi` variant — it's the smallest test on the most common backend.
+
 ## Running Simulations
 
 ### Prerequisites
 
-Before running any simulation, the generated RTL and simulation scripts must exist:
+Before running any simulation, generate the RTL and simulation scripts:
 
 ```bash
 make idma_hw_all    # Generate RTL into target/rtl/
@@ -130,6 +157,8 @@ make idma_sim_all   # Generate compile.tcl and start.tcl into target/sim/vsim/
 ```
 
 ### Compile
+
+Compile the generated design with Questa:
 
 ```bash
 cd target/sim/vsim
