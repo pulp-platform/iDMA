@@ -22,7 +22,7 @@ The backend is the lowest layer of the iDMA pipeline. It takes 1D transfer reque
 | `TFLenWidth` | 24 | Transfer length width. Max transfer size is `2^TFLenWidth` bytes. Must be >= 12 and <= AddrWidth |
 | `MemSysDepth` | 0 | Depth of the attached memory system (additional pipeline stages) |
 | `CombinedShifter` | 0 | Use a single barrel shifter instead of two (saves area, data no longer word-aligned in buffer) |
-| `RAWCouplingAvail` | 1* | Enable R-AW coupling hardware. *Default is 1 for AXI-to-AXI variants, 0 otherwise |
+| `RAWCouplingAvail` | 1 | Enable R-AW coupling hardware. Should be 1 for pure AXI-to-AXI variants (`rw_axi`); set to 0 for mixed-protocol variants where the write protocol has no AW channel |
 | `MaskInvalidData` | 1 | Zero out invalid bytes on the manager interface to reduce toggling |
 | `HardwareLegalizer` | 1 | Include hardware burst legalization. If 0, software must ensure legal bursts |
 | `RejectZeroTransfers` | 1 | Reject zero-length transfers with a `BACKEND` error response |
@@ -91,11 +91,12 @@ The legalizer is pure control path: it does not touch the data. It computes page
 | Protocol | Burst Mode | Page Size | Max Beats |
 |----------|-----------|-----------|-----------|
 | AXI | `split_at_page_boundary` | 4096 B | 256 |
+| TileLink | `only_pow2` | 2048 B | Power-of-2 sized |
 | OBI | `not_supported` (single-beat) | StrbWidth | 1 |
 | INIT | `not_supported` (single-beat) | StrbWidth | 1 |
 | AXI Stream | `not_supported` (single-beat) | StrbWidth | 1 |
 
-For AXI, the legalizer ensures bursts do not cross 4 KiB page boundaries and respect the 256-beat maximum. For non-bursting protocols (OBI, INIT, AXI Stream), each transfer is a single bus-width beat. The effective page size is `min(max_beats * StrbWidth, page_size)`.
+For AXI, the legalizer ensures bursts do not cross 4 KiB page boundaries and respect the 256-beat maximum. TileLink uses power-of-2 aligned bursts with a 2048 B page size (limited by the TLToAXI4 bridge for AXI compliance); in TLToAXI4 compatibility mode, write bursts are further limited to 32 beats and never cross page boundaries. For non-bursting protocols (OBI, INIT, AXI Stream), each transfer is a single bus-width beat. The effective page size is `min(max_beats * StrbWidth, page_size)`.
 
 ### Datapath Request Types
 
@@ -121,7 +122,7 @@ When `CombinedShifter=1`, both shifts are folded into a single operation before 
 
 ## Channel Coupler
 
-The R-AW channel coupler (`idma_channel_coupler`) holds back AW requests until the first corresponding R beat arrives. This prevents the write channel from issuing addresses for data that hasn't been read yet, reducing memory system congestion. Controlled by `RAWCouplingAvail` (enables the hardware) and `decouple_aw` (per-transfer opt-in via `backend_options_t`). Only available for AXI-to-AXI variants.
+The R-AW channel coupler (`idma_channel_coupler`) holds back AW requests until the first corresponding R beat arrives. Without coupling, the DMA could issue a write address before the read data arrives, which wastes write-side resources and can increase interconnect pressure — particularly problematic in shared-bus fabrics. With coupling enabled, the write address is only sent once data is available, preventing write-before-read ordering hazards. Controlled by `RAWCouplingAvail` (enables the hardware) and `decouple_aw` (per-transfer opt-in via `backend_options_t`). Only available for AXI-to-AXI variants.
 
 ## Error Handler
 

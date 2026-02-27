@@ -28,13 +28,17 @@ typedef struct packed {
 | 0 | `irq` | Trigger interrupt on completion |
 | 2:1 | `src_burst` | Source burst type: 00=FIXED, 01=INCR, 10=WRAP |
 | 4:3 | `dst_burst` | Destination burst type: 00=FIXED, 01=INCR, 10=WRAP |
-| 5 | `decouple_rw` | Decouple read and write channels |
-| 6 | `serialize` | Serialize requests (ensures AXI ordering) |
-| 7 | `deburst` | Split each burst into individual transfers |
+| 5 | `decouple_rw` | Decouple read and write channels (`opt.beo.decouple_rw`) |
+| 6 | `decouple_aw` | Decouple AW from R channel — send AWs only after first R arrives (`opt.beo.decouple_aw`) |
+| 7 | `reduce_len` | Reduce burst length on both source and destination (`opt.beo.src_reduce_len` + `opt.beo.dst_reduce_len`) |
 | 11:8 | `src_cache` | AXI cache attributes for source (bufferable, modifiable, read-alloc, write-alloc) |
 | 15:12 | `dst_cache` | AXI cache attributes for destination |
 | 23:16 | `axi_id` | AXI ID for the transfer |
 | 31:24 | — | Reserved |
+
+:::note
+The reshaper (`idma_desc64_reshaper`) hardcodes `src_max_llen = '0` and `dst_max_llen = '0`, meaning full debursting is always active regardless of other flag settings. It also zeroes the `lock`, `prot`, `qos`, and `region` fields on both source and destination AXI options.
+:::
 
 ## Parameters
 

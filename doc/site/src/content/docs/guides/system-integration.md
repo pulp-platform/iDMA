@@ -17,9 +17,9 @@ This guide covers the practical steps for integrating iDMA into a system-on-chip
 
 Select a frontend, midend, and backend based on your requirements:
 
-- **Backend**: Pick the variant matching your bus protocols — see the [variant matrix](../architecture/backend/#variant-matrix)
+- **Backend**: Pick the variant matching your bus protocols — see the [variant matrix](../architecture/backend/#variant-matrix). The backend page also covers [legalizer splitting rules](../architecture/backend/#splitting-rules) and [error handling](../architecture/backend/#error-handler) constraints.
 - **Frontend**: Choose based on your SoC's control interface — see the [frontend comparison](../architecture/frontend/#choosing-a-frontend)
-- **Midend**: Use the ND midend for 2D/3D transfers, RT midend for periodic transfers, or skip the midend entirely for 1D-only systems
+- **Midend**: Use the [ND midend](../architecture/midend/#nd-midend) for 2D/3D transfers, [RT midend](../architecture/midend/#rt-midend) for periodic transfers, or skip the midend entirely for 1D-only systems
 
 ### 2. Define Types
 

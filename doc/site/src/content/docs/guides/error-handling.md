@@ -71,7 +71,7 @@ Software responds to an error via the `idma_eh_req_t` interface:
 
 ## Constraints
 
-- **AXI-only**: Error handling hardware is only instantiated for AXI-to-AXI backend variants. Other protocol combinations will produce a fatal elaboration error if `ErrorCap = ERROR_HANDLING`
+- **AXI-to-AXI only**: The error handler is only instantiated for backend variants with a single AXI read port and a single AXI write port (i.e., the `rw_axi` variant). Mixed-protocol variants (`r_obi_w_axi`, `r_axi_w_obi`) and multi-port variants (`rw_axi_rw_axis`) will produce a fatal elaboration error (`$fatal`) if `ErrorCap = ERROR_HANDLING`. See the [Backend](../architecture/backend/) page for the full variant matrix
 - **ErrorCap parameter**: Must be set at elaboration time. When `NO_ERROR_HANDLING`, all error signals are tied to neutral values and the error handler is bypassed
 - **AXI compliance**: Once a burst is issued, all beats must complete — the error handler cannot cancel individual beats mid-burst. ABORT takes effect at burst boundaries
 - **Outstanding transfer limit**: The error handler tracks outstanding transfers with a credit counter sized to `MetaFifoDepth`. The `cnt_busy` signal indicates transfers are still in-flight
