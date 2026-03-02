@@ -31,14 +31,12 @@ module idma_channel_coupler #(
     /// Testmode in
     input  logic testmode_i,
 
-    /// R response valid
-    input  logic r_rsp_valid_i,
-    /// R response ready
-    input  logic r_rsp_ready_i,
-    /// First R response
-    input  logic r_rsp_first_i,
-    /// Did the read originate from a decoupled request
-    input  logic r_decouple_aw_i,
+    /// W request valid
+    input  logic w_req_valid_i,
+    /// W request ready
+    input  logic w_req_ready_i,
+    /// First W request
+    input  logic w_req_first_i,
     /// Is the `AW` in the queue a decoupled request?
     input  logic aw_decouple_aw_i,
 
@@ -86,9 +84,13 @@ module idma_channel_coupler #(
 
     // counter to keep track of AR to send
     cnt_t aw_to_send_d, aw_to_send_q;
+    cnt_t aw_to_stall_d, aw_to_stall_q;
 
-    // first signal -> an R has arrived that needs to free an AW
-    assign first = r_rsp_valid_i & r_rsp_ready_i & r_rsp_first_i & !r_decouple_aw_i;
+    logic aw_stall_d, aw_stall_q;
+
+    // first signal -> a W has data that needs to free an AW
+    assign first = w_req_valid_i & w_req_first_i & ~aw_stall_q;
+    assign aw_stall_d = w_req_valid_i & ~w_req_ready_i;
 
     // stream fifo to hold AWs back
     stream_fifo_optimal_wrap #(
@@ -132,26 +134,40 @@ module idma_channel_coupler #(
 
         // defaults
         aw_to_send_d = aw_to_send_q;
+        aw_to_stall_d = aw_to_stall_q;
 
         // if we bypass the logic
         aw_sent = aw_decoupled_head & aw_valid;
-
-        // first is asserted and aw is ready -> just send AW out
-        // without changing the credit counter value
-        if (aw_ready_decoupled & first) begin
-            aw_sent = 1'b1;
+        // if the AW is decoupled, we need to keep track of the sent AWs
+        if (aw_decoupled_head & aw_valid & aw_to_send_q == '0) begin
+            aw_to_stall_d = aw_to_stall_q + 1;
+            if (aw_ready_decoupled & first) begin
+                aw_to_stall_d = aw_to_stall_q;
+            end
         end
 
-        // if first is asserted and aw is not ready -> increment
-        // credit counter
-        else if (!aw_ready_decoupled & first) begin
-            aw_to_send_d = aw_to_send_q + 1;
-        end
+        if (aw_to_stall_q != '0) begin
+            if (first && !(aw_decoupled_head & aw_valid)) begin
+                aw_to_stall_d = aw_to_stall_q - 1;
+            end
+        end else begin
+            // first is asserted and aw is ready -> just send AW out
+            // without changing the credit counter value
+            if (aw_ready_decoupled & first) begin
+                aw_sent = 1'b1;
+            end
 
-        // if not first, aw is ready and we have credit -> count down
-        else if (aw_ready_decoupled & !first & aw_to_send_q != '0) begin
-            aw_sent = 1'b1;
-            aw_to_send_d = aw_to_send_q - 1;
+            // if first is asserted and aw is not ready -> increment
+            // credit counter
+            else if (!aw_ready_decoupled & first) begin
+                aw_to_send_d = aw_to_send_q + 1;
+            end
+
+            // if not first, aw is ready and we have credit -> count down
+            else if (aw_ready_decoupled & !first & aw_to_send_q != '0) begin
+                aw_sent = 1'b1;
+                aw_to_send_d = aw_to_send_q - 1;
+            end
         end
     end
 
@@ -159,7 +175,7 @@ module idma_channel_coupler #(
     assign aw_ready = aw_valid_o & aw_ready_i;
 
     // fall through register to decouple the aw valid signal from the aw ready
-    // now payload is required; just the decoupling of the handshaking signals
+    // no payload is required; just the decoupling of the handshaking signals
     fall_through_register #(
         .T ( logic [0:0] )
     ) i_fall_through_register_decouple_aw_valid (
@@ -180,6 +196,8 @@ module idma_channel_coupler #(
 
     // state
     `FF(aw_to_send_q, aw_to_send_d, '0, clk_i, rst_ni)
+    `FF(aw_to_stall_q, aw_to_stall_d, '0, clk_i, rst_ni)
+    `FF(aw_stall_q, aw_stall_d, '0, clk_i, rst_ni)
 
 
 endmodule

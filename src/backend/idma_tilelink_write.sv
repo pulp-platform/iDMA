@@ -70,6 +70,10 @@ module idma_tilelink_write #(
     /// TileLink write manager port response
     input  write_rsp_t write_rsp_i,
 
+    output logic w_chan_valid_o,
+    output logic w_chan_ready_o,
+    output logic w_chan_first_o,
+
     /// Data from buffer
     input  byte_t [StrbWidth-1:0] buffer_out_i,
     /// Valid from buffer
@@ -254,6 +258,10 @@ module idma_tilelink_write #(
         end
     end
 
+    // Channel management signals
+    assign w_chan_valid_o = write_req_o.a_valid;
+    assign w_chan_ready_o = write_rsp_i.a_ready;
+    assign w_chan_first_o = first_w;
 
     //--------------------------------------
     // Write response
