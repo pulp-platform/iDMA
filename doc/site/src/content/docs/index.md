@@ -17,6 +17,16 @@ iDMA's pipeline flows from **Frontend** (software interface) through an optional
 
 ![Architecture Overview](/fig/architecture_overview.svg)
 
+<!-- TODO: Replace with SVG diagram showing a single transfer lifecycle -->
+<!--
+┌──────────┐    ┌───────────┐    ┌─────────────────┐    ┌──────────┐
+│ Frontend │───>│ Legalizer │───>│ Transport Layer  │───>│ Response │
+│ (req_t)  │    │ (split)   │    │ (shift+buffer)   │    │ (rsp_t)  │
+└──────────┘    └───────────┘    └─────────────────┘    └──────────┘
+   idma_req_t      burst 1..N       read→shift→buf→       idma_rsp_t
+                                    shift→write
+-->
+
 ## Core Data Types
 
 All iDMA layers communicate through a small set of struct types defined via macros in `typedef.svh`. The key option structs are summarized below; full type definitions are in the [expandable section](#type-definitions) at the bottom of this page.
@@ -60,9 +70,11 @@ From `protocol_e` in `idma_pkg.sv`:
 | 4 | `INIT` | Init protocol (Occamy) | Efficient memory zeroing without read-modify-write |
 | 5 | `AXI_STREAM` | AXI Stream | Streaming peripherals (e.g., network interfaces, DSP chains) |
 
+Most systems use **AXI** for main memory and **OBI** for simple peripherals. **INIT** is Occamy-specific for memory zeroing. **AXI Stream** is for streaming endpoints (network, DSP). **TileLink** requires a TLToAXI4 bridge and inherits its limitations.
+
 ## Code Generation
 
-Code generation is necessary because each protocol combination (read from AXI, write to OBI, etc.) requires different bus interface logic, legalizer rules, and transport layer wiring. Rather than maintaining N² hand-written variants, iDMA uses the **MARIO** framework (`util/mario/`) to generate all RTL from Mako templates and YAML protocol databases.
+Code generation is necessary because each protocol combination (read from AXI, write to OBI, etc.) requires different bus interface logic, legalizer rules, and transport layer wiring. Rather than maintaining N² hand-written variants, iDMA uses the **MARIO** framework (`util/mario/`) to generate all RTL from Mako templates (a Python-based text templating engine) and YAML protocol databases.
 
 **Key locations**:
 - `src/db/*.yml` — Per-protocol capability databases (e.g., `idma_axi.yml`, `idma_obi.yml`, `idma_tilelink.yml`). These define burst modes, page sizes, meta-channel types, and legalizer rules for each protocol.
@@ -78,6 +90,8 @@ Code generation is necessary because each protocol combination (read from AXI, w
 
 <details>
 <summary>Full type macro expansions (click to expand)</summary>
+
+Use this reference when you need the exact field layout for writing a driver or debugging struct packing. For integration, the `IDMA_TYPEDEF_FULL_*` macros handle all of this automatically — see the [System Integration](./guides/system-integration/#2-define-types) guide.
 
 ### Transfer Request (`idma_req_t`)
 

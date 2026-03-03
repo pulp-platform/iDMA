@@ -44,9 +44,11 @@ typedef logic [StrideWidth-1:0] strides_t;
 `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, reps_t, strides_t)
 ```
 
-The `IDMA_TYPEDEF_FULL_REQ_T` macro is a convenience wrapper that internally invokes `IDMA_TYPEDEF_OPTIONS_T` and `IDMA_TYPEDEF_REQ_T`. Use the `FULL_` variants for integration — they define all intermediate types automatically.
+The `IDMA_TYPEDEF_FULL_REQ_T` macro is a convenience wrapper that internally invokes `IDMA_TYPEDEF_OPTIONS_T` and `IDMA_TYPEDEF_REQ_T`. Use the `FULL_` variants for integration — they define all intermediate types automatically. The non-`FULL_` macros (`IDMA_TYPEDEF_REQ_T`, `IDMA_TYPEDEF_OPTIONS_T`) define individual types and require you to provide the intermediate types manually. Use `FULL_` unless you need custom intermediate types.
 
 ### 3. Instantiate
+
+All iDMA modules use a single clock (`clk_i`) and synchronous active-low reset (`rst_ni`). The clock must be the same for all three layers (frontend, midend, backend) and the attached memory system.
 
 Wire the three layers together. The key connections are:
 - Frontend `dma_req_o` / `req_valid_o` / `req_ready_i` -> Midend ND request input
@@ -64,7 +66,18 @@ idma_reg64_2d #(
     .reg_req_t  ( reg_req_t  ),
     .reg_rsp_t  ( reg_rsp_t  ),
     .dma_req_t  ( idma_nd_req_t )
-) i_frontend ( ... );
+) i_frontend (
+    .clk_i,
+    .rst_ni,
+    .reg_req_i     ( dma_reg_req  ),
+    .reg_rsp_o     ( dma_reg_rsp  ),
+    .dma_req_o     ( fe_req       ),
+    .req_valid_o   ( fe_valid     ),
+    .req_ready_i   ( fe_ready     ),
+    .dma_rsp_i     ( fe_rsp       ),
+    .rsp_valid_i   ( fe_rsp_valid ),
+    .rsp_ready_o   ( fe_rsp_ready )
+);
 
 idma_nd_midend #(
     .NumDim        ( 2              ),
@@ -74,13 +87,20 @@ idma_nd_midend #(
     .idma_nd_req_t ( idma_nd_req_t  ),
     .RepWidths     ( 32'd32         )
 ) i_midend (
+    .clk_i,
+    .rst_ni,
     .nd_req_i          ( fe_req       ),
     .nd_req_valid_i    ( fe_valid     ),
     .nd_req_ready_o    ( fe_ready     ),
+    .nd_rsp_o          ( fe_rsp       ),
+    .nd_rsp_valid_o    ( fe_rsp_valid ),
+    .nd_rsp_ready_i    ( fe_rsp_ready ),
     .burst_req_o       ( be_req       ),
     .burst_req_valid_o ( be_valid     ),
     .burst_req_ready_i ( be_ready     ),
-    ...
+    .burst_rsp_i       ( be_rsp       ),
+    .burst_rsp_valid_i ( be_rsp_valid ),
+    .burst_rsp_ready_o ( be_rsp_ready )
 );
 
 idma_backend_rw_axi #(
@@ -89,13 +109,19 @@ idma_backend_rw_axi #(
     .idma_req_t   ( idma_req_t   ),
     .idma_rsp_t   ( idma_rsp_t   ),
     .axi_req_t    ( axi_req_t    ),
-    .axi_rsp_t    ( axi_rsp_t    ),
-    ...
+    .axi_rsp_t    ( axi_rsp_t    )
+    // Bus ports — variant-specific, see generated module for full port list
 ) i_backend (
-    .idma_req_i  ( be_req   ),
-    .req_valid_i ( be_valid ),
-    .req_ready_o ( be_ready ),
-    ...
+    .clk_i,
+    .rst_ni,
+    .idma_req_i    ( be_req       ),
+    .req_valid_i   ( be_valid     ),
+    .req_ready_o   ( be_ready     ),
+    .idma_rsp_o    ( be_rsp       ),
+    .rsp_valid_o   ( be_rsp_valid ),
+    .rsp_ready_i   ( be_rsp_ready ),
+    .busy_o        ( busy         )
+    // AXI read/write ports omitted — variant-specific
 );
 ```
 
@@ -136,7 +162,7 @@ The following SoCs provide canonical integration examples spanning different bus
 | **Data Width** | 64-bit |
 | **Key File** | [`hw/cheshire_idma_wrap.sv`](https://github.com/pulp-platform/cheshire/blob/main/hw/cheshire_idma_wrap.sv) |
 
-Cheshire is a CVA6-based Linux-capable SoC built around an AXI4 fabric. Its iDMA instance supports conditional 1D/2D mode, making it a good reference for register-frontend integrations with optional multi-dimensional transfers.
+**Start here** if your SoC uses a CVA6 core with AXI4. Cheshire is a CVA6-based Linux-capable SoC built around an AXI4 fabric. Its iDMA instance supports conditional 1D/2D mode, making it a good reference for register-frontend integrations with optional multi-dimensional transfers.
 
 ### Croc
 
@@ -150,7 +176,7 @@ Cheshire is a CVA6-based Linux-capable SoC built around an AXI4 fabric. Its iDMA
 | **Data Width** | 32-bit |
 | **Key File** | [`rtl/idma/croc_idma.sv`](https://github.com/pulp-platform/croc/blob/main/rtl/idma/croc_idma.sv) |
 
-Croc is a minimal OBI-based SoC with a custom register frontend. Its simplicity makes it an excellent starting template for new OBI integrations.
+**Start here** for a minimal OBI-based integration. Croc is a minimal OBI-based SoC with a custom register frontend — the smallest and simplest example.
 
 ### Snitch Cluster
 
@@ -164,7 +190,7 @@ Croc is a minimal OBI-based SoC with a custom register frontend. Its simplicity 
 | **Data Width** | 512-bit |
 | **Key File** | [`hw/snitch_cluster/src/`](https://github.com/pulp-platform/snitch_cluster/tree/main/hw/snitch_cluster/src) |
 
-The Snitch cluster uses a wide 512-bit data path with an ISA-coupled DMA on a dedicated core. Transfers are submitted via Xdma custom instructions, achieving single-cycle launch latency.
+Reference for ISA-coupled DMA with wide (512-bit) data paths. The Snitch cluster uses a wide 512-bit data path with an ISA-coupled DMA on a dedicated core. Transfers are submitted via Xdma custom instructions, achieving single-cycle launch latency.
 
 ### PULP Cluster
 
@@ -178,7 +204,7 @@ The Snitch cluster uses a wide 512-bit data path with an ISA-coupled DMA on a de
 | **Data Width** | 64-bit |
 | **Key File** | [`rtl/idma_wrap.sv`](https://github.com/pulp-platform/pulp_cluster/blob/main/rtl/idma_wrap.sv) |
 
-The PULP cluster is a multi-core architecture with tightly-coupled data memory (TCDM). It uses a register-based 2D frontend and supports conditional selection between the legacy mchan DMA and iDMA via the `TARGET_MCHAN` parameter.
+Shows multi-core DMA sharing and the mchan/iDMA selection mechanism. The PULP cluster is a multi-core architecture with tightly-coupled data memory (TCDM). It uses a register-based 2D frontend and supports conditional selection between the legacy mchan DMA and iDMA via the `TARGET_MCHAN` parameter.
 
 ## Dependency Management
 

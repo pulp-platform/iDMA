@@ -20,7 +20,7 @@ From `err_type_e` in `idma_pkg.sv`:
 
 ## Error Response
 
-When an error occurs, the `idma_rsp_t` response is populated. These structs flow from the error handler to the frontend:
+Every transfer produces an `idma_rsp_t` response. If `error == 0`, the transfer succeeded and `pld` is undefined (ignore it). If `error == 1`, the payload contains the error details:
 
 ```verilog
 typedef struct packed {
@@ -40,6 +40,36 @@ The `burst_addr` field reports the base address of the AXI burst that faulted �
 
 ## Error Handler FSM
 
+<!-- TODO: Replace with SVG state diagram -->
+<!--
+                    ┌───────────────────────────────────────┐
+                    │                                       │
+                    v                                       │
+              ┌──────────┐   read error    ┌──────────┐    │
+     ────────>│   IDLE   │───────────────>│   WAIT   │    │
+              └──────────┘                └──────────┘    │
+                    │                      │    │    │     │
+                    │ write error           │    │    │     │
+                    │ (last burst)          │    │    │     │
+                    v                      │    │    │     │
+              ┌──────────────┐  CONTINUE   │    │    │     │
+              │ WAIT_LAST_W  │<────────────┘    │    │     │
+              └──────────────┘                  │    │     │
+                    │                           │    │     │
+                    │ CONTINUE/ABORT            │    │     │
+                    v                    ABORT   │    │     │
+              ┌──────────────┐  (single) │      │    │
+              │EMIT_EXTRA_RSP│<──────────┘      │    │
+              └──────────────┘                  │    │
+                    │ response accepted         │    │
+                    └───────────────────────────┘    │
+                                                     │
+                              ┌──────────────┐       │
+                  ABORT ─────>│  LEG_FLUSH   │───────┘
+                  (single)    └──────────────┘
+                               datapath idle → EMIT_EXTRA_RSP
+-->
+
 The error handler (`idma_error_handler`) implements a 5-state FSM:
 
 | State | Description | Transition |
@@ -48,7 +78,7 @@ The error handler (`idma_error_handler`) implements a 5-state FSM:
 | `WAIT` | Error reported to software. Waiting for CONTINUE or ABORT action | -> `IDLE` on CONTINUE; -> `IDLE` if ABORT with multiple outstanding; -> `LEG_FLUSH` if ABORT with single outstanding |
 | `WAIT_LAST_W` | Like WAIT, but the error occurred on the last write burst of a 1D transfer. Requires an extra response after handling | -> `EMIT_EXTRA_RSP` on CONTINUE; -> `EMIT_EXTRA_RSP` if ABORT with multiple outstanding; -> `LEG_FLUSH` if ABORT with single outstanding |
 | `EMIT_EXTRA_RSP` | Send the completion response that was deferred due to the error | -> `IDLE` when response is accepted |
-| `LEG_FLUSH` | Flush the legalizer: drain remaining bursts, poison data, then kill the active transfer | -> `EMIT_EXTRA_RSP` when datapath is idle |
+| `LEG_FLUSH` | Flush the legalizer: drain remaining bursts, poison data (drive all-zero strobes on remaining write bursts so the destination memory is not corrupted by stale buffer contents), then kill the active transfer | -> `EMIT_EXTRA_RSP` when datapath is idle |
 
 The `WAIT_LAST_W` state exists because write errors on the last burst of a transfer require special handling. Normally, the backend emits a completion response when the last write finishes. But if that last write *also* faults, the error response must be sent *before* the completion response, requiring an extra `EMIT_EXTRA_RSP` state.
 
@@ -86,6 +116,10 @@ How errors reach software depends on the frontend:
 - **Register frontend**: Poll `done_id` until it advances. The corresponding `idma_rsp_t` is emitted on the backend's response port. If `rsp.error == 1`, the error payload fields indicate the cause. The SoC wrapper must route the response to a readable status register
 - **Descriptor frontend**: Signals errors via IRQ (if `flags.irq` is set in the descriptor)
 - **Snitch frontend**: Returns error information through `DMSTAT` polling
+
+## After Error Recovery
+
+After issuing CONTINUE or ABORT and receiving the final completion response, the backend returns to normal operation. No reset is required. You can submit new transfers immediately. However, if the error was caused by a hardware fault (e.g., disconnected slave), subsequent transfers to the same address range will also fail.
 
 ## Constraints
 

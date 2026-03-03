@@ -11,6 +11,8 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 
 ## Xdma Instruction Set
 
+A DMA transfer requires three steps: (1) set the source and destination addresses (`DMSRC`, `DMDST`), (2) launch the transfer with a length and config (`DMCPY`/`DMCPYI`), (3) poll for completion (`DMSTAT`/`DMSTATI`). Optional instructions set 2D parameters (`DMSTR`, `DMREP`) and AXI user fields (`DMUSER`).
+
 All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` — `rd` receives the transfer ID, `rs1` provides the length.
 
 | Instruction | Operands | Description |
@@ -26,10 +28,10 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
 
 **Status select values** (`DMSTAT`/`DMSTATI`):
-- `0`: Completed transfer ID
-- `1`: Next transfer ID
-- `2`: Busy flag
-- `3`: Backend FIFO full flag
+- `0`: Completed transfer ID — compare against the ID returned by `DMCPY` to check if a specific transfer has finished
+- `1`: Next transfer ID — the ID that will be assigned to the next submitted transfer
+- `2`: Busy flag — 1 if any transfer is in-flight on this channel
+- `3`: Backend FIFO full flag — 1 if the request FIFO is full; software should wait before submitting more transfers
 
 **Config field** (`DMCPY`/`DMCPYI`):
 - Bit 0: Reserved
@@ -37,6 +39,8 @@ All DMA instructions that return a value write to `rd` (destination register). T
 - Bits 4:2: Channel select — `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
 
 ## Parameters
+
+For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are standard. Increase `NumChannels` only if you need independent DMA channels on separate address spaces.
 
 | Parameter | Description |
 |-----------|-------------|
@@ -50,6 +54,8 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMATracing` | Enable DMA trace file generation for debugging |
 
 ## Programming Sequence
+
+The following assembly sequence demonstrates a complete 2D DMA transfer with polling completion:
 
 ```asm
 # 1. Set source address
@@ -74,6 +80,8 @@ loop:
 ## Internal Architecture
 
 The `idma_inst64_top` module instantiates `NumChannels` independent backends, each paired with an ND midend (`NumDim=2`, `BufferDepth=3`). The frontend instruction decoder fills an `idma_nd_req_t` struct from the instruction stream and routes it to the selected channel's request FIFO. A per-channel transfer ID generator tracks issue and retire events. Each backend produces separate AXI read and write manager ports. The `axi_rw_join` module merges them into a single AXI manager port for connection to the SoC interconnect.
+
+When `NumChannels > 1`, each channel has its own independent backend and ND midend. The channel is selected via the config field in `DMCPY`/`DMCPYI` (bits 4:2). Channels operate independently — one can be busy while another accepts new transfers. The AXI ports from all channels are merged via `axi_rw_join`, so they share bus bandwidth.
 
 ## Source Files
 

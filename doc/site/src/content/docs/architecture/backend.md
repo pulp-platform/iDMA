@@ -11,9 +11,11 @@ The backend is the lowest layer of the iDMA pipeline. It takes 1D transfer reque
 
 ### Transfer Lifecycle
 
-When a 1D transfer request arrives at the backend, it flows through three stages. First, the **legalizer** splits the request into protocol-legal bus bursts — respecting page boundaries, maximum burst lengths, and alignment constraints. Each burst produces a set of control signals (offset, tailer, shift) that describe how the data needs to be realigned. Second, the **transport layer** executes each burst: the read channel fetches data from the source, barrel shifters realign byte lanes, the data buffer absorbs timing differences, and the write channel stores data at the destination. Third, the **error handler** (if enabled) monitors bus responses and reports faults to software. The backend signals completion through `idma_rsp_t` once all bursts of a transfer have finished.
+When a 1D transfer request arrives at the backend, it flows through three stages. First, the **legalizer** splits the request into protocol-legal bus bursts (bursts that don't cross page boundaries or exceed the protocol's maximum beat count) — respecting page boundaries, maximum burst lengths, and alignment constraints. Each burst produces a set of control signals (offset, tailer, shift) that describe how the data needs to be realigned. Second, the **transport layer** executes each burst: the read channel fetches data from the source, barrel shifters realign byte lanes, the data buffer absorbs timing differences, and the write channel stores data at the destination. Third, the **error handler** (if enabled) monitors bus responses and reports faults to software. The backend signals completion through `idma_rsp_t` once all bursts of a transfer have finished.
 
 ## Parameters
+
+The most important parameters for a new integration are `DataWidth` (match your bus width), `BufferDepth` (use 3 unless area-constrained), and `HardwareLegalizer` (use 1 unless your software pre-splits bursts). The remaining parameters tune throughput and area — see the [parameter presets](../guides/system-integration/#4-set-parameters) in the System Integration guide for recommended combinations.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -45,6 +47,8 @@ This determines how many 1D bursts can be in-flight simultaneously — `BufferDe
 
 ### Port Groups
 
+All backends have the Request, Response, Bus Read, Bus Write, and Busy port groups. The Error Handler ports are only present when `ErrorCap = ERROR_HANDLING`.
+
 | Group | Signals | Direction | Description |
 |-------|---------|-----------|-------------|
 | **Request** | `idma_req_i`, `req_valid_i`, `req_ready_o` | in/in/out | 1D transfer request (valid/ready handshake) |
@@ -56,7 +60,7 @@ This determines how many 1D bursts can be in-flight simultaneously — `BufferDe
 
 ### Busy Signal (`idma_busy_t`)
 
-Software can poll the busy signal to determine which subunit is still active. All flags must be zero for the backend to be fully idle:
+Software can poll the busy signal to check if the backend is idle before clock-gating, resetting, or reconfiguring it. Each flag corresponds to a specific subunit — if a transfer stalls, the stuck flag identifies the bottleneck:
 
 ```verilog
 typedef struct packed {
@@ -128,6 +132,18 @@ The buffer (`idma_dataflow_element`) is an array of independent FIFOs, one per b
 
 ### Data Realignment
 
+<!-- TODO: Replace with SVG diagram showing data realignment -->
+<!--
+Example: src_addr=0x3, dst_addr=0x5, DataWidth=64 (8 bytes)
+
+Source memory:        Read shifter:         Buffer:              Write shifter:        Dest memory:
+┌─┬─┬─┬─┬─┬─┬─┬─┐   shift by 3            (byte-granular       shift by 5            ┌─┬─┬─┬─┬─┬─┬─┬─┐
+│ │ │ │A│B│C│D│E│   ──────────>            FIFOs, one per       ──────────>            │ │ │ │ │ │A│B│C│
+│0│1│2│3│4│5│6│7│                          byte lane)                                  │0│1│2│3│4│5│6│7│
+└─┴─┴─┴─┴─┴─┴─┴─┘                                                                    └─┴─┴─┴─┴─┴─┴─┴─┘
+  offset=3                                                        offset=5
+-->
+
 Two barrel shifters handle the address offset difference between source and destination. The **read shifter** aligns incoming data based on the source address offset; the **write shifter** rotates data to match the destination address offset.
 
 When `CombinedShifter=1`, both shifts are folded into a single operation before the buffer. This halves the shifter area but means data inside the buffer is no longer word-aligned. The tradeoff is area (single shifter) vs. timing (data alignment happens earlier in the pipeline).
@@ -137,6 +153,8 @@ When `CombinedShifter=1`, both shifts are folded into a single operation before 
 The R-AW channel coupler (`idma_channel_coupler`) holds back AW requests until the first corresponding R beat arrives. Without coupling, the DMA could issue a write address before the read data arrives, which wastes write-side resources and can increase interconnect pressure — particularly problematic in shared-bus fabrics. With coupling enabled, the write address is only sent once data is available, preventing write-before-read ordering hazards. Controlled by `RAWCouplingAvail` (enables the hardware) and `decouple_aw` (per-transfer opt-in via `backend_options_t`). Only available for AXI-to-AXI variants.
 
 Despite the name, `decouple_aw` actually *enables* R-AW coupling (holding AW until R data arrives). The name refers to the backend option struct field (`beo.decouple_aw`), where setting it to 1 activates the coupling logic.
+
+**When coupling helps**: On a shared AXI bus, an uncoupled DMA issues AW immediately, occupying a write-side slot before data is available. With coupling, AW waits for the first R beat, ensuring the write port is only claimed when data is ready to flow. **When to disable**: If the read and write ports go to different memory controllers (no shared resources), coupling adds unnecessary latency.
 
 ## Error Handler
 

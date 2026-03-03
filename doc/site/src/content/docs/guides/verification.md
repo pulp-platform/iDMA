@@ -19,11 +19,15 @@ iDMA uses a SystemVerilog testbench driven by **job files** that describe transf
 
 ### Golden Model
 
+The testbench uses a **golden model** — a software reference implementation that predicts the expected memory state after each DMA transfer. By comparing the hardware's actual memory writes against the model's predictions, the testbench detects functional bugs without requiring hand-written expected values.
+
 The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that simulates DMA transfers at the byte granularity. It replicates the legalizer's burst splitting logic (page boundaries, maximum burst lengths) and error handling behavior (continue/abort semantics). After each transfer, the testbench compares the hardware memory state against the model's expected state to detect mismatches. The golden model uses the `max_src_len` and `max_dst_len` fields from the job file to configure burst splitting — these must match the protocol's actual limits for comparisons to pass. If `max_src_len`/`max_dst_len` don't match the protocol's actual burst limits, the golden model will split bursts differently than the hardware legalizer, causing false mismatches.
 
 ## Job File Format
 
-Each job file contains one or more transfer descriptions, concatenated back-to-back. Each transfer is described by the following fields, one per line:
+Each job file contains one or more transfer descriptions, concatenated back-to-back. Each transfer is described by the following fields, one per line.
+
+The most important fields are `length`, `src_addr`, `dst_addr`, and the two `max_*_len` fields (which must match your protocol's actual burst limits). For a basic AXI test, set both protocols to 0, both max lengths to 256, and both decoupling flags to 0.
 
 ### Fields
 
@@ -145,6 +149,24 @@ Each backend variant has its own set of job files under `jobs/<variant>/`:
 
 For initial bring-up, start with `simple.txt` on the `rw_axi` variant — it's the smallest test on the most common backend.
 
+<!-- TODO: Replace with SVG testbench block diagram -->
+<!--
+┌──────────────────────────────────────────────────────────────┐
+│                        Testbench                             │
+│                                                              │
+│  ┌──────────┐    ┌────────────────────┐    ┌──────────────┐  │
+│  │ Job File │───>│  tb_idma_backend   │───>│  Sim Memory  │  │
+│  │ Parser   │    │  (DUT wrapper)     │    │  (AXI slave) │  │
+│  └──────────┘    └────────────────────┘    └──────────────┘  │
+│       │                                          │           │
+│       v                                          v           │
+│  ┌──────────┐                             ┌──────────────┐   │
+│  │  Golden  │─── compare after each ─────>│   Checker    │   │
+│  │  Model   │    transfer                 │  (pass/fail) │   │
+│  └──────────┘                             └──────────────┘   │
+└──────────────────────────────────────────────────────────────┘
+-->
+
 ## Running Simulations
 
 ### Prerequisites
@@ -167,6 +189,8 @@ questa-2023.4 vsim -c -do "source compile.tcl; quit"
 
 ### Run
 
+Run a simulation against a specific job file:
+
 ```bash
 questa-2023.4 vsim -c -t 1ps -voptargs=+acc \
   +job_file=../../../jobs/backend_rw_axi/simple.txt \
@@ -179,7 +203,19 @@ Replace `backend_rw_axi` and `tb_idma_backend_rw_axi` with the desired variant. 
 
 ### Debugging Failures
 
-If a simulation fails, the testbench prints the first mismatching address and expected vs. actual values. To debug further, open the waveform in the Questa GUI by removing the `-c` flag from the vsim command. Check the `busy_o` flags to identify which subunit stalled, and examine the legalizer's burst splitting against the golden model's expectations.
+If a simulation fails, the testbench prints the first mismatching address and expected vs. actual values. To debug further, open the waveform in the Questa GUI by removing the `-c` flag from the vsim command.
+
+Check the `busy_o` flags to identify which subunit stalled:
+
+| Flag | Stuck means |
+|------|-------------|
+| `r_leg_busy` | Legalizer can't split — check transfer parameters |
+| `r_dp_busy` | Read channel not getting responses — check memory slave |
+| `buffer_busy` | Write channel not draining — check write backpressure |
+| `w_dp_busy` | Write channel blocked — check destination memory |
+| `eh_fsm_busy` | Error handler waiting for software action |
+
+Key signals to trace in waveforms: `idma_req_i`/`req_valid_i`/`req_ready_o` (request handshake), `idma_rsp_o`/`rsp_valid_o` (response), `busy_o` (subunit status), and the AXI AR/AW/R/W/B channels on the bus interface.
 
 ### VCS
 
