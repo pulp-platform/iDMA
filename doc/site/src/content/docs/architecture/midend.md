@@ -5,7 +5,7 @@ description: The midend decomposes multi-dimensional and round-trip transfers in
 
 ## Overview
 
-The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** — for systems that only need 1D transfers, the frontend can drive the backend directly. See the [System Integration](../guides/system-integration/) guide for wiring examples showing how the midend connects to the frontend and backend.
+The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** — for systems that only need 1D transfers, the frontend can drive the backend directly. **Use the ND midend** when your transfers are 2D or higher (e.g., tiling a matrix, copying framebuffer rows with stride). **Skip the midend** (connect frontend directly to backend) when all your transfers are 1D contiguous copies — the midend adds latency and area for no benefit in this case. See the [System Integration](../guides/system-integration/) guide for wiring examples showing how the midend connects to the frontend and backend.
 
 Four midend variants are available:
 
@@ -18,9 +18,7 @@ Four midend variants are available:
 
 ## ND Midend
 
-The ND midend (`idma_nd_midend`) decomposes an N-dimensional transfer into a sequence of 1D transfers. It uses cascaded repetition counters (one per dimension above the first) and a popcount-based stride selector to determine which address stride to apply after each 1D burst.
-
-When a lower dimension completes all its repetitions, the midend increments the next-higher dimension's counter and applies its stride. A popcount of the "dimension complete" signals selects which stride to add to the address — ensuring that when multiple dimensions overflow simultaneously, all their strides are applied.
+The ND midend (`idma_nd_midend`) decomposes an N-dimensional transfer into a sequence of 1D transfers. After each 1D burst completes, the midend checks whether the current dimension has remaining repetitions. If so, it adds the dimension's stride to the address and emits the next burst. When a dimension exhausts its repetitions, the next-higher dimension increments. Internally, this is implemented with cascaded counters (one per dimension) and a popcount-based selector that handles simultaneous dimension overflows.
 
 ### Parameters
 
@@ -71,6 +69,20 @@ The ND midend emits 4 sequential 1D transfers:
 | 2 | `base_src + 256` | `base_dst + 128` | 64 |
 | 3 | `base_src + 384` | `base_dst + 192` | 64 |
 
+<!-- TODO: Replace with SVG diagram showing 2D transfer memory layout -->
+<!--
+Source memory (stride=128):              Destination memory (stride=64):
+┌────────────────────────────────┐       ┌────────────────────┐
+│  row 0 (64B)  │    gap (64B)  │  ───> │  row 0 (64B)      │
+├────────────────────────────────┤       ├────────────────────┤
+│  row 1 (64B)  │    gap (64B)  │  ───> │  row 1 (64B)      │
+├────────────────────────────────┤       ├────────────────────┤
+│  row 2 (64B)  │    gap (64B)  │  ───> │  row 2 (64B)      │
+├────────────────────────────────┤       ├────────────────────┤
+│  row 3 (64B)  │    gap (64B)  │  ───> │  row 3 (64B)      │
+└────────────────────────────────┘       └────────────────────┘
+-->
+
 :::note[Zero repetitions]
 If all repetition counts for a dimension are zero, that dimension is treated as a no-op ("zero stage"). The midend signals this as an `ND_MIDEND` error in the response.
 :::
@@ -80,6 +92,8 @@ If all repetition counts for a dimension are zero, that dimension is treated as 
 The RT midend (`idma_rt_midend`) supports event-driven periodic transfers. It is designed for periodic data movement — sensor sampling at fixed intervals, display buffer refresh, or ring-buffer rotation. Each event channel triggers its pre-configured transfer when its countdown reaches zero, without CPU intervention.
 
 It contains `NumEvents` countdown counters, each triggering an ND transfer when its counter reaches zero. A round-robin arbiter selects among ready events, and a bypass path allows non-periodic transfers to pass through.
+
+**Example**: A sensor sampling system needs to copy 256 bytes from sensor MMIO (`0x4000_0000`) to a ring buffer (`0x8000_0000`) every 1000 clock cycles. Configure event channel 0 with: `src_addr = 0x4000_0000`, `dst_addr = 0x8000_0000`, `length = 256`, `countdown = 1000`. The RT midend will autonomously re-trigger this transfer every 1000 cycles.
 
 ### Parameters
 
@@ -99,6 +113,19 @@ It contains `NumEvents` countdown counters, each triggering an ND transfer when 
 6. A response FIFO routes completions back to the correct requester (periodic or bypass)
 
 ## Multicore Midends
+
+<!-- TODO: Replace with SVG diagram comparing MP_DIST and MP_SPLIT -->
+<!--
+MP_DIST (one transfer → multiple backends in parallel):
+                    ┌─── Backend 0 (region 0x0000-0x0FFF) ───> Mem Bank 0
+Transfer ──> DIST ──┼─── Backend 1 (region 0x1000-0x1FFF) ───> Mem Bank 1
+                    └─── Backend 2 (region 0x2000-0x2FFF) ───> Mem Bank 2
+
+MP_SPLIT (one transfer → serialized sub-transfers to one backend):
+Transfer ──> SPLIT ──> Backend ──> sub-transfer 0 (region 0) ──> Memory
+                              ──> sub-transfer 1 (region 1) ──> Memory
+                              ──> sub-transfer 2 (region 2) ──> Memory
+-->
 
 ### MP_DIST
 

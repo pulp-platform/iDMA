@@ -23,7 +23,7 @@ The register frontend (`idma_reg64_2d`) exposes a standard memory-mapped registe
 4. **Poll `done_id[stream]`**: Wait until `done_id >= next_id` to confirm completion
 
 :::caution[Side-effect read]
-Reading the `next_id` register has a side effect — it atomically launches the configured transfer. This is intentional: the read stalls the bus until the backend accepts the request, and returns the transfer ID. This is non-standard register behavior; ensure your driver reads `next_id` exactly once per transfer.
+Reading the `next_id` register has a side effect — it atomically launches the configured transfer. This atomic read-launch mechanism prevents race conditions in multi-core systems — the bus stall guarantees that the transfer parameters are consumed before another core can overwrite them. This is non-standard register behavior; ensure your driver reads `next_id` exactly once per transfer.
 :::
 
 ## Register Map
@@ -34,15 +34,32 @@ The register file provides direct access to all fields of the `idma_req_t` / `id
 The register bus is 32 bits wide. 64-bit values (addresses, lengths, strides) are split across `_low` and `_high` register pairs (e.g., `src_addr_low` at offset 0xDC, `src_addr_high` at offset 0xE0). The simplified names in the table below refer to the logical fields; see the generated register description (`target/rtl/idma_reg64_2d.hjson`) for exact offsets and bit layouts.
 :::
 
+**Transfer Parameters** — set these before launching a transfer:
+
 | Register | Access | Description |
 |----------|--------|-------------|
 | `src_addr` | R/W | Source address for the next transfer |
 | `dst_addr` | R/W | Destination address for the next transfer |
 | `num_bytes` | R/W | Transfer length in bytes |
+
+**Configuration** — controls decoupling, burst limits, protocol selection, and ND mode:
+
+| Register | Access | Description |
+|----------|--------|-------------|
 | `conf` | R/W | Transfer configuration (see below) |
+
+**Control/Status** — `next_id` launches the transfer; `done_id` signals completion:
+
+| Register | Access | Description |
+|----------|--------|-------------|
 | `status` | RO | Per-stream busy flags |
 | `next_id` | RO | Per-stream next transfer ID. **Reading launches the transfer** |
 | `done_id` | RO | Per-stream last completed transfer ID |
+
+**ND Mode** — only used when `enable_nd` is set in `conf`:
+
+| Register | Access | Description |
+|----------|--------|-------------|
 | `reps` | R/W | Number of 2D repetitions (ND mode) |
 | `src_stride` | R/W | Source stride between rows (ND mode) |
 | `dst_stride` | R/W | Destination stride between rows (ND mode) |
@@ -65,6 +82,22 @@ The register bus is 32 bits wide. 64-bit values (addresses, lengths, strides) ar
 
 When `NumRegs > 1`, multiple register ports can submit transfers concurrently. An internal round-robin arbiter serializes requests to the single backend interface. Each port stalls independently on its `next_id` read until its request is accepted. This allows multiple cores to share a single DMA without software-level locking.
 
+<!-- TODO: Replace with SVG sequence diagram -->
+<!--
+CPU                          Register Frontend               Backend
+ │                                │                            │
+ │── write src_addr ──────────>   │                            │
+ │── write dst_addr ──────────>   │                            │
+ │── write num_bytes ─────────>   │                            │
+ │── write conf ──────────────>   │                            │
+ │── read next_id ────────────>   │── idma_req_t ──────────>   │
+ │   (bus stalls...)              │   (valid/ready handshake)  │
+ │<─ transfer_id ─────────────    │<─ req_ready ───────────    │
+ │                                │                            │
+ │── read done_id ────────────>   │                            │
+ │   (poll until >= tid)          │                            │
+-->
+
 ## Worked Example: 1 KiB Transfer
 
 The following register writes launch a 1 KiB AXI-to-AXI transfer from `0x8000_0000` to `0xC000_0000` with R-AW coupling enabled, on stream 0:
@@ -85,6 +118,28 @@ write(conf, 0x1);  // bit 0 = decouple_aw
 tid = read(next_id_0);
 
 // 4. Poll for completion
+while (read(done_id_0) < tid);
+```
+
+## Worked Example: 2D Transfer
+
+The following register writes launch a 2D transfer copying 4 rows of 64 bytes with different source and destination strides:
+
+```
+// 2D example: copy 4 rows of 64 bytes, src stride 256, dst stride 64
+write(num_bytes_low, 64);
+write(num_bytes_high, 0);
+write(src_addr_low,  0x80000000);
+write(src_addr_high, 0x00000000);
+write(dst_addr_low,  0xC0000000);
+write(dst_addr_high, 0x00000000);
+write(reps, 4);
+write(src_stride_low, 256);
+write(src_stride_high, 0);
+write(dst_stride_low, 64);
+write(dst_stride_high, 0);
+write(conf, 0x401);  // bit 0 = decouple_aw, bit 10 = enable_nd
+tid = read(next_id_0);
 while (read(done_id_0) < tid);
 ```
 

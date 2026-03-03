@@ -15,12 +15,22 @@ The frontend is the topmost layer of the iDMA pipeline. It provides the software
 
 | | Register | Descriptor | Snitch |
 |---|---------|-----------|--------|
-| **Interface** | Memory-mapped registers (PULP `reg_interface`) | Descriptor ring in shared memory (AXI) | Custom ISA extension (accelerator bus) |
+| **Interface** | Memory-mapped registers (PULP `reg_interface` — a lightweight request/response protocol similar to APB, used for memory-mapped register access in PULP SoCs) | Descriptor ring in shared memory (AXI) | Custom ISA extension (accelerator bus) |
 | **Typical SoC** | General-purpose (CVA6, RISC-V) | CVA6 / Linux-capable | Snitch cluster |
 | **Data Width** | Any | 64-bit | Any (typically 64–512 bit) |
 | **ND Support** | Yes (2D via `reg64_2d`) | No (1D only) | Yes (2D, `NumDim=2`) |
 | **Key Advantage** | Simple, portable | Hardware-managed queue, low CPU overhead | Single-cycle launch, zero register overhead |
 | **Error Visibility** | Status register (poll `done_id`, check response) | IRQ (if `flags.irq` set) | Poll via `DMSTAT` |
+
+<!-- TODO: Replace with SVG decision flowchart -->
+<!--
+Is your core a Snitch?
+  ├── Yes → Snitch Frontend (inst64)
+  └── No
+       Do you need hardware-managed descriptor queues?
+       ├── Yes → Descriptor Frontend (desc64)
+       └── No → Register Frontend (reg64_2d)
+-->
 
 ## Common Pattern
 

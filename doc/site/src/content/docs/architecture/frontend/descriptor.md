@@ -9,9 +9,9 @@ The descriptor frontend (`idma_desc64_top`) uses a linked list of transfer descr
 
 ## Descriptor Format
 
-The descriptor frontend's reshaper (`idma_desc64_reshaper`) maps flag bits to backend options, but also hardcodes some values. Notably, `src_max_llen` and `dst_max_llen` are always set to 0 (full debursting: every transfer is broken into single-beat bus transactions, maximum protocol compliance at the cost of throughput), and `lock`, `prot`, `qos`, `region` are zeroed. These options cannot be controlled per-descriptor.
+The descriptor frontend's reshaper (a module that converts the descriptor's flag bits into the `idma_req_t` option fields, `idma_desc64_reshaper`) maps flag bits to backend options, but also hardcodes some values. Notably, `src_max_llen` and `dst_max_llen` are always set to 0 (full debursting: every transfer is broken into single-beat bus transactions, maximum protocol compliance at the cost of throughput), and `lock`, `prot`, `qos`, `region` are zeroed. These options cannot be controlled per-descriptor.
 
-Each descriptor is a 256-bit packed struct stored in shared memory. The fields are laid out MSB-first (flags at the top, dest_addr at the bottom in a packed representation):
+Each descriptor is a 256-bit packed struct stored in shared memory. In a SystemVerilog packed struct, the first field (`flags`) occupies the most-significant bits and the last field (`dest_addr`) occupies the least-significant bits. In memory (little-endian), `dest_addr` is at the lowest byte address:
 
 ```verilog
 typedef struct packed {
@@ -23,7 +23,11 @@ typedef struct packed {
 } descriptor_t;              // Total: 256 bits (addr_t = 64 bits)
 ```
 
-Descriptors must be in memory accessible to the DMA's AXI read port. If the CPU caches this memory, ensure coherency (or use uncached memory). Descriptors are read as 256-bit naturally-aligned bursts.
+Descriptors must be in memory accessible to the DMA's AXI read port. Descriptors are read as 256-bit naturally-aligned bursts.
+
+:::caution[Cache coherency]
+If the CPU uses a data cache, descriptors must be in an uncached or cache-coherent memory region. If you modify a descriptor after writing it and before the DMA reads it, flush the relevant cache lines. The DMA does not snoop CPU caches.
+:::
 
 ### Flags Bitfield
 
@@ -40,7 +44,27 @@ Descriptors must be in memory accessible to the DMA's AXI read port. If the CPU 
 | 23:16 | `axi_id` | AXI ID for the transfer |
 | 31:24 | — | Reserved |
 
+**Typical flags values**: `0x00000000` — default (INCR burst, no decoupling, no IRQ). `0x00000001` — IRQ on completion. `0x00000061` — decouple_aw + decouple_rw + IRQ.
+
 ## Descriptor Chain Example
+
+<!-- TODO: Replace with SVG diagram showing descriptor chain layout in memory -->
+<!--
+Memory:
+0x4000: ┌──────────────────────────┐
+        │ dest_addr = 0x2000       │  Descriptor 0
+        │ src_addr  = 0x1000       │
+        │ next      = 0x4020  ─────│──┐
+        │ length    = 64           │  │
+        │ flags     = 0x0          │  │
+0x4020: ├──────────────────────────┤<─┘
+        │ dest_addr = 0x2100       │  Descriptor 1
+        │ src_addr  = 0x1100       │
+        │ next      = 0xFFFF...F   │  (end of chain)
+        │ length    = 128          │
+        │ flags     = 0x1 (IRQ)    │
+        └──────────────────────────┘
+-->
 
 A two-descriptor chain that transfers 64 bytes, then 128 bytes, then stops. Assume the descriptors are allocated at addresses `0x4000` and `0x4020` (32 bytes apart, naturally aligned):
 
@@ -86,6 +110,8 @@ The descriptor frontend is configured through module parameters at instantiation
 ## Speculative Prefetch
 
 The `NSpeculation` parameter controls how many descriptors the frontend may fetch ahead of the backend's consumption. This hides the descriptor fetch latency — while the backend processes one transfer, the frontend is already reading the next `NSpeculation` descriptors from memory. Setting `NSpeculation=0` disables prefetching (each descriptor is fetched only after the previous transfer completes).
+
+Set `NSpeculation` to match your expected descriptor chain length or `NumAxInFlight`, whichever is smaller. Higher values waste memory bandwidth on speculative reads if chains are short. For most systems, `NSpeculation=4` is a good default.
 
 ## Source Files
 
