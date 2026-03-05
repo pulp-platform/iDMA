@@ -69,19 +69,10 @@ The ND midend emits 4 sequential 1D transfers:
 | 2 | `base_src + 256` | `base_dst + 128` | 64 |
 | 3 | `base_src + 384` | `base_dst + 192` | 64 |
 
-<!-- TODO: Replace with SVG diagram showing 2D transfer memory layout -->
-<!--
-Source memory (stride=128):              Destination memory (stride=64):
-┌────────────────────────────────┐       ┌────────────────────┐
-│  row 0 (64B)  │    gap (64B)  │  ───> │  row 0 (64B)      │
-├────────────────────────────────┤       ├────────────────────┤
-│  row 1 (64B)  │    gap (64B)  │  ───> │  row 1 (64B)      │
-├────────────────────────────────┤       ├────────────────────┤
-│  row 2 (64B)  │    gap (64B)  │  ───> │  row 2 (64B)      │
-├────────────────────────────────┤       ├────────────────────┤
-│  row 3 (64B)  │    gap (64B)  │  ───> │  row 3 (64B)      │
-└────────────────────────────────┘       └────────────────────┘
--->
+:::note[Figure placeholder]
+Diagram: 2D transfer memory layout.
+Show source rows with stride gaps and destination rows packed tightly.
+:::
 
 :::note[Zero repetitions]
 If all repetition counts for a dimension are zero, that dimension is treated as a no-op ("zero stage"). The midend signals this as an `ND_MIDEND` error in the response.
@@ -114,18 +105,10 @@ It contains `NumEvents` countdown counters, each triggering an ND transfer when 
 
 ## Multicore Midends
 
-<!-- TODO: Replace with SVG diagram comparing MP_DIST and MP_SPLIT -->
-<!--
-MP_DIST (one transfer → multiple backends in parallel):
-                    ┌─── Backend 0 (region 0x0000-0x0FFF) ───> Mem Bank 0
-Transfer ──> DIST ──┼─── Backend 1 (region 0x1000-0x1FFF) ───> Mem Bank 1
-                    └─── Backend 2 (region 0x2000-0x2FFF) ───> Mem Bank 2
-
-MP_SPLIT (one transfer → serialized sub-transfers to one backend):
-Transfer ──> SPLIT ──> Backend ──> sub-transfer 0 (region 0) ──> Memory
-                              ──> sub-transfer 1 (region 1) ──> Memory
-                              ──> sub-transfer 2 (region 2) ──> Memory
--->
+:::note[Figure placeholder]
+Diagram: MP_DIST vs MP_SPLIT.
+Show parallel distribution across multiple backends vs serialized region splits to a single backend.
+:::
 
 ### MP_DIST
 

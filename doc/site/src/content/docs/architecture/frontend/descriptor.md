@@ -48,23 +48,10 @@ If the CPU uses a data cache, descriptors must be in an uncached or cache-cohere
 
 ## Descriptor Chain Example
 
-<!-- TODO: Replace with SVG diagram showing descriptor chain layout in memory -->
-<!--
-Memory:
-0x4000: ┌──────────────────────────┐
-        │ dest_addr = 0x2000       │  Descriptor 0
-        │ src_addr  = 0x1000       │
-        │ next      = 0x4020  ─────│──┐
-        │ length    = 64           │  │
-        │ flags     = 0x0          │  │
-0x4020: ├──────────────────────────┤<─┘
-        │ dest_addr = 0x2100       │  Descriptor 1
-        │ src_addr  = 0x1100       │
-        │ next      = 0xFFFF...F   │  (end of chain)
-        │ length    = 128          │
-        │ flags     = 0x1 (IRQ)    │
-        └──────────────────────────┘
--->
+:::note[Figure placeholder]
+Diagram: descriptor chain layout in memory.
+Show two descriptors, next pointer, and end-of-chain marker.
+:::
 
 A two-descriptor chain that transfers 64 bytes, then 128 bytes, then stops. Assume the descriptors are allocated at addresses `0x4000` and `0x4020` (32 bytes apart, naturally aligned):
 

@@ -132,17 +132,10 @@ The buffer (`idma_dataflow_element`) is an array of independent FIFOs, one per b
 
 ### Data Realignment
 
-<!-- TODO: Replace with SVG diagram showing data realignment -->
-<!--
-Example: src_addr=0x3, dst_addr=0x5, DataWidth=64 (8 bytes)
-
-Source memory:        Read shifter:         Buffer:              Write shifter:        Dest memory:
-┌─┬─┬─┬─┬─┬─┬─┬─┐   shift by 3            (byte-granular       shift by 5            ┌─┬─┬─┬─┬─┬─┬─┬─┐
-│ │ │ │A│B│C│D│E│   ──────────>            FIFOs, one per       ──────────>            │ │ │ │ │ │A│B│C│
-│0│1│2│3│4│5│6│7│                          byte lane)                                  │0│1│2│3│4│5│6│7│
-└─┴─┴─┴─┴─┴─┴─┴─┘                                                                    └─┴─┴─┴─┴─┴─┴─┴─┘
-  offset=3                                                        offset=5
--->
+:::note[Figure placeholder]
+Diagram: data realignment through read shifter, buffer, and write shifter.
+Show an example with misaligned source/destination offsets and byte lane rotation.
+:::
 
 Two barrel shifters handle the address offset difference between source and destination. The **read shifter** aligns incoming data based on the source address offset; the **write shifter** rotates data to match the destination address offset.
 

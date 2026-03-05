@@ -16,6 +16,8 @@ export default defineConfig({
         {
           label: 'Architecture',
           items: [
+            { label: 'Programming Model', slug: 'architecture/programming-model' },
+            { label: 'Interfaces and Types', slug: 'architecture/interfaces' },
             {
               label: 'Frontend',
               items: [
@@ -32,9 +34,12 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
+            { label: 'Quickstart', slug: 'guides/quickstart' },
             { label: 'System Integration', slug: 'guides/system-integration' },
             { label: 'Error Handling', slug: 'guides/error-handling' },
             { label: 'Verification', slug: 'guides/verification' },
+            { label: 'Performance and Limitations', slug: 'guides/performance-limitations' },
+            { label: 'Docs Verification Plan', slug: 'guides/docs-verification' },
           ],
         },
       ],

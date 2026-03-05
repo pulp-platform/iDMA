@@ -77,6 +77,11 @@ loop:
   blt     t1, t0, loop   # Wait until completed_id >= transfer_id
 ```
 
+:::note[Figure placeholder]
+Diagram: Snitch instruction flow.
+Show DMSRC/DMDST setup, DMSTR/DMREP for ND, DMCPY launch, DMSTAT polling.
+:::
+
 ## Internal Architecture
 
 The `idma_inst64_top` module instantiates `NumChannels` independent backends, each paired with an ND midend (`NumDim=2`, `BufferDepth=3`). The frontend instruction decoder fills an `idma_nd_req_t` struct from the instruction stream and routes it to the selected channel's request FIFO. A per-channel transfer ID generator tracks issue and retire events. Each backend produces separate AXI read and write manager ports. The `axi_rw_join` module merges them into a single AXI manager port for connection to the SoC interconnect.
