@@ -7,6 +7,8 @@ description: Testbench architecture, job files, and simulation workflow for iDMA
 
 iDMA uses a SystemVerilog testbench driven by **job files** that describe transfer sequences. The testbench compares hardware behavior against a byte-accurate golden model. Tests are run with Questa or VCS, with job files located in `jobs/<backend_variant>/`.
 
+For documentation quality checks, see [Docs Verification Plan](../docs-verification/).
+
 ## Testbench Architecture
 
 ### Key Components
@@ -149,23 +151,10 @@ Each backend variant has its own set of job files under `jobs/<variant>/`:
 
 For initial bring-up, start with `simple.txt` on the `rw_axi` variant — it's the smallest test on the most common backend.
 
-<!-- TODO: Replace with SVG testbench block diagram -->
-<!--
-┌──────────────────────────────────────────────────────────────┐
-│                        Testbench                             │
-│                                                              │
-│  ┌──────────┐    ┌────────────────────┐    ┌──────────────┐  │
-│  │ Job File │───>│  tb_idma_backend   │───>│  Sim Memory  │  │
-│  │ Parser   │    │  (DUT wrapper)     │    │  (AXI slave) │  │
-│  └──────────┘    └────────────────────┘    └──────────────┘  │
-│       │                                          │           │
-│       v                                          v           │
-│  ┌──────────┐                             ┌──────────────┐   │
-│  │  Golden  │─── compare after each ─────>│   Checker    │   │
-│  │  Model   │    transfer                 │  (pass/fail) │   │
-│  └──────────┘                             └──────────────┘   │
-└──────────────────────────────────────────────────────────────┘
--->
+:::note[Figure placeholder]
+Diagram: verification testbench architecture.
+Show job parser feeding the DUT wrapper, simulated memory, and golden model checker.
+:::
 
 ## Running Simulations
 

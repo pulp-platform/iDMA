@@ -22,15 +22,10 @@ The frontend is the topmost layer of the iDMA pipeline. It provides the software
 | **Key Advantage** | Simple, portable | Hardware-managed queue, low CPU overhead | Single-cycle launch, zero register overhead |
 | **Error Visibility** | Status register (poll `done_id`, check response) | IRQ (if `flags.irq` set) | Poll via `DMSTAT` |
 
-<!-- TODO: Replace with SVG decision flowchart -->
-<!--
-Is your core a Snitch?
-  ├── Yes → Snitch Frontend (inst64)
-  └── No
-       Do you need hardware-managed descriptor queues?
-       ├── Yes → Descriptor Frontend (desc64)
-       └── No → Register Frontend (reg64_2d)
--->
+:::note[Figure placeholder]
+Diagram: frontend selection decision flow.
+Show Snitch decision first, then descriptor vs register based on queue needs.
+:::
 
 ## Common Pattern
 

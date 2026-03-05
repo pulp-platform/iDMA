@@ -82,21 +82,10 @@ The register bus is 32 bits wide. 64-bit values (addresses, lengths, strides) ar
 
 When `NumRegs > 1`, multiple register ports can submit transfers concurrently. An internal round-robin arbiter serializes requests to the single backend interface. Each port stalls independently on its `next_id` read until its request is accepted. This allows multiple cores to share a single DMA without software-level locking.
 
-<!-- TODO: Replace with SVG sequence diagram -->
-<!--
-CPU                          Register Frontend               Backend
- │                                │                            │
- │── write src_addr ──────────>   │                            │
- │── write dst_addr ──────────>   │                            │
- │── write num_bytes ─────────>   │                            │
- │── write conf ──────────────>   │                            │
- │── read next_id ────────────>   │── idma_req_t ──────────>   │
- │   (bus stalls...)              │   (valid/ready handshake)  │
- │<─ transfer_id ─────────────    │<─ req_ready ───────────    │
- │                                │                            │
- │── read done_id ────────────>   │                            │
- │   (poll until >= tid)          │                            │
--->
+:::note[Figure placeholder]
+Diagram: register frontend sequence.
+Show write parameters, read `next_id` launching the transfer, and polling `done_id` until completion.
+:::
 
 ## Worked Example: 1 KiB Transfer
 
