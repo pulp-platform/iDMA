@@ -81,7 +81,7 @@ jobs:
         name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: 3.11
       -
         name: Lint Python
         uses: py-actions/flake8@v2
@@ -99,7 +99,7 @@ jobs:
         name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: 3.11
       -
         name: Lint Yaml
         uses: ibiqlik/action-yamllint@v3
@@ -121,7 +121,7 @@ jobs:
       -
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: 3.11
           cache: 'pip'
       -
         name: Python Requirements
@@ -140,7 +140,7 @@ jobs:
         name: Install Python
         uses: actions/setup-python@v5
         with:
-            python-version: '3.9'
+            python-version: 3.11
             cache: 'pip'
       -
         name: Python Requirements
