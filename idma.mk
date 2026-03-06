@@ -460,7 +460,7 @@ idma_spinx_doc_clean:
 
 IDMA_NONFREE_REMOTE ?= git@iis-git.ee.ethz.ch:bslk/idma/idma-non-free.git
 IDMA_NONFREE_DIR    ?= $(IDMA_ROOT)/nonfree
-IDMA_NONFREE_COMMIT ?= deploy
+IDMA_NONFREE_COMMIT ?= fischeti/uv # TODO(fischeti): Revert back when merged
 
 idma_nonfree_init:
 	git clone $(IDMA_NONFREE_REMOTE) $(IDMA_NONFREE_DIR)
