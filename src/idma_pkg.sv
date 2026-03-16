@@ -100,4 +100,9 @@ package idma_pkg;
     /// Supported Protocols type
     typedef logic[1:0] protocol_t;
 
+    typedef enum logic {
+        TCDMDMA   = 0,
+        ToSoC     = 1
+    } dma_addr_map_e;
+
 endpackage
