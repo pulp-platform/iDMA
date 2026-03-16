@@ -271,6 +271,8 @@ module tb_idma_desc64_top
                 // overwrite protocols
                 current_stimulus.burst.opt.src_protocol = idma_pkg::AXI;
                 current_stimulus.burst.opt.dst_protocol = idma_pkg::AXI;
+                current_stimulus.burst.opt.src_head = '0;
+                current_stimulus.burst.opt.dst_head = '0;
                 current_stimulus.burst.user = '0;
 
                 current_stimuli_group.push_back(current_stimulus);
@@ -303,6 +305,8 @@ module tb_idma_desc64_top
                     // overwrite protocols
                     current_stimulus.burst.opt.src_protocol = idma_pkg::AXI;
                     current_stimulus.burst.opt.dst_protocol = idma_pkg::AXI;
+                    current_stimulus.burst.opt.src_head = '0;
+                    current_stimulus.burst.opt.dst_head = '0;
                     current_stimulus.burst.user = '0;
 
                     // chain descriptor

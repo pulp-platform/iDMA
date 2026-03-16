@@ -22,6 +22,16 @@ def render_backend(prot_ids: dict, db: dict, tpl_file: str) -> str:
     # render for every is
     for prot_id in prot_ids:
 
+        # format multi head bus
+        mh_format = {'ar': {}, 'aw': {}}
+        for dir in ['r', 'w']:
+            for mhp in prot_ids[prot_id]['multihead'][dir]:
+                num_heads = prot_ids[prot_id]['multihead'][dir][mhp]
+                if (num_heads == 1):
+                    mh_format['a' + dir][mhp] = ''
+                else:
+                    mh_format['a' + dir][mhp] = f'[{num_heads-1}:0] '
+
         # get ports used
         used_read_prots = prot_ids[prot_id]['ar']
         used_write_prots = prot_ids[prot_id]['aw']
@@ -42,7 +52,8 @@ def render_backend(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'used_non_bursting_write_protocols':
                 prot_key(used_write_prots, 'bursts', 'not_supported', db),
             'combined_aw_and_w':
-                eval_key(used_write_prots, 'combined_aw_and_w', 'true', db)
+                eval_key(used_write_prots, 'combined_aw_and_w', 'true', db),
+            'mh_format': mh_format
         }
 
         # render

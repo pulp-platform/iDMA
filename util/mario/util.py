@@ -58,27 +58,49 @@ def prepare_ids(id_strs: list) -> dict:
 
         # check specifier ordering
         specifiers = id[::2]
+        specifiers = [''.join(i for i in s if not i.isdigit()) for s in specifiers]
+
         if not specifiers == sorted(specifiers):
-            print(f'[MARIO] Specifier order not corrected in {id_str}', file=sys.stderr)
+            print(f'[MARIO] Specifier order not correct in {id_str}', file=sys.stderr)
             sys.exit(1)
 
         # get protocols
         r_prots = []
         w_prots = []
         rw_prots = []
+        multihead = {'r': {}, 'w': {}}
         for idx in range(0, len(id), 2):
-            if id[idx] == 'r':
+            # check if we have a multi head config
+            num_char_idx = 0
+            for c in id[idx]:
+                if c.isdigit():
+                    num_char_idx += 1
+
+            current_id = id[idx][num_char_idx:]
+            num_channels = id[idx][:num_char_idx]
+            if num_channels != '':
+                num_channels = int(num_channels)
+                if num_channels < 2:
+                    print(f'[MARIO] Multi head specifier not correct in {id_str}', file=sys.stderr)
+                    sys.exit(1)
+            else:
+                num_channels = 1
+
+            if current_id == 'r':
                 r_prots.append(id[idx + 1])
-            elif id[idx] == 'w':
+                multihead['r'][id[idx + 1]] = num_channels
+            elif current_id == 'w':
                 w_prots.append(id[idx + 1])
-            elif id[idx] == 'rw':
+                multihead['w'][id[idx + 1]] = num_channels
+            elif current_id == 'rw':
                 rw_prots.append(id[idx + 1])
+                multihead['r'][id[idx + 1]] = num_channels
+                multihead['w'][id[idx + 1]] = num_channels
             else:
                 print(f'[MARIO] {id[idx]} is non-supported specifier', file=sys.stderr)
                 sys.exit(1)
 
         # check protocol ordering
-        specifiers = id[::2]
         if not r_prots == sorted(r_prots):
             print('[MARIO] Read protocols order not correct', file=sys.stderr)
             sys.exit(1)
@@ -90,6 +112,13 @@ def prepare_ids(id_strs: list) -> dict:
         if not rw_prots == sorted(rw_prots):
             print('[MARIO] Bidir protocols order not correct', file=sys.stderr)
             sys.exit(1)
+
+        # check if a rw_prot is declared as one read and write prot
+        for rp in r_prots:
+            if rp in w_prots:
+                if multihead['r'][rp] == multihead['w'][rp]:
+                    print('[MARIO] Use rw specifier instead of r and w separately', file=sys.stderr)
+                    sys.exit(1)
 
         # create all_read and all_write
         ar_prots = []
@@ -116,7 +145,7 @@ def prepare_ids(id_strs: list) -> dict:
 
         # append protocols
         res[id_str] = {'r': r_prots, 'w': w_prots, 'rw': rw_prots, 'ar': sorted(ar_prots),
-            'aw': sorted(aw_prots), 'used': sorted(list(set(used_prots)))}
+            'aw': sorted(aw_prots), 'used': sorted(list(set(used_prots))), 'multihead': multihead}
 
     return res
 

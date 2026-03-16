@@ -80,13 +80,13 @@ module idma_transport_layer_${name_uniqueifier} #(
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_req_t ${protocol}_read_req_i,
+_req_t ${mh_format['ar'][protocol]}${protocol}_read_req_i,
 % else:
     output ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_req_t ${protocol}_read_req_o,
+_req_t ${mh_format['ar'][protocol]}${protocol}_read_req_o,
 % endif
     /// ${database[protocol]['full_name']} read response
 % if database[protocol]['passive_req'] == 'true':
@@ -94,13 +94,13 @@ _req_t ${protocol}_read_req_o,
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_rsp_t ${protocol}_read_rsp_o,
+_rsp_t ${mh_format['ar'][protocol]}${protocol}_read_rsp_o,
 % else:
     input  ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _read\
 % endif
-_rsp_t ${protocol}_read_rsp_i,
+_rsp_t ${mh_format['ar'][protocol]}${protocol}_read_rsp_i,
 % endif
 % endfor
 % for protocol in used_write_protocols:
@@ -110,13 +110,13 @@ _rsp_t ${protocol}_read_rsp_i,
 % if database[protocol]['read_slave'] == 'true':
 _write\
 % endif
-_req_t ${protocol}_write_req_o,
+_req_t ${mh_format['aw'][protocol]}${protocol}_write_req_o,
     /// ${database[protocol]['full_name']} write response
     input  ${protocol}\
 % if database[protocol]['read_slave'] == 'true':
 _write\
 % endif
-_rsp_t ${protocol}_write_rsp_i,
+_rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % endfor
 
     /// Read datapath request
@@ -195,149 +195,63 @@ _rsp_t ${protocol}_write_rsp_i,
     typedef logic [7:0] byte_t;
 
     // inbound control signals to the read buffer: controlled by the read process
-    strb_t\
 % if not one_read_port:
     % for p in used_read_protocols:
- ${p}_buffer_in_valid,\
+    strb_t ${mh_format['ar'][p]}${p}_buffer_in_valid;
     % endfor
 % endif
- buffer_in_valid;
-
+    strb_t buffer_in_valid;
     strb_t buffer_in_ready;
+
     // outbound control signals of the buffer: controlled by the write process
-    strb_t buffer_out_valid, buffer_out_valid_shifted;
-    strb_t\
+    strb_t buffer_out_valid;
+    strb_t buffer_out_valid_shifted;
 % if not one_write_port:
     % for p in used_write_protocols:
- ${p}_buffer_out_ready,\
+    strb_t ${mh_format['aw'][p]}${p}_buffer_out_ready;
     % endfor
 % endif
-
-        buffer_out_ready, buffer_out_ready_shifted;
+    strb_t buffer_out_ready;
+    strb_t buffer_out_ready_shifted;
 
     // shifted data flowing into the buffer
-    byte_t [2*StrbWidth-1:0] buffer_in_tmp;
-    byte_t [StrbWidth-1:0]\
 % if not one_read_port:
     % for p in used_read_protocols:
- ${p}_buffer_in,\
+    byte_t [StrbWidth-1:0] ${mh_format['ar'][p]}${p}_buffer_in;
     % endfor
 % endif
+    byte_t [StrbWidth-1:0] buffer_in;
+    byte_t [StrbWidth-1:0] buffer_in_shifted;
+    // Introduce this temporary signal to ease tool compatibility
+    byte_t [2*StrbWidth-1:0] buffer_in_tmp;
 
-        buffer_in, buffer_in_shifted;
     // aligned and coalesced data leaving the buffer
     byte_t [2*StrbWidth-1:0] buffer_out_tmp;
-    byte_t [StrbWidth-1:0] buffer_out, buffer_out_shifted;
+    byte_t [StrbWidth-1:0] buffer_out;
+    byte_t [StrbWidth-1:0] buffer_out_shifted;
+
 % if not one_read_port:
-
     // Read multiplexed signals
-    logic\
-    % for index, protocol in enumerate(used_read_protocols):
- ${protocol}_r_chan_valid\
-        % if index == len(used_read_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
-    logic\
-    % for index, protocol in enumerate(used_read_protocols):
- ${protocol}_r_chan_ready\
-        % if index == len(used_read_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
-    logic\
-    % for index, protocol in enumerate(used_read_protocols):
- ${protocol}_r_dp_valid\
-        % if index == len(used_read_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
-    logic\
-    % for index, protocol in enumerate(used_read_protocols):
- ${protocol}_r_dp_ready\
-        % if index == len(used_read_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
-    r_dp_rsp_t\
-    % for index, protocol in enumerate(used_read_protocols):
- ${protocol}_r_dp_rsp\
-        % if index == len(used_read_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
+    % for protocol in used_read_protocols:
+    logic ${mh_format['ar'][protocol]}${protocol}_r_chan_valid;
+    logic ${mh_format['ar'][protocol]}${protocol}_r_chan_ready;
+    logic ${mh_format['ar'][protocol]}${protocol}_r_dp_valid;
+    logic ${mh_format['ar'][protocol]}${protocol}_r_dp_ready;
+    r_dp_rsp_t ${mh_format['ar'][protocol]}${protocol}_r_dp_rsp;
+    logic ${mh_format['ar'][protocol]}${protocol}_ar_ready;
 
-    logic\
-    % for index, protocol in enumerate(used_read_protocols):
- ${protocol}_ar_ready\
-        % if index == len(used_read_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
+    % endfor
 % endif
 % if not one_write_port:
-
     // Write multiplexed signals
-    logic\
-    % for index, protocol in enumerate(used_write_protocols):
- ${protocol}_w_dp_rsp_valid\
-        % if index == len(used_write_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
-    logic\
-    % for index, protocol in enumerate(used_write_protocols):
- ${protocol}_w_dp_rsp_ready\
-        % if index == len(used_write_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
-    logic\
-    % for index, protocol in enumerate(used_write_protocols):
- ${protocol}_w_dp_ready\
-        % if index == len(used_write_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
-    w_dp_rsp_t\
-    % for index, protocol in enumerate(used_write_protocols):
- ${protocol}_w_dp_rsp\
-        % if index == len(used_write_protocols)-1:
-;
-        % else:
-,\
-        % endif
-    %endfor
+    % for protocol in used_write_protocols:
+    logic ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp_valid;
+    logic ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp_ready;
+    logic ${mh_format['aw'][protocol]}${protocol}_w_dp_ready;
+    w_dp_rsp_t ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp;
+    logic ${mh_format['aw'][protocol]}${protocol}_aw_ready;
 
-    logic\
-    % for index, protocol in enumerate(used_write_protocols):
- ${protocol}_aw_ready\
-        % if index == len(used_write_protocols)-1:
-;
-        % else:
-,\
-        % endif
     %endfor
-% endif
-% if not one_write_port:
     logic w_dp_req_valid, w_dp_req_ready;
     logic w_dp_rsp_mux_valid, w_dp_rsp_mux_ready;
     logic w_dp_rsp_valid, w_dp_rsp_ready;
@@ -346,6 +260,9 @@ _rsp_t ${protocol}_write_rsp_i,
     // Write Response FIFO signals
     logic w_resp_fifo_in_valid, w_resp_fifo_in_ready;
     idma_pkg::protocol_e w_resp_fifo_out_protocol;
+% if any_mh['aw']:
+    idma_pkg::multihead_t w_resp_fifo_out_head;
+% endif
     logic w_resp_fifo_out_valid, w_resp_fifo_out_ready;
 % endif
 
@@ -365,7 +282,11 @@ ${rendered_read_ports[read_port]}
     always_comb begin : gen_read_meta_channel_multiplexer
         case(ar_req_i.src_protocol)
 % for rp in used_read_protocols:
+    % if mh_format['ar'][rp] == '':
         idma_pkg::${database[rp]['protocol_enum']}: ar_ready_o = ${rp}_ar_ready;
+    % else:
+        idma_pkg::${database[rp]['protocol_enum']}: ar_ready_o = ${rp}_ar_ready [ar_req_i.src_head];
+    % endif
 % endfor
         default:       ar_ready_o = 1'b0;
         endcase
@@ -375,6 +296,7 @@ ${rendered_read_ports[read_port]}
         if (r_dp_valid_i) begin
             case(r_dp_req_i.src_protocol)
 % for rp in used_read_protocols:
+    % if mh_format['ar'][rp] == '':
             idma_pkg::${database[rp]['protocol_enum']}: begin
                 r_chan_valid_o  = ${rp}_r_chan_valid;
                 r_chan_ready_o  = ${rp}_r_chan_ready;
@@ -386,6 +308,19 @@ ${rendered_read_ports[read_port]}
                 buffer_in       = ${rp}_buffer_in;
                 buffer_in_valid = ${rp}_buffer_in_valid;
             end
+    % else:
+            idma_pkg::${database[rp]['protocol_enum']}: begin
+                r_chan_valid_o  = ${rp}_r_chan_valid [r_dp_req_i.src_head];
+                r_chan_ready_o  = ${rp}_r_chan_ready [r_dp_req_i.src_head];
+
+                r_dp_ready_o    = ${rp}_r_dp_ready [r_dp_req_i.src_head];
+                r_dp_rsp_o      = ${rp}_r_dp_rsp [r_dp_req_i.src_head];
+                r_dp_valid_o    = ${rp}_r_dp_valid [r_dp_req_i.src_head];
+
+                buffer_in       = ${rp}_buffer_in [r_dp_req_i.src_head];
+                buffer_in_valid = ${rp}_buffer_in_valid [r_dp_req_i.src_head];
+            end
+    % endif
 % endfor
             default: begin
                 r_chan_valid_o  = 1'b0;
@@ -473,8 +408,13 @@ ${rendered_read_ports[read_port]}
         case(w_dp_req_i.dst_protocol)
 % for wp in used_write_protocols:
         idma_pkg::${database[wp]['protocol_enum']}: begin
+    % if mh_format['aw'][wp] == '':
             w_dp_req_ready   = ${wp}_w_dp_ready;
             buffer_out_ready = ${wp}_buffer_out_ready;
+    % else:
+            w_dp_req_ready   = ${wp}_w_dp_ready [w_dp_req_i.dst_head];
+            buffer_out_ready = ${wp}_buffer_out_ready [w_dp_req_i.dst_head];
+    % endif
         end
 % endfor
         default: begin
@@ -488,7 +428,11 @@ ${rendered_read_ports[read_port]}
     always_comb begin : gen_write_meta_channel_multiplexer
         case(aw_req_i.dst_protocol)
 % for wp in used_write_protocols:
+    % if mh_format['aw'][wp] == '':
         idma_pkg::${database[wp]['protocol_enum']}: aw_ready_o = ${wp}_aw_ready;
+    % else:
+        idma_pkg::${database[wp]['protocol_enum']}: aw_ready_o = ${wp}_aw_ready [aw_req_i.dst_head];
+    % endif
 % endfor
         default:       aw_ready_o = 1'b0;
         endcase
@@ -507,7 +451,7 @@ ${rendered_write_ports[write_port]}
     //--------------------------------------
     // Write Response FIFO
     //--------------------------------------
-    // Needed to be able to route the write reponses properly
+    // Needed to be able to route the write responses properly
     // Insert when data write happens
     // Remove when write response comes
 
@@ -529,6 +473,26 @@ ${rendered_write_ports[write_port]}
         .ready_i    ( w_resp_fifo_out_ready && w_resp_fifo_out_valid )
     );
 
+% if not mh_format['aw'][wp] == '':
+    stream_fifo_optimal_wrap #(
+        .Depth        ( NumAxInFlight         ),
+        .type_t       ( idma_pkg::multihead_t ),
+        .PrintInfo    ( PrintFifoInfo         )
+    ) i_write_response_fifo_multihead (
+        .clk_i      ( clk_i                                          ),
+        .rst_ni     ( rst_ni                                         ),
+        .testmode_i ( testmode_i                                     ),
+        .flush_i    ( 1'b0                                           ),
+        .usage_o    ( /* NOT CONNECTED */                            ),
+        .data_i     ( w_dp_req_i.dst_head                            ),
+        .valid_i    ( w_resp_fifo_in_valid && w_resp_fifo_in_ready   ),
+        .ready_o    ( /* NOT CONNECTED */                            ),
+        .data_o     ( w_resp_fifo_out_multihead                      ),
+        .valid_o    ( /* NOT CONNECTED */                            ),
+        .ready_i    ( w_resp_fifo_out_ready && w_resp_fifo_out_valid )
+    );
+
+% endif
     //--------------------------------------
     // Write Request Demultiplexer
     //--------------------------------------
@@ -538,15 +502,25 @@ ${rendered_write_ports[write_port]}
         w_dp_rsp_mux       = '0;
         w_dp_rsp_mux_valid = 1'b0;
 % for wp in used_write_protocols:
+    % if mh_format['aw'][wp] == '':
         ${wp}_w_dp_rsp_ready = 1'b0;
+    % else:
+        ${wp}_w_dp_rsp_ready = '0;
+    % endif
 % endfor
         if ( w_resp_fifo_out_valid ) begin
             case(w_resp_fifo_out_protocol)
 % for wp in used_write_protocols:
             idma_pkg::${database[wp]['protocol_enum']}: begin
+    % if mh_format['aw'][wp] == '':
                 w_dp_rsp_mux_valid = ${wp}_w_dp_rsp_valid;
                 w_dp_rsp_mux       = ${wp}_w_dp_rsp;
                 ${wp}_w_dp_rsp_ready = w_dp_rsp_mux_ready;
+    % else:
+                w_dp_rsp_mux_valid = ${wp}_w_dp_rsp_valid [w_resp_fifo_out_multihead];
+                w_dp_rsp_mux       = ${wp}_w_dp_rsp [w_resp_fifo_out_multihead];
+                ${wp}_w_dp_rsp_ready [w_resp_fifo_out_multihead] = w_dp_rsp_mux_ready;
+    % endif
             end
 % endfor
             default: begin
