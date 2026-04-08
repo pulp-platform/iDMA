@@ -193,7 +193,7 @@ module dmac_wrap_fc_idma #(
   assign term_event_o    = |trans_complete ? '1 : '0;
   assign term_irq_o      = '0;
 
-  assign busy_o = midend_busy | |idma_busy;
+  assign busy_o = midend_busy | (|idma_busy);
 
   // ------------------------------------------------------
   // MIDEND
