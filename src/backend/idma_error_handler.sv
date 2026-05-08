@@ -311,29 +311,32 @@ module idma_error_handler #(
             // error happened on the last write burst of a 1D transfer. We need to emit an extra
             // response post error handling.
             WAIT_LAST_W : begin
-                // continue case (~error reporting)
-                if (eh_i == idma_pkg::CONTINUE) begin
-                    eh_ready_o = 1'b1;
-                    state_d = EMIT_EXTRA_RSP;
-                end
-                // abort
-                if (eh_i == idma_pkg::ABORT) begin
-                    // in the case we have multiple outstanding 1D transfers in the datapath:
-                    // - the transfers are small no flush required
-                    // - some transfers might complete properly so no flush allowed!
-                    // in this case just continue
-                    if (num_outst_q > 'd1) begin
+                // answer arrives
+                if (eh_valid_i) begin
+                    // continue case (~error reporting)
+                    if (eh_i == idma_pkg::CONTINUE) begin
                         eh_ready_o = 1'b1;
-                        state_d    = EMIT_EXTRA_RSP;
-                    // we are aborting a long transfer (it is still in the legalizer and
-                    // therefore the only active transfer in the datapath)
-                    end else if (num_outst_q == 'd1) begin
-                        eh_ready_o = 1'b1;
-                        state_d    = LEG_FLUSH;
-                    // the counter is 0 -> no transfer in the datapath. This is an impossible
-                    // state
-                    end else begin
-                        `ASSERT_I(inactive_tf_wait_last_w, rst_ni !== 1'b1)
+                        state_d = EMIT_EXTRA_RSP;
+                    end
+                    // abort
+                    if (eh_i == idma_pkg::ABORT) begin
+                        // in the case we have multiple outstanding 1D transfers in the datapath:
+                        // - the transfers are small no flush required
+                        // - some transfers might complete properly so no flush allowed!
+                        // in this case just continue
+                        if (num_outst_q > 'd1) begin
+                            eh_ready_o = 1'b1;
+                            state_d    = EMIT_EXTRA_RSP;
+                        // we are aborting a long transfer (it is still in the legalizer and
+                        // therefore the only active transfer in the datapath)
+                        end else if (num_outst_q == 'd1) begin
+                            eh_ready_o = 1'b1;
+                            state_d    = LEG_FLUSH;
+                        // the counter is 0 -> no transfer in the datapath. This is an impossible
+                        // state
+                        end else begin
+                            `ASSERT_I(inactive_tf_wait_last_w, rst_ni !== 1'b1)
+                        end
                     end
                 end
             end
