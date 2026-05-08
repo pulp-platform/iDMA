@@ -127,29 +127,39 @@ module idma_channel_coupler #(
         .ready_i      ( aw_ready            )
     );
 
-    // use a credit counter to keep track of AWs to send
+    // use a credit counter to keep track of coupled AWs to send.
+    //
+    // The credit `aw_to_send_q` represents *coupled* AWs whose `first` R
+    // beat has arrived but that have not yet been handshaken. Decoupled
+    // AWs do not earn a credit. Pop a decoupled AW that happens to sit at
+    // the head separately (via the default `aw_sent = aw_decoupled_head &
+    // aw_valid`) so it does not consume a coupled credit reserved for a
+    // coupled AW further back in the FIFO.
     always_comb begin : proc_credit_cnt
 
         // defaults
         aw_to_send_d = aw_to_send_q;
 
-        // if we bypass the logic
+        // bypass: a decoupled head can always be sent
         aw_sent = aw_decoupled_head & aw_valid;
 
-        // first is asserted and aw is ready -> just send AW out
-        // without changing the credit counter value
-        if (aw_ready_decoupled & first) begin
+        // First arrives and the *coupled* head is ready -> send it
+        // without changing the credit counter.
+        if (aw_ready_decoupled & first & ~aw_decoupled_head) begin
             aw_sent = 1'b1;
         end
 
-        // if first is asserted and aw is not ready -> increment
-        // credit counter
-        else if (!aw_ready_decoupled & first) begin
+        // First arrives but we cannot send the corresponding coupled AW
+        // *this cycle* (either downstream isn't ready, or the FIFO head is
+        // currently a decoupled AW that has not yet been popped). Save the
+        // first as a credit for the future coupled AW.
+        else if (first) begin
             aw_to_send_d = aw_to_send_q + 1;
         end
 
-        // if not first, aw is ready and we have credit -> count down
-        else if (aw_ready_decoupled & !first & aw_to_send_q != '0) begin
+        // No new first this cycle, downstream ready, head is coupled,
+        // credit available -> drain one credit.
+        else if (aw_ready_decoupled & ~aw_decoupled_head & aw_to_send_q != '0) begin
             aw_sent = 1'b1;
             aw_to_send_d = aw_to_send_q - 1;
         end
