@@ -206,11 +206,11 @@ module idma_rt_midend #(
         .testmode_i ( 1'b0                                  ),
         .usage_o    ( /* NC */                              ),
         .data_i     ( choice                                ),
-        .valid_i    ( nd_req_valid_i & nd_req_ready_o       ),
+        .valid_i    ( nd_req_valid_o & nd_req_ready_i       ),
         .ready_o    ( /* HACK: NC */                        ),
         .data_o     ( choice_head                           ),
         .valid_o    ( /* HACK: NC */                        ),
-        .ready_i    ( burst_rsp_valid_o & burst_rsp_ready_i )
+        .ready_i    ( burst_rsp_valid_i & burst_rsp_ready_o )
     );
 
     // arbitration of responses
