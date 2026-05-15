@@ -46,8 +46,8 @@ IDMA_REGTOOL  ?= $(IDMA_REG_DIR)/vendor/lowrisc_opentitan/util/regtool.py
 IDMA_UTIL_DIR := $(IDMA_ROOT)/util
 IDMA_RTL_DIR  := $(IDMA_ROOT)/target/rtl
 
-# cf_math_pkg file
-IDMA_CF_PKG   := $(IDMA_CC_DIR)/src/cf_math_pkg.sv
+# cc_pkg file
+IDMA_CF_PKG   := $(IDMA_CC_DIR)/src/cc_pkg.sv
 
 # job file
 IDMA_JOBS_JSON := jobs/jobs.json
@@ -238,8 +238,8 @@ $(IDMA_PICKLE_DIR)/sources.json: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FUL
 
 $(IDMA_PICKLE_DIR)/%.sv: $(IDMA_PICKLE_DIR)/sources.json
 	$(MORTY) -f $< -i --top $* $(IDMA_MORTY_ARGS) --propagate_defines -o $@.pre
-	# Hack cf_math_pkg in
-	if grep -q "package cf_math_pkg;" "$@.pre"; then \
+	# Hack cc_pkg in
+	if grep -q "package cc_pkg;" "$@.pre"; then \
 		$(CAT) $@.pre > $@; \
 	else \
 		$(CAT) $(IDMA_CF_PKG) $@.pre > $@; \
@@ -391,8 +391,8 @@ $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
 	mkdir -p $(IDMA_VLT_DIR)
 	# We need a dedicated pickle here to set the defines
 	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
-	# Hack cf_math_pkg in
-	if grep -q "package cf_math_pkg;" "$(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre"; then \
+	# Hack cc_pkg in
+	if grep -q "package cc_pkg;" "$(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre"; then \
   		$(CAT) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
 	else \
 		$(CAT) $(IDMA_CF_PKG) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \

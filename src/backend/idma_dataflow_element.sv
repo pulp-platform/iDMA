@@ -21,7 +21,6 @@ module idma_dataflow_element #(
 )(
     input  logic clk_i,
     input  logic rst_ni,
-    input  logic testmode_i,
 
     input  byte_t [StrbWidth-1:0] data_i,
     input  strb_t valid_i,
@@ -34,14 +33,13 @@ module idma_dataflow_element #(
 
     // buffer is implemented as an array of FIFOs
     for (genvar i = 0; i < StrbWidth; i++) begin : gen_fifo_buffer
-        passthrough_stream_fifo #(
+        cc_passthrough_stream_fifo #(
             .type_t       ( byte_t        ),
             .Depth        ( BufferDepth   ),
             .PrintInfo    ( PrintFifoInfo )
         ) i_passthrough_stream_fifo (
             .clk_i,
             .rst_ni,
-            .testmode_i,
             .flush_i      ( 1'b0        ),
             .data_i       ( data_i  [i] ),
             .valid_i      ( valid_i [i] ),

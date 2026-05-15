@@ -238,7 +238,7 @@ assign queued_address_ready_o = !take_from_next && (!base_valid_q || next_addr_v
 `FF(flush_q, flush_d, 1'b0)
 assign flush_d = flush;
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH(1'b1),
     .DEPTH       (NSpeculation),
     .T           (addr_t)
@@ -246,7 +246,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (flush_q),
-    .testmode_i(1'b0),
     .usage_o   (speculation_usage_short),
     .data_i    (staging_addr.addr),
     .valid_i   (staging_addr_valid_speculation),
@@ -256,7 +255,7 @@ stream_fifo #(
     .ready_i   (speculation_ready)
 );
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH(1'b1),
     .DEPTH       (NSpeculation),
     .T           (addr_spec_t)
@@ -264,7 +263,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (flush),
-    .testmode_i(1'b0),
     .usage_o   ( /* unconnected */ ),
     .data_i    (next_ar),
     .valid_i   (next_ar_valid),
@@ -274,7 +272,7 @@ stream_fifo #(
     .ready_i   (staging_addr_ready_pending)
 );
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH(1'b1),
     .DEPTH       (1),
     .T           (addr_t)
@@ -282,7 +280,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (legalization_usage),
     .data_i    (staging_addr_legalization),
     .valid_i   (staging_addr_valid_legalization),

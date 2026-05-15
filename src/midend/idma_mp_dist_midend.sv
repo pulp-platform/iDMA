@@ -96,7 +96,7 @@ module idma_mp_dist_midend #(
 
   // Fork
   logic [NumBEs-1:0] valid, ready;
-  stream_fork #(
+  cc_stream_fork #(
     .N_OUP (NumBEs)
   ) i_stream_fork (
     .clk_i,
