@@ -28,8 +28,6 @@ module idma_channel_coupler #(
     input  logic clk_i,
     /// Asynchronous reset, active low
     input  logic rst_ni,
-    /// Testmode in
-    input  logic testmode_i,
 
     /// R response valid
     input  logic r_rsp_valid_i,
@@ -60,7 +58,7 @@ module idma_channel_coupler #(
 );
 
     /// The width of the credit counter keeping track of the transfers
-    localparam int unsigned CounterWidth = cf_math_pkg::idx_width(NumAxInFlight);
+    localparam int unsigned CounterWidth = cc_pkg::idx_width(NumAxInFlight);
 
     /// Credit counter type
     typedef logic [CounterWidth-1:0] cnt_t;
@@ -91,14 +89,13 @@ module idma_channel_coupler #(
     assign first = r_rsp_valid_i & r_rsp_ready_i & r_rsp_first_i & !r_decouple_aw_i;
 
     // stream fifo to hold AWs back
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth        ( NumAxInFlight ),
         .type_t       ( axi_aw_chan_t ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_aw_store (
         .clk_i,
         .rst_ni,
-        .testmode_i,
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( aw_req_i            ),
@@ -109,14 +106,13 @@ module idma_channel_coupler #(
         .ready_i      ( aw_ready            )
     );
 
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth        ( NumAxInFlight ),
         .type_t       ( logic         ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_aw_decoupled_store (
         .clk_i,
         .rst_ni,
-        .testmode_i,
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( aw_decouple_aw_i    ),
@@ -160,12 +156,11 @@ module idma_channel_coupler #(
 
     // fall through register to decouple the aw valid signal from the aw ready
     // now payload is required; just the decoupling of the handshaking signals
-    fall_through_register #(
+    cc_fall_through_register #(
         .T ( logic [0:0] )
     ) i_fall_through_register_decouple_aw_valid (
         .clk_i,
         .rst_ni,
-        .testmode_i,
         .clr_i       ( 1'b0                ),
         .valid_i     ( aw_sent             ),
         .ready_o     ( aw_ready_decoupled  ),

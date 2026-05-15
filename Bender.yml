@@ -14,12 +14,12 @@ package:
     - "Axel Vanoni <axvanoni@ethz.ch>"
 
 dependencies:
-  axi:                 { git: "https://github.com/pulp-platform/axi.git",                 version: 0.39.1 }
+  axi:                 { git: "https://github.com/pulp-platform/axi.git",                 rev: common-cells-v2 }
   axi_stream:          { git: "https://github.com/pulp-platform/axi_stream.git",          version: 0.1.1  }
-  common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.33.0 }
+  common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        rev: v2-dev }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.3  }
-  register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.3  }
-  obi:                 { git: "https://github.com/pulp-platform/obi.git",                 version: 0.1.2  }
+  register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  rev: common-cells-v2  }
+  obi:                 { git: "https://github.com/pulp-platform/obi.git",                 rev: common-cells-v2  }
 
 export_include_dirs:
   - src/include

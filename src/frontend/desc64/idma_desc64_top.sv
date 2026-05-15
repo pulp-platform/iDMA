@@ -368,7 +368,7 @@ idma_desc64_reader #(
     .idma_req_inflight_o         (idma_req_inflight)
 );
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH (1'b1),
     .DEPTH        (InputFifoDepth),
     .T            (addr_t)
@@ -376,7 +376,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (input_addr),
     .valid_i   (input_addr_valid),
@@ -386,7 +385,7 @@ stream_fifo #(
     .ready_i   (queued_addr_ready)
 );
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH (1'b1),
     .DEPTH        (PendingFifoDepth + BackendDepth),
     .T            (addr_t)
@@ -394,7 +393,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (feedback_addr),
     .valid_i   (feedback_addr_valid),
@@ -404,7 +402,7 @@ stream_fifo #(
     .ready_i   (next_wb_addr_ready && idma_rsp_valid_i)
 );
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH (1'b0),
     .DEPTH        (PendingFifoDepth),
     .T            (idma_req_t)
@@ -412,7 +410,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (idma_req_used),
     .data_i    (idma_req),
     .valid_i   (idma_req_valid),
@@ -422,7 +419,7 @@ stream_fifo #(
     .ready_i   (idma_req_ready_i)
 );
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH (1'b0),
     .DEPTH        (PendingFifoDepth + MaxAWWPending + BackendDepth),
     .T            (logic)
@@ -430,7 +427,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (do_irq),
     .valid_i   (do_irq_valid),
@@ -440,7 +436,7 @@ stream_fifo #(
     .ready_i   (master_rsp_i.b_valid)
 );
 
-stream_fifo #(
+cc_stream_fifo #(
     .FALL_THROUGH (1'b0),
     .DEPTH        (MaxAWWPending),
     .T            (addr_t)
@@ -448,7 +444,6 @@ stream_fifo #(
     .clk_i,
     .rst_ni,
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (next_wb_addr),
     .valid_i   (next_wb_addr_valid && idma_rsp_valid_i),

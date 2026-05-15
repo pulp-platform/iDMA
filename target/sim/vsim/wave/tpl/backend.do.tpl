@@ -10,7 +10,6 @@ onerror {resume}
 quietly WaveActivateNextPane {} 0
 add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/clk_i
 add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/rst_ni
-add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/testmode_i
 add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/idma_req_i
 add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/req_valid_i
 add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/req_ready_o
@@ -99,7 +98,6 @@ add wave -noupdate -group Legalizer /tb_idma_backend_${name_uniqueifier}/i_idma_
 add wave -noupdate -group Legalizer /tb_idma_backend_${name_uniqueifier}/i_idma_backend/gen_hw_legalizer/i_idma_legalizer/w_done
 add wave -noupdate -group {Transport Layer} /tb_idma_backend_${name_uniqueifier}/i_idma_backend/i_idma_transport_layer/clk_i
 add wave -noupdate -group {Transport Layer} /tb_idma_backend_${name_uniqueifier}/i_idma_backend/i_idma_transport_layer/rst_ni
-add wave -noupdate -group {Transport Layer} /tb_idma_backend_${name_uniqueifier}/i_idma_backend/i_idma_transport_layer/testmode_i
 % for protocol in used_read_protocols:
 add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/i_idma_transport_layer/${protocol}_read_req_o
 add wave -noupdate -expand -group Backend /tb_idma_backend_${name_uniqueifier}/i_idma_backend/i_idma_transport_layer/${protocol}_read_rsp_i
@@ -121,7 +119,6 @@ add wave -noupdate -group {Write Response FIFO} -expand /tb_idma_backend_${name_
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
 add wave -noupdate -group R-AW-Coupler /tb_idma_backend_${name_uniqueifier}/i_idma_backend/gen_r_aw_coupler/i_idma_channel_coupler/clk_i
 add wave -noupdate -group R-AW-Coupler /tb_idma_backend_${name_uniqueifier}/i_idma_backend/gen_r_aw_coupler/i_idma_channel_coupler/rst_ni
-add wave -noupdate -group R-AW-Coupler /tb_idma_backend_${name_uniqueifier}/i_idma_backend/gen_r_aw_coupler/i_idma_channel_coupler/testmode_i
 add wave -noupdate -group R-AW-Coupler /tb_idma_backend_${name_uniqueifier}/i_idma_backend/gen_r_aw_coupler/i_idma_channel_coupler/r_rsp_valid_i
 add wave -noupdate -group R-AW-Coupler /tb_idma_backend_${name_uniqueifier}/i_idma_backend/gen_r_aw_coupler/i_idma_channel_coupler/r_rsp_ready_i
 add wave -noupdate -group R-AW-Coupler /tb_idma_backend_${name_uniqueifier}/i_idma_backend/gen_r_aw_coupler/i_idma_channel_coupler/r_rsp_first_i

@@ -105,8 +105,8 @@ module idma_mp_split_midend #(
   state_t state_d, state_q;
   idma_req_t req_d, req_q;
 
-  `FFARN(state_q, state_d, Idle, clk_i, rst_ni)
-  `FFARN(req_q, req_d, '0, clk_i, rst_ni)
+  `FF(state_q, state_d, Idle, clk_i, rst_ni)
+  `FF(req_q, req_d, '0, clk_i, rst_ni)
 
   always_comb begin : proc_splitting
     // defaults
