@@ -723,7 +723,7 @@ _rsp_t ${protocol}_write_rsp_i,
 
     ) i_idma_transport_layer (
         .clk_i           ( clk_i                ),
-        .rst_ni          ( rst_ni               ),
+        .rst_ni          ( rst_ni               )\
 % for protocol in used_read_protocols:
 ,
 % if database[protocol]['passive_req'] == 'true':
