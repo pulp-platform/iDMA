@@ -16,6 +16,7 @@ SPHINXBUILD ?= sphinx-build
 VCS         ?= vcs
 VERILATOR   ?= verilator
 VLOGAN      ?= vlogan
+VSIM        ?= vsim
 
 # Shell
 SHELL := /bin/bash
@@ -307,6 +308,13 @@ endef
 
 $(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
 	$(call idma_generate_vsim, $@, -t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster,../../..)
+
+.PHONY: idma_sim_tb_idma_rt_midend
+
+idma_sim_tb_idma_rt_midend: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc \
+	    tb_idma_rt_midend -do "run -all; quit"
 
 idma_sim_clean:
 	rm -rf $(IDMA_VSIM_DIR)/compile.tcl
