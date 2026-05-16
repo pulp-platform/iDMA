@@ -281,7 +281,6 @@ module tb_idma_desc64_bench
     ) i_idma_backend  (
         .clk_i                ( clk               ),
         .rst_ni               ( rst_n             ),
-        .testmode_i           ( 1'b0              ),
         .idma_req_i           ( dma_be_req        ),
         .req_valid_i          ( dma_be_req_valid  ),
         .req_ready_o          ( dma_be_req_ready  ),
@@ -360,7 +359,6 @@ module tb_idma_desc64_bench
     ) i_mux (
         .clk_i      (clk),
         .rst_ni     (rst_n),
-        .test_i     (1'b0),
         .slv_reqs_i ({dma_be_master_request, dma_fe_master_request}),
         .slv_resps_o({dma_be_master_response, dma_fe_master_response}),
         .mst_req_o  (axi_throttle_req),

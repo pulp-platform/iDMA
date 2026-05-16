@@ -96,8 +96,6 @@ module idma_backend_${name_uniqueifier} #(
     input  logic clk_i,
     /// Asynchronous reset, active low
     input  logic rst_ni,
-    /// Testmode in
-    input  logic testmode_i,
 
     /// 1D iDMA request
     input  idma_req_t idma_req_i,
@@ -450,7 +448,7 @@ _rsp_t ${protocol}_write_rsp_i,
     end else begin : gen_no_hw_legalizer
         // stream fork is used to synchronize the two decoupled channels without the need for a
         // FIFO here.
-        stream_fork #(
+        cc_stream_fork #(
             .N_OUP   ( 32'd2 )
         ) i_stream_fork (
             .clk_i   ( clk_i                ),
@@ -521,7 +519,6 @@ _rsp_t ${protocol}_write_rsp_i,
         ) i_idma_error_handler (
             .clk_i             ( clk_i              ),
             .rst_ni            ( rst_ni             ),
-            .testmode_i        ( testmode_i         ),
             .rsp_o             ( idma_rsp           ),
             .rsp_valid_o       ( rsp_valid          ),
             .rsp_ready_i       ( rsp_ready          ),
@@ -591,14 +588,13 @@ _rsp_t ${protocol}_write_rsp_i,
     //--------------------------------------
     // Datapath decoupling
     //--------------------------------------
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth     ( NumAxInFlight ),
         .type_t    ( r_dp_req_t    ),
         .PrintInfo ( PrintFifoInfo )
     ) i_r_dp_req (
         .clk_i      ( clk_i               ),
         .rst_ni     ( rst_ni              ),
-        .testmode_i ( testmode_i          ),
         .flush_i    ( 1'b0                ),
         .usage_o    ( /* NOT CONNECTED */ ),
         .data_i     ( r_req.r_dp_req      ),
@@ -609,14 +605,13 @@ _rsp_t ${protocol}_write_rsp_i,
         .ready_i    ( r_dp_req_out_ready  )
     );
 
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth     ( NumAxInFlight ),
         .type_t    ( w_dp_req_t    ),
         .PrintInfo ( PrintFifoInfo )
     ) i_w_dp_req (
         .clk_i      ( clk_i               ),
         .rst_ni     ( rst_ni              ),
-        .testmode_i ( testmode_i          ),
         .flush_i    ( 1'b0                ),
         .usage_o    ( /* NOT CONNECTED */ ),
         .data_i     ( w_req.w_dp_req      ),
@@ -636,7 +631,7 @@ _rsp_t ${protocol}_write_rsp_i,
     end
 % endif
 
-    fall_through_register #(
+    cc_fall_through_register #(
         .T          (\
 % if one_read_port:
  read_meta_channel_t\
@@ -647,7 +642,6 @@ _rsp_t ${protocol}_write_rsp_i,
     ) i_ar_fall_through_register (
         .clk_i      ( clk_i             ),
         .rst_ni     ( rst_ni            ),
-        .testmode_i ( testmode_i        ),
         .clr_i      ( 1'b0              ),
         .valid_i    ( r_valid           ),
         .ready_o    ( ar_ready          ),
@@ -667,14 +661,13 @@ _rsp_t ${protocol}_write_rsp_i,
     //--------------------------------------
     // Last flag store
     //--------------------------------------
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth        ( MetaFifoDepth ),
         .type_t       ( logic [1:0]   ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_w_last (
         .clk_i      ( clk_i                           ),
         .rst_ni     ( rst_ni                          ),
-        .testmode_i ( testmode_i                      ),
         .flush_i    ( 1'b0                            ),
         .usage_o    ( /* NOT CONNECTED */             ),
         .data_i     ( {w_req.super_last, w_req.last}  ),
@@ -730,8 +723,7 @@ _rsp_t ${protocol}_write_rsp_i,
 
     ) i_idma_transport_layer (
         .clk_i           ( clk_i                ),
-        .rst_ni          ( rst_ni               ),
-        .testmode_i      ( testmode_i           )\
+        .rst_ni          ( rst_ni               )\
 % for protocol in used_read_protocols:
 ,
 % if database[protocol]['passive_req'] == 'true':
@@ -802,7 +794,6 @@ _rsp_t ${protocol}_write_rsp_i,
         ) i_idma_channel_coupler (
             .clk_i            ( clk_i                       ),
             .rst_ni           ( rst_ni                      ),
-            .testmode_i       ( testmode_i                  ),
             .r_rsp_valid_i    ( r_chan_valid                ),
             .r_rsp_ready_i    ( r_chan_ready                ),
             .r_rsp_first_i    ( r_dp_rsp.first              ),
@@ -845,7 +836,7 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
 % if combined_aw_and_w:
         // Atleast one write protocol uses combined aw and w -> Need to buffer read meta requests
         // As a write could depend on up to two reads
-        stream_fifo_optimal_wrap #(
+        cc_stream_fifo_optimal_wrap #(
             .Depth        ( 2                    ),
             .type_t       (\
     % if one_write_port:
@@ -857,7 +848,6 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
         ) i_aw_fifo (
             .clk_i,
             .rst_ni,
-            .testmode_i,
             .flush_i   ( 1'b0                       ),
             .usage_o   ( /* NOT CONNECTED */        ),
             .data_i    ( \
@@ -875,7 +865,7 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
 % else:
         // Add fall-through register to allow the input to be ready if the output is not. This
         // does not add a cycle of delay
-        fall_through_register #(
+        cc_fall_through_register #(
             .T          (\
     % if one_write_port:
  write_meta_channel_t        )
@@ -885,7 +875,6 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
         ) i_aw_fall_through_register (
             .clk_i      ( clk_i             ),
             .rst_ni     ( rst_ni            ),
-            .testmode_i ( testmode_i        ),
             .clr_i      ( 1'b0              ),
             .valid_i    ( w_valid           ),
             .ready_o    ( aw_ready          ),

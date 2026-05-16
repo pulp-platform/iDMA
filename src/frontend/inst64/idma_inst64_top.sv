@@ -31,7 +31,6 @@ module idma_inst64_top #(
 ) (
     input  logic                          clk_i,
     input  logic                          rst_ni,
-    input  logic                          testmode_i,
     // AXI4 bus
     output axi_req_t    [NumChannels-1:0] axi_req_o,
     input  axi_res_t    [NumChannels-1:0] axi_res_i,
@@ -177,7 +176,6 @@ module idma_inst64_top #(
         ) i_idma_backend_rw_axi (
             .clk_i,
             .rst_ni,
-            .testmode_i,
             .idma_req_i      ( idma_req       [c] ),
             .req_valid_i     ( idma_req_valid [c] ),
             .req_ready_o     ( idma_req_ready [c] ),
@@ -241,14 +239,13 @@ module idma_inst64_top #(
             .busy_o            ( idma_nd_busy      [c] )
         );
 
-        stream_fifo_optimal_wrap #(
+        cc_stream_fifo_optimal_wrap #(
             .Depth     ( DMAReqFifoDepth ),
             .type_t    ( idma_nd_req_t   ),
             .PrintInfo ( 1'b0            )
         ) i_stream_fifo_optimal_wrap (
             .clk_i,
             .rst_ni,
-            .testmode_i,
             .flush_i    ( 1'b0                  ),
             .usage_o    ( /* NC */              ),
             .data_i     ( idma_fe_req           ),
@@ -307,7 +304,7 @@ module idma_inst64_top #(
     // Spill register for response channel
     //--------------------------------------
     // the response path needs to be decoupled
-    spill_register #(
+    cc_spill_register #(
         .T            ( acc_res_t )
     ) i_spill_register (
         .clk_i,

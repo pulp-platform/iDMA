@@ -33,8 +33,6 @@ module idma_error_handler #(
     input  logic clk_i,
     /// Asynchronous reset, active low
     input  logic rst_ni,
-    /// Testmode in
-    input  logic testmode_i,
 
     /// 1D iDMA response
     output idma_rsp_t rsp_o,
@@ -136,14 +134,13 @@ module idma_error_handler #(
     // FIFO: read address
     // the read address FIFO is synchronized with the `i_w_last` FIFO in the backend. So at this
     // point now full handshaking is required.
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth        ( MetaFifoDepth ),
         .type_t       ( addr_t        ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_r_addr_store (
         .clk_i,
         .rst_ni,
-        .testmode_i,
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( r_addr_i            ),
@@ -157,14 +154,13 @@ module idma_error_handler #(
     // FIFO: w address
     // the read address FIFO is synchronized with the `i_w_last` FIFO in the backend. So at this
     // point now full handshaking is required.
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth        ( MetaFifoDepth ),
         .type_t       ( addr_t        ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_w_addr_store (
         .clk_i,
         .rst_ni,
-        .testmode_i,
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( w_addr_i            ),

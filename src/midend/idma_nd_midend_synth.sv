@@ -78,7 +78,6 @@ module idma_nd_midend_synth #(
 )(
     input  logic                   clk_i,
     input  logic                   rst_ni,
-    input  logic                   test_i,
 
     input  logic                   req_valid_i,
     output logic                   req_ready_o,
@@ -282,7 +281,6 @@ module idma_nd_midend_synth #(
     ) i_idma_backend (
         .clk_i,
         .rst_ni,
-        .testmode_i      ( test_i         ),
         .idma_req_i      ( idma_req       ),
         .req_valid_i     ( idma_req_valid ),
         .req_ready_o     ( idma_req_ready ),
