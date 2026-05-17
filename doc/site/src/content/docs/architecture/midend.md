@@ -3,7 +3,7 @@ title: Midend
 description: The midend decomposes multi-dimensional and round-trip transfers into 1D requests.
 ---
 
-## Overview
+## Midend Role
 
 The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** — for systems that only need 1D transfers, the frontend can drive the backend directly. **Use the ND midend** when your transfers are 2D or higher (e.g., tiling a matrix, copying framebuffer rows with stride). **Skip the midend** (connect frontend directly to backend) when all your transfers are 1D contiguous copies — the midend adds latency and area for no benefit in this case. See the [System Integration](../guides/system-integration/) guide for wiring examples showing how the midend connects to the frontend and backend.
 
@@ -20,7 +20,7 @@ Four midend variants are available:
 
 The ND midend (`idma_nd_midend`) decomposes an N-dimensional transfer into a sequence of 1D transfers. After each 1D burst completes, the midend checks whether the current dimension has remaining repetitions. If so, it adds the dimension's stride to the address and emits the next burst. When a dimension exhausts its repetitions, the next-higher dimension increments. Internally, this is implemented with cascaded counters (one per dimension) and a popcount-based selector that handles simultaneous dimension overflows.
 
-### Parameters
+### ND Parameters
 
 | Parameter | Description |
 |-----------|-------------|
@@ -86,7 +86,7 @@ It contains `NumEvents` countdown counters, each triggering an ND transfer when 
 
 **Example**: A sensor sampling system needs to copy 256 bytes from sensor MMIO (`0x4000_0000`) to a ring buffer (`0x8000_0000`) every 1000 clock cycles. Configure event channel 0 with: `src_addr = 0x4000_0000`, `dst_addr = 0x8000_0000`, `length = 256`, `countdown = 1000`. The RT midend will autonomously re-trigger this transfer every 1000 cycles.
 
-### Parameters
+### RT Parameters
 
 | Parameter | Description |
 |-----------|-------------|

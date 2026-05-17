@@ -3,7 +3,7 @@ title: Backend
 description: The backend executes 1D transfers over concrete transport protocols.
 ---
 
-## Overview
+## Backend Role
 
 The backend is the lowest layer of the iDMA pipeline. It takes 1D transfer requests from the midend and drives the actual bus transactions. Each backend variant targets a specific combination of read and write protocols. Generated modules follow the naming pattern `idma_backend_<variant>` (e.g., `idma_backend_rw_axi`, `idma_backend_r_obi_w_axi`).
 

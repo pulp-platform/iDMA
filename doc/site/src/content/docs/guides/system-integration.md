@@ -3,7 +3,7 @@ title: System Integration
 description: How to wire iDMA into an SoC, including type macros, parameters, and real-world examples.
 ---
 
-## Overview
+## Integration Overview
 
 This guide covers the practical steps for integrating iDMA into a system-on-chip: choosing a frontend/midend/backend combination, instantiating the type macros, wiring the bus interfaces, and setting the key parameters.
 

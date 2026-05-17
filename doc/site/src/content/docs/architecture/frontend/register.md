@@ -3,7 +3,7 @@ title: Register Frontend
 description: Memory-mapped register interface for submitting DMA transfers.
 ---
 
-## Overview
+## Register Frontend Role
 
 The register frontend (`idma_reg64_2d`) exposes a standard memory-mapped register file through which software configures and launches DMA transfers. It connects via the PULP register interface and is the most common frontend for general-purpose SoCs. The module is generated from `src/frontend/reg/tpl/idma_reg.sv.tpl`.
 

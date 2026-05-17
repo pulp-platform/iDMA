@@ -3,7 +3,7 @@ title: Descriptor Frontend
 description: Descriptor-ring frontend for hardware-managed transfer queues.
 ---
 
-## Overview
+## Descriptor Frontend Role
 
 The descriptor frontend (`idma_desc64_top`) uses a linked list of transfer descriptors in shared memory. Hardware fetches descriptors autonomously over an AXI read port, enabling software to enqueue multiple transfers without polling for completion of each one.
 

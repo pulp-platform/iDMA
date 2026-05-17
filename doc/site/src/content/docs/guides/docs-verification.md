@@ -3,7 +3,7 @@ title: Docs Verification Plan
 description: Quality checks to ensure iDMA docs are accurate, complete, and usable.
 ---
 
-## Overview
+## Docs QA Overview
 
 This plan defines how we verify documentation quality. It complements the RTL verification guide and focuses on correctness, clarity, and navigability of the docs.
 

@@ -3,7 +3,7 @@ title: Interfaces and Types
 description: Request, response, and option structs used across iDMA layers.
 ---
 
-## Overview
+## Interface Reference
 
 This page is the reference for `idma_req_t`, `options_t`, and `idma_rsp_t`. Use it when writing drivers or connecting custom frontends. For integration, prefer the convenience macros from `typedef.svh`.
 

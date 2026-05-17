@@ -3,7 +3,7 @@ title: Programming Model
 description: How requests flow through frontend, midend, and backend.
 ---
 
-## Overview
+## Model Overview
 
 iDMA’s programming model centers on a request/response contract. Frontends emit `idma_req_t` (or `idma_nd_req_t`), the backend executes the transfer, and the response `idma_rsp_t` signals completion or error.
 

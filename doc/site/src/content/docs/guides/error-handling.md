@@ -3,7 +3,7 @@ title: Error Handling
 description: How iDMA reports and propagates errors across the frontend, midend, and backend.
 ---
 
-## Overview
+## Error Handling Overview
 
 iDMA propagates error information from the backend (bus-level faults) back through the midend to the frontend, where software can read error status registers. Error handling is optional — controlled by the `ErrorCap` parameter. When enabled (`ErrorCap = ERROR_HANDLING`), the error handler FSM monitors datapath responses and gives software the choice to continue or abort a faulting transfer.
 
