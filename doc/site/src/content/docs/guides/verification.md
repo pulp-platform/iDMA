@@ -3,7 +3,7 @@ title: Verification
 description: Testbench architecture, job files, and simulation workflow for iDMA.
 ---
 
-## Overview
+## Verification Overview
 
 iDMA uses a SystemVerilog testbench driven by **job files** that describe transfer sequences. The testbench compares hardware behavior against a byte-accurate golden model. Tests are run with Questa or VCS, with job files located in `jobs/<backend_variant>/`.
 

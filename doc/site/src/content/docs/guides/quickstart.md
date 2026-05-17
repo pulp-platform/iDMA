@@ -3,7 +3,7 @@ title: Quickstart
 description: Minimal steps to integrate iDMA and run a transfer.
 ---
 
-## Overview
+## Quickstart Overview
 
 This guide shows the shortest path to an end-to-end iDMA transfer: choose a backend, define types, wire modules, and launch a request. It assumes a single clock domain and a 1D transfer flow.
 

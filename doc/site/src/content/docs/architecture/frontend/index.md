@@ -3,7 +3,7 @@ title: Frontend
 description: Frontends accept transfer descriptors from the platform and emit iDMA requests.
 ---
 
-## Overview
+## Frontend Role
 
 The frontend is the topmost layer of the iDMA pipeline. It provides the software-visible interface through which the host or an accelerator core submits transfer descriptors. iDMA ships three frontend families, each targeting a different integration style:
 

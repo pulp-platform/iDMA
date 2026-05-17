@@ -3,7 +3,7 @@ title: iDMA
 description: A modular DMA engine for heterogeneous PULP-platform SoCs.
 ---
 
-## Overview
+## What iDMA Is
 
 iDMA moves data between memories and peripherals across different bus protocols (AXI, OBI, TileLink) and supports multi-dimensional transfers. It splits the problem into three layers so you can mix and match integration styles without changing the core engine.
 

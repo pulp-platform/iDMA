@@ -3,7 +3,7 @@ title: Performance and Limitations
 description: Constraints, tradeoffs, and tuning guidance.
 ---
 
-## Overview
+## Constraints Overview
 
 This guide summarizes practical constraints and tradeoffs that impact performance, area, and correctness.
 
