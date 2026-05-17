@@ -11,7 +11,7 @@ please find some of the most important points below.
 * `master` only receives changes that have passed the full GitLab CI pipeline
   (which runs the proprietary internal verification flow, including the
   `nonfree/` child pipeline). When that pipeline passes on `devel`, a rolling
-  `devel → master` promotion PR is opened (or refreshed) automatically.
+  `devel -> master` promotion PR is opened (or refreshed) automatically.
 * Maintainers merge the promotion PR when they want to ship the verified
   `devel` snapshot to `master`.
 * For urgent fixes that should bypass the staging step, note "needs
