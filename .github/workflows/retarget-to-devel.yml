@@ -35,21 +35,40 @@ jobs:
           script: |
             const pr      = context.payload.pull_request.number;
             const repoUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}`;
+            const MARKER  = '<!-- retarget-to-devel -->';
+
             await github.rest.pulls.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: pr,
               base: 'devel'
             });
-            await github.rest.issues.createComment({
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pr,
-              body: [
-                '👋 Thanks for the contribution! This PR has been automatically retargeted to the `devel` branch.',
-                '',
-                `All external contributions land on \`devel\` first, where they go through internal verification (proprietary EDA flows) before being promoted to \`master\` by a maintainer. See [CONTRIBUTING.md](${repoUrl}/blob/master/CONTRIBUTING.md#branch-policy) for the full policy.`,
-                '',
-                'No action needed from you — please continue reviewing changes here.'
-              ].join('\n')
+              per_page: 100,
             });
+            if (comments.some(c => (c.body || '').includes(MARKER))) {
+              core.info('Retarget comment already posted; skipping.');
+              return;
+            }
+
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body: [
+                  MARKER,
+                  '👋 Thanks for the contribution! This PR has been automatically retargeted to the `devel` branch.',
+                  '',
+                  `All external contributions land on \`devel\` first, where they go through internal verification (proprietary EDA flows) before being promoted to \`master\` by a maintainer. See [CONTRIBUTING.md](${repoUrl}/blob/master/CONTRIBUTING.md#branch-policy) for the full policy.`,
+                  '',
+                  'No action needed from you — please continue reviewing changes here.'
+                ].join('\n')
+              });
+            } catch (err) {
+              core.warning(`Failed to post retarget comment: ${err.message}. PR was retargeted; contributor was not notified.`);
+            }
