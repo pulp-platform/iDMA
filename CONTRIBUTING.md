@@ -31,7 +31,7 @@ please find some of the most important points below.
 * Areas which are not clear by their name alone (e.g., "vendor") should be
   separated by a slash. For example "hw/vendor: Add patch directory".
 * Create pull requests from a fork rather than making new branches in
-  `github.com/pulp_platform/iDMA`.
+  `github.com/pulp-platform/iDMA`.
 * Target PRs at `devel`, not `master` (see [Branch Policy](#branch-policy)).
 * Do not force push.
 * Do not attempt to commit code with a non-Solderpad license without discussing

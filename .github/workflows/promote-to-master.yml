@@ -25,7 +25,7 @@ jobs:
       && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
     steps:
       - name: Open or update devel -> master PR
