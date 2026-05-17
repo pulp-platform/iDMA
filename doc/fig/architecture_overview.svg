@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1056" height="283" viewBox="0 0 1056 283">
+<defs><marker id="arrowhead-495057" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="#495057" /></marker><marker id="arrowhead-868e96" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="#868e96" /></marker></defs>
+<g transform="translate(40,20)">
+<rect x="60" y="100" width="180" height="80" rx="8" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"  />
+<rect x="360" y="100" width="180" height="80" rx="8" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="10 10"  />
+<rect x="660" y="100" width="180" height="80" rx="8" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"  />
+<path d="M240,140 L360,140" fill="none" stroke="#495057" stroke-width="2"  marker-end="url(#arrowhead-495057)"  />
+<path d="M540,140 L660,140" fill="none" stroke="#495057" stroke-width="2"  marker-end="url(#arrowhead-495057)"  />
+<path d="M660,160 L540,160" fill="none" stroke="#868e96" stroke-width="2" stroke-dasharray="10 10" marker-end="url(#arrowhead-868e96)"  />
+<path d="M360,160 L240,160" fill="none" stroke="#868e96" stroke-width="2" stroke-dasharray="10 10" marker-end="url(#arrowhead-868e96)"  />
+<path d="M0,140 L60,140" fill="none" stroke="#495057" stroke-width="2"  marker-end="url(#arrowhead-495057)"  />
+<path d="M840,140 L900,140" fill="none" stroke="#495057" stroke-width="2"  marker-end="url(#arrowhead-495057)"  />
+<text x="392" y="40.4" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="24" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="392" >iDMA Architecture Overview</tspan></text>
+<text x="150" y="143.15" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="18" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="150" >Frontend</tspan></text>
+<text x="60" y="200.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="60" >Register IF / Descriptors</tspan><tspan x="60" dy="16.200000000000003">Snitch ISA</tspan></text>
+<text x="450" y="143.15" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="18" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="450" >Midend</tspan></text>
+<text x="370" y="200.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="370" >N-D decomposition</tspan><tspan x="370" dy="16.200000000000003">(optional)</tspan></text>
+<text x="750" y="143.15" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="18" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="750" >Backend</tspan></text>
+<text x="675" y="200.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="675" >Legalizer → R/W</tspan><tspan x="675" dy="16.200000000000003">Transport Layer</tspan></text>
+<text x="300" y="131.7" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="middle" dominant-baseline="auto"><tspan x="300" >idma_req_t</tspan></text>
+<text x="600" y="131.7" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="middle" dominant-baseline="auto"><tspan x="600" >idma_req_t</tspan></text>
+<text x="600" y="151.7" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="600" >idma_rsp_t</tspan></text>
+<text x="300" y="151.7" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="300" >idma_rsp_t</tspan></text>
+<text x="0" y="120.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="0" >Platform</tspan><tspan x="0" dy="16.200000000000003">Interface</tspan></text>
+<text x="910" y="105.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="910" >AXI4</tspan><tspan x="910" dy="16.200000000000003">OBI</tspan><tspan x="910" dy="16.200000000000003">AXI Stream</tspan><tspan x="910" dy="16.200000000000003">INIT</tspan></text>
+</g>
+</svg>
