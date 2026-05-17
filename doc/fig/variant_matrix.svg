@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="368" viewBox="0 0 980 368">
+
+<g transform="translate(20,25)">
+<rect x="120" y="75" width="160" height="45" rx="0" fill="#e7f5ff" stroke="#868e96" stroke-width="1"  />
+<rect x="280" y="75" width="160" height="45" rx="0" fill="#e7f5ff" stroke="#868e96" stroke-width="1"  />
+<rect x="440" y="75" width="160" height="45" rx="0" fill="#e7f5ff" stroke="#868e96" stroke-width="1"  />
+<rect x="600" y="75" width="160" height="45" rx="0" fill="#e7f5ff" stroke="#868e96" stroke-width="1"  />
+<rect x="760" y="75" width="160" height="45" rx="0" fill="#e7f5ff" stroke="#868e96" stroke-width="1"  />
+<rect x="40" y="120" width="80" height="60" rx="0" fill="#e7f5ff" stroke="#868e96" stroke-width="1"  />
+<rect x="40" y="180" width="80" height="60" rx="0" fill="#e7f5ff" stroke="#868e96" stroke-width="1"  />
+<rect x="120" y="120" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="280" y="120" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="440" y="120" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="600" y="120" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="760" y="120" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="120" y="180" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="280" y="180" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="440" y="180" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="600" y="180" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="760" y="180" width="160" height="60" rx="0" fill="#f8f9fa" stroke="#868e96" stroke-width="1"  />
+<rect x="128" y="137" width="144" height="26" rx="4" fill="#4dabf7" stroke="#4dabf7" stroke-width="1"  />
+<rect x="288" y="137" width="144" height="26" rx="4" fill="#4dabf7" stroke="#4dabf7" stroke-width="1"  />
+<rect x="448" y="137" width="144" height="26" rx="4" fill="#4dabf7" stroke="#4dabf7" stroke-width="1"  />
+<rect x="768" y="137" width="144" height="26" rx="4" fill="#f76707" stroke="#f76707" stroke-width="1"  />
+<rect x="128" y="197" width="144" height="26" rx="4" fill="#4dabf7" stroke="#4dabf7" stroke-width="1"  />
+<rect x="608" y="197" width="144" height="26" rx="4" fill="#f76707" stroke="#f76707" stroke-width="1"  />
+<rect x="120" y="260" width="16" height="16" rx="3" fill="#4dabf7" stroke="#4dabf7" stroke-width="1"  />
+<rect x="270" y="260" width="16" height="16" rx="3" fill="#f76707" stroke="#f76707" stroke-width="1"  />
+<text x="399" y="33.7" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="22" fill="#1e1e1e" text-anchor="start" dominant-baseline="auto"><tspan x="399" >iDMA Backend Variants</tspan></text>
+<text x="469.95" y="61.05" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="13" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="469.95" >Write Protocol(s)</tspan></text>
+<text x="20" y="173.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="13" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="20" >Read</tspan><tspan x="20" dy="17.55">Protocol</tspan></text>
+<text x="200" y="99.60000000000001" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="200" >AXI4</tspan></text>
+<text x="360" y="99.60000000000001" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="360" >OBI</tspan></text>
+<text x="520" y="91.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="520" >AXI4 +</tspan><tspan x="520" dy="16.200000000000003">AXI Stream</tspan></text>
+<text x="680" y="91.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="680" >AXI4 +</tspan><tspan x="680" dy="16.200000000000003">INIT</tspan></text>
+<text x="840" y="91.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="840" >OBI +</tspan><tspan x="840" dy="16.200000000000003">INIT</tspan></text>
+<text x="80" y="152.45000000000002" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="14" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="80" >AXI4</tspan></text>
+<text x="80" y="212.45000000000002" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="14" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="80" >OBI</tspan></text>
+<text x="200" y="151.92499999999998" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#4dabf7" text-anchor="middle" dominant-baseline="auto"><tspan x="200" >rw_axi</tspan></text>
+<text x="360" y="151.92499999999998" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#4dabf7" text-anchor="middle" dominant-baseline="auto"><tspan x="360" >r_axi_w_obi</tspan></text>
+<text x="520" y="151.92499999999998" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#4dabf7" text-anchor="middle" dominant-baseline="auto"><tspan x="520" >rw_axi_rw_axis</tspan></text>
+<text x="840" y="151.92499999999998" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#f76707" text-anchor="middle" dominant-baseline="auto"><tspan x="840" >r_axi_rw_init_rw_obi</tspan></text>
+<text x="200" y="211.92499999999998" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#4dabf7" text-anchor="middle" dominant-baseline="auto"><tspan x="200" >r_obi_w_axi</tspan></text>
+<text x="680" y="211.92499999999998" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#f76707" text-anchor="middle" dominant-baseline="auto"><tspan x="680" >r_obi_rw_init_w_axi</tspan></text>
+<text x="142" y="270.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#343a40" text-anchor="start" dominant-baseline="auto"><tspan x="142" >Base variants</tspan></text>
+<text x="292" y="270.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#343a40" text-anchor="start" dominant-baseline="auto"><tspan x="292" >Occamy variants</tspan></text>
+<text x="120" y="297.35" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="120" >Naming: r_&lt;read&gt;_w_&lt;write&gt;  •  rw = same protocol for both  •  Extend via IDMA_ADD_IDS</tspan></text>
+</g>
+</svg>
