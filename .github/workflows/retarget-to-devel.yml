@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: retarget-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   retarget:
     name: Retarget external PRs targeting master
@@ -29,7 +33,8 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const pr = context.payload.pull_request.number;
+            const pr      = context.payload.pull_request.number;
+            const repoUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}`;
             await github.rest.pulls.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -43,7 +48,7 @@ jobs:
               body: [
                 '👋 Thanks for the contribution! This PR has been automatically retargeted to the `devel` branch.',
                 '',
-                'All external contributions land on `devel` first, where they go through internal verification (proprietary EDA flows) before being promoted to `master` by a maintainer. See [CONTRIBUTING.md](../blob/master/CONTRIBUTING.md#branch-policy) for the full policy.',
+                `All external contributions land on \`devel\` first, where they go through internal verification (proprietary EDA flows) before being promoted to \`master\` by a maintainer. See [CONTRIBUTING.md](${repoUrl}/blob/master/CONTRIBUTING.md#branch-policy) for the full policy.`,
                 '',
                 'No action needed from you — please continue reviewing changes here.'
               ].join('\n')

@@ -6,11 +6,15 @@ name: promote-to-master
 
 on:
   workflow_run:
-    workflows: ["gitlab-ci"]
+    workflows: ["ci"]
     types: [completed]
 
 permissions:
   contents: read
+
+concurrency:
+  group: promote-to-master
+  cancel-in-progress: false
 
 jobs:
   promote:
@@ -43,7 +47,7 @@ jobs:
             }
 
             const body = [
-              'Auto-opened/refreshed after `gitlab-ci` passed on `devel`.',
+              'Auto-opened/refreshed after `ci` (incl. `gitlab-ci`) passed on `devel`.',
               '',
               `\`devel\` is ${cmp.data.ahead_by} commit(s) ahead of \`master\`.`,
               `Last verified commit: \`${short}\` ✅`,
@@ -81,7 +85,10 @@ jobs:
               });
               core.info(`Opened promotion PR #${created.data.number}.`);
             } catch (err) {
-              if (err.status === 422) {
+              const alreadyExists = err.status === 422
+                && (err.response?.data?.errors || []).some(e =>
+                     (e.message || '').toLowerCase().includes('pull request already exists'));
+              if (alreadyExists) {
                 core.info('Promotion PR already exists (race with a concurrent run); nothing to do.');
                 return;
               }
