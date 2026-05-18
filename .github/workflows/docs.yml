@@ -37,14 +37,14 @@ jobs:
         uses: ts-graphviz/setup-graphviz@v2
       -
         name: Install RISC-V GCC toolchain
-        uses: pulp-platform/pulp-actions/riscv-gcc-install@v2
+        uses: pulp-platform/pulp-actions/riscv-gcc-install@v2.5.0
         with:
           distro: ubuntu-22.04
           nightly-date: '2023.03.14'
           target: riscv64-elf
       -
         name: Install Bender
-        uses: pulp-platform/pulp-actions/bender-install@v2
+        uses: pulp-platform/pulp-actions/bender-install@v2.5.0
         with:
           version: 0.27.3
       -

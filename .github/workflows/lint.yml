@@ -22,7 +22,7 @@ jobs:
       uses: actions/checkout@v4
     -
       name: Check license
-      uses: pulp-platform/pulp-actions/lint-license@v2
+      uses: pulp-platform/pulp-actions/lint-license@v2.5.0
       with:
         license: |
           Copyright (\d{4}(-\d{4})?\s)?(ETH Zurich and University of Bologna|lowRISC contributors).
