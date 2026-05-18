@@ -25,14 +25,8 @@ jobs:
         name: Checkout
         uses: actions/checkout@v4
       -
-        name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.9
-          cache: pip
-      -
-        name: Install Python requirements
-        run: pip install -r requirements.txt
+        name: Install uv
+        uses: astral-sh/setup-uv@v5
       -
         name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
@@ -58,13 +52,13 @@ jobs:
           echo "PATH=.:$PATH" >> ${GITHUB_ENV}
       -
         name: Check clean
-        run: make idma_clean_all
+        run: uv run --locked make idma_clean_all
       -
         name: Check whether clean
         run: git status && test -z "$(git status --porcelain --ignore-submodules)"
       -
         name: Build target
-        run: make -j9 idma_${{ matrix.target }}_all
+        run: uv run --locked make -j9 idma_${{ matrix.target }}_all
       -
         name: Check whether stale
         run: git status && test -z "$(git status --porcelain --ignore-submodules)"

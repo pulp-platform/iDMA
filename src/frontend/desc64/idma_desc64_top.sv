@@ -20,10 +20,10 @@ module idma_desc64_top #(
     parameter type         idma_req_t            = logic,
     /// burst response type. See the documentation of the idma backend for details
     parameter type         idma_rsp_t            = logic,
-    /// regbus interface types. Use the REG_BUS_TYPEDEF macros to define the types
+    /// regbus interface types. Use the APB_TYPEDEF macros to define the types
     /// or see the idma backend documentation for more details
-    parameter type         reg_rsp_t              = logic,
-    parameter type         reg_req_t              = logic,
+    parameter type         apb_rsp_t              = logic,
+    parameter type         apb_req_t              = logic,
     /// AXI interface types used for fetching descriptors.
     /// Use the AXI_TYPEDEF_ALL macros to define the types
     parameter type         axi_rsp_t              = logic,
@@ -62,9 +62,9 @@ module idma_desc64_top #(
     /// exposes whether the DMA is busy on bit 0 and whether FIFOs are full
     /// on bit 1.
     /// master request
-    input  reg_req_t              slave_req_i       ,
+    input  apb_req_t              slave_req_i       ,
     /// master response
-    output reg_rsp_t              slave_rsp_o       ,
+    output apb_rsp_t              slave_rsp_o       ,
 
     /// backend interface
     /// burst request submission
@@ -164,8 +164,8 @@ logic  input_addr_valid, input_addr_ready;
 
 logic do_irq_out;
 
-idma_desc64_reg_pkg::idma_desc64_reg2hw_t reg2hw;
-idma_desc64_reg_pkg::idma_desc64_hw2reg_t hw2reg;
+idma_desc64_reg_pkg::idma_desc64_reg__out_t reg2hw;
+idma_desc64_reg_pkg::idma_desc64_reg__in_t  hw2reg;
 
 addr_t aw_addr;
 
@@ -234,29 +234,27 @@ end else begin : gen_aw_w_chan
     end
 end
 
-assign hw2reg.status.busy.d       = queued_addr_valid     ||
-                                    next_wb_addr_valid    ||
-                                    idma_req_valid_o      ||
-                                    master_req_o.b_ready  ||
-                                    master_req_o.aw_valid ||
-                                    w_counter_q > 0       ||
-                                    idma_busy_i           ||
-                                    ar_busy;
+assign hw2reg.status.busy.next      = queued_addr_valid     ||
+                                      next_wb_addr_valid    ||
+                                      idma_req_valid_o      ||
+                                      master_req_o.b_ready  ||
+                                      master_req_o.aw_valid ||
+                                      w_counter_q > 0       ||
+                                      idma_busy_i           ||
+                                      ar_busy;
 
-assign hw2reg.status.busy.de      = 1'b1;
-assign hw2reg.status.fifo_full.d  = !input_addr_ready;
-assign hw2reg.status.fifo_full.de = 1'b1;
+assign hw2reg.status.fifo_full.next = !input_addr_ready;
 
-assign input_addr = reg2hw.desc_addr.q;
+assign input_addr = reg2hw.desc_addr.desc_addr.value;
 
 idma_desc64_reg_wrapper #(
-    .reg_req_t(reg_req_t),
-    .reg_rsp_t(reg_rsp_t)
+    .apb_req_t(apb_req_t),
+    .apb_rsp_t(apb_rsp_t)
 ) i_reg_wrapper (
     .clk_i,
     .rst_ni,
-    .reg_req_i          (slave_req_i),
-    .reg_rsp_o          (slave_rsp_o),
+    .apb_req_i          (slave_req_i),
+    .apb_rsp_o          (slave_rsp_o),
     .reg2hw_o           (reg2hw),
     .hw2reg_i           (hw2reg),
     .devmode_i          (1'b0),

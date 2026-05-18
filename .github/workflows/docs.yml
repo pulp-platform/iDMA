@@ -24,14 +24,10 @@ jobs:
         name: Checkout
         uses: actions/checkout@v4
       -
-        name: Install Python
-        uses: actions/setup-python@v5
+        name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: 3.9
-          cache: pip
-      -
-        name: Install Python requirements
-        run: pip install -r requirements.txt
+          python-version: "3.11"
       -
         name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
@@ -57,7 +53,7 @@ jobs:
           echo "PATH=.:$PATH" >> ${GITHUB_ENV}
       -
         name: Build Doc
-        run: make idma_doc_all
+        run: uv run --locked make idma_doc_all
       -
         name: Create publish docs
         uses: actions/upload-pages-artifact@v3

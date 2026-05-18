@@ -27,6 +27,7 @@ exclude-ext:
   - svg
   - txt
   - json
+  - toml
   - md
   - lock
   - local

@@ -1,0 +1,45 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Authors:
+// - Axel Vanoni <axvanoni@ethz.ch>
+// - Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+
+`ifndef IDMA_DESC64_REG_RDL
+`define IDMA_DESC64_REG_RDL
+
+addrmap idma_desc64_reg {
+    default regwidth = 64;
+
+    reg desc_addr {
+        name = "desc_addr";
+		desc = "This register specifies the bus address at which the first transfer
+			descriptor can be found. A write to this register starts the transfer.";
+        default sw = w;
+        default hw = r;
+        field {
+            swmod;
+        } desc_addr [63:0] = 0xFFFFFFFFFFFFFFFF;
+    };
+
+    reg status {
+        name = "status";
+		desc = "This register contains status information for the DMA.";
+        default sw = r;
+        default hw = w;
+        field {
+            desc = "The DMA is busy";
+        } busy [0:0] = 0;
+        field {
+            desc = "If this bit is set, the buffers of the DMA are full. Any further submissions via the
+					desc_addr register may overwrite previously submitted jobs or get lost.";
+        } fifo_full [1:1] = 0;
+
+    };
+
+    desc_addr desc_addr;
+    status status;
+};
+
+`endif // IDMA_DESC64_REG_RDL

@@ -22,14 +22,8 @@ jobs:
       with:
           fetch-depth: 0
     -
-      name: Install Python
-      uses: actions/setup-python@v5
-      with:
-          python-version: '3.9'
-          cache: 'pip'
-    -
-      name: Python Requirements
-      run: pip install -r requirements.txt
+      name: Install uv
+      uses: astral-sh/setup-uv@v5
     -
       name: Install Bender
       uses: pulp-platform/pulp-actions/bender-install@v2
@@ -45,11 +39,11 @@ jobs:
         echo "PATH=.:$PATH" >> ${GITHUB_ENV}
     -
       name: Build hardware
-      run: make -B idma_hw_all
+      run: uv run --locked make -B idma_hw_all
     -
       name: Deploy generated files
       run: |
         git config user.email "github-ci@iis.ee.ethz.ch"
         git config user.name "github-ci"
         git fetch --all
-        python3 util/deploy.py
+        uv run --locked util/deploy.py
