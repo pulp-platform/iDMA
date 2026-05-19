@@ -9,4 +9,4 @@ sphinx-rtd-theme
 recommonmark
 sphinxcontrib-svg2pdfconverter
 pylint
-setuptools<81
+setuptools<79
