@@ -1,8 +1,5 @@
 # Global owners
-* @thommythomaso
+* @thommythomaso @DanielKellerM
 
 # Frontends
-src/frontends @micprog
-
-# Systems
-src/systems @micprog
+src/frontend @micprog
