@@ -11,6 +11,8 @@ stages:
 
 init:
   stage: init
+  before_script:
+    - uv pip install --system -r requirements.txt --cache-dir ${CACHEDIR}/uv
   script:
     - make idma_nonfree_init
     - make idma_nonfree_ci
