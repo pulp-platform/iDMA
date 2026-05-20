@@ -441,7 +441,7 @@ idma_spinx_doc_clean:
 
 IDMA_NONFREE_REMOTE ?= git@iis-git.ee.ethz.ch:bslk/idma/idma-non-free.git
 IDMA_NONFREE_DIR    ?= $(IDMA_ROOT)/nonfree
-IDMA_NONFREE_COMMIT ?= 8165876
+IDMA_NONFREE_COMMIT ?= 9aed0cb
 
 idma_nonfree_init:
 	git clone $(IDMA_NONFREE_REMOTE) $(IDMA_NONFREE_DIR)
