@@ -11,6 +11,10 @@ stages:
 
 init:
   stage: init
+  before_script:
+    - uv venv .venv
+    - source .venv/bin/activate
+    - uv pip install -r requirements.txt
   script:
     - make idma_nonfree_init
     - make idma_nonfree_ci
