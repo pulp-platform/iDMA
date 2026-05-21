@@ -180,14 +180,19 @@ module tb_idma_rt_midend;
         event_ena    = {1'd1, 1'd1, 1'd1, 1'd1, 1'd1};
         #5000ns;
 
-        // Drain any remaining outstanding bypass responses.
-        @(posedge clk);
+        // Drain outstanding bypass responses with a bounded wait so lost
+        // routing doesn't masquerade as "responses haven't arrived yet".
+        for (int i = 0; i < 1000; i++) begin
+            if (bypass_rsp_seen >= bypass_req_issued) break;
+            @(posedge clk);
+        end
+
         // -- Final check: every bypass request must produce exactly one
         //                 response on the bypass output. A routing mismatch
         //                 would either lose bypass responses (they go to
         //                 the internal sink) or duplicate them.
-        assert (bypass_rsp_seen == bypass_req_issued) else begin
-            $error("[tb_idma_rt_midend] routing mismatch: bypass_req_issued=%0d bypass_rsp_seen=%0d",
+        if (bypass_rsp_seen != bypass_req_issued) begin
+            $fatal(1, "[tb_idma_rt_midend] routing mismatch: bypass_req_issued=%0d bypass_rsp_seen=%0d",
                    bypass_req_issued, bypass_rsp_seen);
         end
 

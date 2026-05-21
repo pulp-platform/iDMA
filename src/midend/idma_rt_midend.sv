@@ -111,6 +111,9 @@ module idma_rt_midend #(
     idma_rsp_t   int_rsp;
     logic        int_valid;
 
+    // choice-FIFO backpressure signal
+    logic        choice_fifo_ready;
+
     // generate the counters timing the events and assemble the transfers
     for (genvar c = 0; c < NumEvents; c++) begin : gen_counters
         // counter instance
@@ -180,7 +183,7 @@ module idma_rt_midend #(
         .inp_ready_o ( { nd_req_ready_o, nd_req_ready_int } ),
         .oup_data_o  ( out_req                              ),
         .oup_valid_o ( nd_req_valid_o                       ),
-        .oup_ready_i ( nd_req_ready_i                       )
+        .oup_ready_i ( nd_req_ready_i & choice_fifo_ready   )
     );
 
     // assemble arbiter inputs
@@ -206,10 +209,10 @@ module idma_rt_midend #(
         .testmode_i ( 1'b0                                  ),
         .usage_o    ( /* NC */                              ),
         .data_i     ( choice                                ),
-        .valid_i    ( nd_req_valid_o & nd_req_ready_i       ),
-        .ready_o    ( /* HACK: NC */                        ),
+        .valid_i    ( nd_req_valid_o & nd_req_ready_i & choice_fifo_ready ),
+        .ready_o    ( choice_fifo_ready                     ),
         .data_o     ( choice_head                           ),
-        .valid_o    ( /* HACK: NC */                        ),
+        .valid_o    ( /* NC */                              ),
         .ready_i    ( burst_rsp_valid_i & burst_rsp_ready_o )
     );
 
