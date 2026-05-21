@@ -1103,6 +1103,7 @@ axi_rsp_mem       )
                 id = now.id[4:0];
         % endif
     % endfor
+                default: $fatal(1, "Unhandled destination protocol (%0d) post-coerce", now.dst_protocol);
             endcase
             if (now.err_addr.size() == 0) begin
                 while (writes_in_flight[now.dst_protocol][id] > 0) begin
