@@ -1077,7 +1077,7 @@ axi_rsp_mem       )
     % endif
 % endfor
  })) begin
-                $fatal(1, "Requested Source Protocol (%d) Not Supported", now.src_protocol);
+                now.src_protocol = idma_pkg::${database[used_read_protocols[-1]]['protocol_enum']};
             end
             if (!(now.dst_protocol inside {\
 % for index, protocol in enumerate(used_write_protocols):
@@ -1087,7 +1087,7 @@ axi_rsp_mem       )
     % endif
 % endfor
  })) begin
-                $fatal(1, "Requested Destination Protocol (%d) Not Supported", now.dst_protocol);
+                now.dst_protocol = idma_pkg::${database[used_write_protocols[-1]]['protocol_enum']};
             end
             // wait for DMA to complete
             ack_tf_handle_err(now);
