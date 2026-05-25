@@ -1,1 +1,6 @@
 fig/graph
+diagrams/
+site/node_modules/
+site/dist/
+site/.astro/
+TODO*

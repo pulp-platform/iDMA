@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="729" height="639" viewBox="0 0 729 639">
+<defs><marker id="arrowhead-343a40" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="#343a40" /></marker><marker id="arrowhead-868e96" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="#868e96" /></marker></defs>
+<g transform="translate(-55,40)">
+<rect x="210" y="60" width="280" height="50" rx="8" fill="#f8f9fa" stroke="#1e1e1e" stroke-width="2"  />
+<rect x="100" y="155" width="100" height="40" rx="4" fill="#d0bfff" stroke="#1e1e1e" stroke-width="1.5"  />
+<rect x="204" y="155" width="260" height="40" rx="4" fill="#bac8ff" stroke="#1e1e1e" stroke-width="1.5"  />
+<rect x="468" y="155" width="100" height="40" rx="4" fill="#c5f6fa" stroke="#1e1e1e" stroke-width="1.5"  />
+<rect x="100" y="275" width="230" height="70" rx="6" fill="#fff9db" stroke="#495057" stroke-width="1"  />
+<rect x="350" y="275" width="230" height="70" rx="6" fill="#e7f5ff" stroke="#495057" stroke-width="1"  />
+<rect x="120" y="410" width="200" height="105" rx="6" fill="#edf2ff" stroke="#364fc7" stroke-width="1.5"  />
+<rect x="360" y="410" width="200" height="105" rx="6" fill="#ebfbee" stroke="#2b8a3e" stroke-width="1.5"  />
+<path d="M350,110 L350,155" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M202,140 L202,210" fill="none" stroke="#e03131" stroke-width="1.5" stroke-dasharray="7.5 7.5"   />
+<path d="M466,140 L466,210" fill="none" stroke="#e03131" stroke-width="1.5" stroke-dasharray="7.5 7.5"   />
+<path d="M270,390 L270,410" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M430,390 L430,410" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M570,515 L570,420" fill="none" stroke="#868e96" stroke-width="1" stroke-dasharray="5 5" marker-end="url(#arrowhead-868e96)"  />
+<text x="354.5" y="18.7" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="22" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="354.5" >Legalizer</tspan></text>
+<text x="195" y="38.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="195" >Splits 1D transfers into protocol-legal bursts</tspan></text>
+<text x="350" y="87.45" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="350" >idma_req_t</tspan></text>
+<text x="225" y="120.5" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="10" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="225" >src_addr   dst_addr   length   protocol options</tspan></text>
+<text x="100" y="132.35" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#495057" text-anchor="start" dominant-baseline="auto"><tspan x="100" >Example: 6 KB transfer starting at 0x0C00 (3 KB into a 4 KB page)</tspan></text>
+<text x="150" y="169.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="150" >Burst 1</tspan><tspan x="150" dy="14.850000000000001">1 KB</tspan></text>
+<text x="334" y="169.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="334" >Burst 2</tspan><tspan x="334" dy="14.850000000000001">4 KB</tspan></text>
+<text x="518" y="169.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="518" >Burst 3</tspan><tspan x="518" dy="14.850000000000001">1 KB</tspan></text>
+<text x="202" y="221.5" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="10" fill="#e03131" text-anchor="middle" dominant-baseline="auto"><tspan x="202" >0x1000</tspan></text>
+<text x="466" y="221.5" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="10" fill="#e03131" text-anchor="middle" dominant-baseline="auto"><tspan x="466" >0x2000</tspan></text>
+<text x="95" y="221.5" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="10" fill="#495057" text-anchor="start" dominant-baseline="auto"><tspan x="95" >0x0C00</tspan></text>
+<text x="538" y="221.5" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="10" fill="#495057" text-anchor="start" dominant-baseline="auto"><tspan x="538" >0x2400</tspan></text>
+<text x="207" y="144.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#e03131" text-anchor="start" dominant-baseline="auto"><tspan x="207" >4 KB page boundaries (AXI)</tspan></text>
+<text x="598" y="158.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#495057" text-anchor="start" dominant-baseline="auto"><tspan x="598" >Page size per protocol:</tspan></text>
+<text x="598" y="172.65" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="598" >AXI      4 KB</tspan><tspan x="598" dy="12.15">OBI      1 word (no bursts)</tspan><tspan x="598" dy="12.15">TileLink POW2 aligned</tspan></text>
+<text x="100" y="260.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#343a40" text-anchor="start" dominant-baseline="auto"><tspan x="100" >Read / Write synchronization</tspan></text>
+<text x="112" y="292.35" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#343a40" text-anchor="start" dominant-baseline="auto"><tspan x="112" >Coupled (default)</tspan></text>
+<text x="112" y="308.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="112" >Both paths split at whichever</tspan><tspan x="112" dy="12.15">page boundary comes first.</tspan><tspan x="112" dy="12.15">Used when both protocols burst.</tspan></text>
+<text x="362" y="292.35" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#343a40" text-anchor="start" dominant-baseline="auto"><tspan x="362" >Decoupled</tspan></text>
+<text x="362" y="308.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="362" >Read and write advance at their</tspan><tspan x="362" dy="12.15">own pace. Required when one side</tspan><tspan x="362" dy="12.15">has no burst support (e.g. OBI).</tspan></text>
+<text x="100" y="385.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#343a40" text-anchor="start" dominant-baseline="auto"><tspan x="100" >Per-burst output (emitted each cycle until transfer complete)</tspan></text>
+<text x="130" y="428.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#364fc7" text-anchor="start" dominant-baseline="auto"><tspan x="130" >Read Request</tspan></text>
+<text x="130" y="445.65" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="9" fill="#495057" text-anchor="start" dominant-baseline="auto"><tspan x="130" >Protocol metadata (AR)</tspan><tspan x="130" dy="12.15">  addr, len, size, burst, id</tspan><tspan x="130" dy="12.15"></tspan><tspan x="130" dy="12.15">Datapath control</tspan><tspan x="130" dy="12.15">  offset, shift, is_single</tspan></text>
+<text x="370" y="428.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start" dominant-baseline="auto"><tspan x="370" >Write Request</tspan></text>
+<text x="370" y="445.65" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="9" fill="#495057" text-anchor="start" dominant-baseline="auto"><tspan x="370" >Protocol metadata (AW)</tspan><tspan x="370" dy="12.15">  addr, len, size, burst, id</tspan><tspan x="370" dy="12.15"></tspan><tspan x="370" dy="12.15">Datapath control</tspan><tspan x="370" dy="12.15">  offset, shift, num_beats</tspan><tspan x="370" dy="12.15">  last, super_last</tspan></text>
+<text x="160" y="530.35" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="11" fill="#364fc7" text-anchor="start" dominant-baseline="auto"><tspan x="160" >idma_r_req_t</tspan></text>
+<text x="400" y="530.35" font-family="&apos;Cascadia Code&apos;, &apos;Fira Code&apos;, monospace" font-size="11" fill="#2b8a3e" text-anchor="start" dominant-baseline="auto"><tspan x="400" >idma_w_req_t</tspan></text>
+<text x="575" y="447.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="575" >Advance</tspan><tspan x="575" dy="12.15">addr,</tspan><tspan x="575" dy="12.15">reduce</tspan><tspan x="575" dy="12.15">length</tspan></text>
+<text x="100" y="553.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="100" >Iterates one burst per cycle. last flag marks the final burst of the transfer.</tspan></text>
+</g>
+</svg>
