@@ -47,8 +47,8 @@ module idma_${identifier} #(
 );
 
   /// Maximum number of streams is set to 16. It can be enlarged, but the register file
-  /// needs to be adapted too. It's set to 2 here to avoid binding to 0 useless registers in the pulp_cluster instance
-  localparam int unsigned MaxNumStreams = 32'd2;
+  /// needs to be adapted too.
+  localparam int unsigned MaxNumStreams = 32'd16;
 
   `APB_TYPEDEF_ALL(apb, logic[31:0], logic[31:0], logic[3:0])
   apb_req_t  [NumRegs-1:0] apb_req;
@@ -219,6 +219,13 @@ module idma_${identifier} #(
         assign dma_hw2reg[i].next_id[c].rd_ack = '0;
         assign dma_hw2reg[i].done_id[c].rd_data.done_id = '0;
         assign dma_hw2reg[i].done_id[c].rd_ack = '0;
+    end
+
+    // tie-off unused channels
+    for (genvar c = NumStreams; c < MaxNumStreams; c++) begin : gen_hw2reg_unused
+        assign dma_hw2reg[i].status[c]  = '0;
+        assign dma_hw2reg[i].next_id[c] = '0;
+        assign dma_hw2reg[i].done_id[c] = '0;
     end
 
   end
