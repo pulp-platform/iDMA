@@ -1,0 +1,96 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+name: promote-to-master
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-to-master
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Open or refresh promotion PR
+    if: >
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_branch == 'devel'
+      && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Open or update devel -> master PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha   = context.payload.workflow_run.head_sha;
+            const short = sha.substring(0, 7);
+
+            const cmp = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              base:  'master',
+              head:  'devel',
+            });
+            if (cmp.data.ahead_by === 0) {
+              core.info('devel is not ahead of master; nothing to promote.');
+              return;
+            }
+
+            const body = [
+              'Auto-opened/refreshed after `ci` (incl. `gitlab-ci`) passed on `devel`.',
+              '',
+              `\`devel\` is ${cmp.data.ahead_by} commit(s) ahead of \`master\`.`,
+              `Last verified commit: \`${short}\` ✅`,
+              '',
+              'Merge this PR to ship the verified `devel` snapshot to `master`.',
+            ].join('\n');
+
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              base:  'master',
+              head:  `${context.repo.owner}:devel`,
+              state: 'open',
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                pull_number: existing.data[0].number,
+                body,
+              });
+              core.info(`Updated existing promotion PR #${existing.data[0].number}.`);
+              return;
+            }
+
+            try {
+              const created = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                title: 'Promote verified devel to master',
+                head:  'devel',
+                base:  'master',
+                body,
+              });
+              core.info(`Opened promotion PR #${created.data.number}.`);
+            } catch (err) {
+              const alreadyExists = err.status === 422
+                && (err.response?.data?.errors || []).some(e =>
+                     (e.message || '').toLowerCase().includes('pull request already exists'));
+              if (alreadyExists) {
+                core.info('Promotion PR already exists (race with a concurrent run); nothing to do.');
+                return;
+              }
+              throw err;
+            }

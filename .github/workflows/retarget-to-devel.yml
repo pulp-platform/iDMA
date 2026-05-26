@@ -1,0 +1,74 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+name: retarget-to-devel
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retarget-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  retarget:
+    name: Retarget external PRs targeting master
+    runs-on: ubuntu-latest
+    if: >
+      github.event.pull_request.base.ref == 'master'
+      && !(github.event.pull_request.head.ref == 'devel'
+           && github.event.pull_request.head.repo.full_name == github.repository)
+      && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                   github.event.pull_request.author_association)
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Retarget to devel and comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr      = context.payload.pull_request.number;
+            const repoUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}`;
+            const MARKER  = '<!-- retarget-to-devel -->';
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr,
+              base: 'devel'
+            });
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              per_page: 100,
+            });
+            if (comments.some(c => (c.body || '').includes(MARKER))) {
+              core.info('Retarget comment already posted; skipping.');
+              return;
+            }
+
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body: [
+                  MARKER,
+                  '👋 Thanks for the contribution! This PR has been automatically retargeted to the `devel` branch.',
+                  '',
+                  `All external contributions land on \`devel\` first, where they go through internal verification (proprietary EDA flows) before being promoted to \`master\` by a maintainer. See [CONTRIBUTING.md](${repoUrl}/blob/master/CONTRIBUTING.md#branch-policy) for the full policy.`,
+                  '',
+                  'No action needed from you — please continue reviewing changes here.'
+                ].join('\n')
+              });
+            } catch (err) {
+              core.warning(`Failed to post retarget comment: ${err.message}. PR was retargeted; contributor was not notified.`);
+            }
