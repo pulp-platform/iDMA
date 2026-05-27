@@ -7,6 +7,7 @@
 
 /// Legalizer module implementing a page splitter
 module idma_legalizer_page_splitter #(
+    parameter int unsigned Burst_len     = 4'd5,
     parameter int unsigned OffsetWidth   = 32'd2,
     parameter int unsigned PageAddrWidth = 32'd5,
     parameter type         addr_t        = logic,
@@ -34,7 +35,7 @@ module idma_legalizer_page_splitter #(
         end else begin
             // should the "virtual" page be reduced? e.g. the transfers split into
             // smaller chunks than the AXI page size?
-            page_addr_width = OffsetWidth + (reduce_len_i ? max_llen_i : 'd8);
+            page_addr_width = OffsetWidth + (reduce_len_i ? max_llen_i : Burst_len);
             // a page can be a maximum of 4kB (12 bit)
             page_addr_width = page_addr_width > 'd12 ? 'd12 : page_addr_width;
         end
