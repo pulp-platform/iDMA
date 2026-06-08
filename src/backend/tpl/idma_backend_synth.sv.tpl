@@ -32,6 +32,8 @@ module idma_backend_synth_${name_uniqueifier} #(
     parameter int unsigned TFLenWidth          = 32'd32,
     /// The depth of the memory system the backend is attached to
     parameter int unsigned MemSysDepth         = 32'd0,
+    /// Burst Len (for actual burst length do 8 byte * 2^(BurstLen))
+    parameter int unsigned BurstLen = 4'd5,
     /// Should both data shifts be done before the dataflow element?
     /// If this is enabled, then the data inserted into the dataflow element
     /// will no longer be word aligned, but only a single shifter is needed
@@ -81,9 +83,7 @@ module idma_backend_synth_${name_uniqueifier} #(
     /// Transfer length type (do not override!)
     parameter type tf_len_t                    = logic[TFLenWidth-1:0],
     /// Offset type (do not override!)
-    parameter type offset_t                    = logic[OffsetWidth-1:0],
-    /// Burst Len (for actual burst length do 8 byte * 2^(Burst_len))
-    parameter int unsigned Burst_len = 4'd5
+    parameter type offset_t                    = logic[OffsetWidth-1:0]
 )(
     input  logic                   clk_i,
     input  logic                   rst_ni,
@@ -328,7 +328,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     % endif
 % endfor
 ,
-        .Burst_len            ( Burst_len               ),
+        .BurstLen             ( BurstLen                ),
         .write_meta_channel_t ( write_meta_channel_t    ),
         .read_meta_channel_t  ( read_meta_channel_t     )
     ) i_idma_backend (
