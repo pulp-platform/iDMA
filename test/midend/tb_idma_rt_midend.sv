@@ -171,10 +171,6 @@ module tb_idma_rt_midend;
 
     // -- Main stimulus -------------------------------------------------
     initial begin
-        bypass_req_issued = '0;
-        bypass_rsp_seen   = '0;
-        internal_rsp_seen = '0;
-
         event_counts = {32'd17, 32'd300, 32'd800, 32'd1000, 32'd2000};
         #10ns;
         event_ena    = {1'd1, 1'd1, 1'd1, 1'd1, 1'd1};
