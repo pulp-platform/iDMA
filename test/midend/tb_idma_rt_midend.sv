@@ -176,11 +176,11 @@ module tb_idma_rt_midend;
 
         // Every bypass request must produce exactly one bypass response.
         if (bypass_rsp_seen != bypass_req_issued) begin
-            $fatal(1, "[tb_idma_rt_midend] routing mismatch: bypass_req_issued=%0d bypass_rsp_seen=%0d",
+            $fatal(1, "[tb_idma_rt_midend] routing mismatch: issued=%0d seen=%0d",
                    bypass_req_issued, bypass_rsp_seen);
         end
 
-        $display("[tb_idma_rt_midend] bypass requests: %0d, bypass responses: %0d, internal responses: %0d",
+        $display("[tb_idma_rt_midend] bypass req: %0d, bypass rsp: %0d, internal rsp: %0d",
                  bypass_req_issued, bypass_rsp_seen, internal_rsp_seen);
         $finish();
     end
