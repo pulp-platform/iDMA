@@ -1,0 +1,5 @@
+build/
+*.so
+modelsim.ini
+transcript
+work/

@@ -97,6 +97,18 @@ sources:
       # Level 2
       - src/frontend/desc64/idma_desc64_top.sv
 
+  # Snitch inst64 standalone harness; needs snitch_cluster for idma_inst64_top + opcode pkg
+  - target: all(snitch_cluster, idma_test)
+    files:
+      # Level 0
+      - systems/snitch/test/idma_inst64_tb_pkg.sv
+      # Level 1
+      - systems/snitch/test/idma_inst64_drv_if.sv
+      - systems/snitch/test/idma_inst64_base.sv
+      # Level 2
+      - systems/snitch/test/tb_idma_inst64_copy.sv
+      - systems/snitch/test/tb_idma_inst64_transpose.sv
+
   # Synthesis wrappers
   - target: synth
     files:
