@@ -24,14 +24,14 @@ jobs:
         name: Checkout
         uses: actions/checkout@v4
       -
-        name: Install Python
-        uses: actions/setup-python@v5
+        name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: 3.9
-          cache: pip
+          python-version: '3.9'
+          activate-environment: true
       -
         name: Install Python requirements
-        run: pip install -r requirements.txt
+        run: uv pip install -r requirements.txt
       -
         name: Install RISC-V GCC toolchain
         uses: pulp-platform/pulp-actions/riscv-gcc-install@v2.5.0

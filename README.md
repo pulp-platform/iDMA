@@ -466,8 +466,9 @@ various tools are required.
 - [`bender >= v0.32.0`](https://github.com/pulp-platform/bender)
 - [`Verilator = v4.202`](https://www.veripool.org/verilator)
 - [`Verible >= v0.0-1051-gd4cd328`](https://github.com/chipsalliance/verible)
-- [`Python3 >= 3.8`](https://www.python.org/downloads/) including some the libraries listed
-  in [`requirements.txt`](requirements.txt)
+- [`Python3 >= 3.8`](https://www.python.org/downloads/) with the libraries listed in
+  [`requirements.txt`](requirements.txt), installed e.g. using [`uv`](https://docs.astral.sh/uv/):
+  `uv pip install -r requirements.txt`
 
 ### Building the Documentation
 Use `make doc` to build the documentation. The output is located at `doc/build`.
