@@ -148,6 +148,7 @@ IDMA_WAVE_ALL    += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backen
 .PHONY: idma_reg_clean
 
 IDMA_DOC_SRC_DIR := $(IDMA_ROOT)/doc/src
+IDMA_DOC_FIG_DIR := $(IDMA_ROOT)/doc/fig
 IDMA_DOC_OUT_DIR := $(IDMA_ROOT)/target/doc
 IDMA_HTML_DIR    := $(IDMA_DOC_OUT_DIR)/html
 IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontend
@@ -228,22 +229,41 @@ $(IDMA_PICKLE_DIR)/%.sv: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $
 	mkdir -p $(IDMA_PICKLE_DIR)
 	$(BENDER) pickle $(IDMA_PICKLE_TARGETS) --top $* --expand-macros $(IDMA_PICKLE_ARGS) -o $@
 
+# hierarchy graphs
+IDMA_DOT     ?= dot
+IDMA_AST2DOT := $(IDMA_UTIL_DIR)/ast2dot.py
+
+$(IDMA_PICKLE_DIR)/%.dot: $(IDMA_AST2DOT) $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_PICKLE_DIR)
+	set -o pipefail; $(BENDER) pickle $(IDMA_PICKLE_TARGETS) --top $* --expand-macros --ast-json | \
+		$(PYTHON) $(IDMA_AST2DOT) - --top $* -o $@
+
+$(IDMA_DOC_FIG_DIR)/graph/%.png: $(IDMA_PICKLE_DIR)/%.dot
+	mkdir -p $(IDMA_DOC_FIG_DIR)/graph
+	$(IDMA_DOT) -Tpng $< > $@
+
 idma_pickle_clean:
 	rm -rf $(IDMA_PICKLE_DIR)
+	rm -f  $(IDMA_DOC_FIG_DIR)/graph/*.png
 
 # 1Ds
+IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_DOC_FIG_DIR)/graph/idma_backend_synth_$Y.png)
 IDMA_PICKLE_ALL  += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_PICKLE_DIR)/idma_backend_synth_$Y.sv)
 
 # nDs
+IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_nd_midend_synth.png
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_nd_midend_synth.sv
 
 # descriptor-based frontend
+IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_desc64_synth.png
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_desc64_synth.sv
 
 # RT midend
+IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_rt_midend_synth.png
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_rt_midend_synth.sv
 
 # Mempool midend
+IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_mp_midend_synth.png
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_mp_midend_synth.sv
 
 
