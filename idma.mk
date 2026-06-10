@@ -7,9 +7,7 @@
 
 BENDER      ?= bender
 CAT         ?= cat
-DOT         ?= dot
 GIT         ?= git
-MORTY       ?= morty
 PRINTF      ?= printf
 PYTHON      ?= python3
 SPHINXBUILD ?= sphinx-build
@@ -41,13 +39,9 @@ IDMA_FE_IDS      := $(IDMA_BASE_FE_IDS) $(IDMA_ADD_FE_IDS)
 # iDMA paths
 IDMA_ROOT     ?= $(shell $(BENDER) path idma)
 IDMA_REG_DIR  := $(shell $(BENDER) path register_interface)
-IDMA_CC_DIR   := $(shell $(BENDER) path common_cells)
 IDMA_REGTOOL  ?= $(IDMA_REG_DIR)/vendor/lowrisc_opentitan/util/regtool.py
 IDMA_UTIL_DIR := $(IDMA_ROOT)/util
 IDMA_RTL_DIR  := $(IDMA_ROOT)/target/rtl
-
-# cf_math_pkg file
-IDMA_CF_PKG   := $(IDMA_CC_DIR)/src/cf_math_pkg.sv
 
 # job file
 IDMA_JOBS_JSON := jobs/jobs.json
@@ -59,9 +53,6 @@ IDMA_BENDER_FILES := $(IDMA_ROOT)/Bender.yml \
 # Helper functions
 # Relative paths for VLOGAN
 IDMA_VLOGAN_REL_PATHS    := | grep -v "ROOT=" | sed '3 i ROOT="../../.."'
-# Morty helpers
-IDMA_PATH_ESCAPED        := $(shell pwd | sed 's_/_\\/_g')
-IDMA_RELATIVE_PATH_REGEX := 's/$(IDMA_PATH_ESCAPED)/./'
 
 # Ensure half-built targets are purged
 .DELETE_ON_ERROR:
@@ -156,7 +147,6 @@ IDMA_WAVE_ALL    += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backen
 .PHONY: idma_reg_clean
 
 IDMA_DOC_SRC_DIR := $(IDMA_ROOT)/doc/src
-IDMA_DOC_FIG_DIR := $(IDMA_ROOT)/doc/fig
 IDMA_DOC_OUT_DIR := $(IDMA_ROOT)/target/doc
 IDMA_HTML_DIR    := $(IDMA_DOC_OUT_DIR)/html
 IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontend
@@ -224,67 +214,35 @@ $(IDMA_FULL_TB): $(IDMA_TB_ALL)
 
 
 # ---------------
-# Morty
+# Pickle
 # ---------------
 
-.PHONY: idma_morty_clean
+.PHONY: idma_pickle_clean
 
-IDMA_PICKLE_DIR  := $(IDMA_ROOT)/target/morty
-IDMA_MORTY_ARGS  ?=
+IDMA_PICKLE_DIR     := $(IDMA_ROOT)/target/morty
+IDMA_PICKLE_TARGETS := -t rtl -t synth -t asic -t snitch_cluster
+IDMA_PICKLE_ARGS    ?=
 
-$(IDMA_PICKLE_DIR)/sources.json: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
+$(IDMA_PICKLE_DIR)/%.sv: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
 	mkdir -p $(IDMA_PICKLE_DIR)
-	$(BENDER) sources -f -t rtl -t synth -t asic -t snitch_cluster | sed -e $(IDMA_RELATIVE_PATH_REGEX) > $@
+	$(BENDER) pickle $(IDMA_PICKLE_TARGETS) --top $* --expand-macros $(IDMA_PICKLE_ARGS) -o $@
 
-$(IDMA_PICKLE_DIR)/%.sv: $(IDMA_PICKLE_DIR)/sources.json
-	$(MORTY) -f $< -i --top $* $(IDMA_MORTY_ARGS) --propagate_defines -o $@.pre
-	# Hack cf_math_pkg in
-	if grep -q "package cf_math_pkg;" "$@.pre"; then \
-		$(CAT) $@.pre > $@; \
-	else \
-		$(CAT) $(IDMA_CF_PKG) $@.pre > $@; \
-	fi
-	rm -f $@.pre
-
-$(IDMA_HTML_DIR)/%/index.html: $(IDMA_PICKLE_DIR)/%.sv
-	mkdir -p $(IDMA_HTML_DIR)/$*
-	$(MORTY) -i --doc $(IDMA_HTML_DIR)/$* $<
-
-$(IDMA_PICKLE_DIR)/%.dot: $(IDMA_PICKLE_DIR)/sources.json
-	$(MORTY) -f $< -i $(IDMA_MORTY_ARGS) --top $* --propagate_defines --graph_file $@ > /dev/null
-
-$(IDMA_DOC_FIG_DIR)/graph/%.png: $(IDMA_PICKLE_DIR)/%.dot
-	mkdir -p $(IDMA_DOC_FIG_DIR)/graph
-	$(DOT) -Tpng $< > $@
-
-idma_morty_clean:
+idma_pickle_clean:
 	rm -rf $(IDMA_PICKLE_DIR)
-	rm -f  $(IDMA_DOC_FIG_DIR)/graph/*.png
-	rm -rf $(IDMA_HTML_DIR)
 
 # 1Ds
-IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_DOC_FIG_DIR)/graph/idma_backend_synth_$Y.png)
-IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_HTML_DIR)/idma_backend_synth_$Y/index.html)
 IDMA_PICKLE_ALL  += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_PICKLE_DIR)/idma_backend_synth_$Y.sv)
 
 # nDs
-IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_nd_midend_synth.png
-IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_nd_midend_synth/index.html
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_nd_midend_synth.sv
 
 # descriptor-based frontend
-IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_desc64_synth.png
-IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_desc64_synth/index.html
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_desc64_synth.sv
 
 # RT midend
-IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_rt_midend_synth.png
-IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_rt_midend_synth/index.html
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_rt_midend_synth.sv
 
 # Mempool midend
-IDMA_RTL_DOC_ALL += $(IDMA_DOC_FIG_DIR)/graph/idma_mp_midend_synth.png
-IDMA_RTL_DOC_ALL += $(IDMA_HTML_DIR)/idma_mp_midend_synth/index.html
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_mp_midend_synth.sv
 
 
@@ -387,17 +345,10 @@ IDMA_VLT_PARAMS  ?=
 
 .PRECIOUS: $(IDMA_VLT_DIR)/%_elab.log
 
-$(IDMA_VLT_DIR)/%_elab.log: $(IDMA_PICKLE_DIR)/sources.json
+$(IDMA_VLT_DIR)/%_elab.log: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
 	mkdir -p $(IDMA_VLT_DIR)
 	# We need a dedicated pickle here to set the defines
-	$(MORTY) -f $< -i --top $(IDMA_VLT_TOP) -DVERILATOR --propagate_defines -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
-	# Hack cf_math_pkg in
-	if grep -q "package cf_math_pkg;" "$(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre"; then \
-  		$(CAT) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
-	else \
-		$(CAT) $(IDMA_CF_PKG) $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre > $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv; \
-	fi
-	rm -f $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv.pre
+	$(BENDER) pickle $(IDMA_PICKLE_TARGETS) --top $(IDMA_VLT_TOP) -D VERILATOR --expand-macros -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv
 	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
 idma_verilator_clean:
@@ -459,7 +410,7 @@ idma_nonfree_clean:
 
 .PHONY: idma_clean_all idma_clean idma_misc_clean
 
-idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_morty_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_spinx_doc_clean idma_trace_clean
+idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_spinx_doc_clean idma_trace_clean
 
 idma_misc_clean:
 	rm -rf scripts/__pycache__
