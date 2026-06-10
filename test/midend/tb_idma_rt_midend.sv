@@ -8,12 +8,8 @@
 
 `include "idma/typedef.svh"
 
-/// Sanity testbench for the RT midend.
-/// Drives both the counter-generated (internal) and bypass nd_req streams,
-/// then checks that the number of responses routed to the bypass output
-/// matches the number of bypass requests issued. A routing mismatch
-/// (responses going to the wrong output) indicates a misalignment between
-/// the choice FIFO and the arbiter, the bug fixed by Flavien Solt's patch.
+/// Sanity testbench for the RT midend: checks bypass responses are routed
+/// to the bypass output, not lost to the internal sink.
 module tb_idma_rt_midend;
 
     logic clk;
@@ -107,8 +103,7 @@ module tb_idma_rt_midend;
     assign out_req_ready = 1'b1;
     assign byp_rsp_ready = 1'b1;
 
-    // Drive a "pretend" response one cycle after every accepted request.
-    // This keeps requests and responses in 1:1 order at the downstream side.
+    // Drive a response one cycle after every accepted request (1:1 order).
     logic out_req_handshake;
     assign out_req_handshake = out_req_valid & out_req_ready;
 
@@ -117,7 +112,7 @@ module tb_idma_rt_midend;
             out_rsp_valid <= 1'b0;
             out_rsp       <= '0;
         end else begin
-            // If we already issued a response and it was not yet consumed, keep it.
+            // Hold an unconsumed response.
             if (out_rsp_valid && !out_rsp_ready) begin
                 out_rsp_valid <= 1'b1;
             end else begin
@@ -138,8 +133,7 @@ module tb_idma_rt_midend;
                 bypass_req_issued <= bypass_req_issued + 1;
             if (byp_rsp_valid && byp_rsp_ready)
                 bypass_rsp_seen <= bypass_rsp_seen + 1;
-            // Burst responses consumed by the demux but not routed to bypass
-            // are "internal" responses (consumed by the internal sink).
+            // Responses not routed to bypass are internal.
             if (out_rsp_valid && out_rsp_ready && !byp_rsp_valid)
                 internal_rsp_seen <= internal_rsp_seen + 1;
         end
@@ -149,7 +143,6 @@ module tb_idma_rt_midend;
     initial begin : drive_bypass
         byp_req_valid = 1'b0;
         byp_req       = '0;
-        // Pre-load a request payload distinguishable from the counters'.
         byp_req.burst_req.length   = 32'h0000_1000;
         byp_req.burst_req.src_addr = 32'hC000_0000;
         byp_req.burst_req.dst_addr = 32'hD000_0000;
@@ -159,7 +152,6 @@ module tb_idma_rt_midend;
 
         // Issue 8 bypass requests interleaved with the counter traffic.
         for (int i = 0; i < 8; i++) begin
-            // Random spacing to interleave with internal arbitration.
             repeat (3 + (i % 4)) @(posedge clk);
             byp_req_valid = 1'b1;
             byp_req.burst_req.length = 32'h0000_1000 + i;
@@ -176,17 +168,13 @@ module tb_idma_rt_midend;
         event_ena    = {1'd1, 1'd1, 1'd1, 1'd1, 1'd1};
         #5000ns;
 
-        // Drain outstanding bypass responses with a bounded wait so lost
-        // routing doesn't masquerade as "responses haven't arrived yet".
+        // Bounded drain for outstanding bypass responses.
         for (int i = 0; i < 1000; i++) begin
             if (bypass_rsp_seen >= bypass_req_issued) break;
             @(posedge clk);
         end
 
-        // -- Final check: every bypass request must produce exactly one
-        //                 response on the bypass output. A routing mismatch
-        //                 would either lose bypass responses (they go to
-        //                 the internal sink) or duplicate them.
+        // Every bypass request must produce exactly one bypass response.
         if (bypass_rsp_seen != bypass_req_issued) begin
             $fatal(1, "[tb_idma_rt_midend] routing mismatch: bypass_req_issued=%0d bypass_rsp_seen=%0d",
                    bypass_req_issued, bypass_rsp_seen);
