@@ -313,8 +313,7 @@ $(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_R
 
 idma_sim_tb_idma_rt_midend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc \
-	    tb_idma_rt_midend -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_rt_midend -do "run -all; quit"
 
 idma_sim_clean:
 	rm -rf $(IDMA_VSIM_DIR)/compile.tcl
