@@ -172,9 +172,23 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     output idma_busy_t busy_o
 );
 
+    /// Extra write-descriptor slots covering the compute (transpose) tile-fill latency
+    localparam int unsigned ComputeFifoDepth = ${"StrbWidth" if enable_compute else "32'd0"};
+% if enable_compute:
+
+    /// Per-op compute set baked into this variant (frontends may cross-check)
+    localparam idma_pkg::compute_enable_t ComputeEnable =
+        '{${', '.join("%s: 1'b1" % op for op in compute_ops)}};
+`ifndef SYNTHESIS
+    // no engine flush on abort: compute is incompatible with error handling
+    initial assert (ErrorCap == idma_pkg::NO_ERROR_HANDLING) else
+        $fatal(1, "compute requires ErrorCap == NO_ERROR_HANDLING");
+`endif
+% endif
+
     /// The localparam MetaFifoDepth holds the maximum number of transfers that can be
     /// in-flight under any circumstances.
-    localparam int unsigned MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth;
+    localparam int unsigned MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth + ComputeFifoDepth;
 
     /// Address type
     typedef logic [AddrWidth-1:0]   addr_t;
@@ -235,6 +249,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         offset_t              shift;
         axi_pkg::len_t        num_beats;
         logic                 is_single;
+        idma_pkg::compute_options_t compute;
     } w_dp_req_t;
 
     /// The datapath write response type provides feedback from the write part of the datapath:
@@ -298,6 +313,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         idma_pkg::axi_options_t src_axi_opt;
         idma_pkg::axi_options_t dst_axi_opt;
         logic                   super_last;
+        idma_pkg::compute_options_t compute;
     } idma_mut_tf_opt_t;
 
     /// The mutable transfer type holds important information that is mutated by the
@@ -494,7 +510,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.dst_addr[OffsetWidth-1:0]),
             shift:        OffsetWidth'(- idma_req_i.dst_addr[OffsetWidth-1:0]),
             num_beats:    len,
-            is_single:    len == '0
+            is_single:    len == '0,
+            compute:      idma_req_i.opt.compute
         };
 
         // if the legalizer is bypassed; every burst is the last of the 1D transfer
@@ -621,7 +638,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     );
 
     stream_fifo_optimal_wrap #(
-        .Depth     ( NumAxInFlight ),
+        .Depth     ( NumAxInFlight + ComputeFifoDepth ),
         .type_t    ( w_dp_req_t    ),
         .PrintInfo ( PrintFifoInfo )
     ) i_w_dp_req (

@@ -12,7 +12,7 @@
 import argparse
 import sys
 
-from mario.util import prepare_ids, prepare_fids
+from mario.util import prepare_ids, prepare_compute_ids, prepare_fids
 from mario.database import read_database
 from mario.transport_layer import render_transport_layer
 from mario.legalizer import render_legalizer
@@ -44,6 +44,8 @@ def main():
     parser.add_argument('--entity', choices=sorted(GENABLE_ENTITIES), dest='entity', required=True,
         help='The entity to generate from a given configuration.')
     parser.add_argument('--ids', dest='ids', nargs='*', help='configuration IDs')
+    parser.add_argument('--compute-ids', dest='compute_ids', nargs='*', default=[],
+        help='configuration IDs with on-the-fly compute enabled (IDMA_VIDMA_IDS)')
     parser.add_argument('--fids', dest='fids', nargs='*', help='frontend IDs')
     parser.add_argument('--db', dest='db', nargs='*', help='Database files')
     parser.add_argument('--tpl', dest='tpl', required=True, help='Template file')
@@ -51,16 +53,17 @@ def main():
 
     # prepare database and ids
     protocol_ids = prepare_ids(args.ids)
+    compute_cfg = prepare_compute_ids(args.compute_ids)
     frontend_ids = prepare_fids(args.fids)
     protocol_db = read_database(args.db)
 
     # decide what to render
     if args.entity == 'transport':
-        print(render_transport_layer(protocol_ids, protocol_db, args.tpl))
+        print(render_transport_layer(protocol_ids, protocol_db, args.tpl, compute_cfg))
     elif args.entity == 'legalizer':
-        print(render_legalizer(protocol_ids, protocol_db, args.tpl))
+        print(render_legalizer(protocol_ids, protocol_db, args.tpl, compute_cfg))
     elif args.entity == 'backend':
-        print(render_backend(protocol_ids, protocol_db, args.tpl))
+        print(render_backend(protocol_ids, protocol_db, args.tpl, compute_cfg))
     elif args.entity == 'vsim_wave':
         print(render_vsim_wave(protocol_ids, protocol_db, args.tpl))
     elif args.entity == 'synth_wrapper':

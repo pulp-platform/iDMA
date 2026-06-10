@@ -85,7 +85,8 @@ legalizer_write_data_path: |
         tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
         shift: opt_tf_q.write_shift,
         num_beats: 'd0,
-        is_single: w_num_bytes <= StrbWidth
+        is_single: w_num_bytes <= StrbWidth,
+        compute: opt_tf_q.compute
     };
 read_template: |
     idma_tilelink_read #(
