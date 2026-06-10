@@ -220,7 +220,7 @@ $(IDMA_FULL_TB): $(IDMA_TB_ALL)
 
 .PHONY: idma_pickle_clean
 
-IDMA_PICKLE_DIR     := $(IDMA_ROOT)/target/morty
+IDMA_PICKLE_DIR     := $(IDMA_ROOT)/target/pickle
 IDMA_PICKLE_TARGETS := -t rtl -t synth -t asic -t snitch_cluster
 IDMA_PICKLE_ARGS    ?=
 
