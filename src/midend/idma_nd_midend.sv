@@ -65,6 +65,13 @@ module idma_nd_midend #(
     /// How many bits are required to index the counters
     localparam int unsigned StrideSelWidth = $clog2(NumDim-1) + 'd1;
 
+`ifndef SYNTHESIS
+    // strides are added with same-width arithmetic; narrower strides would not sign-extend
+    initial assert ($bits(nd_req_i.d_req[0].src_strides) == $bits(nd_req_i.burst_req.src_addr))
+        else $fatal(1, "idma_nd_midend: stride width (%0d) != address width (%0d)",
+                    $bits(nd_req_i.d_req[0].src_strides), $bits(nd_req_i.burst_req.src_addr));
+`endif
+
     // The counter currently active (this is added to the address)
     logic [StrideSelWidth-1:0] stride_sel_d, stride_sel_q;
 
