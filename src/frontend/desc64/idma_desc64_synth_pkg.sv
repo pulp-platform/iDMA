@@ -8,7 +8,7 @@
 /// synth package
 package idma_desc64_synth_pkg;
 
-    `include "register_interface/typedef.svh"
+    `include "apb/typedef.svh"
     `include "axi/typedef.svh"
     `include "idma/typedef.svh"
 
@@ -30,7 +30,7 @@ package idma_desc64_synth_pkg;
     typedef logic [UserWidth-1:0]  user_t;
     typedef logic [TFLenWidth-1:0] tf_len_t;
 
-    `REG_BUS_TYPEDEF_ALL(reg, addr_t, data_t, strb_t)
+    `APB_TYPEDEF_ALL(apb, addr_t, data_t, strb_t)
     `AXI_TYPEDEF_ALL_CT(axi, axi_req_t, axi_rsp_t, addr_t, id_t, data_t, strb_t, user_t)
     `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, id_t, addr_t, tf_len_t)
     `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
