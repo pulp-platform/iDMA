@@ -626,6 +626,14 @@ idma_spinx_doc: $(IDMA_RTL_DOC_ALL)
 idma_spinx_doc_clean:
 	rm -rf $(IDMA_DOC_OUT_DIR)
 
+.PHONY: idma_doc_site
+
+IDMA_SITE_DIR := $(IDMA_ROOT)/doc/site
+
+idma_doc_site: $(IDMA_RTL_DOC_ALL)
+	mkdir -p $(IDMA_SITE_DIR)/public/fig/graph
+	cp -f $(IDMA_DOC_FIG_DIR)/graph/*.png $(IDMA_SITE_DIR)/public/fig/graph/
+
 
 # --------------
 # Nonfree
