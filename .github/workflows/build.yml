@@ -41,6 +41,9 @@ jobs:
           nightly-date: '2023.03.14'
           target: riscv64-elf
       -
+        name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v2
+      -
         name: Install Bender
         uses: pulp-platform/pulp-actions/bender-install@v2.5.0
         with:
