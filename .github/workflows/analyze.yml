@@ -21,14 +21,14 @@ jobs:
       name: Checkout
       uses: actions/checkout@v4
     -
-      name: Install Python
-      uses: actions/setup-python@v5
+      name: Install uv
+      uses: astral-sh/setup-uv@v7
       with:
           python-version: '3.9'
-          cache: 'pip'
+          activate-environment: true
     -
       name: Python Requirements
-      run: pip install -r requirements.txt
+      run: uv pip install -r requirements.txt
     -
       name: List contributors
       run: scripts/list-contributors | tee contributions.txt
@@ -48,14 +48,14 @@ jobs:
       name: Checkout
       uses: actions/checkout@v4
     -
-      name: Install Python
-      uses: actions/setup-python@v5
+      name: Install uv
+      uses: astral-sh/setup-uv@v7
       with:
           python-version: '3.9'
-          cache: 'pip'
+          activate-environment: true
     -
       name: Python Requirements
-      run: pip install -r requirements.txt
+      run: uv pip install -r requirements.txt
     -
       name: List todos
       run: scripts/list-todos | tee open_todos.txt
