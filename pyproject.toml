@@ -1,0 +1,24 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "idma"
+version = "0.6.5"
+requires-python = ">=3.11"
+dependencies = [
+    "GitPython",
+    "pre-commit",
+    "hjson",
+    "tabulate",
+    "pyyaml",
+    "mako",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "recommonmark",
+    "sphinxcontrib-svg2pdfconverter",
+    "pylint",
+    "peakrdl>=1.5.0",
+    "peakrdl-rawheader>=0.2.4",
+    "setuptools<79",
+]

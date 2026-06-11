@@ -27,11 +27,7 @@ jobs:
         name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.9'
-          activate-environment: true
-      -
-        name: Install Python requirements
-        run: uv pip install -r requirements.txt
+          enable-cache: true
       -
         name: Install RISC-V GCC toolchain
         uses: pulp-platform/pulp-actions/riscv-gcc-install@v2.5.0
@@ -49,7 +45,7 @@ jobs:
           version: 0.32.0
       -
         name: Build Doc
-        run: make idma_doc_all
+        run: uv run --locked make idma_doc_all
       -
         name: Create publish docs
         uses: actions/upload-pages-artifact@v3

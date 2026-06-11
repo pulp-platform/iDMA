@@ -24,14 +24,10 @@ jobs:
       name: Install uv
       uses: astral-sh/setup-uv@v7
       with:
-          python-version: '3.9'
-          activate-environment: true
-    -
-      name: Python Requirements
-      run: uv pip install -r requirements.txt
+          enable-cache: true
     -
       name: List contributors
-      run: scripts/list-contributors | tee contributions.txt
+      run: uv run --locked scripts/list-contributors | tee contributions.txt
     -
       name: Upload contributions.txt
       uses: actions/upload-artifact@v4
@@ -51,14 +47,10 @@ jobs:
       name: Install uv
       uses: astral-sh/setup-uv@v7
       with:
-          python-version: '3.9'
-          activate-environment: true
-    -
-      name: Python Requirements
-      run: uv pip install -r requirements.txt
+          enable-cache: true
     -
       name: List todos
-      run: scripts/list-todos | tee open_todos.txt
+      run: uv run --locked scripts/list-todos | tee open_todos.txt
     -
       name: Upload todos.txt
       uses: actions/upload-artifact@v4
