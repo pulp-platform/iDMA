@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1095" height="482" viewBox="0 0 1095 482">
+<defs><marker id="arrowhead-343a40" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="#343a40" /></marker><marker id="arrowhead-868e96" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="#868e96" /></marker><marker id="arrowhead-adb5bd" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="#adb5bd" /></marker></defs>
+<g transform="translate(20,25)">
+<rect x="160" y="140" width="140" height="90" rx="8" fill="#a5d8ff" stroke="#343a40" stroke-width="2"  />
+<rect x="400" y="140" width="140" height="90" rx="8" fill="#d0bfff" stroke="#343a40" stroke-width="2" stroke-dasharray="10 10"  />
+<rect x="640" y="140" width="140" height="90" rx="8" fill="#b2f2bb" stroke="#343a40" stroke-width="2"  />
+<rect x="170" y="290" width="120" height="50" rx="6" fill="#fff3bf" stroke="#343a40" stroke-width="1.5"  />
+<rect x="20" y="150" width="90" height="70" rx="6" fill="#f1f3f5" stroke="#868e96" stroke-width="1.5"  />
+<rect x="870" y="150" width="90" height="70" rx="6" fill="#f1f3f5" stroke="#868e96" stroke-width="1.5"  />
+<path d="M110,185 L160,185" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M300,175 L400,175" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M400,195 L300,195" fill="none" stroke="#868e96" stroke-width="1" stroke-dasharray="5 5" marker-end="url(#arrowhead-868e96)"  />
+<path d="M540,175 L640,175" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M640,195 L540,195" fill="none" stroke="#868e96" stroke-width="1" stroke-dasharray="5 5" marker-end="url(#arrowhead-868e96)"  />
+<path d="M780,170 L870,170" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M780,200 L870,200" fill="none" stroke="#343a40" stroke-width="1.5"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M215,230 L215,290" fill="none" stroke="#343a40" stroke-width="1"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M245,290 L245,230" fill="none" stroke="#343a40" stroke-width="1"  marker-end="url(#arrowhead-343a40)"  />
+<path d="M710,230 L710,315 L290,315" fill="none" stroke="#adb5bd" stroke-width="1" stroke-dasharray="5 5" marker-end="url(#arrowhead-adb5bd)"  />
+<path d="M710,230 L710,365 L230,365" fill="none" stroke="#adb5bd" stroke-width="1" stroke-dasharray="5 5" marker-end="url(#arrowhead-adb5bd)"  />
+<text x="699.5" y="33.7" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="22" fill="#1e1e1e" text-anchor="middle" dominant-baseline="auto"><tspan x="699.5" >iDMA System Integration</tspan></text>
+<text x="200" y="55.2" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="12" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="200" >Typical configuration: Register Frontend (64-bit 2D) + ND Midend + AXI Backend</tspan></text>
+<text x="230" y="177.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="15" fill="#343a40" text-anchor="middle" dominant-baseline="auto"><tspan x="230" >Register</tspan><tspan x="230" dy="20.25">Frontend</tspan></text>
+<text x="170" y="241.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="170" >idma_reg64_2d_top</tspan></text>
+<text x="470" y="177.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="15" fill="#343a40" text-anchor="middle" dominant-baseline="auto"><tspan x="470" >ND</tspan><tspan x="470" dy="20.25">Midend</tspan></text>
+<text x="415" y="241.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="415" >idma_nd_midend</tspan></text>
+<text x="710" y="187.625" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="15" fill="#343a40" text-anchor="middle" dominant-baseline="auto"><tspan x="710" >Backend</tspan></text>
+<text x="645" y="241.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="645" >idma_backend_rw_axi</tspan></text>
+<text x="230" y="316.925" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="11" fill="#343a40" text-anchor="middle" dominant-baseline="auto"><tspan x="230" >Transfer ID Gen</tspan></text>
+<text x="65" y="178.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="13" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="65" >CPU</tspan><tspan x="65" dy="17.55">RegBus</tspan></text>
+<text x="915" y="178.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="13" fill="#868e96" text-anchor="middle" dominant-baseline="auto"><tspan x="915" >AXI</tspan><tspan x="915" dy="17.55">Fabric</tspan></text>
+<text x="113" y="175.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="113" >reg_req/rsp</tspan></text>
+<text x="305" y="167.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="305" >idma_nd_req_t</tspan></text>
+<text x="305" y="207.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="305" >idma_rsp_t</tspan></text>
+<text x="550" y="167.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="550" >idma_req_t</tspan></text>
+<text x="550" y="207.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="550" >idma_rsp_t</tspan></text>
+<text x="785" y="162.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="785" >AR / R</tspan></text>
+<text x="785" y="212.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="785" >AW / W / B</tspan></text>
+<text x="175" y="245.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="175" >next_id</tspan></text>
+<text x="248" y="245.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#5c7cfa" text-anchor="start" dominant-baseline="auto"><tspan x="248" >done_id</tspan></text>
+<text x="645" y="306.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="645" >issue / retire</tspan></text>
+<text x="410" y="356.65" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="9" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="410" >busy_o → busy_i</tspan></text>
+<text x="600" y="393.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="600" >Key parameters:  DataWidth  AddrWidth  NumAxInFlight  BufferDepth(≥3)  ErrorCap</tspan></text>
+<text x="600" y="411.5" font-family="&apos;Helvetica Neue&apos;, Helvetica, Arial, sans-serif" font-size="10" fill="#868e96" text-anchor="start" dominant-baseline="auto"><tspan x="600" >Type macros:  `IDMA_TYPEDEF_REQ_T  `IDMA_TYPEDEF_RSP_T  `AXI_TYPEDEF_REQ_T</tspan></text>
+</g>
+</svg>
