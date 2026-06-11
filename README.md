@@ -463,8 +463,7 @@ iDMA can directly be integrated after cloning it from this repository. However, 
 the configuration registers, build the documentation, and run various checks on the source code,
 various tools are required.
 
-- [`bender >= v0.24.0`](https://github.com/pulp-platform/bender)
-- [`morty >= v0.6.0`](https://github.com/zarubaf/morty)
+- [`bender >= v0.32.0`](https://github.com/pulp-platform/bender)
 - [`Verilator = v4.202`](https://www.veripool.org/verilator)
 - [`Verible >= v0.0-1051-gd4cd328`](https://github.com/chipsalliance/verible)
 - [`Python3 >= 3.8`](https://www.python.org/downloads/) including some the libraries listed
