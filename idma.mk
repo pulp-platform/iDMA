@@ -40,8 +40,6 @@ IDMA_FE_IDS      := $(IDMA_BASE_FE_IDS) $(IDMA_ADD_FE_IDS)
 
 # iDMA paths
 IDMA_ROOT     ?= $(shell $(BENDER) path idma)
-IDMA_REG_DIR  := $(shell $(BENDER) path register_interface)
-IDMA_REGTOOL  ?= $(IDMA_REG_DIR)/vendor/lowrisc_opentitan/util/regtool.py
 IDMA_UTIL_DIR := $(IDMA_ROOT)/util
 IDMA_RTL_DIR  := $(IDMA_ROOT)/target/rtl
 
