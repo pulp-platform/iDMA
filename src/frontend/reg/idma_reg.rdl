@@ -1,0 +1,165 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Authors:
+// - Michael Rogenmoser <michaero@iis.ee.ethz.ch>
+// - Thomas Benz <tbenz@iis.ee.ethz.ch>
+
+`ifndef IDMA_REG_REG_RDL
+`define IDMA_REG_REG_RDL
+
+addrmap idma_reg #(
+    longint unsigned SysAddrWidth = 32, // Address width
+    longint unsigned NumDims = 2, // Number of dimensions available
+    longint unsigned Log2NumDims = 0, // Log2 of NumDims
+    longint unsigned NumProtBits = 3 // Number of protocol bits
+) {
+    default regwidth = 32;
+
+    reg conf {
+        regwidth = 32;
+        name = "conf";
+        desc = "Configuration Register for DMA settings";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Decouple R-AW";
+        } decouple_aw [0:0] = 0;
+        field {
+            desc = "Decouple R-W";
+        } decouple_rw [1:1] = 0;
+        field {
+            desc = "Reduce maximal source burst length";
+        } src_reduce_len [2:2] = 0;
+        field {
+            desc = "Reduce maximal destination burst length";
+        } dst_reduce_len [3:3] = 0;
+        field {
+            desc = "Maximal logarithmic source burst length";
+        } src_max_llen [6:4] = 0;
+        field {
+            desc = "Maximal logarithmic destination burst length";
+        } dst_max_llen [9:7] = 0;
+        field {
+            desc = "ND-extension enabled";
+        } enable_nd [10+Log2NumDims:10] = 0;
+        field {
+            desc = "Selection of the source protocol";
+         } src_protocol [NumProtBits+11+Log2NumDims-1:11+Log2NumDims] = 0;
+        field {
+            desc = "Selection of the destination protocol";
+         } dst_protocol [2*NumProtBits+11+Log2NumDims-1:11+Log2NumDims+NumProtBits] = 0;
+    };
+
+    reg status {
+        regwidth = 32;
+        name = "status";
+        desc = "DMA Status";
+        default sw = r;
+        default hw = w;
+        field {
+            desc = "DMA busy";
+        } busy [9:0] = 0;
+    };
+
+    reg next_id {
+        regwidth = 32;
+        name = "next_id";
+        desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
+        default sw = r;
+        default hw = rw;
+        field {
+            desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
+        } next_id [31:0] = 0;
+    };
+
+    reg done_id {
+        regwidth = 32;
+        name = "done_id";
+        desc = "Get ID of finished transactions.";
+        default sw = r;
+        default hw = w;
+        field {
+            desc = "Get ID of finished transactions.";
+        } done_id [31:0] = 0;
+    };
+
+    reg dst_addr {
+        name = "dst_addr";
+        desc = "Destination address";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Destination address";
+        } dst_addr [31:0] = 0;
+    };
+
+    reg src_addr {
+        name = "src_addr";
+        desc = "Source address";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Source address";
+        } src_addr [31:0] = 0;
+    };
+
+    reg length {
+        name = "length";
+        desc = "Transfer length in bytes";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Transfer length in bytes";
+        } length [31:0] = 0;
+    };
+
+    reg dst_stride {
+        name = "dst_stride";
+        desc = "Destination stride";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Destination stride";
+        } dst_stride [31:0] = 0;
+    };
+
+    reg src_stride {
+        name = "src_stride";
+        desc = "Source stride";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Source stride";
+        } src_stride [31:0] = 0;
+    };
+
+    reg reps {
+        name = "reps";
+        desc = "Number of repetitions";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Number of repetitions";
+        } reps [31:0] = 0;
+    };
+
+    regfile dim {
+        dst_stride dst_stride[SysAddrWidth/32];
+        src_stride src_stride[SysAddrWidth/32];
+        reps       reps[SysAddrWidth/32];
+        ispresent = NumDims > 1;
+    };
+
+             conf     conf;
+    external status   status[16];
+    external next_id  next_id[16];
+    external done_id  done_id[16];
+             dst_addr dst_addr[SysAddrWidth/32] @ 0xD0;
+             src_addr src_addr[SysAddrWidth/32];
+             length   length[SysAddrWidth/32];
+             dim      dim[NumDims-1 | NumDims == 1];
+};
+
+`endif // IDMA_REG_RDL
