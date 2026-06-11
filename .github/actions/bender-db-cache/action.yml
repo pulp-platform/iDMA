@@ -1,0 +1,18 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Cache Bender database
+description: Relocate bender's bare-repo git database to a cached path
+# A committed .bender.yml setting db_dir would silently override BENDER_DB_DIR.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "BENDER_DB_DIR=$HOME/.cache/bender-db" >> "$GITHUB_ENV"
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/bender-db
+        key: bender-db-${{ runner.os }}-${{ hashFiles('Bender.lock') }}
+        restore-keys: |
+          bender-db-${{ runner.os }}-

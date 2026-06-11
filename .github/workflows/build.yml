@@ -25,6 +25,9 @@ jobs:
         name: Checkout
         uses: actions/checkout@v4
       -
+        name: Cache Bender database
+        uses: ./.github/actions/bender-db-cache
+      -
         name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
