@@ -247,6 +247,19 @@ IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_rt_midend_synth.sv
 IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_mp_midend_synth.sv
 
 
+# ---------------
+# Trimmed compile scripts
+# ---------------
+
+# Per-top vsim compile script trimmed via slang (bender >= 0.32.0)
+$(IDMA_VSIM_DIR)/compile_%.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
+	echo 'set ROOT [file normalize [file dirname [info script]]/../../..]' > $@
+	set -o pipefail; $(BENDER) script vsim --vlog-arg="$(IDMA_VLOG_ARGS)" \
+		-t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster -t split_rtl \
+		--top $* | grep -v "set ROOT" >> $@
+	echo >> $@
+
+
 # --------------
 # QuestaSim
 # --------------
