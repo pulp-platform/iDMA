@@ -121,14 +121,10 @@ jobs:
       -
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.9'
-          activate-environment: true
-      -
-        name: Python Requirements
-        run: uv pip install -r requirements.txt
+          enable-cache: true
       -
         name: Lint commits
-        run: python3 util/lint-commits.py HEAD
+        run: uv run --locked python3 util/lint-commits.py HEAD
 
   lint-author:
     runs-on: ubuntu-latest
@@ -140,11 +136,7 @@ jobs:
         name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-            python-version: '3.9'
-            activate-environment: true
-      -
-        name: Python Requirements
-        run: uv pip install -r requirements.txt
+            enable-cache: true
       -
         name: Lint authors
-        run: python3 util/lint-authors.py .github/authors-cfg.yaml
+        run: uv run --locked python3 util/lint-authors.py .github/authors-cfg.yaml

@@ -25,11 +25,7 @@ jobs:
       name: Install uv
       uses: astral-sh/setup-uv@v7
       with:
-          python-version: '3.9'
-          activate-environment: true
-    -
-      name: Python Requirements
-      run: uv pip install -r requirements.txt
+          enable-cache: true
     -
       name: Install Bender
       uses: pulp-platform/pulp-actions/bender-install@v2.5.0
@@ -37,11 +33,11 @@ jobs:
         version: 0.32.0
     -
       name: Build hardware
-      run: make -B idma_hw_all
+      run: uv run --locked make -B idma_hw_all
     -
       name: Deploy generated files
       run: |
         git config user.email "github-ci@iis.ee.ethz.ch"
         git config user.name "github-ci"
         git fetch --all
-        python3 util/deploy.py
+        uv run --locked python3 util/deploy.py
