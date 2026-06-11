@@ -5,6 +5,9 @@
 # Authors:
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
+default:
+  interruptible: true
+
 stages:
   - init
   - idma
