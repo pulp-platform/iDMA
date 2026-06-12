@@ -22,6 +22,8 @@
     typedef struct packed {                                              \
         idma_pkg::protocol_e        src_protocol;                        \
         idma_pkg::protocol_e        dst_protocol;                        \
+        idma_pkg::multihead_t       src_head;                            \
+        idma_pkg::multihead_t       dst_head;                            \
         axi_id_t                    axi_id;                              \
         idma_pkg::axi_options_t     src;                                 \
         idma_pkg::axi_options_t     dst;                                 \
