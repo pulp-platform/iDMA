@@ -2,9 +2,11 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
 name: Cache Bender database
 description: Relocate bender's bare-repo git database to a cached path
-# A committed .bender.yml setting db_dir would silently override BENDER_DB_DIR.
 runs:
   using: composite
   steps:
