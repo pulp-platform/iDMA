@@ -7,6 +7,10 @@
 
 default:
   interruptible: true
+  hooks:
+    pre_get_sources_script:
+      - rm -rf "${CI_PROJECT_DIR}.tmp/git-template"
+      - find "${CI_PROJECT_DIR}.tmp" -name '*.lock' -delete 2>/dev/null || true
 
 stages:
   - init
