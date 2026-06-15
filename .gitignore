@@ -10,3 +10,5 @@ nonfree
 working_dir
 bender
 todo
+.venv
+modelsim.ini
