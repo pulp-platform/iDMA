@@ -36,9 +36,11 @@ def render_backend(prot_ids: dict, db: dict, tpl_file: str) -> str:
         used_read_prots = prot_ids[prot_id]['ar']
         used_write_prots = prot_ids[prot_id]['aw']
 
-        # single port IPs?
-        srp = len(used_read_prots) == 1
-        swp = len(used_write_prots) == 1
+        # single port IPs? a multi-head protocol still needs the tagged (per-head) path
+        any_mh_r = any(n > 1 for n in prot_ids[prot_id]['multihead']['r'].values())
+        any_mh_w = any(n > 1 for n in prot_ids[prot_id]['multihead']['w'].values())
+        srp = len(used_read_prots) == 1 and not any_mh_r
+        swp = len(used_write_prots) == 1 and not any_mh_w
 
         # create context
         context = {

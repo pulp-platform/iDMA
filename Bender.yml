@@ -129,3 +129,9 @@ sources:
   - target: idma_test
     files:
       - target/rtl/tb_idma_generated.sv
+
+  # Multi-head directed backend testbenches
+  - target: multihead
+    files:
+      - test/tb_idma_backend_multihead.sv
+      - test/tb_idma_backend_multihead_rw.sv

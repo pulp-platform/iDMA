@@ -687,16 +687,17 @@ package idma_test;
             input logic [2:0] dst_max_llen,
             input logic       src_reduce_len,
             input logic       dst_reduce_len,
-            input id_t        id
+            input id_t        id,
+            input idma_pkg::multihead_t src_head = '0,
+            input idma_pkg::multihead_t dst_head = '0
         );
             idma.req.length                 <= #TA length;
-            idma.req.src_addr               <= #TA src_addr;
             idma.req.src_addr               <= #TA src_addr;
             idma.req.dst_addr               <= #TA dst_addr;
             idma.req.opt.src_protocol       <= #TA src_protocol;
             idma.req.opt.dst_protocol       <= #TA dst_protocol;
-            idma.req.opt.src_head           <= #TA '0;
-            idma.req.opt.dst_head           <= #TA '0;
+            idma.req.opt.src_head           <= #TA src_head;
+            idma.req.opt.dst_head           <= #TA dst_head;
             idma.req.opt.axi_id             <= #TA id;
             idma.req.opt.beo.decouple_aw    <= #TA decouple_aw;
             idma.req.opt.beo.decouple_rw    <= #TA decouple_rw;
