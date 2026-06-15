@@ -9,8 +9,9 @@ name: ci
 
 on:
   push:
-    branches-ignore:
-      - '__deploy__**'
+    branches:
+      - devel
+      - master
   pull_request:
     branches-ignore:
       - '__deploy__**'
