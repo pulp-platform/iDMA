@@ -131,7 +131,6 @@ sources:
       - target/rtl/tb_idma_generated.sv
 
   # Multi-head directed backend testbenches
-  # (need IDMA_ADD_IDS="2r_axi_w_axi 2rw_axi" at gen time)
   - target: multihead
     files:
       - test/tb_idma_backend_multihead.sv
