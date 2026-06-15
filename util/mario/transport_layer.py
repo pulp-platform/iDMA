@@ -106,7 +106,7 @@ ar_valid_i\
                 else:
                     read_meta_valid = f'''\
 (ar_req_i.src_protocol == idma_pkg::{db[rp]["protocol_enum"]}) & \
-(r_dp_req_i.src_head == {curr_head}) & \
+(ar_req_i.src_head == {curr_head}) & \
 ar_valid_i\
 '''
                 read_meta_ready = f'{rp}_ar_ready{mh_bus}'
@@ -127,8 +127,8 @@ ar_valid_i\
                 'read_meta_request': read_meta_request,
                 'read_meta_valid': read_meta_valid,
                 'read_meta_ready': read_meta_ready,
-                'read_request': f'{rp}_read_req_{read_port_dir_req_str}',
-                'read_response': f'{rp}_read_rsp_{read_port_dir_rsp_str}',
+                'read_request': f'{rp}_read_req_{read_port_dir_req_str}{mh_bus}',
+                'read_response': f'{rp}_read_rsp_{read_port_dir_rsp_str}{mh_bus}',
                 'r_chan_valid': r_chan_valid,
                 'r_chan_ready': r_chan_ready,
                 'buffer_in': buffer_in,
@@ -204,7 +204,7 @@ w_dp_req_valid\
                 else:
                     write_dp_valid_in = f'''\
 (w_dp_req_i.dst_protocol == idma_pkg::{db[wp]["protocol_enum"]}) & \
-(r_dp_req_i.dst_head == {curr_head}) & \
+(w_dp_req_i.dst_head == {curr_head}) & \
 w_dp_req_valid\
 '''
                 write_dp_ready_out = f'{wp}_w_dp_ready{mh_bus}'
@@ -220,7 +220,7 @@ aw_valid_i\
                 else:
                     write_meta_valid = f'''\
 (aw_req_i.dst_protocol == idma_pkg::{db[wp]["protocol_enum"]}) & \
-(r_dp_req_i.dst_head == {curr_head}) & \
+(aw_req_i.dst_head == {curr_head}) & \
 aw_valid_i\
 '''
                 write_meta_ready = f'{wp}_aw_ready{mh_bus}'
@@ -238,8 +238,8 @@ aw_valid_i\
                 'write_meta_request': write_meta_request,
                 'write_meta_valid': write_meta_valid,
                 'write_meta_ready': write_meta_ready,
-                'write_request': f'{wp}_write_req_o',
-                'write_response': f'{wp}_write_rsp_i',
+                'write_request': f'{wp}_write_req_o{mh_bus}',
+                'write_response': f'{wp}_write_rsp_i{mh_bus}',
                 'buffer_out_ready': buffer_out_ready,
                 'mh': mh
             }

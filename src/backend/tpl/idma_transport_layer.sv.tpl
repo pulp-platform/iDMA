@@ -217,7 +217,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     // shifted data flowing into the buffer
 % if not one_read_port:
     % for p in used_read_protocols:
-    byte_t [StrbWidth-1:0] ${mh_format['ar'][p]}${p}_buffer_in;
+    byte_t ${mh_format['ar'][p]}[StrbWidth-1:0] ${p}_buffer_in;
     % endfor
 % endif
     byte_t [StrbWidth-1:0] buffer_in;
@@ -487,7 +487,7 @@ ${rendered_write_ports[write_port]}
         .data_i     ( w_dp_req_i.dst_head                            ),
         .valid_i    ( w_resp_fifo_in_valid && w_resp_fifo_in_ready   ),
         .ready_o    ( /* NOT CONNECTED */                            ),
-        .data_o     ( w_resp_fifo_out_multihead                      ),
+        .data_o     ( w_resp_fifo_out_head                      ),
         .valid_o    ( /* NOT CONNECTED */                            ),
         .ready_i    ( w_resp_fifo_out_ready && w_resp_fifo_out_valid )
     );
@@ -517,9 +517,9 @@ ${rendered_write_ports[write_port]}
                 w_dp_rsp_mux       = ${wp}_w_dp_rsp;
                 ${wp}_w_dp_rsp_ready = w_dp_rsp_mux_ready;
     % else:
-                w_dp_rsp_mux_valid = ${wp}_w_dp_rsp_valid [w_resp_fifo_out_multihead];
-                w_dp_rsp_mux       = ${wp}_w_dp_rsp [w_resp_fifo_out_multihead];
-                ${wp}_w_dp_rsp_ready [w_resp_fifo_out_multihead] = w_dp_rsp_mux_ready;
+                w_dp_rsp_mux_valid = ${wp}_w_dp_rsp_valid [w_resp_fifo_out_head];
+                w_dp_rsp_mux       = ${wp}_w_dp_rsp [w_resp_fifo_out_head];
+                ${wp}_w_dp_rsp_ready [w_resp_fifo_out_head] = w_dp_rsp_mux_ready;
     % endif
             end
 % endfor

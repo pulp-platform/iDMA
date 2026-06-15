@@ -486,7 +486,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         // assemble write datapath request
         assign w_req.w_dp_req = '{
             dst_protocol: idma_req_i.opt.dst_protocol,
-            dst_head:     idma_req_i.opt.src_head,
+            dst_head:     idma_req_i.opt.dst_head,
             offset:       idma_req_i.dst_addr[OffsetWidth-1:0],
             tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.dst_addr[OffsetWidth-1:0]),
             shift:        OffsetWidth'(- idma_req_i.dst_addr[OffsetWidth-1:0]),
