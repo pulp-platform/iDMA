@@ -49,6 +49,7 @@ module idma_${identifier} #(
   /// Maximum number of streams is set to 16. It can be enlarged, but the register file
   /// needs to be adapted too.
   localparam int unsigned MaxNumStreams = 32'd16;
+  localparam int unsigned RegAddrWidth  = idma_${identifier}_reg_pkg::IDMA_${identifier.upper()}_REG_TOP_MIN_ADDR_WIDTH;
 
   `APB_TYPEDEF_ALL(apb, logic[31:0], logic[31:0], logic[3:0])
   apb_req_t  [NumRegs-1:0] apb_req;
@@ -104,7 +105,7 @@ module idma_${identifier} #(
       .s_apb_penable (apb_req[i].penable),
       .s_apb_pwrite  (apb_req[i].pwrite),
       .s_apb_pprot   (apb_req[i].pprot),
-      .s_apb_paddr   (apb_req[i].paddr),
+      .s_apb_paddr   (apb_req[i].paddr[RegAddrWidth-1:0]),
       .s_apb_pwdata  (apb_req[i].pwdata),
       .s_apb_pstrb   (apb_req[i].pstrb),
       .s_apb_pready  (apb_rsp[i].pready),
