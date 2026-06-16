@@ -1,10 +1,10 @@
 // Copyright 2026 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
+
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
-//
+
 // DPI-C golden model for idma_otf_transpose: an element-granular matrix
 // transpose. Element size E in {1,2,4} bytes (int8/fp16/fp32); each E-byte
 // element is kept intact while the M x N element grid is transposed to N x M.

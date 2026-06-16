@@ -1,8 +1,9 @@
 // Copyright 2026 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
-// Author: Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+// Authors:
+// - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 /// Transpose geometry expander: turns an opt.compute=TRANSPOSE request into a
 /// NumDim=4 tiled ND walk (row / row-tile / col-tile) from (M, N, mode) and

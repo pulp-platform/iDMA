@@ -1,8 +1,9 @@
 // Copyright 2026 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
-// Author: Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+// Authors:
+// - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 `include "idma/typedef.svh"
 

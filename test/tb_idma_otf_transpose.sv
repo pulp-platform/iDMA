@@ -4,7 +4,7 @@
 
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
-//
+
 // Standalone self-checking testbench for idma_otf_transpose (element transpose,
 // no iDMA backend / no protocol deps). Verifies a full M x N transpose of
 // EB-byte elements (EB in {1,2,4} = int8/fp16/fp32), split into NE-square tiles

@@ -1,10 +1,10 @@
 // Copyright 2026 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
+
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
-//
+
 // Self-checking multi-tile transpose testbench: idma_nd_midend (NumDim=4,
 // transposed-stride program) -> idma_backend_rw_axi (EnableTranspose) ->
 // axi_sim_mem. The ND midend generates the tiled read order (col-tile,

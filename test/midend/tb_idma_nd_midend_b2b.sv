@@ -1,10 +1,10 @@
 // Copyright 2026 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
+
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
-//
+
 // Back-to-back ND regression for idma_nd_midend. Drives the midend directly and
 // golden-checks the burst_req address sequence: two back-to-back transfers (no
 // gap) plus one after an idle gap must each walk from their own base. Catches a

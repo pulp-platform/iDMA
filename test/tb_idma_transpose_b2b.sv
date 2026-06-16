@@ -1,10 +1,10 @@
 // Copyright 2026 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
-//
+
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
-//
+
 // End-to-end back-to-back transpose regression: two transposes of one source to
 // DIFFERENT dst bases through the ND midend -> rw_axi backend -> axi_sim_mem. A
 // stale base across transfers would leave the second dst untouched. Both checked.

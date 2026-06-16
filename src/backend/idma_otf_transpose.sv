@@ -4,7 +4,7 @@
 
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
-//
+
 // On-the-fly matrix transpose engine (ping-pong tile banks) for the iDMA
 // transport write seam. Adapted from the datamover (Ratha) HWPE:
 // pulp-platform/datamover@d58a985, rtl/datamover_engine.sv.
