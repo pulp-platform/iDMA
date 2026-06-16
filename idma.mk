@@ -53,8 +53,8 @@ IDMA_OCCAMY_IDS  := \
 					rw_axi_rw_init_rw_obi
 IDMA_ADD_IDS     ?=
 IDMA_BACKEND_IDS ?= $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
-# Backend variants that host the on-the-fly compute dispatcher (single AXI write)
-IDMA_VIDMA_IDS   ?= rw_axi
+# Compute-hosting variants (single AXI write); empty default = stock has no compute
+IDMA_VIDMA_IDS   ?=
 # Compute variants (strip the optional :op:fd suffix) must be built backends
 _idma_vidma_unknown := $(filter-out $(IDMA_BACKEND_IDS),\
 	$(foreach c,$(IDMA_VIDMA_IDS),$(firstword $(subst :, ,$(c)))))
@@ -133,13 +133,22 @@ define idma_gen
 	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 $(if $7,--compute-ids $7) > $6
 endef
 
-$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl $(IDMA_DB_FILES)
+# Force an RTL regen when IDMA_VIDMA_IDS changes; rewritten only on change
+IDMA_VIDMA_STAMP := $(IDMA_RTL_DIR)/.vidma_ids
+.PHONY: idma_vidma_stamp_check
+idma_vidma_stamp_check:
+	@mkdir -p $(IDMA_RTL_DIR)
+	@printf '%s' '$(IDMA_VIDMA_IDS)' | cmp -s - $(IDMA_VIDMA_STAMP) 2>/dev/null || \
+		printf '%s' '$(IDMA_VIDMA_IDS)' > $(IDMA_VIDMA_STAMP)
+$(IDMA_VIDMA_STAMP): idma_vidma_stamp_check ;
+
+$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
 	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
 
-$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl $(IDMA_DB_FILES)
+$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
 	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
 
-$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl $(IDMA_DB_FILES)
+$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
 	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
 
 $(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl $(IDMA_DB_FILES)
@@ -373,6 +382,9 @@ idma_sim_tb_idma_otf_transpose:
 # (M or N not a multiple of NE) geometries for int8/fp16/fp32. Needs the
 # split_rtl flow (per-variant routing). Run with the Questa SEPP wrapper:
 #   make idma_sim_tb_idma_transpose_nd VSIM="questa-2023.4 vsim"
+# These tests need the write-seam engine: build rw_axi with compute (stamp regens)
+idma_sim_tb_idma_transpose_nd idma_sim_tb_idma_transpose_b2b: IDMA_VIDMA_IDS := rw_axi
+
 .PHONY: idma_sim_tb_idma_transpose_nd
 idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
