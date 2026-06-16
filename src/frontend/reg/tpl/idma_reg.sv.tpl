@@ -221,13 +221,6 @@ module idma_${identifier} #(
         assign dma_hw2reg[i].done_id[c].rd_ack = '0;
     end
 
-    // tie-off unused channels
-    for (genvar c = NumStreams; c < MaxNumStreams; c++) begin : gen_hw2reg_unused
-        assign dma_hw2reg[i].status[c]  = '0;
-        assign dma_hw2reg[i].next_id[c] = '0;
-        assign dma_hw2reg[i].done_id[c] = '0;
-    end
-
   end
 
   // arbitration
