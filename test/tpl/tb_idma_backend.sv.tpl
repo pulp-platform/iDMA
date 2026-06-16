@@ -657,7 +657,6 @@ ${p}_${database[p]['write_meta_channel']}_width\
     ) i_idma_backend  (
         .clk_i                ( clk             ),
         .rst_ni               ( rst_n           ),
-        .testmode_i           ( 1'b0            ),
         .idma_req_i           ( idma_req        ),
         .req_valid_i          ( req_valid       ),
         .req_ready_o          ( req_ready       ),
@@ -708,8 +707,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
 % if 'axis' in used_write_protocols and False:
     // Delay iDMA response 2 cycles such that all axi stream writes are finished 
 
-    spill_register #(
-        .T      ( idma_rsp_t ),
+    cc_spill_register #(
+        .data_t ( idma_rsp_t ),
         .Bypass ( 1'b0       )
     ) i_idma_rsp_cut (
         .clk_i   ( clk          ),
@@ -722,8 +721,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .data_o  ( idma_rsp_w2  )
     );
 
-    spill_register #(
-        .T      ( idma_rsp_t ),
+    cc_spill_register #(
+        .data_t ( idma_rsp_t ),
         .Bypass ( 1'b0       )
     ) i_idma_rsp_cut_2 (
         .clk_i   ( clk          ),
