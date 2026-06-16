@@ -4,13 +4,11 @@
 //
 // Author: Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// Transpose geometry expander. For a request carrying opt.compute = TRANSPOSE,
-/// derives the NumDim=4 tiled ND walk (row / row-tile / col-tile) from the tensor
-/// shape (M, N, element mode) and the bus StrbWidth, leaving the generic
-/// idma_nd_midend to walk it. Non-transpose requests pass through untouched.
-/// The walk reads the source up to the tile-padded bounds (ceil to NE in both
-/// dims) and writes the full padded dst extent (writes strb-masked, reads not).
-/// Combinational; outputs are quasi-static per request (multicycle-safe in STA).
+/// Transpose geometry expander: turns an opt.compute=TRANSPOSE request into a
+/// NumDim=4 tiled ND walk (row / row-tile / col-tile) from (M, N, mode) and
+/// StrbWidth, for the generic idma_nd_midend to walk. Non-transpose passes
+/// through. Reads to tile-padded bounds; writes the padded dst strb-masked.
+/// Combinational, quasi-static per request (multicycle-safe in STA).
 module idma_transpose_midend #(
     /// Number of ND dimensions (must be >= 4 to express the tiled walk)
     parameter int unsigned NumDim    = 32'd4,

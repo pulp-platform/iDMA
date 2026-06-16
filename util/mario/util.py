@@ -171,6 +171,13 @@ def prepare_compute_ids(compute_id_strs: list) -> dict:
     res = {}
     for cid_str in (compute_id_strs or []):
         parts = cid_str.split(':')
+        variant = parts[0]
+        if variant == '':
+            print(f'[MARIO] empty compute variant in "{cid_str}"', file=sys.stderr)
+            sys.exit(1)
+        if variant in res:
+            print(f'[MARIO] duplicate compute variant "{variant}"', file=sys.stderr)
+            sys.exit(1)
         ops = ['transpose']
         full_duplex = True
         for part in parts[1:]:
@@ -182,5 +189,5 @@ def prepare_compute_ids(compute_id_strs: list) -> dict:
             if op not in ('transpose',):
                 print(f'[MARIO] {op} is a non-supported compute op in {cid_str}', file=sys.stderr)
                 sys.exit(1)
-        res[parts[0]] = {'ops': ops, 'full_duplex': full_duplex}
+        res[variant] = {'ops': ops, 'full_duplex': full_duplex}
     return res

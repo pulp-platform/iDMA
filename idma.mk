@@ -55,6 +55,12 @@ IDMA_ADD_IDS     ?=
 IDMA_BACKEND_IDS ?= $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
 # Backend variants that host the on-the-fly compute dispatcher (single AXI write)
 IDMA_VIDMA_IDS   ?= rw_axi
+# Compute variants (strip the optional :op:fd suffix) must be built backends
+_idma_vidma_unknown := $(filter-out $(IDMA_BACKEND_IDS),\
+	$(foreach c,$(IDMA_VIDMA_IDS),$(firstword $(subst :, ,$(c)))))
+ifneq ($(_idma_vidma_unknown),)
+  $(error iDMA: IDMA_VIDMA_IDS variant(s) not in IDMA_BACKEND_IDS: $(_idma_vidma_unknown))
+endif
 
 # generated frontends
 IDMA_BASE_FE_IDS := reg32_3d reg64_2d reg64_1d

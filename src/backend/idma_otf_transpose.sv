@@ -45,6 +45,10 @@ module idma_otf_transpose #(
   input  logic                      ready_i
 );
 
+  // StrbWidth must be a power of two >= 2 so LaneW>=1 and the shift geometry holds
+  initial assert (StrbWidth >= 2 && (StrbWidth & (StrbWidth-1)) == 0) else
+      $fatal(1, "idma_otf_transpose: StrbWidth (%0d) must be a power of two >= 2", StrbWidth);
+
   // geometry: NE is a power of two, so only shifts and AND-masks
   logic [1:0]       eff_mode;         // element-size mode, saturated at LaneW
   logic [LaneW:0]   ne_m1;            // NE-1
