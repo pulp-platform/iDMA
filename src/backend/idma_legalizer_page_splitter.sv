@@ -7,7 +7,7 @@
 
 /// Legalizer module implementing a page splitter
 module idma_legalizer_page_splitter #(
-    parameter int unsigned BurstLen     = 4'd5,
+    parameter int unsigned BurstLen     = 4'd8,
     parameter int unsigned OffsetWidth   = 32'd2,
     parameter int unsigned PageAddrWidth = 32'd5,
     parameter type         addr_t        = logic,
