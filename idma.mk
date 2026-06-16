@@ -170,6 +170,7 @@ idma_rtl_clean:
 	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
 	rm -f  $(IDMA_RTL_DIR)/include/idma/tracer.svh
 	rm -rf $(IDMA_RTL_DIR)/include/idma
+	rm -f  $(IDMA_VIDMA_STAMP)
 
 # assemble the required files
 IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
