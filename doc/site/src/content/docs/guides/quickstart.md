@@ -14,13 +14,12 @@ iDMA's SystemVerilog is generated from templates, so the first step in any check
 **Prerequisites:** [`bender >= 0.32.0`](https://github.com/pulp-platform/bender) and [`Python >= 3.11`](https://www.python.org/downloads/) with [`uv`](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync                    # install the generator deps (mako, peakrdl, …) into .venv
-uv run make idma_hw_all    # render the templates into target/rtl/
+make idma_hw_all
 ```
 
-`uv run` executes inside the synced environment, so no manual `source .venv/bin/activate` is needed. The generated sources land in `target/rtl/` and are what Bender exposes through its `rtl` and `synth` targets.
+On first run this provisions a local `uv` environment (`uv sync --locked`) — no manual venv setup or activation needed — and renders the templates into `target/rtl/`, which Bender exposes through its `rtl` and `synth` targets.
 
-When iDMA is pulled as a Bender dependency, regenerate its RTL from the consuming repo with the same environment, e.g.:
+When iDMA is pulled as a Bender dependency, regenerate its RTL from the consuming repo the same way:
 
 ```bash
 make -C $(bender path idma) idma_hw_all
