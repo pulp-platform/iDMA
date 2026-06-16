@@ -103,6 +103,10 @@ sources:
       - target/rtl/idma_reg32_3d_reg_top.sv
       - target/rtl/idma_reg64_2d_reg_top.sv
       - target/rtl/idma_reg64_1d_reg_top.sv
+      - target/rtl/idma_desc64_addrmap_pkg.sv
+      - target/rtl/idma_reg32_3d_addrmap_pkg.sv
+      - target/rtl/idma_reg64_2d_addrmap_pkg.sv
+      - target/rtl/idma_reg64_1d_addrmap_pkg.sv
       - target/rtl/idma_desc64_top.sv
       - target/rtl/idma_reg32_3d_top.sv
       - target/rtl/idma_reg64_2d_top.sv
