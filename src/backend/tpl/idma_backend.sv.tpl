@@ -44,6 +44,10 @@ module idma_backend_${name_uniqueifier} #(
 %endif
     /// Mask invalid data on the manager interface
     parameter bit MaskInvalidData            = 1'b1,
+% if 'obi' in used_protocols:
+    /// Set to `0` if the OBI bus has no `rready`; inserts a response converter
+    parameter bit ObiUseRReady               = 1'b1,
+% endif
     /// Should hardware legalization be present? (recommended)
     /// If not, software legalization is required to ensure the transfers are
     /// AXI4-conformal
@@ -705,6 +709,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .DataWidth                   ( DataWidth                   ),
         .BufferDepth                 ( BufferDepth                 ),
         .MaskInvalidData             ( MaskInvalidData             ),
+% if 'obi' in used_protocols:
+        .ObiUseRReady                ( ObiUseRReady                ),
+% endif
         .PrintFifoInfo               ( PrintFifoInfo               ),
         .r_dp_req_t                  ( r_dp_req_t                  ),
         .w_dp_req_t                  ( w_dp_req_t                  ),
