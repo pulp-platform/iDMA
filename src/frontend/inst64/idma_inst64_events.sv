@@ -33,8 +33,8 @@ module idma_inst64_events #(
     logic [$clog2(StrbWidth)+1-1:0] num_bytes_written;
 
     // need popcount common cell to get the number of bytes active in the strobe signal
-    popcount #(
-        .INPUT_WIDTH ( StrbWidth  )
+    cc_popcount #(
+        .InputWidth ( StrbWidth  )
     ) i_popcount (
         .data_i      ( axi_req_i.w.strb   ),
         .popcount_o  ( num_bytes_written      )

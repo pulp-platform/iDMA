@@ -143,7 +143,7 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
         .idma_busy_t (idma_busy_t), .axi_req_t (axi_req_t), .axi_rsp_t (axi_rsp_t),
         .write_meta_channel_t (write_meta_channel_t), .read_meta_channel_t (read_meta_channel_t)
     ) i_idma_backend (
-        .clk_i (clk), .rst_ni (rst_n), .testmode_i (1'b0),
+        .clk_i (clk), .rst_ni (rst_n),
         .idma_req_i (idma_req), .req_valid_i (req_valid), .req_ready_o (req_ready),
         .idma_rsp_o (idma_rsp), .rsp_valid_o (rsp_valid), .rsp_ready_i (rsp_ready),
         .idma_eh_req_i (idma_eh_req), .eh_req_valid_i (eh_req_valid), .eh_req_ready_o (eh_req_ready),

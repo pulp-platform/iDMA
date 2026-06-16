@@ -36,7 +36,7 @@ module idma_${identifier} #(
   /// Width of the transfer id (max 32-bit)
   parameter int unsigned IdCounterWidth = 32'd32,
   /// Dependent parameter: Stream Idx
-  parameter int unsigned StreamWidth    = cf_math_pkg::idx_width(NumStreams),
+  parameter int unsigned StreamWidth    = cc_pkg::idx_width(NumStreams),
 % if _fam == 'apb':
   /// APB4 request type
   parameter type         apb_req_t      = logic,
@@ -305,9 +305,9 @@ module idma_${identifier} #(
   end
 
   // arbitration
-  rr_arb_tree #(
+  cc_rr_arb_tree #(
     .NumIn     ( NumRegs   ),
-    .DataType  ( dma_req_t ),
+    .data_t    ( dma_req_t ),
     .ExtPrio   ( 0         ),
     .AxiVldRdy ( 1         ),
     .LockIn    ( 1         )
