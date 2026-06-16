@@ -32,6 +32,8 @@ module idma_backend_synth_${name_uniqueifier} #(
     parameter int unsigned TFLenWidth          = 32'd32,
     /// The depth of the memory system the backend is attached to
     parameter int unsigned MemSysDepth         = 32'd0,
+    /// Burst Len (for actual burst length do 8 byte * 2^(BurstLen))
+    parameter int unsigned BurstLen = 4'd8,
     /// Should both data shifts be done before the dataflow element?
     /// If this is enabled, then the data inserted into the dataflow element
     /// will no longer be word aligned, but only a single shifter is needed
@@ -326,6 +328,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     % endif
 % endfor
 ,
+        .BurstLen             ( BurstLen                ),
         .write_meta_channel_t ( write_meta_channel_t    ),
         .read_meta_channel_t  ( read_meta_channel_t     )
     ) i_idma_backend (

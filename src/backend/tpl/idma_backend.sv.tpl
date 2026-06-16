@@ -29,6 +29,8 @@ module idma_backend_${name_uniqueifier} #(
     parameter int unsigned TFLenWidth       = 32'd24,
     /// The depth of the memory system the backend is attached to
     parameter int unsigned MemSysDepth      = 32'd0,
+    /// Burst Len (for actual burst length do 8 byte * 2^(BurstLen))
+    parameter int unsigned BurstLen = 4'd8,
     /// Should both data shifts be done before the dataflow element?
     /// If this is enabled, then the data inserted into the dataflow element
     /// will no longer be word aligned, but only a single shifter is needed
@@ -430,6 +432,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             .CombinedShifter   ( CombinedShifter   ),
             .DataWidth         ( DataWidth         ),
             .AddrWidth         ( AddrWidth         ),
+            .BurstLen          ( BurstLen          ),
             .idma_req_t        ( idma_req_t        ),
             .idma_r_req_t      ( idma_r_req_t      ),
             .idma_w_req_t      ( idma_w_req_t      ),
