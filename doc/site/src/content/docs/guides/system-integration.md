@@ -63,14 +63,14 @@ The following skeleton shows how the three layers connect. Signal types come fro
 idma_reg64_2d #(
     .NumRegs    ( 1          ),
     .NumStreams  ( 1          ),
-    .reg_req_t  ( reg_req_t  ),
-    .reg_rsp_t  ( reg_rsp_t  ),
+    .apb_req_t  ( apb_req_t  ),
+    .apb_rsp_t  ( apb_rsp_t  ),
     .dma_req_t  ( idma_nd_req_t )
 ) i_frontend (
     .clk_i,
     .rst_ni,
-    .reg_req_i     ( dma_reg_req  ),
-    .reg_rsp_o     ( dma_reg_rsp  ),
+    .dma_ctrl_req_i ( dma_apb_req  ),
+    .dma_ctrl_rsp_o ( dma_apb_rsp  ),
     .dma_req_o     ( fe_req       ),
     .req_valid_o   ( fe_valid     ),
     .req_ready_i   ( fe_ready     ),
@@ -208,4 +208,4 @@ Shows multi-core DMA sharing and the mchan/iDMA selection mechanism. The PULP cl
 
 ## Dependency Management
 
-iDMA uses [Bender](https://github.com/pulp-platform/bender) for RTL dependency management. Add iDMA to your `Bender.yml` and run `bender update` to pull it and its transitive dependencies (`axi`, `common_cells`, `register_interface`, `obi`). Bender resolves the source file list for your build system — use `bender script vsim` for Questa or `bender script vcs` for VCS.
+iDMA uses [Bender](https://github.com/pulp-platform/bender) for RTL dependency management. Add iDMA to your `Bender.yml` and run `bender update` to pull it and its transitive dependencies (`axi`, `common_cells`, `apb`, `obi`). Bender resolves the source file list for your build system — use `bender script vsim` for Questa or `bender script vcs` for VCS.
