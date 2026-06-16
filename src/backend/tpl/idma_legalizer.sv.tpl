@@ -22,7 +22,7 @@ module idma_legalizer_${name_uniqueifier} #(
     /// Address width
     parameter int unsigned AddrWidth       = 32'd24,
     /// Burst Len (for actual burst length do 8 byte * 2^(BurstLen))
-    parameter int unsigned BurstLen = 4'd5,
+    parameter int unsigned BurstLen = 4'd8,
     /// 1D iDMA request type:
     /// - `length`: the length of the transfer in bytes
     /// - `*_addr`: the source / target byte addresses of the transfer
