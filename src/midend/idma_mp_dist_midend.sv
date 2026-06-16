@@ -96,11 +96,12 @@ module idma_mp_dist_midend #(
 
   // Fork
   logic [NumBEs-1:0] valid, ready;
-  stream_fork #(
-    .N_OUP (NumBEs)
+  cc_stream_fork #(
+    .NumOup (NumBEs)
   ) i_stream_fork (
     .clk_i,
     .rst_ni,
+    .clr_i   ( 1'b0             ),
     .valid_i ( idma_req_valid_i ),
     .ready_o ( idma_req_ready_o ),
     .valid_o ( valid            ),

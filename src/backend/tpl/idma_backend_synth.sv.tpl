@@ -85,7 +85,6 @@ module idma_backend_synth_${name_uniqueifier} #(
 )(
     input  logic                   clk_i,
     input  logic                   rst_ni,
-    input  logic                   test_i,
 
     input  logic                   req_valid_i,
     output logic                   req_ready_o,
@@ -329,7 +328,6 @@ ${p}_${database[p]['write_meta_channel']}_width\
     ) i_idma_backend (
         .clk_i                ( clk_i          ),
         .rst_ni               ( rst_ni         ),
-        .testmode_i           ( test_i         ),
         .idma_req_i           ( idma_req       ),
         .req_valid_i          ( req_valid_i    ),
         .req_ready_o          ( req_ready_o    ),

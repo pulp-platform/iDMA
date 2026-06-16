@@ -114,13 +114,13 @@ module idma_rt_midend #(
     // generate the counters timing the events and assemble the transfers
     for (genvar c = 0; c < NumEvents; c++) begin : gen_counters
         // counter instance
-        counter #(
-            .WIDTH           ( EventCntWidth ),
-            .STICKY_OVERFLOW (  1'b0         )
+        cc_counter #(
+            .Width          ( EventCntWidth ),
+            .StickyOverflow (  1'b0         )
         ) i_counter (
             .clk_i,
             .rst_ni,
-            .clear_i    ( 1'b0               ),
+            .clr_i      ( 1'b0               ),
             .en_i       ( cnt_ena        [c] ),
             .load_i     ( cnt_load       [c] ),
             .down_i     ( 1'b1               ),
@@ -152,13 +152,14 @@ module idma_rt_midend #(
     assign cnt_ena   = event_ena_i & ~(event_valid);
 
     // arbitrates the events
-    stream_arbiter #(
-        .DATA_T  ( idma_nd_req_t ),
-        .N_INP   ( NumEvents     ),
-        .ARBITER ( "rr"          )
+    cc_stream_arbiter #(
+        .data_t  ( idma_nd_req_t ),
+        .NumInp  ( NumEvents     ),
+        .ArbMode ( cc_pkg::ARB_RR )
     ) i_stream_arbiter (
         .clk_i,
         .rst_ni,
+        .clr_i       ( 1'b0             ),
         .inp_data_i  ( idma_nd_req      ),
         .inp_valid_i ( event_valid      ),
         .inp_ready_o ( event_ready      ),
@@ -168,13 +169,14 @@ module idma_rt_midend #(
     );
 
     // arbitrates the events
-    stream_arbiter #(
-        .DATA_T  ( ext_arb_t     ),
-        .N_INP   ( 32'd2         ),
-        .ARBITER ( "rr"          )
+    cc_stream_arbiter #(
+        .data_t  ( ext_arb_t     ),
+        .NumInp  ( 32'd2         ),
+        .ArbMode ( cc_pkg::ARB_RR )
     ) i_stream_arbiter_bypass (
         .clk_i,
         .rst_ni,
+        .clr_i       ( 1'b0                                 ),
         .inp_data_i  ( { ext_req,        int_req          } ),
         .inp_valid_i ( { nd_req_valid_i, nd_req_valid_int } ),
         .inp_ready_o ( { nd_req_ready_o, nd_req_ready_int } ),
@@ -195,15 +197,15 @@ module idma_rt_midend #(
     assign choice   = out_req.src;
 
     // safe the choice in a fifo
-    stream_fifo #(
-        .FALL_THROUGH ( 1'b0           ),
-        .DATA_WIDTH   ( 32'd1          ),
-        .DEPTH        ( NumOutstanding )
+    cc_stream_fifo #(
+        .FallThrough ( 1'b0           ),
+        .DataWidth   ( 32'd1          ),
+        .Depth       ( NumOutstanding )
     ) i_stream_fifo (
         .clk_i,
         .rst_ni,
+        .clr_i      ( 1'b0                                  ),
         .flush_i    ( 1'b0                                  ),
-        .testmode_i ( 1'b0                                  ),
         .usage_o    ( /* NC */                              ),
         .data_i     ( choice                                ),
         .valid_i    ( nd_req_valid_i & nd_req_ready_o       ),
@@ -214,8 +216,8 @@ module idma_rt_midend #(
     );
 
     // arbitration of responses
-    stream_demux #(
-        .N_OUP       ( 32'd2 )
+    cc_stream_demux #(
+        .NumOup      ( 32'd2 )
     ) i_stream_demux (
         .inp_valid_i ( burst_rsp_valid_i                ),
         .inp_ready_o ( burst_rsp_ready_o                ),

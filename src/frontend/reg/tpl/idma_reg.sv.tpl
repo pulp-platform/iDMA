@@ -15,7 +15,7 @@ module idma_${identifier} #(
   /// Width of the transfer id (max 32-bit)
   parameter int unsigned IdCounterWidth = 32'd32,
   /// Dependent parameter: Stream Idx
-  parameter int unsigned StreamWidth    = cf_math_pkg::idx_width(NumStreams),
+  parameter int unsigned StreamWidth    = cc_pkg::idx_width(NumStreams),
   /// Register_interface request type
   parameter type         reg_req_t      = logic,
   /// Register_interface response type
@@ -190,16 +190,16 @@ module idma_${identifier} #(
   end
 
   // arbitration
-  rr_arb_tree #(
+  cc_rr_arb_tree #(
     .NumIn     ( NumRegs   ),
-    .DataType  ( dma_req_t ),
+    .data_t    ( dma_req_t ),
     .ExtPrio   ( 0         ),
     .AxiVldRdy ( 1         ),
     .LockIn    ( 1         )
   ) i_rr_arb_tree (
     .clk_i,
     .rst_ni,
-    .flush_i ( 1'b0        ),
+    .clr_i   ( 1'b0        ),
     .rr_i    ( '0          ),
     .req_i   ( arb_valid   ),
     .gnt_o   ( arb_ready   ),

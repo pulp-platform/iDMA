@@ -42,8 +42,8 @@ typedefs: |
         logic           req_ready;
     } init_rsp_t;
 read_bridge_template: |
-    spill_register #(
-        .T      ( logic ),
+    cc_spill_register #(
+        .data_t ( logic ),
         .Bypass ( 1'b0  )
     ) i_init_read_bridge (
         .clk_i   ( clk                     ),
