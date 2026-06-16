@@ -407,7 +407,6 @@ module tb_idma_nd_midend import idma_pkg::*; #(
     ) i_idma_backend  (
         .clk_i           ( clk             ),
         .rst_ni          ( rst_n           ),
-        .testmode_i      ( 1'b0            ),
         .idma_req_i      ( burst_req       ),
         .req_valid_i     ( burst_req_valid ),
         .req_ready_o     ( burst_req_ready ),
