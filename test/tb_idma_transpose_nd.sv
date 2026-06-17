@@ -6,11 +6,9 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 // Self-checking multi-tile transpose testbench: idma_nd_midend (NumDim=4,
-// transposed-stride program) -> idma_backend_rw_axi (EnableTranspose) ->
-// axi_sim_mem. The ND midend generates the tiled read order (col-tile,
-// row-tile, local-row) and the transposed destination placement the engine
-// requires, so a full M x N transpose works end-to-end (not just one tile).
-// Reference: out_T[c][r] = in[r][c] over E-byte elements.
+// transposed-stride program) -> idma_backend_rw_axi -> axi_sim_mem, exercising
+// a full M x N transpose end-to-end. Reference: out_T[c][r] = in[r][c].
+// Sweeps a list of geometries internally (one elaboration per bus width).
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -18,17 +16,12 @@
 module tb_idma_transpose_nd
   import idma_pkg::*;
 #(
-  parameter int unsigned DataWidth  = 32,
-  parameter int unsigned AddrWidth  = 32,
-  parameter int unsigned UserWidth  = 1,
-  parameter int unsigned AxiIdWidth = 12,
-  parameter int unsigned TFLenWidth = 32,
-  parameter int unsigned M          = 8,   // matrix rows (elements)
-  parameter int unsigned N          = 8,   // matrix cols (elements)
-  parameter int unsigned EB         = 1,   // element size in bytes (1/2/4)
-  // 0 = auto: NumAxInFlight = StrbWidth (transpose needs >= NE in-flight; NE = StrbWidth at E=1)
-  parameter int unsigned NumAxInFlight = 0,
-  parameter int unsigned BufferDepth   = 3
+  parameter int unsigned DataWidth   = 32,
+  parameter int unsigned AddrWidth   = 32,
+  parameter int unsigned UserWidth   = 1,
+  parameter int unsigned AxiIdWidth  = 12,
+  parameter int unsigned TFLenWidth  = 32,
+  parameter int unsigned BufferDepth = 3
 );
 
   localparam time TA  = 1ns;
@@ -36,15 +29,19 @@ module tb_idma_transpose_nd
   localparam time TCK = 10ns;
 
   localparam int unsigned StrbWidth = DataWidth / 8;
-  localparam int unsigned NE        = StrbWidth / EB;        // tile side (elements)
-  localparam int unsigned AxIF      = (NumAxInFlight == 0) ? StrbWidth : NumAxInFlight;
-  localparam int unsigned MODE      = (EB == 4) ? 2 : (EB == 2) ? 1 : 0;
-  localparam int unsigned YT        = (M + NE - 1) / NE;     // row-tiles
-  localparam int unsigned NT        = (N + NE - 1) / NE;     // col-tiles
-  // padded Aᵀ row pitch: M rounded up to a tile so every row is StrbWidth-aligned
-  localparam int unsigned MP        = YT * NE;
+  // transpose buffers a full NE-beat tile before the first write; NE <= StrbWidth
+  localparam int unsigned AxIF      = StrbWidth;
   localparam int unsigned NumDim    = 4;                     // 1D + {row, row-tile, col-tile}
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
+
+  // Geometry cases (M, N, EB) swept in one elaboration: aligned + edge
+  // (M or N not a multiple of NE) for int8/fp16/fp32. EB>StrbWidth cases skip.
+  localparam int unsigned NCases = 13;
+  localparam int unsigned Cases [NCases][3] = '{
+    '{ 8,  8, 1}, '{16, 16, 1}, '{16,  8, 1}, '{ 8,  8, 2}, '{ 6,  8, 1},
+    '{ 8,  6, 1}, '{ 6,  6, 1}, '{ 5,  7, 1}, '{10,  6, 1}, '{ 5,  5, 2},
+    '{32, 24, 1}, '{ 9,  5, 4}, '{13, 19, 1}
+  };
 
   // ── Types ──
   typedef logic [AddrWidth-1:0]   addr_t;
@@ -150,13 +147,14 @@ module tb_idma_transpose_nd
   addr_t sb = 'h0000_1000;
   addr_t db = 'h0000_4000;
 
-  // every AW (incl. wstrb=0 padding rows) must stay in the padded dst allocation
-  // [db, db+NT*NE*MP*EB) — else a strict slave would DECERR
-  always @(posedge clk) if (rst_n && axi_write_req.aw_valid && axi_write_rsp.aw_ready) begin
-    automatic addr_t aw_end = db + addr_t'(NT*NE*MP*EB);
-    if (axi_write_req.aw.addr < db || axi_write_req.aw.addr >= aw_end)
+  // every AW (incl. wstrb=0 padding rows) must stay in the active case's padded
+  // dst allocation [chk_db, chk_aw_hi) — else a strict slave would DECERR
+  logic  chk_active = 1'b0;
+  addr_t chk_db, chk_aw_hi;
+  always @(posedge clk) if (rst_n && chk_active && axi_write_req.aw_valid && axi_write_rsp.aw_ready) begin
+    if (axi_write_req.aw.addr < chk_db || axi_write_req.aw.addr >= chk_aw_hi)
       $fatal(1, "[TPN] AW 0x%0h outside dst alloc [0x%0h,0x%0h) — would DECERR on a strict slave",
-             axi_write_req.aw.addr, db, aw_end);
+             axi_write_req.aw.addr, chk_db, chk_aw_hi);
   end
 
   task automatic wr_mem(input addr_t a, input logic [7:0] d); i_axi_sim_mem.mem[a] = d; endtask
@@ -164,28 +162,36 @@ module tb_idma_transpose_nd
     return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
   endfunction
 
-  initial begin
-    automatic int unsigned errs = 0;
-    nd_req_valid = 1'b0; nd_rsp_ready = 1'b1; nd_req = '0;
-    @(posedge rst_n);
-    repeat (5) @(posedge clk);
+  // Run one M x N transpose of EB-byte elements; returns the mismatch count.
+  task automatic run_case(input int unsigned m, input int unsigned n, input int unsigned eb,
+                          output int unsigned errs);
+    automatic int unsigned ne   = StrbWidth / eb;        // tile side (elements)
+    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic int unsigned yt   = (m + ne - 1) / ne;     // row-tiles
+    automatic int unsigned nt   = (n + ne - 1) / ne;     // col-tiles
+    automatic int unsigned mp   = yt * ne;               // padded Aᵀ row pitch (StrbWidth-aligned)
+    errs = 0;
 
-    // init source matrix (row-major, M x N elements of EB bytes)
-    for (int unsigned r = 0; r < M; r++)
-      for (int unsigned c = 0; c < N; c++)
-        for (int unsigned b = 0; b < EB; b++)
-          wr_mem(sb + (r*N + c)*EB + b, 8'((( (r*N+c)*EB + b )*7 + 3) & 8'hFF));
+    // init source matrix (row-major, m x n elements of eb bytes)
+    for (int unsigned r = 0; r < m; r++)
+      for (int unsigned c = 0; c < n; c++)
+        for (int unsigned b = 0; b < eb; b++)
+          wr_mem(sb + (r*n + c)*eb + b, 8'((( (r*n+c)*eb + b )*7 + 3) & 8'hFF));
 
     // sentinel-fill the full padded Aᵀ extent; padding cols/rows must stay sentinel
-    // (the engine strobe suppresses them) — checked after the transfer
-    for (int unsigned i = 0; i < NT*NE; i++)
-      for (int unsigned j = 0; j < MP; j++)
-        for (int unsigned b = 0; b < EB; b++)
-          wr_mem(db + (i*MP + j)*EB + b, 8'hCC);
+    for (int unsigned i = 0; i < nt*ne; i++)
+      for (int unsigned j = 0; j < mp; j++)
+        for (int unsigned b = 0; b < eb; b++)
+          wr_mem(db + (i*mp + j)*eb + b, 8'hCC);
+
+    // arm the AW-bounds guard for this case
+    chk_db     = db;
+    chk_aw_hi  = db + addr_t'(nt*ne*mp*eb);
+    chk_active = 1'b1;
 
     // ── transposed-stride ND program (routing-plan §4.2) ──
     nd_req = '0;
-    nd_req.burst_req.length   = tf_len_t'(NE*EB);   // one tile-row = StrbWidth bytes
+    nd_req.burst_req.length   = tf_len_t'(ne*eb);   // one tile-row = StrbWidth bytes
     nd_req.burst_req.src_addr = sb;
     nd_req.burst_req.dst_addr = db;
     nd_req.burst_req.opt.src_protocol = idma_pkg::AXI;
@@ -196,68 +202,82 @@ module tb_idma_transpose_nd
     nd_req.burst_req.opt.beo.decouple_aw = 1'b1;
     nd_req.burst_req.opt.beo.src_max_llen = '0;
     nd_req.burst_req.opt.beo.dst_max_llen = '0;
-    nd_req.burst_req.opt.compute.enable                  = 1'b1;
-    nd_req.burst_req.opt.compute.op                      = idma_pkg::COMPUTE_TRANSPOSE;
-    nd_req.burst_req.opt.compute.params.transpose.mode     = 2'(MODE);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(M);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(N);
+    nd_req.burst_req.opt.compute.enable                    = 1'b1;
+    nd_req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;
+    nd_req.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
+    nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
+    nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
     nd_req.burst_req.opt.last         = 1'b1;
     // ND midend strides are INCREMENTAL deltas (added on dim roll-over), NOT
-    // absolute pitches. Aᵀ uses padded pitch MP*EB (aligned writes); src keeps
-    // N*EB (misaligned reads coalesce in the pre-engine buffer).
-    // d_req[0] = local row within tile (reps NE)
-    nd_req.d_req[0].reps        = reps_t'(NE);
-    nd_req.d_req[0].src_strides = addr_t'(int'(N*EB));                        // next source row
-    nd_req.d_req[0].dst_strides = addr_t'(int'(MP*EB));                       // next Aᵀ row (padded pitch)
-    // d_req[1] = row-tile (reps YT)
-    nd_req.d_req[1].reps        = reps_t'(YT);
-    nd_req.d_req[1].src_strides = addr_t'(int'(N*EB));                        // rows are consecutive
-    nd_req.d_req[1].dst_strides = addr_t'(int'(NE*EB) - int'((NE-1)*MP*EB));  // back up cols, next col-block
-    // d_req[2] = col-tile (reps NT). src rewind uses the padded row extent
-    // (YT*NE-1, not M-1): the read walks padding rows of the last row-tile.
-    nd_req.d_req[2].reps        = reps_t'(NT);
-    nd_req.d_req[2].src_strides = addr_t'(int'(NE*EB) - int'((YT*NE-1)*N*EB)); // back to padded row0, next col-block
-    nd_req.d_req[2].dst_strides = addr_t'(int'(MP*EB) - int'((YT-1)*NE*EB));   // next Aᵀ col-block
+    // absolute pitches. Aᵀ uses padded pitch mp*eb (aligned writes); src keeps
+    // n*eb (misaligned reads coalesce in the pre-engine buffer).
+    nd_req.d_req[0].reps        = reps_t'(ne);
+    nd_req.d_req[0].src_strides = addr_t'(int'(n*eb));
+    nd_req.d_req[0].dst_strides = addr_t'(int'(mp*eb));
+    nd_req.d_req[1].reps        = reps_t'(yt);
+    nd_req.d_req[1].src_strides = addr_t'(int'(n*eb));
+    nd_req.d_req[1].dst_strides = addr_t'(int'(ne*eb) - int'((ne-1)*mp*eb));
+    nd_req.d_req[2].reps        = reps_t'(nt);
+    nd_req.d_req[2].src_strides = addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb));
+    nd_req.d_req[2].dst_strides = addr_t'(int'(mp*eb) - int'((yt-1)*ne*eb));
 
-    $display("[TPN] launching %0dx%0d EB=%0d transpose via ND midend (NE=%0d, %0dx%0d tiles)", M, N, EB, NE, YT, NT);
+    $display("[TPN] case %0dx%0d EB=%0d (NE=%0d, %0dx%0d tiles)", m, n, eb, ne, yt, nt);
     nd_req_valid = 1'b1;
     // drop valid on accept; holding it one cycle past makes the midend re-walk the request
     do @(posedge clk); while (!nd_req_ready);
     nd_req_valid = 1'b0;
     nd_req = '0;
 
-    // wait for ND completion
+    // wait for ND completion + drain
     while (!(nd_rsp_valid && nd_rsp_ready)) @(posedge clk);
     repeat (20) @(posedge clk);
+    chk_active = 1'b0;
 
-    // check 1 (data): out_T[c][r] == in[r][c], Aᵀ at padded pitch MP
-    for (int unsigned c = 0; c < N; c++)
-      for (int unsigned r = 0; r < M; r++)
-        for (int unsigned b = 0; b < EB; b++) begin
-          automatic logic [7:0] got = rd_mem(db + (c*MP + r)*EB + b);
-          automatic logic [7:0] exp = rd_mem(sb + (r*N + c)*EB + b);
+    // check 1 (data): out_T[c][r] == in[r][c], Aᵀ at padded pitch mp
+    for (int unsigned c = 0; c < n; c++)
+      for (int unsigned r = 0; r < m; r++)
+        for (int unsigned b = 0; b < eb; b++) begin
+          automatic logic [7:0] got = rd_mem(db + (c*mp + r)*eb + b);
+          automatic logic [7:0] exp = rd_mem(sb + (r*n + c)*eb + b);
           if (got !== exp) begin
             errs++;
             if (errs <= 12) $display("[TPN] MISMATCH out_T[%0d][%0d].b%0d=%02h exp %02h", c, r, b, got, exp);
           end
         end
-    // check 2: padding cols [M,MP) and padding rows [N,NT*NE) must stay sentinel (strobe-suppressed)
-    for (int unsigned i = 0; i < NT*NE; i++)
-      for (int unsigned j = 0; j < MP; j++)
-        if (i >= N || j >= M)
-          for (int unsigned b = 0; b < EB; b++) begin
-            automatic logic [7:0] got = rd_mem(db + (i*MP + j)*EB + b);
+    // check 2: padding cols [m,mp) and padding rows [n,nt*ne) must stay sentinel
+    for (int unsigned i = 0; i < nt*ne; i++)
+      for (int unsigned j = 0; j < mp; j++)
+        if (i >= n || j >= m)
+          for (int unsigned b = 0; b < eb; b++) begin
+            automatic logic [7:0] got = rd_mem(db + (i*mp + j)*eb + b);
             if (got !== 8'hCC) begin
               errs++;
               if (errs <= 12) $display("[TPN] PADDING CLOBBERED at row=%0d col=%0d b%0d=%02h (exp CC)", i, j, b, got);
             end
           end
-    if (errs == 0) $display("[TPN] PASS: %0dx%0d EB=%0d multi-tile transpose matches golden (padding intact)", M, N, EB);
-    else           $fatal(1, "[TPN] FAIL: %0d mismatches", errs);
+  endtask
+
+  initial begin
+    automatic int unsigned total = 0;
+    automatic int unsigned ce;
+    nd_req_valid = 1'b0; nd_rsp_ready = 1'b1; nd_req = '0;
+    @(posedge rst_n);
+    repeat (5) @(posedge clk);
+
+    for (int unsigned k = 0; k < NCases; k++) begin
+      if (Cases[k][2] > StrbWidth) continue;   // element must fit the bus
+      run_case(Cases[k][0], Cases[k][1], Cases[k][2], ce);
+      if (ce == 0) $display("[TPN] PASS: %0dx%0d EB=%0d", Cases[k][0], Cases[k][1], Cases[k][2]);
+      else         $display("[TPN] FAIL: %0dx%0d EB=%0d (%0d mismatches)", Cases[k][0], Cases[k][1], Cases[k][2], ce);
+      total += ce;
+    end
+
+    if (total == 0) $display("[TPN] ALL PASS (%0d cases, StrbWidth=%0d)", NCases, StrbWidth);
+    else            $fatal(1, "[TPN] FAIL: %0d total mismatches", total);
     repeat (5) @(posedge clk);
     $finish();
   end
 
-  initial begin #5_000_000; $fatal(1, "[TPN] timeout"); end
+  initial begin #100_000_000; $fatal(1, "[TPN] timeout"); end
 
 endmodule

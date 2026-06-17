@@ -5,9 +5,10 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// End-to-end back-to-back transpose regression: two transposes of one source to
-// DIFFERENT dst bases through the ND midend -> rw_axi backend -> axi_sim_mem. A
-// stale base across transfers would leave the second dst untouched. Both checked.
+// End-to-end back-to-back transpose regression: per geometry, two transposes of
+// one source to DIFFERENT dst bases through the ND midend -> rw_axi backend ->
+// axi_sim_mem. A stale base across transfers would leave the second dst
+// untouched. Sweeps a geometry list internally (one run per bus width).
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -15,25 +16,21 @@
 module tb_idma_transpose_b2b
   import idma_pkg::*;
 #(
-  parameter int unsigned DataWidth = 32,
-  parameter int unsigned AddrWidth = 32,
-  parameter int unsigned UserWidth = 1,
+  parameter int unsigned DataWidth  = 32,
+  parameter int unsigned AddrWidth  = 32,
+  parameter int unsigned UserWidth  = 1,
   parameter int unsigned AxiIdWidth = 12,
-  parameter int unsigned TFLenWidth = 32,
-  parameter int unsigned M  = 6,
-  parameter int unsigned N  = 8,
-  parameter int unsigned EB = 1
+  parameter int unsigned TFLenWidth = 32
 );
 
   localparam time TA = 1ns, TT = 9ns, TCK = 10ns;
   localparam int unsigned StrbWidth = DataWidth / 8;
-  localparam int unsigned NE   = StrbWidth / EB;
-  localparam int unsigned MODE = (EB == 4) ? 2 : (EB == 2) ? 1 : 0;
-  localparam int unsigned YT   = (M + NE - 1) / NE;
-  localparam int unsigned NT   = (N + NE - 1) / NE;
-  localparam int unsigned MP   = YT * NE;
   localparam int unsigned NumDim = 4;
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
+
+  // Geometry cases (M, N, EB); EB>StrbWidth cases skip.
+  localparam int unsigned NCases = 4;
+  localparam int unsigned Cases [NCases][3] = '{ '{6, 8, 1}, '{8, 8, 1}, '{13, 19, 1}, '{5, 5, 2} };
 
   typedef logic [AddrWidth-1:0]  addr_t;
   typedef logic [DataWidth-1:0]  data_t;
@@ -135,16 +132,22 @@ module tb_idma_transpose_b2b
     return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
   endfunction
 
-  // one transpose of the source at sb -> dst base `db`; returns error count
-  task automatic do_transpose(input addr_t db, output int unsigned errs);
+  // one m x n transpose of the source at sb -> dst base `db`; returns error count
+  task automatic do_transpose(input int unsigned m, input int unsigned n, input int unsigned eb,
+                              input addr_t db, output int unsigned errs);
+    automatic int unsigned ne   = StrbWidth / eb;
+    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic int unsigned yt   = (m + ne - 1) / ne;
+    automatic int unsigned nt   = (n + ne - 1) / ne;
+    automatic int unsigned mp   = yt * ne;
     errs = 0;
     // pre-fill full padded dst extent with sentinel
-    for (int unsigned i = 0; i < NT*NE; i++)
-      for (int unsigned j = 0; j < MP; j++)
-        for (int unsigned b = 0; b < EB; b++)
-          wr_mem(db + (i*MP + j)*EB + b, 8'hCC);
+    for (int unsigned i = 0; i < nt*ne; i++)
+      for (int unsigned j = 0; j < mp; j++)
+        for (int unsigned b = 0; b < eb; b++)
+          wr_mem(db + (i*mp + j)*eb + b, 8'hCC);
     nd_req = '0;
-    nd_req.burst_req.length   = tf_len_t'(NE*EB);
+    nd_req.burst_req.length   = tf_len_t'(ne*eb);
     nd_req.burst_req.src_addr = sb;
     nd_req.burst_req.dst_addr = db;
     nd_req.burst_req.opt.src_protocol = idma_pkg::AXI;
@@ -153,15 +156,15 @@ module tb_idma_transpose_b2b
     nd_req.burst_req.opt.dst.burst    = axi_pkg::BURST_INCR;
     nd_req.burst_req.opt.beo.decouple_rw = 1'b1;
     nd_req.burst_req.opt.beo.decouple_aw = 1'b1;
-    nd_req.burst_req.opt.compute.enable                  = 1'b1;
-    nd_req.burst_req.opt.compute.op                      = idma_pkg::COMPUTE_TRANSPOSE;
-    nd_req.burst_req.opt.compute.params.transpose.mode     = 2'(MODE);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(M);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(N);
+    nd_req.burst_req.opt.compute.enable                    = 1'b1;
+    nd_req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;
+    nd_req.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
+    nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
+    nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
     nd_req.burst_req.opt.last         = 1'b1;
-    nd_req.d_req[0].reps = reps_t'(NE); nd_req.d_req[0].src_strides = addr_t'(int'(N*EB));                       nd_req.d_req[0].dst_strides = addr_t'(int'(MP*EB));
-    nd_req.d_req[1].reps = reps_t'(YT); nd_req.d_req[1].src_strides = addr_t'(int'(N*EB));                       nd_req.d_req[1].dst_strides = addr_t'(int'(NE*EB) - int'((NE-1)*MP*EB));
-    nd_req.d_req[2].reps = reps_t'(NT); nd_req.d_req[2].src_strides = addr_t'(int'(NE*EB) - int'((YT*NE-1)*N*EB)); nd_req.d_req[2].dst_strides = addr_t'(int'(MP*EB) - int'((YT-1)*NE*EB));
+    nd_req.d_req[0].reps = reps_t'(ne); nd_req.d_req[0].src_strides = addr_t'(int'(n*eb));                          nd_req.d_req[0].dst_strides = addr_t'(int'(mp*eb));
+    nd_req.d_req[1].reps = reps_t'(yt); nd_req.d_req[1].src_strides = addr_t'(int'(n*eb));                          nd_req.d_req[1].dst_strides = addr_t'(int'(ne*eb) - int'((ne-1)*mp*eb));
+    nd_req.d_req[2].reps = reps_t'(nt); nd_req.d_req[2].src_strides = addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb));  nd_req.d_req[2].dst_strides = addr_t'(int'(mp*eb) - int'((yt-1)*ne*eb));
     nd_req_valid = 1'b1;
     do @(posedge clk); while (!nd_req_ready);   // drop valid the cycle accept is seen (compliant)
     nd_req_valid = 1'b0;
@@ -169,46 +172,52 @@ module tb_idma_transpose_b2b
     while (!(nd_rsp_valid && nd_rsp_ready)) @(posedge clk);
     repeat (20) @(posedge clk);
     // data + padding checks
-    for (int unsigned c = 0; c < N; c++)
-      for (int unsigned r = 0; r < M; r++)
-        for (int unsigned b = 0; b < EB; b++)
-          if (rd_mem(db + (c*MP + r)*EB + b) !== rd_mem(sb + (r*N + c)*EB + b)) begin
-            errs++; if (errs <= 8) $display("[B2BT] @db=%0h MISMATCH out_T[%0d][%0d].b%0d=%02h exp %02h", db, c, r, b, rd_mem(db+(c*MP+r)*EB+b), rd_mem(sb+(r*N+c)*EB+b));
+    for (int unsigned c = 0; c < n; c++)
+      for (int unsigned r = 0; r < m; r++)
+        for (int unsigned b = 0; b < eb; b++)
+          if (rd_mem(db + (c*mp + r)*eb + b) !== rd_mem(sb + (r*n + c)*eb + b)) begin
+            errs++; if (errs <= 8) $display("[B2BT] @db=%0h MISMATCH out_T[%0d][%0d].b%0d", db, c, r, b);
           end
-    for (int unsigned i = 0; i < NT*NE; i++)
-      for (int unsigned j = 0; j < MP; j++)
-        if (i >= N || j >= M)
-          for (int unsigned b = 0; b < EB; b++)
-            if (rd_mem(db + (i*MP + j)*EB + b) !== 8'hCC) begin
+    for (int unsigned i = 0; i < nt*ne; i++)
+      for (int unsigned j = 0; j < mp; j++)
+        if (i >= n || j >= m)
+          for (int unsigned b = 0; b < eb; b++)
+            if (rd_mem(db + (i*mp + j)*eb + b) !== 8'hCC) begin
               errs++; if (errs <= 8) $display("[B2BT] @db=%0h PADDING CLOBBERED row=%0d col=%0d", db, i, j);
             end
   endtask
 
   initial begin
-    automatic int unsigned e1, e2;
+    automatic int unsigned total = 0, e1, e2;
     automatic addr_t db1 = 'h0000_4000;
     automatic addr_t db2 = 'h0000_8000;   // DIFFERENT base — a stale-addr bug misplaces xfer 2
+    automatic int unsigned m, n, eb;
     nd_req_valid = 1'b0; nd_rsp_ready = 1'b1; nd_req = '0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
-    for (int unsigned r = 0; r < M; r++)
-      for (int unsigned c = 0; c < N; c++)
-        for (int unsigned b = 0; b < EB; b++)
-          wr_mem(sb + (r*N + c)*EB + b, 8'((( (r*N+c)*EB + b )*7 + 3) & 8'hFF));
 
-    $display("[B2BT] transfer 1 -> db=%0h", db1);
-    do_transpose(db1, e1);
-    $display("[B2BT] transfer 2 (back-to-back) -> db=%0h", db2);
-    do_transpose(db2, e2);
+    for (int unsigned k = 0; k < NCases; k++) begin
+      m = Cases[k][0]; n = Cases[k][1]; eb = Cases[k][2];
+      if (eb > StrbWidth) continue;
+      // (re)init source for this geometry
+      for (int unsigned r = 0; r < m; r++)
+        for (int unsigned c = 0; c < n; c++)
+          for (int unsigned b = 0; b < eb; b++)
+            wr_mem(sb + (r*n + c)*eb + b, 8'((( (r*n+c)*eb + b )*7 + 3) & 8'hFF));
+      $display("[B2BT] %0dx%0d EB=%0d: xfer1 -> db=%0h, xfer2 -> db=%0h", m, n, eb, db1, db2);
+      do_transpose(m, n, eb, db1, e1);
+      do_transpose(m, n, eb, db2, e2);   // back-to-back, distinct base
+      if (e1 == 0 && e2 == 0) $display("[B2BT] PASS: %0dx%0d EB=%0d both back-to-back transposes correct", m, n, eb);
+      else                    $display("[B2BT] FAIL: %0dx%0d EB=%0d xfer1=%0d xfer2=%0d", m, n, eb, e1, e2);
+      total += e1 + e2;
+    end
 
-    if (e1 == 0 && e2 == 0)
-      $display("[B2BT] PASS: two back-to-back %0dx%0d EB=%0d transposes both correct (xfer2 landed at its own dst)", M, N, EB);
-    else
-      $fatal(1, "[B2BT] FAIL: xfer1 errs=%0d xfer2 errs=%0d", e1, e2);
+    if (total == 0) $display("[B2BT] ALL PASS (%0d cases, StrbWidth=%0d)", NCases, StrbWidth);
+    else            $fatal(1, "[B2BT] FAIL: %0d total mismatches", total);
     repeat (5) @(posedge clk);
     $finish();
   end
 
-  initial begin #5_000_000; $fatal(1, "[B2BT] timeout"); end
+  initial begin #50_000_000; $fatal(1, "[B2BT] timeout"); end
 
 endmodule

@@ -5,12 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// DPI-C golden model for idma_otf_transpose: an element-granular matrix
-// transpose. Element size E in {1,2,4} bytes (int8/fp16/fp32); each E-byte
-// element is kept intact while the M x N element grid is transposed to N x M.
-// Accessor-based (no open-array marshalling): the testbench loads the row-major
-// input byte by byte, calls gm_transpose(m,n,e), then reads back the transposed
-// output bytes. Reference: out_elem[c][r] = in_elem[r][c].
+// DPI-C golden model for idma_otf_transpose: element-granular M x N -> N x M
+// transpose, element size E in {1,2,4} B. Reference: out_elem[c][r] = in_elem[r][c].
 
 #include <stdint.h>
 
