@@ -16,6 +16,8 @@ VCS         ?= vcs
 VERILATOR   ?= verilator
 VLOGAN      ?= vlogan
 VSIM        ?= vsim
+VLOG        ?= vlog
+VLIB        ?= vlib
 
 # Provision a local uv venv when the generator deps are not already available.
 IDMA_VENV_PY := $(IDMA_ROOT)/.venv/bin/python
@@ -51,6 +53,14 @@ IDMA_OCCAMY_IDS  := \
 					rw_axi_rw_init_rw_obi
 IDMA_ADD_IDS     ?=
 IDMA_BACKEND_IDS ?= $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
+# Compute-hosting variants (single AXI write); empty default = stock has no compute
+IDMA_VIDMA_IDS   ?=
+# Compute variants (strip the optional :op:fd suffix) must be built backends
+_idma_vidma_unknown := $(filter-out $(IDMA_BACKEND_IDS),\
+	$(foreach c,$(IDMA_VIDMA_IDS),$(firstword $(subst :, ,$(c)))))
+ifneq ($(_idma_vidma_unknown),)
+  $(error iDMA: IDMA_VIDMA_IDS variant(s) not in IDMA_BACKEND_IDS: $(_idma_vidma_unknown))
+endif
 
 # generated frontends
 IDMA_BASE_FE_IDS := reg32_3d reg64_2d reg64_1d
@@ -120,17 +130,26 @@ IDMA_RTL_FILES  := $(IDMA_RTL_DIR)/idma_transport_layer \
 IDMA_VSIM_DIR   := $(IDMA_ROOT)/target/sim/vsim
 
 define idma_gen
-	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 > $6
+	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 $(if $7,--compute-ids $7) > $6
 endef
 
-$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl $(IDMA_DB_FILES)
-	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
+# Force an RTL regen when IDMA_VIDMA_IDS changes; rewritten only on change
+IDMA_VIDMA_STAMP := $(IDMA_RTL_DIR)/.vidma_ids
+.PHONY: idma_vidma_stamp_check
+idma_vidma_stamp_check:
+	@mkdir -p $(IDMA_RTL_DIR)
+	@printf '%s' '$(IDMA_VIDMA_IDS)' | cmp -s - $(IDMA_VIDMA_STAMP) 2>/dev/null || \
+		printf '%s' '$(IDMA_VIDMA_IDS)' > $(IDMA_VIDMA_STAMP)
+$(IDMA_VIDMA_STAMP): idma_vidma_stamp_check ;
 
-$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl $(IDMA_DB_FILES)
-	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
+$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
+	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
 
-$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl $(IDMA_DB_FILES)
-	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
+$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
+	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
+
+$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
+	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
 
 $(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl $(IDMA_DB_FILES)
 	$(call idma_gen,synth_wrapper,$(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
@@ -151,6 +170,7 @@ idma_rtl_clean:
 	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
 	rm -f  $(IDMA_RTL_DIR)/include/idma/tracer.svh
 	rm -rf $(IDMA_RTL_DIR)/include/idma
+	rm -f  $(IDMA_VIDMA_STAMP)
 
 # assemble the required files
 IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
@@ -304,7 +324,7 @@ IDMA_PICKLE_ALL  += $(IDMA_PICKLE_DIR)/idma_mp_midend_synth.sv
 $(IDMA_VSIM_DIR)/compile_%.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
 	echo 'set ROOT [file normalize [file dirname [info script]]/../../..]' > $@
 	set -o pipefail; $(BENDER) script vsim --vlog-arg="$(IDMA_VLOG_ARGS)" \
-		-t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster -t split_rtl \
+		-t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster \
 		--top $* | grep -v "set ROOT" >> $@
 	echo >> $@
 
@@ -329,6 +349,55 @@ endef
 $(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
 	$(call idma_generate_vsim, $@, -t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster,../../..)
 
+# Standalone self-checking transpose-engine regression (DPI-C golden, no backend deps).
+# Run with the Questa SEPP wrapper, e.g.:
+#   make idma_sim_tb_idma_otf_transpose VSIM="questa-2023.4 vsim" VLOG="questa-2023.4 vlog" VLIB="questa-2023.4 vlib"
+IDMA_OTF_TP_RTL := $(abspath $(IDMA_ROOT)/src/backend/idma_otf_transpose.sv)
+IDMA_OTF_TP_TB  := $(abspath $(IDMA_ROOT)/test/tb_idma_otf_transpose.sv)
+IDMA_OTF_TP_DPI := $(abspath $(IDMA_ROOT)/test/idma_transpose_dpi.c)
+IDMA_OTF_TP_DIR := $(abspath $(IDMA_VSIM_DIR))/otf_transpose
+
+.PHONY: idma_sim_tb_idma_otf_transpose
+idma_sim_tb_idma_otf_transpose:
+	mkdir -p $(IDMA_OTF_TP_DIR)
+	cd $(IDMA_OTF_TP_DIR); $(VLIB) work
+	cd $(IDMA_OTF_TP_DIR); $(VLOG) -sv $(IDMA_OTF_TP_DPI)
+	cd $(IDMA_OTF_TP_DIR); $(VLOG) -sv -svinputport=compat -timescale "1ns/1fs" $(IDMA_OTF_TP_RTL) $(IDMA_OTF_TP_TB)
+	# the TB sweeps the geometry list internally; one run per StrbWidth x FullDuplex
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=1 tb_idma_otf_transpose +BP -do "run -all; quit"
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=0 tb_idma_otf_transpose +BP -do "run -all; quit"
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=1 tb_idma_otf_transpose +BP -do "run -all; quit"
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=0 tb_idma_otf_transpose +BP -do "run -all; quit"
+
+# Multi-tile transpose via the ND midend -> rw_axi backend -> axi_sim_mem.
+# Run with the Questa SEPP wrapper: make idma_sim_tb_idma_transpose_nd VSIM="questa-2023.4 vsim"
+# These tests need the compute engine: build rw_axi with compute (stamp regens).
+idma_sim_tb_idma_transpose_nd idma_sim_tb_idma_transpose_b2b: IDMA_VIDMA_IDS := rw_axi
+
+.PHONY: idma_sim_tb_idma_transpose_nd
+idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	# the TB sweeps the geometry list internally; one run per bus width
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_nd -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_nd -do "run -all; quit"
+
+# Back-to-back regressions: the ND midend must reload each new transfer's base
+# address (it does, for a protocol-compliant producer that drops nd_req_valid on
+# accept). tb_idma_nd_midend_b2b checks the midend's burst-address sequence under
+# backpressure; tb_idma_transpose_b2b checks two end-to-end transposes to distinct
+# destinations.  Run with the Questa SEPP wrapper.
+.PHONY: idma_sim_tb_idma_nd_midend_b2b
+idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_nd_midend_b2b -do "run -all; quit"
+
+.PHONY: idma_sim_tb_idma_transpose_b2b
+idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	# the TB sweeps the geometry list internally; one run per bus width
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_b2b -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_b2b -do "run -all; quit"
+
 .PHONY: idma_sim_tb_idma_rt_midend
 
 idma_sim_tb_idma_rt_midend: $(IDMA_VSIM_DIR)/compile.tcl
@@ -336,6 +405,7 @@ idma_sim_tb_idma_rt_midend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_rt_midend -do "run -all; quit"
 
 idma_sim_clean:
+	rm -rf $(IDMA_OTF_TP_DIR)
 	rm -rf $(IDMA_VSIM_DIR)/compile.tcl
 	rm -rf $(IDMA_VSIM_DIR)/work
 	rm -f  $(IDMA_VSIM_DIR)/dma_trace_*

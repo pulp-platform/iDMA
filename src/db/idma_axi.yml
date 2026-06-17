@@ -67,7 +67,8 @@ legalizer_write_data_path: |
         tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
         shift: opt_tf_q.write_shift,
         num_beats: w_req_o.aw_req.axi.aw_chan.len,
-        is_single: w_req_o.aw_req.axi.aw_chan.len == '0
+        is_single: w_req_o.aw_req.axi.aw_chan.len == '0,
+        compute: opt_tf_q.compute
     };
 read_template: |
     idma_axi_read #(
@@ -128,7 +129,9 @@ write_template: |
         .write_rsp_i        ( ${write_response} ),
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
-        .buffer_out_ready_o ( ${buffer_out_ready} )
+        .buffer_out_ready_o ( ${buffer_out_ready} ),
+        .mask_ext_i         ( mask_ext_shifted ),
+        .w_beat_done_o      ( w_beat_done )
     );
 synth_wrapper_ports_write: |
     output id_t                    axi_aw_id_o,

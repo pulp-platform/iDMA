@@ -44,6 +44,8 @@ sources:
       - src/backend/idma_axis_write.sv
       - src/backend/idma_channel_coupler.sv
       - src/backend/idma_dataflow_element.sv
+      - src/backend/idma_otf_transpose.sv
+      - src/backend/idma_otf_compute.sv
       - src/backend/idma_error_handler.sv
       - src/backend/idma_init_read.sv
       - src/backend/idma_init_write.sv
@@ -54,7 +56,6 @@ sources:
       - src/backend/idma_tilelink_read.sv
       - src/backend/idma_tilelink_write.sv
 
-  # Generated content
   - target: rtl
     files:
       - target/rtl/idma_generated.sv
@@ -67,6 +68,7 @@ sources:
       - src/midend/idma_mp_split_midend.sv
       - src/midend/idma_nd_midend.sv
       - src/midend/idma_rt_midend.sv
+      - src/midend/idma_transpose_midend.sv
 
   # RISC-V opcode package for ooc use of inst64
   - target: all(rtl,snitch_cluster)
@@ -120,7 +122,9 @@ sources:
       - test/future/idma_tb_per2axi.sv
       - test/future/TLToAXI4.v
       - test/midend/tb_idma_nd_midend.sv
+      - test/midend/tb_idma_nd_midend_b2b.sv
       - test/midend/tb_idma_rt_midend.sv
+      - test/midend/tb_idma_transpose_midend.sv
       # Level 2
       - test/future/idma_obi2axi_bridge.sv
       - test/future/idma_tilelink2axi_bridge.sv
@@ -129,6 +133,8 @@ sources:
   - target: idma_test
     files:
       - target/rtl/tb_idma_generated.sv
+      - test/tb_idma_transpose_nd.sv
+      - test/tb_idma_transpose_b2b.sv
 
   # Multi-head directed backend testbenches
   - target: multihead

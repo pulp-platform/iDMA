@@ -27,8 +27,9 @@
         axi_id_t                    axi_id;                              \
         idma_pkg::axi_options_t     src;                                 \
         idma_pkg::axi_options_t     dst;                                 \
-        idma_pkg::backend_options_t beo;                                 \
-        logic                       last;                                \
+        idma_pkg::backend_options_t   beo;                               \
+        idma_pkg::compute_options_t   compute;                           \
+        logic                         last;                              \
     } options_t;
 `define IDMA_TYPEDEF_ERR_PAYLOAD_T(err_payload_t, axi_addr_t)            \
     typedef struct packed {                                              \

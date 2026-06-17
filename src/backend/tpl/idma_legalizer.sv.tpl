@@ -484,8 +484,13 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 dst_head:       req_i.opt.dst_head,
                 read_shift:     '0,
                 write_shift:    '0,
+% if enable_compute:
+                decouple_rw:    req_i.opt.beo.decouple_rw | req_i.opt.compute.enable,
+                decouple_aw:    req_i.opt.beo.decouple_aw | req_i.opt.compute.enable,
+% else:
                 decouple_rw:    req_i.opt.beo.decouple_rw,
                 decouple_aw:    req_i.opt.beo.decouple_aw,
+% endif
                 src_max_llen:   req_i.opt.beo.src_max_llen,
                 dst_max_llen:   req_i.opt.beo.dst_max_llen,
                 src_reduce_len: req_i.opt.beo.src_reduce_len,
@@ -493,7 +498,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 axi_id:         req_i.opt.axi_id,
                 src_axi_opt:    req_i.opt.src,
                 dst_axi_opt:    req_i.opt.dst,
-                super_last:     req_i.opt.last
+                super_last:     req_i.opt.last,
+                compute:        req_i.opt.compute
             };
             // determine shift amount
             if (CombinedShifter) begin
@@ -557,7 +563,8 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
             tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
             shift:        opt_tf_q.write_shift,
             num_beats:    'd0,
-            is_single:    1'b1
+            is_single:    1'b1,
+            compute:      opt_tf_q.compute
         };
     % endif
     end
@@ -592,7 +599,8 @@ ${database[protocol]['legalizer_write_data_path']}
                 tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
                 shift:        opt_tf_q.write_shift,
                 num_beats:    'd0,
-                is_single:    1'b1
+                is_single:    1'b1,
+                compute:      opt_tf_q.compute
             };
         endcase
     end

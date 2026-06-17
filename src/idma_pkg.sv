@@ -81,6 +81,39 @@ package idma_pkg;
         logic       dst_reduce_len;
     } backend_options_t;
 
+    /// Compute operation selector
+    typedef enum logic [3:0] {
+        COMPUTE_NONE      = 4'd0,
+        COMPUTE_TRANSPOSE = 4'd1
+    } compute_op_e;
+
+    /// Transpose tensor dimension width (elements)
+    localparam int unsigned TransposeDimWidth = 32'd12;
+
+    /// Transpose options (E = 1<<mode: 1/2/4 B)
+    typedef struct packed {
+        logic [1:0]                   mode;
+        logic [TransposeDimWidth-1:0] tensor_m;
+        logic [TransposeDimWidth-1:0] tensor_n;
+    } transpose_options_t;
+
+    /// Per-op compute parameter union (members must be equal width)
+    typedef union packed {
+        transpose_options_t transpose;
+    } compute_params_t;
+
+    /// Compute option type: per-transfer on-the-fly compute selection
+    typedef struct packed {
+        logic            enable;
+        compute_op_e     op;
+        compute_params_t params;
+    } compute_options_t;
+
+    /// Compile-time per-op compute feature enables
+    typedef struct packed {
+        logic transpose;
+    } compute_enable_t;
+
     /// Supported Protocols
     /// - `AXI`: Full AXI
     /// - `AXILITE`: AXI Lite

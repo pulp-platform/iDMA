@@ -3,3 +3,4 @@ include/*
 !include/.gitkeep
 *.sv
 *.hjson
+.vidma_ids
