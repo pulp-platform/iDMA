@@ -5,8 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// On-the-fly compute dispatcher at the transport write seam: latches the
-/// per-transfer compute options and dispatches one op per transfer to its sub-unit.
+/// On-the-fly compute dispatcher: latches the per-transfer compute options
+/// and dispatches one op per transfer to its sub-unit.
 module idma_otf_compute #(
   /// Byte lanes per beat (= DataWidth/8)
   parameter int unsigned StrbWidth       = 32'd8,

@@ -81,16 +81,16 @@ package idma_pkg;
         logic       dst_reduce_len;
     } backend_options_t;
 
-    /// On-the-fly compute operation selector
+    /// Compute operation selector
     typedef enum logic [3:0] {
         COMPUTE_NONE      = 4'd0,
         COMPUTE_TRANSPOSE = 4'd1
     } compute_op_e;
 
-    /// Transpose tensor dimension width in elements (bound by the inst64 DMCPY argb encoding)
+    /// Transpose tensor dimension width (elements)
     localparam int unsigned TransposeDimWidth = 32'd12;
 
-    /// Transpose option type: E = 1<<mode (0/1/2 -> 1/2/4 B); tensor in elements
+    /// Transpose options (E = 1<<mode: 1/2/4 B)
     typedef struct packed {
         logic [1:0]                   mode;
         logic [TransposeDimWidth-1:0] tensor_m;

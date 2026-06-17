@@ -229,7 +229,6 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [2*StrbWidth-1:0] buffer_out_tmp;
     byte_t [StrbWidth-1:0] buffer_out;
     byte_t [StrbWidth-1:0] buffer_out_shifted;
-    // compute write seam (passthrough when compute is off)
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
     logic                  w_beat_done;
@@ -382,7 +381,7 @@ ${rendered_read_ports[read_port]}
     );
 
     //--------------------------------------
-    // On-the-fly compute (write seam)
+    // On-the-fly compute
     //--------------------------------------
 
 % if enable_compute:

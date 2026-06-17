@@ -56,61 +56,9 @@ sources:
       - src/backend/idma_tilelink_read.sv
       - src/backend/idma_tilelink_write.sv
 
-  # Generated content (bundled single-file; default flow)
-  - target: all(rtl, not(split_rtl))
+  - target: rtl
     files:
       - target/rtl/idma_generated.sv
-
-  # Generated content (per-variant files; opt-in via `-t split_rtl`).
-  # Used for the transpose-engine prototype where the rw_axi backend/transport/
-  # legalizer are hand-edited in place before being ported back to templates.
-  # Mutually exclusive with idma_generated.sv to avoid duplicate module defs.
-  - target: all(rtl, split_rtl)
-    files:
-      - target/rtl/idma_transport_layer_rw_axi.sv
-      - target/rtl/idma_transport_layer_r_obi_w_axi.sv
-      - target/rtl/idma_transport_layer_r_axi_w_obi.sv
-      - target/rtl/idma_transport_layer_rw_axi_rw_axis.sv
-      - target/rtl/idma_transport_layer_rw_obi.sv
-      - target/rtl/idma_transport_layer_r_obi_rw_init_w_axi.sv
-      - target/rtl/idma_transport_layer_r_axi_rw_init_rw_obi.sv
-      - target/rtl/idma_legalizer_rw_axi.sv
-      - target/rtl/idma_legalizer_r_obi_w_axi.sv
-      - target/rtl/idma_legalizer_r_axi_w_obi.sv
-      - target/rtl/idma_legalizer_rw_axi_rw_axis.sv
-      - target/rtl/idma_legalizer_rw_obi.sv
-      - target/rtl/idma_legalizer_r_obi_rw_init_w_axi.sv
-      - target/rtl/idma_legalizer_r_axi_rw_init_rw_obi.sv
-      - target/rtl/idma_backend_rw_axi.sv
-      - target/rtl/idma_backend_r_obi_w_axi.sv
-      - target/rtl/idma_backend_r_axi_w_obi.sv
-      - target/rtl/idma_backend_rw_axi_rw_axis.sv
-      - target/rtl/idma_backend_rw_obi.sv
-      - target/rtl/idma_backend_r_obi_rw_init_w_axi.sv
-      - target/rtl/idma_backend_r_axi_rw_init_rw_obi.sv
-      - target/rtl/idma_backend_synth_rw_axi.sv
-      - target/rtl/idma_backend_synth_r_obi_w_axi.sv
-      - target/rtl/idma_backend_synth_r_axi_w_obi.sv
-      - target/rtl/idma_backend_synth_rw_axi_rw_axis.sv
-      - target/rtl/idma_backend_synth_rw_obi.sv
-      - target/rtl/idma_backend_synth_r_obi_rw_init_w_axi.sv
-      - target/rtl/idma_backend_synth_r_axi_rw_init_rw_obi.sv
-      - target/rtl/idma_desc64_reg_pkg.sv
-      - target/rtl/idma_reg32_3d_reg_pkg.sv
-      - target/rtl/idma_reg64_2d_reg_pkg.sv
-      - target/rtl/idma_reg64_1d_reg_pkg.sv
-      - target/rtl/idma_desc64_reg_top.sv
-      - target/rtl/idma_reg32_3d_reg_top.sv
-      - target/rtl/idma_reg64_2d_reg_top.sv
-      - target/rtl/idma_reg64_1d_reg_top.sv
-      - target/rtl/idma_desc64_addrmap_pkg.sv
-      - target/rtl/idma_reg32_3d_addrmap_pkg.sv
-      - target/rtl/idma_reg64_2d_addrmap_pkg.sv
-      - target/rtl/idma_reg64_1d_addrmap_pkg.sv
-      - target/rtl/idma_desc64_top.sv
-      - target/rtl/idma_reg32_3d_top.sv
-      - target/rtl/idma_reg64_2d_top.sv
-      - target/rtl/idma_reg64_1d_top.sv
 
   # Midends
   - target: rtl
@@ -149,7 +97,6 @@ sources:
       # Level 2
       - src/frontend/desc64/idma_desc64_top.sv
 
-
   # Synthesis wrappers
   - target: synth
     files:
@@ -186,11 +133,8 @@ sources:
   - target: idma_test
     files:
       - target/rtl/tb_idma_generated.sv
-      # Multi-tile transpose path: ND-midend (transposed strides) -> backend
-      - target: all(idma_test, split_rtl)
-        files:
-          - test/tb_idma_transpose_nd.sv
-          - test/tb_idma_transpose_b2b.sv
+      - test/tb_idma_transpose_nd.sv
+      - test/tb_idma_transpose_b2b.sv
 
   # Multi-head directed backend testbenches
   - target: multihead

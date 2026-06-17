@@ -42,7 +42,7 @@ def render_backend(prot_ids: dict, db: dict, tpl_file: str, compute_cfg: dict = 
         srp = len(used_read_prots) == 1 and not any_mh_r
         swp = len(used_write_prots) == 1 and not any_mh_w
 
-        # on-the-fly compute is hosted at the (single) AXI write seam
+        # on-the-fly compute requires a single AXI write port
         enable_compute = prot_id in (compute_cfg or {})
         if enable_compute and not (swp and used_write_prots[0] == 'axi'):
             raise ValueError(

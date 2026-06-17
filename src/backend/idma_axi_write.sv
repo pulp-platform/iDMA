@@ -145,7 +145,7 @@ module idma_axi_write #(
         if (w_dp_req_i.tailer != '0 & last_w) begin
             mask_out = mask_out & w_last_mask;
         end
-        // external mask: some bytes may be masked by an OTF engine
+        // external mask (OTF compute)
         mask_out = mask_out & mask_ext_i;
     end
 
