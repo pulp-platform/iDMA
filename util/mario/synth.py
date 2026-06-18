@@ -29,6 +29,10 @@ def render_synth_wrapper(prot_ids: dict, db: dict, tpl_file: str) -> str:
         srp = len(used_read_prots) == 1
         swp = len(used_write_prots) == 1
 
+        # multi-head head ports are emitted only when a protocol has >1 head
+        any_mh = any(n > 1 for n in prot_ids[prot_id]['multihead']['r'].values()) \
+            or any(n > 1 for n in prot_ids[prot_id]['multihead']['w'].values())
+
         # formatting
         for rp in used_read_prots:
             db[rp]['synth_wrapper_ports_read'] =\
@@ -49,7 +53,8 @@ def render_synth_wrapper(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'used_write_protocols': used_write_prots,
             'used_protocols': prot_ids[prot_id]['used'],
             'one_read_port': srp,
-            'one_write_port': swp
+            'one_write_port': swp,
+            'any_mh': any_mh
         }
 
         # render
