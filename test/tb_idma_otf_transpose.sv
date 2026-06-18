@@ -174,15 +174,14 @@ module tb_idma_otf_transpose #(
     end
 
     if (total == 0) $display("[TB] ALL PASS (%0d cases, StrbWidth=%0d, FullDuplex=%0d)", NCases, StrbWidth, FullDuplex);
-    else            $display("[TB] FAIL: %0d total errors", total);
+    else            $fatal(1, "[TB] FAIL: %0d total errors", total);
     repeat (5) @(posedge clk);
     $finish;
   end
 
   initial begin
     #100000000;
-    $display("[TB] FAIL: timeout");
-    $finish;
+    $fatal(1, "[TB] FAIL: timeout");
   end
 
 endmodule
