@@ -203,27 +203,24 @@ module idma_${identifier} #(
     end
 
     // observational registers
+    // status and done_id are internal hw=w regs (no read side-effect): drive the
+    // registered value. next_id is external (read launches a transfer): ack only
+    // on request, held until the arbiter accepts (read back-pressure).
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
-        assign dma_hw2reg[i].status[c].rd_data.busy  = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].status[c].rd_ack = dma_reg2hw[i].status[c].req
-                                              & ~dma_reg2hw[i].status[c].req_is_wr;
+        assign dma_hw2reg[i].status[c].busy.next = {midend_busy_i[c], busy_i[c]};
         assign dma_hw2reg[i].next_id[c].rd_data.next_id = next_id_i;
         assign dma_hw2reg[i].next_id[c].rd_ack = dma_reg2hw[i].next_id[c].req
                                                & ~dma_reg2hw[i].next_id[c].req_is_wr
                                                & arb_ready[i];
-        assign dma_hw2reg[i].done_id[c].rd_data.done_id = done_id_i[c];
-        assign dma_hw2reg[i].done_id[c].rd_ack = dma_reg2hw[i].done_id[c].req
-                                               & ~dma_reg2hw[i].done_id[c].req_is_wr;
+        assign dma_hw2reg[i].done_id[c].done_id.next = done_id_i[c];
     end
 
     // tie-off unused channels
     for (genvar c = NumStreams; c < MaxNumStreams; c++) begin : gen_hw2reg_unused
-        assign dma_hw2reg[i].status[c].rd_data = '0;
-        assign dma_hw2reg[i].status[c].rd_ack  = '0;
+        assign dma_hw2reg[i].status[c].busy.next = '0;
         assign dma_hw2reg[i].next_id[c].rd_data.next_id = '0;
         assign dma_hw2reg[i].next_id[c].rd_ack = '0;
-        assign dma_hw2reg[i].done_id[c].rd_data.done_id = '0;
-        assign dma_hw2reg[i].done_id[c].rd_ack = '0;
+        assign dma_hw2reg[i].done_id[c].done_id.next = '0;
     end
 
   end

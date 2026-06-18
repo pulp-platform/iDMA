@@ -153,9 +153,9 @@ addrmap idma_reg #(
     };
 
              conf     conf;
-    external status   status[16];
+             status   status[16];
     external next_id  next_id[16];
-    external done_id  done_id[16];
+             done_id  done_id[16];
              dst_addr dst_addr[SysAddrWidth/32] @ 0xD0;
              src_addr src_addr[SysAddrWidth/32];
              length   length[SysAddrWidth/32];
