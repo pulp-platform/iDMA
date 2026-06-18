@@ -173,11 +173,15 @@ module idma_${identifier} #(
     // observational registers
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
         assign dma_hw2reg[i].status[c].rd_data.busy  = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].status[c].rd_ack = 1'b1;
+        assign dma_hw2reg[i].status[c].rd_ack = dma_reg2hw[i].status[c].req
+                                              & ~dma_reg2hw[i].status[c].req_is_wr;
         assign dma_hw2reg[i].next_id[c].rd_data.next_id = next_id_i;
-        assign dma_hw2reg[i].next_id[c].rd_ack = arb_ready[i];
+        assign dma_hw2reg[i].next_id[c].rd_ack = dma_reg2hw[i].next_id[c].req
+                                               & ~dma_reg2hw[i].next_id[c].req_is_wr
+                                               & arb_ready[i];
         assign dma_hw2reg[i].done_id[c].rd_data.done_id = done_id_i[c];
-        assign dma_hw2reg[i].done_id[c].rd_ack = 1'b1;
+        assign dma_hw2reg[i].done_id[c].rd_ack = dma_reg2hw[i].done_id[c].req
+                                               & ~dma_reg2hw[i].done_id[c].req_is_wr;
     end
 
     // tie-off unused channels
