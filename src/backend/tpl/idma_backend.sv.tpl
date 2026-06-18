@@ -215,7 +215,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// - `is_single`: Is this transfer just one beat long? `(len == 0)`
     typedef struct packed {
         idma_pkg::protocol_e  src_protocol;
-        idma_pkg::multihead_t src_head;
+        idma_pkg::multihead_t src_head;  // ignored unless multi-head (one head: tied 0)
         offset_t              offset;
         offset_t              tailer;
         offset_t              shift;
@@ -243,7 +243,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// - `is_single`: Is this transfer just one beat long? `(len == 0)`
     typedef struct packed {
         idma_pkg::protocol_e  dst_protocol;
-        idma_pkg::multihead_t dst_head;
+        idma_pkg::multihead_t dst_head;  // ignored unless multi-head (one head: tied 0)
         offset_t              offset;
         offset_t              tailer;
         offset_t              shift;
