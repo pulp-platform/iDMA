@@ -231,7 +231,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
+% if one_write_port:
     logic                  w_beat_done;
+% endif
 
 % if not one_read_port:
     // Read multiplexed signals
@@ -253,6 +255,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic ${mh_format['aw'][protocol]}${protocol}_w_dp_ready;
     w_dp_rsp_t ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp;
     logic ${mh_format['aw'][protocol]}${protocol}_aw_ready;
+    logic ${mh_format['aw'][protocol]}${protocol}_w_beat_done;
 
     %endfor
     logic w_dp_req_valid, w_dp_req_ready;
@@ -393,7 +396,7 @@ ${rendered_read_ports[read_port]}
     // beats retire on w_beat_done (strobe-independent)
     idma_otf_compute #(
         .StrbWidth           ( StrbWidth ),
-        .ComputeEnable       ( '{${', '.join("%s: 1'b1" % op for op in compute_ops)}} ),
+        .ComputeEnable       ( idma_pkg::compute_enable_t'{${', '.join("%s: 1'b1" % op for op in compute_ops)}} ),
         .TransposeFullDuplex ( 1'b${'1' if compute_full_duplex else '0'} )
     ) i_idma_otf_compute (
         .clk_i,
