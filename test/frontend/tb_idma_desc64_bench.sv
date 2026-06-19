@@ -128,6 +128,7 @@ module tb_idma_desc64_bench
         constraint axi_params_zero_dst { burst.opt.dst.lock == '0 && burst.opt.dst.prot == '0 && burst.opt.dst.qos == '0 && burst.opt.dst.region == '0; }
         constraint axi_src_cache_zero { burst.opt.src.cache == '0; }
         constraint axi_dst_cache_zero { burst.opt.dst.cache == '0; }
+        constraint compute_zero { burst.opt.compute == '0; }
         constraint transfer_length { burst.length == TransferLength; }
         constraint irq { do_irq == DoIRQ; }
     endclass
