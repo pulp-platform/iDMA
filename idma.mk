@@ -9,9 +9,7 @@ BENDER      ?= bender
 CAT         ?= cat
 GIT         ?= git
 PRINTF      ?= printf
-PEAKRDL     ?= peakrdl
-PYTHON      ?= python3
-SPHINXBUILD ?= sphinx-build
+UV          ?= uv
 VCS         ?= vcs
 VERILATOR   ?= verilator
 VLOGAN      ?= vlogan
@@ -19,23 +17,15 @@ VSIM        ?= vsim
 VLOG        ?= vlog
 VLIB        ?= vlib
 
-# Provision a local uv venv when the generator deps are not already available.
-IDMA_VENV_PY := $(IDMA_ROOT)/.venv/bin/python
-ifeq ($(shell $(PYTHON) -c 'import mako' >/dev/null 2>&1 && echo ok),ok)
-else ifeq ($(shell $(IDMA_VENV_PY) -c 'import mako' >/dev/null 2>&1 && echo ok),ok)
-  PYTHON      := $(IDMA_VENV_PY)
-  export PATH := $(IDMA_ROOT)/.venv/bin:$(PATH)
-else ifeq ($(shell command -v uv >/dev/null 2>&1 && echo ok),ok)
-  $(info iDMA: provisioning the generator environment (uv sync --locked) ...)
-  _idma_uv_sync := $(shell cd $(IDMA_ROOT) && uv sync --locked 1>&2 || echo FAIL)
-  ifeq ($(_idma_uv_sync),FAIL)
-    $(error iDMA: 'uv sync --locked' failed; see output above)
-  endif
-  PYTHON      := $(IDMA_VENV_PY)
-  export PATH := $(IDMA_ROOT)/.venv/bin:$(PATH)
-else
-  $(error iDMA RTL generation needs 'uv' (https://docs.astral.sh/uv) on PATH, or a venv with the pyproject.toml deps activated)
-endif
+# iDMA root, resolved via bender so integrators can host iDMA anywhere
+IDMA_ROOT   ?= $(shell $(BENDER) path idma)
+
+# All generator/doc tooling runs through uv against the locked environment
+# (pyproject.toml + uv.lock are the single source of truth).
+UV_RUN      := $(UV) run --locked --project $(IDMA_ROOT)
+PYTHON      ?= $(UV_RUN) python
+PEAKRDL     ?= $(UV_RUN) peakrdl
+SPHINXBUILD ?= $(UV_RUN) sphinx-build
 
 # Shell
 SHELL := /bin/bash
@@ -68,7 +58,6 @@ IDMA_ADD_FE_IDS  ?=
 IDMA_FE_IDS      ?= $(IDMA_BASE_FE_IDS) $(IDMA_ADD_FE_IDS)
 
 # iDMA paths
-IDMA_ROOT     ?= $(shell $(BENDER) path idma)
 IDMA_UTIL_DIR := $(IDMA_ROOT)/util
 IDMA_RTL_DIR  := $(IDMA_ROOT)/target/rtl
 
