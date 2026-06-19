@@ -157,7 +157,12 @@ module idma_otf_transpose #(
 
   // consumer (output) side
   always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni || clear_i || exec_done) begin
+    if (!rst_ni) begin
+      rd_cnt  <= '0;
+      rd_bank <= 1'b0;
+      rtr     <= '0;
+      ntr     <= '0;
+    end else if (clear_i || exec_done) begin
       rd_cnt  <= '0;
       rd_bank <= 1'b0;
       rtr     <= '0;
@@ -180,7 +185,9 @@ module idma_otf_transpose #(
 
   // full/empty token
   always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni || clear_i || exec_done) begin
+    if (!rst_ni) begin
+      full_q <= 2'b00;
+    end else if (clear_i || exec_done) begin
       full_q <= 2'b00;
     end else begin
       if (fill_done)  full_q[wr_bank] <= 1'b1;
@@ -224,7 +231,11 @@ module idma_otf_transpose #(
   // output register; not cleared by exec_done so the final beat is held until accepted
   assign ready_int = ~valid_o | ready_i;
   always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni || clear_i) begin
+    if (!rst_ni) begin
+      valid_o <= 1'b0;
+      data_o  <= '0;
+      strb_o  <= '0;
+    end else if (clear_i) begin
       valid_o <= 1'b0;
       data_o  <= '0;
       strb_o  <= '0;
