@@ -82,15 +82,15 @@
 `endif
 
 `ifdef PROT_OBI
-    // write a byte to the OBI AXI-attached memory
+    // seed a byte into the OBI source (read) memory
     task write_byte_obi_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
-        i_obi_axi_sim_mem.mem[addr_i] = byte_i;
+        i_obi_read_sim_mem.mem[addr_i] = byte_i;
     endtask
 
-    // read a byte from the OBI AXI-attached memory
+    // read a byte back from the OBI destination (write) memory
     task read_byte_obi_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
@@ -341,6 +341,19 @@
             end
             now++;
         end
+`ifdef PROT_OBI
+        // pad partial-word src bytes (0xff) so obi_sim_mem word-base gating returns real bytes
+        foreach (used_protocols[i]) begin
+            if (used_protocols[i] == idma_pkg::OBI) begin
+                addr_t sw   = DataWidth/8;
+                addr_t base = (now_r.src_addr / sw) * sw;
+                addr_t top  = (((now_r.src_addr + now_r.length) + sw - 1) / sw) * sw;
+                for (addr_t a = base; a < top; a++)
+                    if (!i_obi_read_sim_mem.mem.exists(a))
+                        write_byte_obi_axi_mem(8'hff, a);
+            end
+        end
+`endif
         // write errors
         for (int i = 0; i < now_r.err_addr.size(); i++) begin
             set_error_mem(
