@@ -294,8 +294,13 @@ module idma_inst64_top #(
 
         assign init_read_rsp[c].rsp_chan.init = {{StrbWidth}{init_read_req_byte[c]}};
 
-        // prefer read request if both were valid (but shouldn't happen)
-        assign obi_we_d[c] = (~obi_read_req[c].req & obi_write_req[c].req);
+        always_comb begin : gen_obi_rw_arbitration
+            if (obi_write_req[c].req) begin
+                obi_we_d[c] = '1;
+            end else begin
+                obi_we_d[c] = '0;
+            end
+        end
 
         `FF(obi_we_q[c], obi_we_d[c], '0, clk_i, rst_ni)
         stream_mux #(
