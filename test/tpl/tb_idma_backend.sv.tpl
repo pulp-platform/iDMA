@@ -99,6 +99,15 @@ ${database['axi']['typedefs']}
     // ${database['obi']['full_name']} typedefs
 ${database['obi']['typedefs']}
 % endif
+% if 'obi' in used_protocols:
+    // OBI sim-mem cfg; UseRReady=1 so the mem honors the backend's rready
+    function automatic obi_pkg::obi_cfg_t tb_obi_cfg();
+        tb_obi_cfg = obi_pkg::obi_default_cfg(AddrWidth, DataWidth, AxiIdWidth,
+                                              obi_pkg::ObiMinimalOptionalConfig);
+        tb_obi_cfg.UseRReady = 1'b1;
+    endfunction
+    localparam obi_pkg::obi_cfg_t ObiCfg = tb_obi_cfg();
+% endif
 % for protocol in used_protocols:
     % if (protocol != 'axi') and (protocol != 'obi'):
     // ${database[protocol]['full_name']} typedefs
@@ -245,6 +254,15 @@ ${p}_${database[p]['write_meta_channel']}_width\
  axi_write_rsp,\
         % endif
  axi_rsp, axi_rsp_mem;
+    % elif protocol == 'obi':
+        % if protocol in used_read_protocols:
+    obi_req_t obi_read_req;
+    obi_rsp_t obi_read_rsp;
+        % endif
+        % if protocol in used_write_protocols:
+    obi_req_t obi_write_req;
+    obi_rsp_t obi_write_rsp;
+        % endif
     % else:
         % if protocol in used_read_protocols:
             % if database[protocol]['read_slave'] == 'true':
@@ -356,6 +374,14 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .clk_o        ( clk     ),
         .rst_no       ( rst_n   )
     );
+
+    // Dummy memory type (sim-mem instances a backend lacks but shared tb_tasks.svh references)
+    typedef struct {
+        logic [7:0]     mem[addr_t];
+        axi_pkg::resp_t rerr[addr_t];
+        axi_pkg::resp_t werr[addr_t];
+    } dummy_mem_t;
+
 % for protocol in used_protocols:
     // ${database[protocol]['full_name']} sim memory
     % if protocol == 'axi':
@@ -390,6 +416,50 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .mon_w_addr_o       ( /* NOT CONNECTED */ ),
         .mon_w_valid_o      ( /* NOT CONNECTED */ )
     );
+    % elif protocol == 'obi':
+    // Native OBI: separate read/write obi_sim_mem (seed src in read mem, check dst in write mem)
+        % if protocol in used_read_protocols:
+    obi_sim_mem #(
+        .ObiCfg            ( ObiCfg          ),
+        .obi_req_t         ( obi_req_t       ),
+        .obi_rsp_t         ( obi_rsp_t       ),
+        .obi_r_chan_t      ( obi_r_chan_t    ),
+        .WarnUninitialized ( 1'b0            ),
+        .ClearErrOnAccess  ( 1'b1            ),
+        .ApplDelay         ( TA              ),
+        .AcqDelay          ( TT              )
+    ) i_obi_read_sim_mem (
+        .clk_i       ( clk          ),
+        .rst_ni      ( rst_n        ),
+        .obi_req_i   ( obi_read_req ),
+        .obi_rsp_o   ( obi_read_rsp ),
+        .mon_valid_o (), .mon_we_o (), .mon_addr_o (),
+        .mon_wdata_o (), .mon_be_o (), .mon_id_o ()
+    );
+        % else:
+    dummy_mem_t i_obi_read_sim_mem;
+        % endif
+        % if protocol in used_write_protocols:
+    obi_sim_mem #(
+        .ObiCfg            ( ObiCfg          ),
+        .obi_req_t         ( obi_req_t       ),
+        .obi_rsp_t         ( obi_rsp_t       ),
+        .obi_r_chan_t      ( obi_r_chan_t    ),
+        .WarnUninitialized ( 1'b0            ),
+        .ClearErrOnAccess  ( 1'b1            ),
+        .ApplDelay         ( TA              ),
+        .AcqDelay          ( TT              )
+    ) i_obi_axi_sim_mem (
+        .clk_i       ( clk           ),
+        .rst_ni      ( rst_n         ),
+        .obi_req_i   ( obi_write_req ),
+        .obi_rsp_o   ( obi_write_rsp ),
+        .mon_valid_o (), .mon_we_o (), .mon_addr_o (),
+        .mon_wdata_o (), .mon_be_o (), .mon_id_o ()
+    );
+        % else:
+    dummy_mem_t i_obi_axi_sim_mem;
+        % endif
     % else:
     axi_sim_mem #(
         .AddrWidth         ( AddrWidth    ),
@@ -426,16 +496,13 @@ ${p}_${database[p]['write_meta_channel']}_width\
 % endfor
 
 % if len(unused_protocols) > 0:
-    // Dummy memory
-    typedef struct {
-        logic [7:0]     mem[addr_t];
-        axi_pkg::resp_t rerr[addr_t];
-        axi_pkg::resp_t werr[addr_t];
-    } dummy_mem_t;
-
+    // Dummy memories for unused protocols
     % for protocol in sorted(unused_protocols):
         % if protocol == 'axi':
     dummy_mem_t i_axi_sim_mem;
+        % elif protocol == 'obi':
+    dummy_mem_t i_obi_read_sim_mem;
+    dummy_mem_t i_obi_axi_sim_mem;
         % else:
     dummy_mem_t i_${protocol}_axi_sim_mem;
         % endif
@@ -453,6 +520,16 @@ ${p}_${database[p]['write_meta_channel']}_width\
     signal_highlighter #(.T(axi_w_chan_t))  i_w_hl  (.ready_i(axi_rsp.w_ready),  .valid_i(axi_req.w_valid),  .data_i(axi_req.w));
     signal_highlighter #(.T(axi_r_chan_t))  i_r_hl  (.ready_i(axi_req.r_ready),  .valid_i(axi_rsp.r_valid),  .data_i(axi_rsp.r));
     signal_highlighter #(.T(axi_b_chan_t))  i_b_hl  (.ready_i(axi_req.b_ready),  .valid_i(axi_rsp.b_valid),  .data_i(axi_rsp.b));
+    % elif protocol == 'obi':
+    // ${database[protocol]['full_name']} Signal Highlighters
+        % if protocol in used_read_protocols:
+    signal_highlighter #(.T(obi_a_chan_t)) i_obi_r_a_hl (.ready_i(obi_read_rsp.gnt),    .valid_i(obi_read_req.req),     .data_i(obi_read_req.a));
+    signal_highlighter #(.T(obi_r_chan_t)) i_obi_r_r_hl (.ready_i(obi_read_req.rready), .valid_i(obi_read_rsp.rvalid),  .data_i(obi_read_rsp.r));
+        % endif
+        % if protocol in used_write_protocols:
+    signal_highlighter #(.T(obi_a_chan_t)) i_obi_w_a_hl (.ready_i(obi_write_rsp.gnt),    .valid_i(obi_write_req.req),    .data_i(obi_write_req.a));
+    signal_highlighter #(.T(obi_r_chan_t)) i_obi_w_r_hl (.ready_i(obi_write_req.rready), .valid_i(obi_write_rsp.rvalid), .data_i(obi_write_rsp.r));
+        % endif
     % else:
     // ${database[protocol]['full_name']}-AXI Signal Highlighters
     signal_highlighter #(.T(axi_aw_chan_t)) i_${protocol}_aw_hl (.ready_i(${protocol}_axi_rsp.aw_ready), .valid_i(${protocol}_axi_req.aw_valid), .data_i(${protocol}_axi_req.aw));
@@ -484,6 +561,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
  && !(axi_rsp.r_valid && axi_req.r_ready)\
                 % elif p2 == 'init':
  && !(init_read_rsp.rsp_valid && init_read_req.rsp_ready)\
+                % elif p2 == 'obi':
+ && !(obi_read_rsp.rvalid && obi_read_req.rready)\
                 % else:
  && !(${p2}_axi_rsp.r_valid && ${p2}_axi_req.r_ready)\
                 % endif
@@ -492,6 +571,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
 ),
         % if protocol == 'axi':
         .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
+        % elif protocol == 'obi':
+        .valid_i(obi_read_rsp.rvalid), .ready_i(obi_read_req.rready));
         % else:
         .valid_i(${protocol}_axi_rsp.r_valid), .ready_i(${protocol}_axi_req.r_ready));
         % endif
@@ -508,6 +589,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
             % if protocol != p2:
                 % if p2 == 'axi':
  && !(axi_req.w_valid && axi_rsp.w_ready)\
+                % elif p2 == 'obi':
+ && !(obi_write_req.req && obi_write_rsp.gnt)\
                 % else:
  && !(${p2}_axi_req.w_valid && ${p2}_axi_rsp.w_ready)\
                 % endif
@@ -516,6 +599,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
 ),
         % if protocol == 'axi':
         .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+        % elif protocol == 'obi':
+        .valid_i(obi_write_req.req), .ready_i(obi_write_rsp.gnt));
         % else:
         .valid_i(${protocol}_axi_req.w_valid), .ready_i(${protocol}_axi_rsp.w_ready));
         % endif
@@ -653,20 +738,22 @@ ${p}_${database[p]['write_meta_channel']}_width\
 % endif
 
 % for protocol in used_read_protocols:
-    % if protocol != 'axi':
+    % if (protocol != 'axi') and (protocol != 'obi'):
 ${rendered_read_bridges[protocol]}
     % endif
 %endfor
 
 % for protocol in used_write_protocols:
-    % if protocol != 'axi':
+    % if (protocol != 'axi') and (protocol != 'obi'):
 ${rendered_write_bridges[protocol]}
     % endif
 %endfor
 
     // Read Write Join
 % for protocol in used_protocols:
-    % if (protocol in used_read_protocols) and (protocol in used_write_protocols):
+    % if protocol == 'obi':
+        ## native OBI: separate read/write obi_sim_mem, no rw_join
+    % elif (protocol in used_read_protocols) and (protocol in used_write_protocols):
     axi_rw_join #(
         .axi_req_t        ( axi_req_t ),
         .axi_resp_t       ( axi_rsp_t )
@@ -730,6 +817,9 @@ ${rendered_write_bridges[protocol]}
     assign idma_dv.eh_req_ready  = eh_req_ready;
 
 % for protocol in used_protocols:
+    % if protocol == 'obi':
+        ## native OBI memory path: no AXI throttle/multicut
+    % else:
     // throttle the\
     % if protocl != 'axi':
 ${database[protocol]['full_name']}-\
@@ -856,6 +946,7 @@ ${protocol}_\
 axi_rsp_mem       )
         );
     end
+    % endif
 % endfor
 
 
@@ -1015,6 +1106,9 @@ axi_rsp_mem       )
                 //if (writes_in_flight[proto][id] == 0)
                     //$display("Stopped transfer %d id @%d ns", id, $time);
             end
+    % elif protocol == 'obi':
+            // obi_sim_mem commits writes on grant; mem current at rsp_valid, no write tracking
+            proto = idma_pkg::${database[protocol]['protocol_enum']};
     % else:
             proto = idma_pkg::${database[protocol]['protocol_enum']};
             if ( ${protocol}_axi_req_mem.aw_valid && ${protocol}_axi_rsp_mem.aw_ready ) begin
@@ -1105,7 +1199,8 @@ axi_rsp_mem       )
     % endfor
                 default: $fatal(1, "Unhandled destination protocol (%0d) in writes_in_flight case", now.dst_protocol);
             endcase
-            if (now.err_addr.size() == 0) begin
+            // OBI writes commit synchronously (no response tracking); other protocols wait
+            if (now.err_addr.size() == 0 && now.dst_protocol != idma_pkg::OBI) begin
                 while (writes_in_flight[now.dst_protocol][id] > 0) begin
                     $display("Waiting for write to finish!");
                     @(posedge clk);
