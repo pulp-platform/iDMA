@@ -10,8 +10,7 @@
 // joined axi_sim_mem so both src_head and dst_head routing are observable. A
 // cross-head transfer (src_head != dst_head) reads one head's memory and must
 // land in the other head's memory, which also exercises the write-response head
-// FIFO. Recycles the per-head memory harness pattern from the vidma inst64
-// verification harness.
+// FIFO. Uses a per-head memory harness pattern.
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
