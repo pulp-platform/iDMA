@@ -161,4 +161,14 @@ module idma_inst64_base #(
     else return 8'hXX;
   endfunction
 
+  // L1/TCDM (OBI) backdoor helpers (channel 0)
+  task automatic obi_write_byte(input addr_t addr, input byte data);
+    gen_mem_ch[0].i_obi_sim_mem.mem[addr] = data;
+  endtask
+
+  function automatic logic [7:0] obi_read_byte(input addr_t addr);
+    if (gen_mem_ch[0].i_obi_sim_mem.mem.exists(addr)) return gen_mem_ch[0].i_obi_sim_mem.mem[addr];
+    else return 8'hXX;
+  endfunction
+
 endmodule
