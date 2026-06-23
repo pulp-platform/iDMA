@@ -5,12 +5,15 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// Transpose geometry expander: expands an opt.compute=TRANSPOSE request into a
-/// NumDim=4 tiled ND walk for the generic idma_nd_midend. Non-transpose passes
-/// through. Combinational, quasi-static per request.
+/// Transpose geometry expander for the generic idma_nd_midend. Two modes:
+/// engine (NumDim=4 tiled walk feeding the FF transpose engine) and address-gen
+/// (element-granular swapped-stride walk, no engine, for backends without the
+/// engine e.g. multi-write OBI/TCDM). Non-transpose passes through.
 module idma_transpose_midend #(
-    /// Number of ND dimensions (must be >= 4 to express the tiled walk)
+    /// Number of ND dimensions (engine walk needs >= 4; address-gen needs >= 3)
     parameter int unsigned NumDim    = 32'd4,
+    /// Address-gen mode: element-granular swapped-stride transpose, no engine
+    parameter bit          AddrGenTranspose = 1'b0,
     /// Write data-path width in bytes (tile side NE = StrbWidth / element bytes)
     parameter int unsigned StrbWidth = 32'd64,
     /// Address type
@@ -51,6 +54,7 @@ module idma_transpose_midend #(
         logic [TensorW-1:0]      tm, tn;
         logic signed [WorkW-1:0] m, n, log2ne, ne, yt, nt, nxe, mpe;
         logic signed [WorkW-1:0] strb_c;   // NE*E == StrbWidth (mode cancels)
+        logic signed [WorkW-1:0] e, me;    // address-gen: E (=1<<mode), M*E
 
         nd_req_o = nd_req_i;   // passthrough
 
@@ -59,43 +63,68 @@ module idma_transpose_midend #(
             tm   = nd_req_i.burst_req.opt.compute.params.transpose.tensor_m;
             tn   = nd_req_i.burst_req.opt.compute.params.transpose.tensor_n;
             // zero-extend bounded dims into the signed working width
-            m      = $signed({{(WorkW-TensorW){1'b0}}, tm});   // M
-            n      = $signed({{(WorkW-TensorW){1'b0}}, tn});   // N
-            log2ne = $signed(WorkW'(Log2Strb)) - $signed({{(WorkW-ModeW){1'b0}}, mode});
-            ne     = $signed(WorkW'(1)) <<< log2ne;            // tile side (elements)
-            yt     = (m + ne - 1) >>> log2ne;                  // ceil(M/NE)
-            nt     = (n + ne - 1) >>> log2ne;                  // ceil(N/NE)
-            nxe    = n  <<< mode;                              // N*E  (E = 1<<mode)
-            mpe    = yt <<< Log2Strb;                          // MP*E = YT*NE*E = YT*StrbWidth
-            strb_c = $signed(WorkW'(StrbWidth));               // NE*E (one tile-row = StrbWidth B)
+            m = $signed({{(WorkW-TensorW){1'b0}}, tm});   // M
+            n = $signed({{(WorkW-TensorW){1'b0}}, tn});   // N
 
-            nd_req_o.burst_req.length     = LenW'(StrbWidth);
+            if (AddrGenTranspose) begin
+                // Element-granular swapped-stride walk (out_T[c][r] = in[r][c]),
+                // dst a contiguous N x M transpose. No engine: compute is cleared
+                // so the backend runs a plain strided copy. Correct on any
+                // protocol (ideal on random-access OBI/TCDM; slow on burst AXI).
+                e  = $signed(WorkW'(1)) <<< mode;              // E = 1<<mode
+                me = m <<< mode;                               // M*E
+                nd_req_o.burst_req.opt.compute.enable = 1'b0;
+                nd_req_o.burst_req.length     = LenW'(e);
+                // d_req[0] = column walk (reps N): src +E, dst +M*E
+                nd_req_o.d_req[0].reps        = n[RepW-1:0];
+                nd_req_o.d_req[0].src_strides = addr_t'(e);
+                nd_req_o.d_req[0].dst_strides = addr_t'(me);
+                // d_req[1] = row walk (reps M): src +E, dst +E - (N-1)*M*E (rewind)
+                nd_req_o.d_req[1].reps        = m[RepW-1:0];
+                nd_req_o.d_req[1].src_strides = addr_t'(e);
+                nd_req_o.d_req[1].dst_strides = addr_t'(e - (n - 1) * me);
+                for (int unsigned d = 2; d < NumDim-1; d++) begin
+                    nd_req_o.d_req[d].reps        = RepW'(1);
+                    nd_req_o.d_req[d].src_strides = '0;
+                    nd_req_o.d_req[d].dst_strides = '0;
+                end
+            end else begin
+                log2ne = $signed(WorkW'(Log2Strb)) - $signed({{(WorkW-ModeW){1'b0}}, mode});
+                ne     = $signed(WorkW'(1)) <<< log2ne;            // tile side (elements)
+                yt     = (m + ne - 1) >>> log2ne;                  // ceil(M/NE)
+                nt     = (n + ne - 1) >>> log2ne;                  // ceil(N/NE)
+                nxe    = n  <<< mode;                              // N*E  (E = 1<<mode)
+                mpe    = yt <<< Log2Strb;                          // MP*E = YT*NE*E = YT*StrbWidth
+                strb_c = $signed(WorkW'(StrbWidth));               // NE*E (one tile-row = StrbWidth B)
 
-            // d_req[0] = local row within tile (reps NE)
-            nd_req_o.d_req[0].reps        = ne[RepW-1:0];
-            nd_req_o.d_req[0].src_strides = addr_t'(nxe);
-            nd_req_o.d_req[0].dst_strides = addr_t'(mpe);
-            // d_req[1] = row-tile (reps YT). (NE-1)*MPE = (MPE<<log2ne) - MPE.
-            nd_req_o.d_req[1].reps        = yt[RepW-1:0];
-            nd_req_o.d_req[1].src_strides = addr_t'(nxe);
-            nd_req_o.d_req[1].dst_strides = addr_t'(strb_c - (mpe <<< log2ne) + mpe);
-            // d_req[2] = col-tile (reps NT). (YT*NE-1)*NXE = ((YT*N)<<Log2Strb) - NXE;
-            //            the dst rewind MPE-(YT-1)*StrbWidth collapses to StrbWidth.
-            nd_req_o.d_req[2].reps        = nt[RepW-1:0];
-            nd_req_o.d_req[2].src_strides = addr_t'(strb_c - ((yt * n) <<< Log2Strb) + nxe);
-            nd_req_o.d_req[2].dst_strides = addr_t'(strb_c);
-            // the walk is exactly 4-D: neutralize any higher dims
-            for (int unsigned d = 3; d < NumDim-1; d++) begin
-                nd_req_o.d_req[d].reps        = RepW'(1);
-                nd_req_o.d_req[d].src_strides = '0;
-                nd_req_o.d_req[d].dst_strides = '0;
+                nd_req_o.burst_req.length     = LenW'(StrbWidth);
+
+                // d_req[0] = local row within tile (reps NE)
+                nd_req_o.d_req[0].reps        = ne[RepW-1:0];
+                nd_req_o.d_req[0].src_strides = addr_t'(nxe);
+                nd_req_o.d_req[0].dst_strides = addr_t'(mpe);
+                // d_req[1] = row-tile (reps YT). (NE-1)*MPE = (MPE<<log2ne) - MPE.
+                nd_req_o.d_req[1].reps        = yt[RepW-1:0];
+                nd_req_o.d_req[1].src_strides = addr_t'(nxe);
+                nd_req_o.d_req[1].dst_strides = addr_t'(strb_c - (mpe <<< log2ne) + mpe);
+                // d_req[2] = col-tile (reps NT). (YT*NE-1)*NXE = ((YT*N)<<Log2Strb) - NXE;
+                //            the dst rewind MPE-(YT-1)*StrbWidth collapses to StrbWidth.
+                nd_req_o.d_req[2].reps        = nt[RepW-1:0];
+                nd_req_o.d_req[2].src_strides = addr_t'(strb_c - ((yt * n) <<< Log2Strb) + nxe);
+                nd_req_o.d_req[2].dst_strides = addr_t'(strb_c);
+                // the walk is exactly 4-D: neutralize any higher dims
+                for (int unsigned d = 3; d < NumDim-1; d++) begin
+                    nd_req_o.d_req[d].reps        = RepW'(1);
+                    nd_req_o.d_req[d].src_strides = '0;
+                    nd_req_o.d_req[d].dst_strides = '0;
+                end
             end
         end
     end
 
 `ifndef SYNTHESIS
-    initial assert (NumDim >= 4) else
-        $fatal(1, "idma_transpose_midend requires NumDim >= 4 (got %0d)", NumDim);
+    initial assert (NumDim >= (AddrGenTranspose ? 32'd3 : 32'd4)) else
+        $fatal(1, "idma_transpose_midend: NumDim too small (got %0d)", NumDim);
     // mode 0..2 needs NE >= 1, i.e. log2(StrbWidth) >= 2
     initial assert (Log2Strb >= 2) else
         $fatal(1, "idma_transpose_midend requires StrbWidth >= 4 (got %0d)", StrbWidth);

@@ -9,7 +9,8 @@
 /// and one axi_sim_mem per channel. No Snitch cluster, no multi-head.
 module idma_inst64_base #(
     parameter int unsigned DMATracing = idma_inst64_tb_pkg::DMATracing,
-    parameter idma_pkg::compute_enable_t ComputeEnable = '0
+    parameter idma_pkg::compute_enable_t ComputeEnable = '0,
+    parameter bit AddrGenTranspose = 1'b0
 );
   import idma_inst64_tb_pkg::*;
   import idma_inst64_snitch_pkg::*;
@@ -56,6 +57,7 @@ module idma_inst64_base #(
     .NumChannels     ( NumChannels     ),
     .DMATracing      ( DMATracing      ),
     .ComputeEnable   ( ComputeEnable   ),
+    .AddrGenTranspose( AddrGenTranspose ),
     .axi_ar_chan_t   ( axi_ar_chan_t   ),
     .axi_aw_chan_t   ( axi_aw_chan_t   ),
     .axi_req_t       ( axi_req_t       ),

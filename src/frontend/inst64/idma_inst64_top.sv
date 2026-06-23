@@ -24,6 +24,9 @@ module idma_inst64_top #(
     parameter int unsigned DMATracing      = 32'd0,
     /// Compile-time on-the-fly compute feature enables (e.g. transpose)
     parameter idma_pkg::compute_enable_t ComputeEnable = '0,
+    /// Transpose via address generation (no FF engine) — for backends without
+    /// the engine, e.g. this multi-write OBI/TCDM variant
+    parameter bit          AddrGenTranspose = 1'b0,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -378,10 +381,11 @@ module idma_inst64_top #(
         // expand transpose requests into the tiled ND walk
         if (ComputeEnable.transpose) begin : gen_transpose
             idma_transpose_midend #(
-                .NumDim        ( NumDim        ),
-                .StrbWidth     ( StrbWidth     ),
-                .addr_t        ( addr_t        ),
-                .idma_nd_req_t ( idma_nd_req_t )
+                .NumDim           ( NumDim           ),
+                .AddrGenTranspose ( AddrGenTranspose ),
+                .StrbWidth        ( StrbWidth        ),
+                .addr_t           ( addr_t           ),
+                .idma_nd_req_t    ( idma_nd_req_t    )
             ) i_idma_transpose_midend (
                 .nd_req_i ( fifo_nd_req           ),
                 .valid_i  ( fifo_nd_valid         ),
@@ -834,7 +838,8 @@ module idma_inst64_top #(
         $fatal(1, "DMCPY argb transpose packing requires TransposeDimWidth == 12");
 `ifndef VERILATOR
     // capability cross-check against the generated backend's baked compute set
-    if (ComputeEnable.transpose) begin : gen_compute_check
+    // (engine route only; address-gen needs no compute-enabled backend)
+    if (ComputeEnable.transpose && !AddrGenTranspose) begin : gen_compute_check
         initial assert (gen_backend[0].i_idma_backend_rw_axi.ComputeEnable.transpose) else
             $fatal(1, "ComputeEnable.transpose requires a compute-enabled backend variant");
     end

@@ -24,7 +24,7 @@ module tb_idma_inst64_transpose #(
   localparam addr_t DST = 64'h9000_0000;
   localparam addr_t CPY = 64'hA000_0000;
 
-  idma_inst64_base #(.ComputeEnable('{transpose: 1'b1})) harness();
+  idma_inst64_base #(.ComputeEnable('{transpose: 1'b1}), .AddrGenTranspose(1'b1)) harness();
 
   int unsigned errs = 0;
 
@@ -46,30 +46,26 @@ module tb_idma_inst64_transpose #(
                               input addr_t src, input addr_t dst);
     tf_id_t tid;
     longint unsigned c0, cyc, b0;
-    int unsigned yt = (mm + NE - 1)/NE;
-    int unsigned nt = (nn + NE - 1)/NE;
-    int unsigned mp = yt*NE;
     for (int unsigned idx = 0; idx < mm*nn; idx++)
       for (int unsigned b = 0; b < EB; b++)
         harness.mem_write_byte(src + idx*EB + b, fp(idx, b));
-    for (int unsigned i = 0; i < nt*NE; i++)
-      for (int unsigned j = 0; j < mp*EB; j++)
-        harness.mem_write_byte(dst + i*mp*EB + j, 8'hCC);
+    // address-gen output is a contiguous N x M transpose (pitch M, no padding)
+    for (int unsigned k = 0; k < nn*mm*EB; k++)
+      harness.mem_write_byte(dst + k, 8'hCC);
 
     c0 = harness.drv_if.cycle_counter; b0 = burst_cnt;
     harness.drv_if.dma_transpose(src, dst, 12'(mm), 12'(nn), 2'(MODE), 3'd0, tid);
     harness.drv_if.dma_wait(tid, 0);
     harness.drv_if.dma_wait_idle(0);   // ensure all writes retired before reading
     cyc = harness.drv_if.cycle_counter - c0;
-    $display("  transpose %0dx%0d (NE=%0d, %0dx%0d=%0d tiles, MP=%0d):", mm, nn, NE, yt, nt,
-             yt*nt, mp);
-    $display("    bursts=%0d (exp NE*YT*NT=%0d) cycles=%0d eff=%0d B/cyc (bus peak %0d)",
-             burst_cnt-b0, NE*yt*nt, cyc, (mm*nn*EB)/cyc, StrbWidth);
+    $display("  transpose %0dx%0d: bursts=%0d (exp M*N=%0d) cycles=%0d", mm, nn,
+             burst_cnt-b0, mm*nn, cyc);
 
+    // out_T[c][r] == in[r][c], dst contiguous N x M (pitch M)
     for (int unsigned c = 0; c < nn; c++)
       for (int unsigned r = 0; r < mm; r++)
         for (int unsigned b = 0; b < EB; b++) begin
-          automatic logic [7:0] got = harness.mem_read_byte(dst + (c*mp + r)*EB + b);
+          automatic logic [7:0] got = harness.mem_read_byte(dst + (c*mm + r)*EB + b);
           automatic logic [7:0] exp = harness.mem_read_byte(src + (r*nn + c)*EB + b);
           if (got !== exp) begin
             errs++;
@@ -77,14 +73,6 @@ module tb_idma_inst64_transpose #(
               $display("[TP] data mismatch out_T[%0d][%0d].b%0d=%02h exp %02h", c, r, b, got, exp);
           end
         end
-    for (int unsigned i = 0; i < nt*NE; i++)
-      for (int unsigned j = 0; j < mp; j++)
-        if (i >= nn || j >= mm)
-          for (int unsigned b = 0; b < EB; b++)
-            if (harness.mem_read_byte(dst + (i*mp + j)*EB + b) !== 8'hCC) begin
-              errs++;
-              if (errs <= 12) $display("[TP] padding clobbered at [%0d][%0d].b%0d", i, j, b);
-            end
   endtask
 
   initial begin
