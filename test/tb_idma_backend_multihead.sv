@@ -10,8 +10,8 @@
 // its own axi_sim_mem so read-head routing is observable: src_head selects which
 // read memory a transfer sources from, while all writes land in the single write
 // memory. Preloading distinct data per read head and checking the write memory
-// catches a backend that ignores or mis-routes src_head. Recycles the per-head
-// memory harness pattern from the vidma inst64 verification harness.
+// catches a backend that ignores or mis-routes src_head. Uses a per-head
+// memory harness pattern.
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
