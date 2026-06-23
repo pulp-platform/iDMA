@@ -387,6 +387,21 @@ idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_b2b -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_b2b -do "run -all; quit"
 
+# Address-gen transpose: idma_transpose_midend (AddrGen) -> idma_nd_midend ->
+# stock rw_axi / rw_obi backend. No compute engine. TB sweeps geometries; one
+# run per bus width.
+.PHONY: idma_sim_tb_idma_addrgen_transpose
+idma_sim_tb_idma_addrgen_transpose: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_addrgen_transpose -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_addrgen_transpose -do "run -all; quit"
+
+.PHONY: idma_sim_tb_idma_addrgen_transpose_obi
+idma_sim_tb_idma_addrgen_transpose_obi: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_addrgen_transpose_obi -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_addrgen_transpose_obi -do "run -all; quit"
+
 .PHONY: idma_sim_tb_idma_transpose_midend
 idma_sim_tb_idma_transpose_midend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
