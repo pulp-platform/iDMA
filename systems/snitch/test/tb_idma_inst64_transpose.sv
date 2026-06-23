@@ -12,7 +12,8 @@
 module tb_idma_inst64_transpose #(
   parameter int unsigned M  = 40,   // matrix rows (elements)
   parameter int unsigned N  = 70,   // matrix cols (elements)
-  parameter int unsigned EB = 4     // element size in bytes (1/2/4)
+  parameter int unsigned EB = 4,    // element size in bytes (1/2/4)
+  parameter bit          BankSkew = 1'b0
 );
   import idma_inst64_tb_pkg::*;
 
@@ -27,7 +28,8 @@ module tb_idma_inst64_transpose #(
   localparam addr_t CPY  = 64'h0080_0000;
   localparam addr_t ASRC = 64'h8000_0000;
 
-  idma_inst64_base #(.ComputeEnable('{transpose: 1'b1}), .AddrGenTranspose(1'b1)) harness();
+  idma_inst64_base #(.ComputeEnable('{transpose: 1'b1}), .AddrGenTranspose(1'b1),
+                     .BankSkew(BankSkew)) harness();
 
   int unsigned errs = 0;
 
@@ -41,6 +43,13 @@ module tb_idma_inst64_transpose #(
   // behind a value collision (a plain byte ramp aliases mod 256).
   function automatic logic [7:0] fp(input int unsigned idx, input int unsigned b);
     return 8'((idx >> (8*b)) & 32'hFF);
+  endfunction
+
+  // padded dst row pitch (matches idma_transpose_midend BankSkew rule): pad by
+  // one bus-word of elements when mm*EB is an even number of bus words
+  function automatic int unsigned skew_pitch(input int unsigned mm);
+    if (BankSkew && ((mm*EB) % (2*StrbWidth) == 0)) return mm + StrbWidth/EB;
+    else return mm;
   endfunction
 
   // memory backdoors selected by protocol: OBI (TCDM) vs AXI (ToSoC)
@@ -58,11 +67,13 @@ module tb_idma_inst64_transpose #(
                               input bit src_obi, input bit dst_obi);
     tf_id_t tid;
     longint unsigned c0, cyc, b0;
+    int unsigned mp;
+    mp = skew_pitch(mm);   // dst row pitch (>= mm when BankSkew pads it)
     for (int unsigned idx = 0; idx < mm*nn; idx++)
       for (int unsigned b = 0; b < EB; b++)
         seed_byte(src_obi, src + idx*EB + b, fp(idx, b));
-    // address-gen output is a contiguous N x M transpose (pitch M, no padding)
-    for (int unsigned k = 0; k < nn*mm*EB; k++)
+    // dst is an N x mp transpose (mp == M unless bank-skew pads the pitch)
+    for (int unsigned k = 0; k < nn*mp*EB; k++)
       seed_byte(dst_obi, dst + k, 8'hCC);
 
     c0 = harness.drv_if.cycle_counter; b0 = burst_cnt;
@@ -70,14 +81,14 @@ module tb_idma_inst64_transpose #(
     harness.drv_if.dma_wait(tid, 0);
     harness.drv_if.dma_wait_idle(0);   // ensure all writes retired before reading
     cyc = harness.drv_if.cycle_counter - c0;
-    $display("  transpose %0dx%0d %s->%s: bursts=%0d (exp M*N=%0d) cycles=%0d", mm, nn,
-             src_obi ? "OBI" : "AXI", dst_obi ? "OBI" : "AXI", burst_cnt-b0, mm*nn, cyc);
+    $display("  transpose %0dx%0d %s->%s pitch=%0d: bursts=%0d (exp M*N=%0d) cycles=%0d", mm, nn,
+             src_obi ? "OBI" : "AXI", dst_obi ? "OBI" : "AXI", mp, burst_cnt-b0, mm*nn, cyc);
 
-    // out_T[c][r] == in[r][c], dst contiguous N x M (pitch M)
+    // out_T[c][r] == in[r][c] at dst row pitch mp
     for (int unsigned c = 0; c < nn; c++)
       for (int unsigned r = 0; r < mm; r++)
         for (int unsigned b = 0; b < EB; b++) begin
-          automatic logic [7:0] got = peek_byte(dst_obi, dst + (c*mm + r)*EB + b);
+          automatic logic [7:0] got = peek_byte(dst_obi, dst + (c*mp + r)*EB + b);
           automatic logic [7:0] exp = peek_byte(src_obi, src + (r*nn + c)*EB + b);
           if (got !== exp) begin
             errs++;
@@ -85,6 +96,14 @@ module tb_idma_inst64_transpose #(
               $display("[TP] data mismatch out_T[%0d][%0d].b%0d=%02h exp %02h", c, r, b, got, exp);
           end
         end
+    // skew padding (columns r in [mm, mp)) must stay sentinel
+    for (int unsigned c = 0; c < nn; c++)
+      for (int unsigned r = mm; r < mp; r++)
+        for (int unsigned b = 0; b < EB; b++)
+          if (peek_byte(dst_obi, dst + (c*mp + r)*EB + b) !== 8'hCC) begin
+            errs++;
+            if (errs <= 12) $display("[TP] skew padding clobbered at [%0d][%0d].b%0d", c, r, b);
+          end
   endtask
 
   initial begin

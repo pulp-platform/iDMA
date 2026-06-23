@@ -27,6 +27,8 @@ module idma_inst64_top #(
     /// Transpose via address generation (no FF engine) — for backends without
     /// the engine, e.g. this multi-write OBI/TCDM variant
     parameter bit          AddrGenTranspose = 1'b0,
+    /// Address-gen transpose: skew the dst pitch to avoid TCDM bank conflicts
+    parameter bit          BankSkew         = 1'b0,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -383,6 +385,7 @@ module idma_inst64_top #(
             idma_transpose_midend #(
                 .NumDim           ( NumDim           ),
                 .AddrGenTranspose ( AddrGenTranspose ),
+                .BankSkew         ( BankSkew         ),
                 .StrbWidth        ( StrbWidth        ),
                 .addr_t           ( addr_t           ),
                 .idma_nd_req_t    ( idma_nd_req_t    )

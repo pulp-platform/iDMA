@@ -14,6 +14,9 @@ module idma_transpose_midend #(
     parameter int unsigned NumDim    = 32'd4,
     /// Address-gen mode: element-granular swapped-stride transpose, no engine
     parameter bit          AddrGenTranspose = 1'b0,
+    /// Address-gen: pad the dst row pitch by one bus-word when needed so the
+    /// per-column word stride is odd (conflict-free on power-of-2-bank TCDM)
+    parameter bit          BankSkew     = 1'b0,
     /// Write data-path width in bytes (tile side NE = StrbWidth / element bytes)
     parameter int unsigned StrbWidth = 32'd64,
     /// Address type
@@ -54,7 +57,7 @@ module idma_transpose_midend #(
         logic [TensorW-1:0]      tm, tn;
         logic signed [WorkW-1:0] m, n, log2ne, ne, yt, nt, nxe, mpe;
         logic signed [WorkW-1:0] strb_c;   // NE*E == StrbWidth (mode cancels)
-        logic signed [WorkW-1:0] e, me;    // address-gen: E (=1<<mode), M*E
+        logic signed [WorkW-1:0] e, me, pad;  // address-gen: E (=1<<mode), M*E, pitch pad
 
         nd_req_o = nd_req_i;   // passthrough
 
@@ -68,18 +71,24 @@ module idma_transpose_midend #(
 
             if (AddrGenTranspose) begin
                 // Element-granular swapped-stride walk (out_T[c][r] = in[r][c]),
-                // dst a contiguous N x M transpose. No engine: compute is cleared
-                // so the backend runs a plain strided copy. Correct on any
-                // protocol (ideal on random-access OBI/TCDM; slow on burst AXI).
-                e  = $signed(WorkW'(1)) <<< mode;              // E = 1<<mode
-                me = m <<< mode;                               // M*E
+                // dst an N x M' transpose. No engine: compute is cleared so the
+                // backend runs a plain strided copy. Correct on any protocol
+                // (ideal on random-access OBI/TCDM; slow on burst AXI).
+                e   = $signed(WorkW'(1)) <<< mode;             // E = 1<<mode
+                me  = m <<< mode;                              // M*E
+                // BankSkew: when M*E is an even number of bus words the column
+                // stride hammers one TCDM bank; pad the pitch by one word (NE
+                // elements) to make the word stride odd => round-robin all banks.
+                ne  = $signed(WorkW'(StrbWidth)) >>> mode;     // NE = StrbWidth/E
+                pad = (BankSkew && (me[Log2Strb:0] == '0)) ? ne : '0;
+                me  = (m + pad) <<< mode;                      // M'*E (padded pitch)
                 nd_req_o.burst_req.opt.compute.enable = 1'b0;
                 nd_req_o.burst_req.length     = LenW'(e);
-                // d_req[0] = column walk (reps N): src +E, dst +M*E
+                // d_req[0] = column walk (reps N): src +E, dst +M'*E
                 nd_req_o.d_req[0].reps        = n[RepW-1:0];
                 nd_req_o.d_req[0].src_strides = addr_t'(e);
                 nd_req_o.d_req[0].dst_strides = addr_t'(me);
-                // d_req[1] = row walk (reps M): src +E, dst +E - (N-1)*M*E (rewind)
+                // d_req[1] = row walk (reps M): src +E, dst +E - (N-1)*M'*E (rewind)
                 nd_req_o.d_req[1].reps        = m[RepW-1:0];
                 nd_req_o.d_req[1].src_strides = addr_t'(e);
                 nd_req_o.d_req[1].dst_strides = addr_t'(e - (n - 1) * me);
