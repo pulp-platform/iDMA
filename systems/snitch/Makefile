@@ -1,9 +1,10 @@
 # Copyright 2026 ETH Zurich and University of Bologna.
 # Solderpad Hardware License, Version 0.51, see LICENSE for details.
 # SPDX-License-Identifier: SHL-0.51
-#
-# Author: Daniel Keller <dankeller@iis.ee.ethz.ch>
-#
+
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
 # Standalone build + sim flow for the Snitch inst64 integration. Elaborates the
 # upstream single-head idma_inst64_top + the recycled harness against iDMA's own
 # deps (axi, common_cells, common_verification). Uses the split_rtl compute-

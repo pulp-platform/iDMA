@@ -2,6 +2,9 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
+// Authors:
+// - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
 // Recycled from the vidma inst64 verification harness
 // (idma_alu_vec/test/frontend/idma_inst64_drv_if.sv). Faithful copy of the
 // copy/status tasks; the vidma-only DMOPC/multi-head/immediate tasks are

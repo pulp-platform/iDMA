@@ -2,6 +2,9 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
+// Authors:
+// - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
 // Recycled from the vidma inst64 verification harness
 // (idma_alu_vec/test/frontend/idma_inst64_tb_pkg.sv). Kept faithful. The
 // transpose imposes no NumAxInFlight>=NE constraint (the engine self-buffers a
