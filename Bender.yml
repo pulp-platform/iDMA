@@ -135,6 +135,8 @@ sources:
       - target/rtl/tb_idma_generated.sv
       - test/tb_idma_transpose_nd.sv
       - test/tb_idma_transpose_b2b.sv
+      - test/tb_idma_addrgen_transpose.sv
+      - test/tb_idma_addrgen_transpose_obi.sv
 
   # Multi-head directed backend testbenches
   - target: multihead
