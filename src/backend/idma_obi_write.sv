@@ -66,7 +66,11 @@ module idma_obi_write #(
     /// Valid from buffer
     input  strb_t buffer_out_valid_i,
     /// Ready to buffer
-    output strb_t buffer_out_ready_o
+    output strb_t buffer_out_ready_o,
+    /// External (compute) byte mask ANDed into the write strobe ('1 when unused)
+    input  strb_t mask_ext_i,
+    /// One write beat was accepted on the bus (strobe-independent retire pulse)
+    output logic  w_beat_done_o
 );
     // corresponds to the strobe: the write aligned data that is currently valid in the buffer
     strb_t mask_out;
@@ -91,7 +95,7 @@ module idma_obi_write #(
 
     assign mask_out = ('1 << w_dp_req_i.offset) &
         ((w_dp_req_i.tailer != '0) ? ('1 >> (StrbWidth - w_dp_req_i.tailer))
-        : '1);
+        : '1) & mask_ext_i;
 
     //--------------------------------------
     // Write control
@@ -105,6 +109,9 @@ module idma_obi_write #(
 
     // write happening: both the bus (w_ready) and the buffer (ready_to_write) is high
     assign write_happening = ready_to_write & write_rsp_i.gnt;
+
+    // strobe-independent beat-accept pulse for the compute engine retire (pulses even for be='0)
+    assign w_beat_done_o = write_happening;
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;

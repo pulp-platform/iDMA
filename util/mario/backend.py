@@ -42,11 +42,11 @@ def render_backend(prot_ids: dict, db: dict, tpl_file: str, compute_cfg: dict = 
         srp = len(used_read_prots) == 1 and not any_mh_r
         swp = len(used_write_prots) == 1 and not any_mh_w
 
-        # on-the-fly compute requires a single AXI write port
+        # compute needs a data-carrying write port (AXI or OBI); INIT carries none
         enable_compute = prot_id in (compute_cfg or {})
-        if enable_compute and not (swp and used_write_prots[0] == 'axi'):
+        if enable_compute and not (set(used_write_prots) & {'axi', 'obi'}):
             raise ValueError(
-                f'compute (IDMA_VIDMA_IDS) requires a single AXI write port: {prot_id}')
+                f'compute (IDMA_VIDMA_IDS) needs an AXI or OBI write port: {prot_id}')
 
         # create context
         context = {
