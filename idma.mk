@@ -60,6 +60,7 @@ IDMA_FE_IDS      ?= $(IDMA_BASE_FE_IDS) $(IDMA_ADD_FE_IDS)
 # iDMA paths
 IDMA_UTIL_DIR := $(IDMA_ROOT)/util
 IDMA_RTL_DIR  := $(IDMA_ROOT)/target/rtl
+IDMA_HAL_DIR  := $(IDMA_ROOT)/target/hal
 
 # job file
 IDMA_JOBS_JSON := jobs/jobs.json
@@ -85,6 +86,7 @@ IDMA_VLOGAN_REL_PATHS    := | grep -v "ROOT=" | sed '3 i ROOT="../../.."'
 # All RTL files
 IDMA_INCLUDE_ALL :=
 IDMA_RTL_ALL     :=
+IDMA_HAL_ALL     :=
 IDMA_PICKLE_ALL  :=
 IDMA_TB_ALL      :=
 IDMA_WAVE_ALL    :=
@@ -191,6 +193,10 @@ regwidth = $(word 1,$(subst _, ,$1))
 dimension = $(word 2,$(subst _, ,$1))
 log2dimension = $(shell echo $$(( $$( echo "obase=2;$$(($(1)-1))" | bc | wc -c ) - 1 )) )
 
+# Shared SPDX license header (raw-header takes plain text; c-header gets the //-prefixed variant)
+IDMA_LICENSE   := Copyright 2026 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51
+IDMA_C_HDR_LIC := // $(subst \n,\n// ,$(IDMA_LICENSE))\n
+
 $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv:
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif $(IDMA_REG_CPUIF) \
@@ -203,7 +209,7 @@ $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(ID
 	  --format svpkg \
 	  -o $(IDMA_RTL_DIR)/idma_reg$*d_addrmap_pkg.sv \
 	  --base_name idma_reg$*d \
-	  --license_str="Copyright 2025 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51" \
+	  --license_str="$(IDMA_LICENSE)" \
 	  -P SysAddrWidth=$(call regwidth,$*) \
 	  -P NumDims=$(call dimension,$*) \
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
@@ -219,7 +225,23 @@ $(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv $(
 	  --format svpkg \
 	  -o $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv \
 	  --base_name idma_desc64 \
-	  --license_str="Copyright 2025 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51"
+	  --license_str="$(IDMA_LICENSE)"
+
+# SW HAL C headers
+$(IDMA_HAL_DIR)/regs/idma_reg%d_reg.h:
+	mkdir -p $(IDMA_HAL_DIR)/regs
+	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
+	  -b ltoh --type-style hier --rename idma_reg$*d \
+	  -P SysAddrWidth=$(call regwidth,$*) \
+	  -P NumDims=$(call dimension,$*) \
+	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+	sed -i '1i$(IDMA_C_HDR_LIC)' $@
+
+$(IDMA_HAL_DIR)/regs/idma_desc64_reg.h:
+	mkdir -p $(IDMA_HAL_DIR)/regs
+	$(PEAKRDL) c-header $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $@ \
+	  -b ltoh --type-style hier --rename idma_desc64
+	sed -i '1i$(IDMA_C_HDR_LIC)' $@
 
 $(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl
 	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@,,$(if $(filter desc64,$*),apb4-flat,$(IDMA_REG_CPUIF)))
@@ -235,6 +257,7 @@ $(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
 
 idma_reg_clean:
 	rm -rf $(IDMA_HTML_DIR)/regs
+	rm -rf $(IDMA_HAL_DIR)/regs
 	rm -f  $(IDMA_RTL_DIR)/*_reg_top.sv
 	rm -f  $(IDMA_RTL_DIR)/*_reg_pkg.sv
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
@@ -245,6 +268,7 @@ IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_pkg.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
+IDMA_HAL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HAL_DIR)/regs/idma_$Y_reg.h)
 IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
 
 
@@ -574,7 +598,7 @@ idma_nuke: idma_clean idma_nonfree_clean
 # Phony Targets
 # --------------
 
-.PHONY: idma_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
+.PHONY: idma_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all idma_hal_all
 
 idma_doc_all: idma_spinx_doc
 
@@ -582,6 +606,8 @@ idma_pickle_all: $(IDMA_PICKLE_ALL)
 
 idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) $(IDMA_WAVE_ALL)
 
+idma_hal_all: $(IDMA_HAL_ALL)
+
 idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl
 
-idma_all: idma_hw_all idma_sim_all idma_doc_all idma_pickle_all
+idma_all: idma_hw_all idma_hal_all idma_sim_all idma_doc_all idma_pickle_all
