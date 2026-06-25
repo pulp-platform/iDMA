@@ -156,9 +156,9 @@ module idma_rt_midend #(
 
     // arbitrates the events
     cc_stream_arbiter #(
-        .data_t  ( idma_nd_req_t ),
-        .NumInp  ( NumEvents     ),
-        .ArbMode ( cc_pkg::ARB_RR )
+        .DATA_T  ( idma_nd_req_t ),
+        .N_INP   ( NumEvents     ),
+        .ARBITER ( "rr"          )
     ) i_stream_arbiter (
         .clk_i,
         .rst_ni,
@@ -172,9 +172,9 @@ module idma_rt_midend #(
 
     // arbitrates the events
     cc_stream_arbiter #(
-        .data_t  ( ext_arb_t     ),
-        .NumInp  ( 32'd2         ),
-        .ArbMode ( cc_pkg::ARB_RR )
+        .DATA_T  ( ext_arb_t ),
+        .N_INP   ( 32'd2     ),
+        .ARBITER ( "rr"      )
     ) i_stream_arbiter_bypass (
         .clk_i,
         .rst_ni,
