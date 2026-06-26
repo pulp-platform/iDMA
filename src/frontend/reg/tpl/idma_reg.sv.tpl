@@ -226,7 +226,7 @@ module idma_${identifier} #(
   // arbitration
   cc_rr_arb_tree #(
     .NumIn     ( NumRegs   ),
-    .data_t    ( dma_req_t ),
+    .DataType    ( dma_req_t ),
     .ExtPrio   ( 0         ),
     .AxiVldRdy ( 1         ),
     .LockIn    ( 1         )

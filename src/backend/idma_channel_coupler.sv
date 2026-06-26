@@ -91,7 +91,7 @@ module idma_channel_coupler #(
     // stream fifo to hold AWs back
     cc_stream_fifo_optimal_wrap #(
         .Depth        ( NumAxInFlight ),
-        .data_t       ( axi_aw_chan_t ),
+        .type_t       ( axi_aw_chan_t ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_aw_store (
         .clk_i,
@@ -108,7 +108,7 @@ module idma_channel_coupler #(
 
     cc_stream_fifo_optimal_wrap #(
         .Depth        ( NumAxInFlight ),
-        .data_t       ( logic         ),
+        .type_t       ( logic         ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_aw_decoupled_store (
         .clk_i,
@@ -157,7 +157,7 @@ module idma_channel_coupler #(
     // fall through register to decouple the aw valid signal from the aw ready
     // now payload is required; just the decoupling of the handshaking signals
     cc_fall_through_register #(
-        .data_t ( logic [0:0] )
+        .T ( logic [0:0] )
     ) i_fall_through_register_decouple_aw_valid (
         .clk_i,
         .rst_ni,

@@ -256,9 +256,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FallThrough(1'b1),
-    .Depth      (NSpeculation),
-    .data_t     (addr_spec_t)
+    .FALL_THROUGH(1'b1),
+    .DEPTH      (NSpeculation),
+    .T     (addr_spec_t)
 ) i_pending_ars (
     .clk_i,
     .rst_ni,
@@ -273,9 +273,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FallThrough(1'b1),
-    .Depth      (1),
-    .data_t     (addr_t)
+    .FALL_THROUGH(1'b1),
+    .DEPTH      (1),
+    .T     (addr_t)
 ) i_legalization_fifo (
     .clk_i,
     .rst_ni,

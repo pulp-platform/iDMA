@@ -151,7 +151,7 @@ module idma_nd_midend #(
     // The popcount is used to identify the highest stage that is done. This is then added to the
     // current address register.
     cc_popcount #(
-        .InputWidth ( NumDim-1  )
+        .INPUT_WIDTH ( NumDim-1  )
     ) i_popcount (
         .data_i      ( stage_clear  ),
         .popcount_o  ( stride_sel_d )

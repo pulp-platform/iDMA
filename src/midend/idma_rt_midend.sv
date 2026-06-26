@@ -118,8 +118,8 @@ module idma_rt_midend #(
     for (genvar c = 0; c < NumEvents; c++) begin : gen_counters
         // counter instance
         cc_counter #(
-            .Width          ( EventCntWidth ),
-            .StickyOverflow (  1'b0         )
+            .WIDTH          ( EventCntWidth ),
+            .STICKY_OVERFLOW (  1'b0         )
         ) i_counter (
             .clk_i,
             .rst_ni,
@@ -199,9 +199,9 @@ module idma_rt_midend #(
 
     // safe the choice in a fifo
     cc_stream_fifo #(
-        .FallThrough ( 1'b0           ),
-        .DataWidth   ( 32'd1          ),
-        .Depth       ( NumOutstanding )
+        .FALL_THROUGH ( 1'b0           ),
+        .DATA_WIDTH   ( 32'd1          ),
+        .DEPTH       ( NumOutstanding )
     ) i_stream_fifo (
         .clk_i,
         .rst_ni,
@@ -217,7 +217,7 @@ module idma_rt_midend #(
 
     // arbitration of responses
     cc_stream_demux #(
-        .NumOup      ( 32'd2 )
+        .N_OUP      ( 32'd2 )
     ) i_stream_demux (
         .inp_valid_i ( burst_rsp_valid_i                ),
         .inp_ready_o ( burst_rsp_ready_o                ),

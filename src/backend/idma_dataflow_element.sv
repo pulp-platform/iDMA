@@ -34,7 +34,7 @@ module idma_dataflow_element #(
     // buffer is implemented as an array of FIFOs
     for (genvar i = 0; i < StrbWidth; i++) begin : gen_fifo_buffer
         cc_passthrough_stream_fifo #(
-            .data_t       ( byte_t        ),
+            .type_t       ( byte_t        ),
             .Depth        ( BufferDepth   ),
             .PrintInfo    ( PrintFifoInfo )
         ) i_passthrough_stream_fifo (
