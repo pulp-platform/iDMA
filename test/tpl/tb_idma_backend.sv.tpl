@@ -708,7 +708,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     // Delay iDMA response 2 cycles such that all axi stream writes are finished 
 
     cc_spill_register #(
-        .data_t ( idma_rsp_t ),
+        .T ( idma_rsp_t ),
         .Bypass ( 1'b0       )
     ) i_idma_rsp_cut (
         .clk_i   ( clk          ),
@@ -722,7 +722,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     );
 
     cc_spill_register #(
-        .data_t ( idma_rsp_t ),
+        .T ( idma_rsp_t ),
         .Bypass ( 1'b0       )
     ) i_idma_rsp_cut_2 (
         .clk_i   ( clk          ),

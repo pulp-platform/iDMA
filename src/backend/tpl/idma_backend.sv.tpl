@@ -474,7 +474,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         // stream fork is used to synchronize the two decoupled channels without the need for a
         // FIFO here.
         cc_stream_fork #(
-            .NumOup  ( 32'd2 )
+            .N_OUP  ( 32'd2 )
         ) i_stream_fork (
             .clk_i   ( clk_i                ),
             .rst_ni  ( rst_ni               ),
@@ -618,7 +618,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     //--------------------------------------
     cc_stream_fifo_optimal_wrap #(
         .Depth     ( NumAxInFlight ),
-        .data_t    ( r_dp_req_t    ),
+        .type_t    ( r_dp_req_t    ),
         .PrintInfo ( PrintFifoInfo )
     ) i_r_dp_req (
         .clk_i      ( clk_i               ),
@@ -634,8 +634,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     );
 
     cc_stream_fifo_optimal_wrap #(
-        .Depth     ( NumAxInFlight + ComputeFifoDepth ),
-        .data_t    ( w_dp_req_t    ),
+        .Depth     ( NumAxInFlight + ComputeFifoDepth),
+        .type_t    ( w_dp_req_t    ),
         .PrintInfo ( PrintFifoInfo )
     ) i_w_dp_req (
         .clk_i      ( clk_i               ),
@@ -661,7 +661,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % endif
 
     cc_fall_through_register #(
-        .data_t     (\
+        .T     (\
 % if one_read_port:
  read_meta_channel_t\
 % else:
@@ -692,7 +692,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     //--------------------------------------
     cc_stream_fifo_optimal_wrap #(
         .Depth        ( MetaFifoDepth ),
-        .data_t       ( logic [1:0]   ),
+        .type_t       ( logic [1:0]   ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_w_last (
         .clk_i      ( clk_i                           ),
@@ -845,7 +845,7 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
             .aw_req_i         (\
 % if one_write_port:
  w_req.aw_req                ),
-% else:           
+% else:
  w_meta_req_tagged           ),
 % endif
             .aw_valid_i       ( w_valid                     ),
@@ -868,7 +868,7 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
         // As a write could depend on up to two reads
         cc_stream_fifo_optimal_wrap #(
             .Depth        ( 2                    ),
-            .data_t       (\
+            .type_t       (\
     % if one_write_port:
  write_meta_channel_t ),
     % else:
@@ -896,7 +896,7 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
         // Add fall-through register to allow the input to be ready if the output is not. This
         // does not add a cycle of delay
         cc_fall_through_register #(
-            .data_t     (\
+            .T     (\
     % if one_write_port:
  write_meta_channel_t        )
     % else:

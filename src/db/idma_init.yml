@@ -43,7 +43,7 @@ typedefs: |
     } init_rsp_t;
 read_bridge_template: |
     cc_spill_register #(
-        .data_t ( logic ),
+        .T ( logic ),
         .Bypass ( 1'b0  )
     ) i_init_read_bridge (
         .clk_i   ( clk                     ),
