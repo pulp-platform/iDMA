@@ -88,8 +88,8 @@ module idma_inst64_events #(
         events_o.b_done = axi_req_i.b_ready && axi_rsp_i.b_valid;
 
         // obi
-        events_o.obi_wr_req = obi_req_i.req & obi_res_i.gnt & obi_req_i.a.we;
-        events_o.obi_rd_req = obi_req_i.req & obi_res_i.gnt & ~obi_req_i.a.we;
+        events_o.obi_wr_req = obi_req_i.req && obi_res_i.gnt && obi_req_i.a.we;
+        events_o.obi_rd_req = obi_req_i.req && obi_res_i.gnt && ~obi_req_i.a.we;
 
         // buffer
         events_o.w_stall = axi_rsp_i.w_ready && !axi_req_i.w_valid;
