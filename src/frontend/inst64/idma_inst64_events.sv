@@ -10,6 +10,8 @@ module idma_inst64_events #(
     parameter int unsigned DataWidth     = 32'd0,
     parameter type         axi_req_t     = logic,
     parameter type         axi_res_t     = logic,
+    parameter type         obi_req_t     = logic,
+    parameter type         obi_res_t     = logic,
     parameter type         dma_events_t  = logic
 ) (
     input  logic                 clk_i,
@@ -17,6 +19,9 @@ module idma_inst64_events #(
     // AXI4 bus
     input  axi_req_t             axi_req_i,
     input  axi_res_t             axi_rsp_i,
+    // OBI interconnect
+    input  obi_req_t             obi_req_i,
+    input  obi_res_t             obi_res_i,
     // DMA busy
     input  logic                 busy_i,
     // events
@@ -81,6 +86,10 @@ module idma_inst64_events #(
         events_o.b_valid = axi_rsp_i.b_valid;
         events_o.b_ready = axi_req_i.b_ready;
         events_o.b_done = axi_req_i.b_ready && axi_rsp_i.b_valid;
+
+        // obi
+        events_o.obi_wr_req = obi_req_i.req && obi_res_i.gnt && obi_req_i.a.we;
+        events_o.obi_rd_req = obi_req_i.req && obi_res_i.gnt && ~obi_req_i.a.we;
 
         // buffer
         events_o.w_stall = axi_rsp_i.w_ready && !axi_req_i.w_valid;

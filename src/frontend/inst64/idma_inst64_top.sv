@@ -417,12 +417,16 @@ module idma_inst64_top #(
             .DataWidth    ( AxiDataWidth ),
             .axi_req_t    ( axi_req_t    ),
             .axi_res_t    ( axi_res_t    ),
+            .obi_req_t    ( obi_req_t    ),
+            .obi_res_t    ( obi_res_t    ),
             .dma_events_t ( dma_events_t )
         ) i_idma_inst64_events (
             .clk_i,
             .rst_ni,
             .axi_req_i      ( axi_req_o [c] ),
             .axi_rsp_i      ( axi_res_i [c] ),
+            .obi_req_i      ( obi_req_o [c] ),
+            .obi_res_i      ( obi_res_i [c] ),
             .busy_i         ( busy_o    [c] ),
             .events_o       ( events_o  [c] )
         );
