@@ -20,7 +20,7 @@ module idma_inst64_events #(
     input  axi_req_t             axi_req_i,
     input  axi_res_t             axi_rsp_i,
     // OBI interconnect
-    input obi_req_t              obi_req_i,
+    input  obi_req_t             obi_req_i,
     input  obi_res_t             obi_res_i,
     // DMA busy
     input  logic                 busy_i,
