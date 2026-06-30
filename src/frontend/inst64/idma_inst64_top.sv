@@ -84,7 +84,7 @@ module idma_inst64_top #(
     localparam type id_t                 = logic[AxiIdWidth-1:0];
     localparam type tf_len_t             = logic[TFLenWidth-1:0];
     localparam type offset_t             = logic[OffsetWidth-1:0];
-    localparam type strides_t            = logic[RepWidth-1:0];
+    localparam type strides_t            = addr_t;
     localparam type reps_t               = logic[RepWidth-1:0];
     localparam type tf_id_t              = logic[TfIdWidth-1:0];
 
