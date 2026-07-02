@@ -7,18 +7,8 @@
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 """Deploy script run by ci. Creates a deploy branch which includes generated files."""
-import os
-import time
+import subprocess
 
-# Git command fragments
-GET_BRANCH_CMD = '''git for-each-ref --format='%(objectname) %(refname:short)' refs/heads |\
-                    awk "/^$(git rev-parse HEAD)/ {print \\$2}"'''
-GET_COMMIT_ID_CMD = 'git rev-parse HEAD'
-GET_COMMIT_MSG_CMD = 'git log -1 --pretty=%B'
-GIT_ADD_ALL_CMD = 'git add .'
-GIT_CHECKOUT_TAG_CMD = 'git checkout -b'
-GIT_COMMIT_CMD = 'git commit -m'
-GIT_PUSH_CMD = 'git push'
 
 # Repo configuration
 ORIGIN = 'origin'
@@ -26,12 +16,36 @@ ORIGIN = 'origin'
 # Comment added to gitignore
 GITIGNORE_COMMENT = '# Deactivated by deploy.py'
 
+
+def git_output(*args):
+    """Run a git command and return its stdout without invoking a shell."""
+    return subprocess.check_output(['git', *args], text=True).strip()
+
+
+def git_run(*args):
+    """Run a git command without invoking a shell."""
+    subprocess.run(['git', *args], check=True)
+
+
+def get_current_branch():
+    """Return the local branch pointing at HEAD, matching the previous shell pipeline."""
+    current_hash = git_output('rev-parse', 'HEAD')
+    refs = git_output('for-each-ref', '--format=%(objectname) %(refname:short)', 'refs/heads')
+
+    for ref in refs.splitlines():
+        object_name, branch_name = ref.split(maxsplit=1)
+        if object_name == current_hash:
+            return branch_name
+
+    raise RuntimeError(f'Could not find a local branch pointing at {current_hash}')
+
+
 # get current branch info
-current_branch = os.popen(GET_BRANCH_CMD).read().split('\n')[0]
+current_branch = get_current_branch()
 print(f'Current branch: {current_branch}')
-current_hash = os.popen(GET_COMMIT_ID_CMD).read().split('\n')[0]
+current_hash = git_output('rev-parse', 'HEAD')
 print(f'Current hash: {current_hash}')
-current_msg = '\n'.join(os.popen(GET_COMMIT_MSG_CMD).read().split('\n')[:-1])
+current_msg = git_output('log', '-1', '--pretty=%B')
 print(f'Current commit message: \n{current_msg}')
 
 # create target branch
@@ -41,8 +55,7 @@ deploy_msg = f'{current_msg}\n-----\n\nDeployed from {current_hash}'
 print(f'Deploy commit message:\n{deploy_msg}')
 
 # create new deploy branch
-os.popen(f'{GIT_CHECKOUT_TAG_CMD} {deploy_branch} {current_branch}')
-time.sleep(2)
+git_run('checkout', '-b', deploy_branch, current_branch)
 
 # selectively deactivate gitignore to check in generated files
 with open('target/rtl/.gitignore', 'r', encoding='utf-8') as f:
@@ -55,10 +68,8 @@ if content[0] != GITIGNORE_COMMENT:
             f.write(f'# {line}\n')
 
 # add and commit files
-os.popen(GIT_ADD_ALL_CMD)
-time.sleep(0.5)
-os.popen(f'{GIT_COMMIT_CMD} "{deploy_msg}"')
-time.sleep(0.5)
+git_run('add', '.')
+git_run('commit', '-m', deploy_msg)
 
 # push state to origin
-os.popen(f'{GIT_PUSH_CMD} {ORIGIN} {deploy_branch}')
+git_run('push', ORIGIN, deploy_branch)

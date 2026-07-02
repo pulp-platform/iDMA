@@ -9,7 +9,29 @@ name: deploy
 
 on:
   workflow_call:
+    inputs:
+      IDMA_BACKEND_IDS:
+        description: Backend variants to generate.
+        required: false
+        type: string
+        default: "rw_axi r_obi_w_axi r_axi_w_obi rw_axi_rw_axis rw_obi r_obi_rw_init_w_axi r_axi_rw_init_rw_obi rw_axi_rw_init_rw_obi"
+      IDMA_REG_CPUIF:
+        description: PeakRDL CPU interface used for generated register frontends.
+        required: false
+        type: string
+        default: "apb4-flat"
   workflow_dispatch:
+    inputs:
+      IDMA_BACKEND_IDS:
+        description: Backend variants to generate.
+        required: false
+        type: string
+        default: "rw_axi r_obi_w_axi r_axi_w_obi rw_axi_rw_axis rw_obi r_obi_rw_init_w_axi r_axi_rw_init_rw_obi rw_axi_rw_init_rw_obi"
+      IDMA_REG_CPUIF:
+        description: PeakRDL CPU interface used for generated register frontends.
+        required: false
+        type: string
+        default: "apb4-flat"
 
 jobs:
 
@@ -38,7 +60,10 @@ jobs:
         version: 0.32.0
     -
       name: Build hardware
-      run: uv run --locked make -B idma_hw_all
+      run: |
+        uv run --locked make -B idma_hw_all \
+          IDMA_BACKEND_IDS="${{ inputs.IDMA_BACKEND_IDS }}" \
+          IDMA_REG_CPUIF="${{ inputs.IDMA_REG_CPUIF }}"
     -
       name: Deploy generated files
       run: |
