@@ -43,6 +43,8 @@ jobs:
     secrets: inherit
 
   deploy:
+    permissions:
+      contents: write
     needs: build
     if: github.event_name == 'push'
     uses: ./.github/workflows/deploy.yml
