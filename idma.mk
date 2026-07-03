@@ -60,6 +60,7 @@ IDMA_FE_IDS      ?= $(IDMA_BASE_FE_IDS) $(IDMA_ADD_FE_IDS)
 # iDMA paths
 IDMA_UTIL_DIR := $(IDMA_ROOT)/util
 IDMA_RTL_DIR  := $(IDMA_ROOT)/target/rtl
+IDMA_SW_DIR  := $(IDMA_ROOT)/target/sw
 
 # job file
 IDMA_JOBS_JSON := jobs/jobs.json
@@ -233,6 +234,21 @@ $(IDMA_HTML_DIR)/regs/idma_reg%d_reg/index.html:
 $(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
 	$(PEAKRDL) html $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_desc64_reg
 
+# C header
+$(IDMA_SW_DIR)/idma_reg%d_regs.h:
+	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
+	  -P SysAddrWidth=$(call regwidth,$*) \
+	  -P NumDims=$(call dimension,$*) \
+	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+
+
+$(IDMA_SW_DIR)/idma_reg%d_raw_regs.h:
+	$(PEAKRDL) raw-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
+	  --format c \
+	  -P SysAddrWidth=$(call regwidth,$*) \
+	  -P NumDims=$(call dimension,$*) \
+	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+
 idma_reg_clean:
 	rm -rf $(IDMA_HTML_DIR)/regs
 	rm -f  $(IDMA_RTL_DIR)/*_reg_top.sv
@@ -247,6 +263,11 @@ IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
 IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
 
+# C headers
+IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_regs.h)
+
+# C headers with the "raw-header" plugin
+IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_raw_regs.h)
 
 # ---------------
 # RTL assembly
@@ -549,9 +570,9 @@ idma_nonfree_clean:
 # Misc Clean
 # --------------
 
-.PHONY: idma_clean_all idma_clean idma_misc_clean
+.PHONY: idma_clean_all idma_clean idma_misc_clean idma_sw_clean
 
-idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_spinx_doc_clean idma_trace_clean
+idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_spinx_doc_clean idma_trace_clean idma_sw_clean
 
 idma_misc_clean:
 	rm -rf scripts/__pycache__
@@ -561,6 +582,9 @@ idma_misc_clean:
 
 idma_nuke: idma_clean idma_nonfree_clean
 	rm -rf .bender
+
+idma_sw_clean:
+	rm -rf IDMA_SW_DIR/*.h
 
 
 # --------------
@@ -574,6 +598,8 @@ idma_doc_all: idma_spinx_doc
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
 idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) $(IDMA_WAVE_ALL)
+
+idma_sw_all: $(IDMA_SW_ALL)
 
 idma_sim_all: $(IDMA_VCS_DIR)/compile.sh $(IDMA_VSIM_DIR)/compile.tcl
 
