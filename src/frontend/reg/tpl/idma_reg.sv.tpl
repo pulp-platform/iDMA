@@ -6,8 +6,6 @@
 // - Michael Rogenmoser <michaero@iis.ee.ethz.ch>
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
-`include "apb/typedef.svh"
-
 /// Description: Register-based front-end for iDMA
 module idma_${identifier} #(
   /// Number of configuration register ports
@@ -18,10 +16,10 @@ module idma_${identifier} #(
   parameter int unsigned IdCounterWidth = 32'd32,
   /// Dependent parameter: Stream Idx
   parameter int unsigned StreamWidth    = cf_math_pkg::idx_width(NumStreams),
-  /// Register_interface request type
-  parameter type         reg_req_t      = logic,
-  /// Register_interface response type
-  parameter type         reg_rsp_t      = logic,
+  /// APB request type. Use the APB_TYPEDEF macros to define it
+  parameter type         apb_req_t      = logic,
+  /// APB response type. Use the APB_TYPEDEF macros to define it
+  parameter type         apb_rsp_t      = logic,
   /// DMA 1d or ND burst request type
   parameter type         dma_req_t      = logic,
   /// Dependent type for IdCounterWidth
@@ -31,9 +29,9 @@ module idma_${identifier} #(
 ) (
   input  logic clk_i,
   input  logic rst_ni,
-  /// Register interface control slave
-  input  reg_req_t [NumRegs-1:0] dma_ctrl_req_i,
-  output reg_rsp_t [NumRegs-1:0] dma_ctrl_rsp_o,
+  /// APB control slave
+  input  apb_req_t [NumRegs-1:0] dma_ctrl_req_i,
+  output apb_rsp_t [NumRegs-1:0] dma_ctrl_rsp_o,
   /// Request signals
   output dma_req_t   dma_req_o,
   output logic       req_valid_o,
@@ -51,11 +49,6 @@ module idma_${identifier} #(
   localparam int unsigned MaxNumStreams = 32'd16;
   localparam int unsigned RegAddrWidth  = idma_${identifier}_reg_pkg::IDMA_${identifier.upper()}_REG_TOP_MIN_ADDR_WIDTH;
 
-  `APB_TYPEDEF_ALL(apb, logic[31:0], logic[31:0], logic[3:0])
-  apb_req_t  [NumRegs-1:0] apb_req;
-  apb_resp_t [NumRegs-1:0] apb_rsp;
-
-
   // register connections
   idma_${identifier}_reg_pkg::idma_reg__out_t dma_reg2hw [NumRegs-1:0];
   idma_${identifier}_reg_pkg::idma_reg__in_t  dma_hw2reg [NumRegs-1:0];
@@ -65,14 +58,11 @@ module idma_${identifier} #(
   logic     [NumRegs-1:0] arb_valid;
   logic     [NumRegs-1:0] arb_ready;
 
-  // register signals
-  reg_rsp_t [NumRegs-1:0] dma_ctrl_rsp;
-
   always_comb begin
       stream_idx_o = '0;
       for (int r = 0; r < NumRegs; r++) begin
           for (int c = 0; c < NumStreams; c++) begin
-              if (dma_reg2hw[r].next_id[c].req && !dma_reg2hw[r].next_id[c].req_is_wr) begin
+              if (dma_reg2hw[r].next_id[c].next_id.rd_swacc) begin
                   stream_idx_o = c;
               end
           end
@@ -82,54 +72,31 @@ module idma_${identifier} #(
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
 
-
-    reg_to_apb #(
-      .reg_req_t  ( reg_req_t ),
-      .reg_rsp_t  ( reg_rsp_t ),
-      .apb_req_t  ( apb_req_t ),
-      .apb_rsp_t  ( apb_resp_t )
-    ) chs_regs_reg_to_apb (
-      .clk_i,
-      .rst_ni,
-      .reg_req_i ( dma_ctrl_req_i   [i] ),
-      .reg_rsp_o ( dma_ctrl_rsp     [i] ),
-      .apb_req_o ( apb_req          [i] ),
-      .apb_rsp_i ( apb_rsp          [i] )
-    );
-
     idma_${identifier}_reg_top i_idma_${identifier}_reg_top (
       .clk    ( clk_i ),
       .arst_n ( rst_ni ),
 
-      .s_apb_psel    (apb_req[i].psel),
-      .s_apb_penable (apb_req[i].penable),
-      .s_apb_pwrite  (apb_req[i].pwrite),
-      .s_apb_pprot   (apb_req[i].pprot),
-      .s_apb_paddr   (apb_req[i].paddr[RegAddrWidth-1:0]),
-      .s_apb_pwdata  (apb_req[i].pwdata),
-      .s_apb_pstrb   (apb_req[i].pstrb),
-      .s_apb_pready  (apb_rsp[i].pready),
-      .s_apb_prdata  (apb_rsp[i].prdata),
-      .s_apb_pslverr (apb_rsp[i].pslverr),
+      .s_apb_psel    (dma_ctrl_req_i[i].psel),
+      .s_apb_penable (dma_ctrl_req_i[i].penable),
+      .s_apb_pwrite  (dma_ctrl_req_i[i].pwrite),
+      .s_apb_pprot   (dma_ctrl_req_i[i].pprot),
+      .s_apb_paddr   (dma_ctrl_req_i[i].paddr[RegAddrWidth-1:0]),
+      .s_apb_pwdata  (dma_ctrl_req_i[i].pwdata),
+      .s_apb_pstrb   (dma_ctrl_req_i[i].pstrb),
+      .s_apb_pready  (dma_ctrl_rsp_o[i].pready),
+      .s_apb_prdata  (dma_ctrl_rsp_o[i].prdata),
+      .s_apb_pslverr (dma_ctrl_rsp_o[i].pslverr),
 
       .hwif_out  ( dma_reg2hw       [i] ),
       .hwif_in   ( dma_hw2reg       [i] )
     );
 
+    // A read of `next_id` launches a transfer.
     logic read_happens;
-    // DMA backpressure
-    always_comb begin : proc_dma_backpressure
-      // ready signal
-      dma_ctrl_rsp_o[i]       = dma_ctrl_rsp[i];
-      dma_ctrl_rsp_o[i].ready = read_happens ? arb_ready[i] : dma_ctrl_rsp[i];
-    end
-
-    // valid signals
-
     always_comb begin : proc_launch
         read_happens = 1'b0;
         for (int c = 0; c < NumStreams; c++) begin
-            read_happens |= dma_reg2hw[i].next_id[c].req & ~dma_reg2hw[i].next_id[c].req_is_wr;
+            read_happens |= dma_reg2hw[i].next_id[c].next_id.rd_swacc;
         end
         arb_valid[i] = read_happens;
     end
@@ -204,26 +171,16 @@ module idma_${identifier} #(
 
     // observational registers
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
-        assign dma_hw2reg[i].status[c].rd_data.busy  = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].status[c].rd_ack = dma_reg2hw[i].status[c].req
-                                              & ~dma_reg2hw[i].status[c].req_is_wr;
-        assign dma_hw2reg[i].next_id[c].rd_data.next_id = next_id_i;
-        assign dma_hw2reg[i].next_id[c].rd_ack = dma_reg2hw[i].next_id[c].req
-                                               & ~dma_reg2hw[i].next_id[c].req_is_wr
-                                               & arb_ready[i];
-        assign dma_hw2reg[i].done_id[c].rd_data.done_id = done_id_i[c];
-        assign dma_hw2reg[i].done_id[c].rd_ack = dma_reg2hw[i].done_id[c].req
-                                               & ~dma_reg2hw[i].done_id[c].req_is_wr;
+        assign dma_hw2reg[i].status[c].busy.next        = {midend_busy_i[c], busy_i[c]};
+        assign dma_hw2reg[i].next_id[c].next_id.next    = next_id_i;
+        assign dma_hw2reg[i].done_id[c].done_id.next    = done_id_i[c];
     end
 
     // tie-off unused channels
     for (genvar c = NumStreams; c < MaxNumStreams; c++) begin : gen_hw2reg_unused
-        assign dma_hw2reg[i].status[c].rd_data = '0;
-        assign dma_hw2reg[i].status[c].rd_ack  = '0;
-        assign dma_hw2reg[i].next_id[c].rd_data.next_id = '0;
-        assign dma_hw2reg[i].next_id[c].rd_ack = '0;
-        assign dma_hw2reg[i].done_id[c].rd_data.done_id = '0;
-        assign dma_hw2reg[i].done_id[c].rd_ack = '0;
+        assign dma_hw2reg[i].status[c].busy.next        = '0;
+        assign dma_hw2reg[i].next_id[c].next_id.next    = '0;
+        assign dma_hw2reg[i].done_id[c].done_id.next    = '0;
     end
 
   end

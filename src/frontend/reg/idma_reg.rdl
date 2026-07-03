@@ -9,6 +9,11 @@
 `ifndef IDMA_REG_REG_RDL
 `define IDMA_REG_REG_RDL
 
+property rd_swacc {
+    type = boolean;
+    component = field;
+};
+
 addrmap idma_reg #(
     longint unsigned SysAddrWidth = 32, // Address width
     longint unsigned NumDims = 2, // Number of dimensions available
@@ -68,9 +73,10 @@ addrmap idma_reg #(
         name = "next_id";
         desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
         default sw = r;
-        default hw = rw;
+        default hw = w;
         field {
             desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
+            rd_swacc = true;
         } next_id [31:0] = 0;
     };
 
@@ -153,9 +159,9 @@ addrmap idma_reg #(
     };
 
              conf     conf;
-    external status   status[16];
-    external next_id  next_id[16];
-    external done_id  done_id[16];
+             status   status[16];
+             next_id  next_id[16];
+             done_id  done_id[16];
              dst_addr dst_addr[SysAddrWidth/32] @ 0xD0;
              src_addr src_addr[SysAddrWidth/32];
              length   length[SysAddrWidth/32];
