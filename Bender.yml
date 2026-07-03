@@ -18,7 +18,6 @@ dependencies:
   axi_stream:          { git: "https://github.com/pulp-platform/axi_stream.git",          version: 0.1.1  }
   common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 1.39.0 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.5  }
-  register_interface:  { git: "https://github.com/pulp-platform/register_interface.git",  version: 0.4.7  }
   apb:                 { git: "https://github.com/pulp-platform/apb.git",                 version: 0.2.4  }
   obi:                 { git: "https://github.com/pulp-platform/obi.git",                 version: 0.1.7  }
 

@@ -49,6 +49,8 @@ def main():
     parser.add_argument('--fids', dest='fids', nargs='*', help='frontend IDs')
     parser.add_argument('--db', dest='db', nargs='*', help='Database files')
     parser.add_argument('--tpl', dest='tpl', required=True, help='Template file')
+    parser.add_argument('--cpuif', dest='cpuif', default='apb4-flat',
+        help='Register-frontend config-bus CPUIF (must match the PeakRDL regblock --cpuif)')
     args = parser.parse_args()
 
     # prepare database and ids
@@ -73,7 +75,7 @@ def main():
     elif args.entity == 'reg_hjson':
         print(render_reg_hjson(frontend_ids, args.tpl))
     elif args.entity == 'reg_top':
-        print(render_reg_top(frontend_ids, args.tpl))
+        print(render_reg_top(frontend_ids, args.tpl, args.cpuif))
     elif args.entity == 'tracer':
         print(render_tracer(protocol_ids, protocol_db, args.tpl))
     else:
