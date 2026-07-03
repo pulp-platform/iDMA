@@ -239,9 +239,9 @@ assign queued_address_ready_o = !take_from_next && (!base_valid_q || next_addr_v
 assign flush_d = flush;
 
 cc_stream_fifo #(
-    .FALL_THROUGH(1'b0),
-    .DEPTH      (NSpeculation),
-    .T     (addr_t)
+    .FallThrough(1'b0),
+    .Depth      (NSpeculation),
+    .data_t     (addr_t)
 ) i_speculation_fifo (
     .clk_i,
     .rst_ni,
@@ -256,9 +256,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FALL_THROUGH(1'b1),
-    .DEPTH      (NSpeculation),
-    .T     (addr_spec_t)
+    .FallThrough(1'b1),
+    .Depth      (NSpeculation),
+    .data_t     (addr_spec_t)
 ) i_pending_ars (
     .clk_i,
     .rst_ni,
@@ -273,9 +273,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FALL_THROUGH(1'b1),
-    .DEPTH      (1),
-    .T     (addr_t)
+    .FallThrough(1'b1),
+    .Depth      (1),
+    .data_t     (addr_t)
 ) i_legalization_fifo (
     .clk_i,
     .rst_ni,

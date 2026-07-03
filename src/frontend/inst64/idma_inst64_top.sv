@@ -278,7 +278,7 @@ module idma_inst64_top #(
 
         // INIT setup
         cc_spill_register #(
-            .T  ( logic [7:0] )
+            .data_t  ( logic [7:0] )
         ) i_spill_register_init (
             .clk_i,
             .rst_ni,
@@ -302,8 +302,8 @@ module idma_inst64_top #(
 
         `FF(obi_we_q[c], obi_we_d[c], '0, clk_i, rst_ni)
         cc_stream_mux #(
-            .DATA_T       ( obi_a_chan_t ),
-            .N_INP       ( 32'd2  )
+            .data_t       ( obi_a_chan_t ),
+            .NumInp       ( 32'd2  )
         ) i_obi_rw_mux (
             .inp_data_i   ( {obi_write_req[c].a,        obi_read_req[c].a     } ),
             .inp_valid_i  ( {obi_write_req[c].req,      obi_read_req[c].req   } ),
@@ -315,7 +315,7 @@ module idma_inst64_top #(
         );
 
         cc_stream_demux #(
-            .N_OUP      ( 32'd2 )
+            .NumOup      ( 32'd2 )
         ) i_obi_rw_demux (
             .inp_valid_i ( obi_res_i[c].rvalid ),
             .inp_ready_o ( obi_req_o[c].rready ),
@@ -367,7 +367,7 @@ module idma_inst64_top #(
 
         cc_stream_fifo_optimal_wrap #(
             .Depth     ( DMAReqFifoDepth ),
-            .type_t    ( idma_nd_req_t   ),
+            .data_t    ( idma_nd_req_t   ),
             .PrintInfo ( 1'b0            )
         ) i_stream_fifo_optimal_wrap (
             .clk_i,
@@ -435,7 +435,7 @@ module idma_inst64_top #(
     //--------------------------------------
     // the response path needs to be decoupled
     cc_spill_register #(
-        .T       ( acc_res_t )
+        .data_t       ( acc_res_t )
     ) i_spill_register (
         .clk_i,
         .rst_ni,

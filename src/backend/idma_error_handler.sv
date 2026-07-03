@@ -136,7 +136,7 @@ module idma_error_handler #(
     // point now full handshaking is required.
     cc_stream_fifo_optimal_wrap #(
         .Depth        ( MetaFifoDepth ),
-        .type_t       ( addr_t        ),
+        .data_t       ( addr_t        ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_r_addr_store (
         .clk_i,
@@ -156,7 +156,7 @@ module idma_error_handler #(
     // point now full handshaking is required.
     cc_stream_fifo_optimal_wrap #(
         .Depth        ( MetaFifoDepth ),
-        .type_t       ( addr_t        ),
+        .data_t       ( addr_t        ),
         .PrintInfo    ( PrintFifoInfo )
     ) i_w_addr_store (
         .clk_i,
