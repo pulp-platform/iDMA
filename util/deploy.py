@@ -13,6 +13,7 @@ import subprocess
 # Repo configuration
 ORIGIN = 'origin'
 
+GITIGNORE_FILES = ['target/rtl/.gitignore', 'target/sw/.gitignore']
 # Comment added to gitignore
 GITIGNORE_COMMENT = '# Deactivated by deploy.py'
 
@@ -58,14 +59,15 @@ print(f'Deploy commit message:\n{deploy_msg}')
 git_run('checkout', '-b', deploy_branch, current_branch)
 
 # selectively deactivate gitignore to check in generated files
-with open('target/rtl/.gitignore', 'r', encoding='utf-8') as f:
-    content = f.read().split('\n')[:-1]
+for gitignore_fn in GITIGNORE_FILES:
+    with open(gitignore_fn, 'r', encoding='utf-8') as f:
+        content = f.read().split('\n')[:-1]
 
-if content[0] != GITIGNORE_COMMENT:
-    with open('target/rtl/.gitignore', 'w', encoding='utf-8') as f:
-        f.write(f'{GITIGNORE_COMMENT}\n')
-        for line in content:
-            f.write(f'# {line}\n')
+    if content[0] != GITIGNORE_COMMENT:
+        with open(gitignore_fn, 'w', encoding='utf-8') as f:
+            f.write(f'{GITIGNORE_COMMENT}\n')
+            for line in content:
+                f.write(f'# {line}\n')
 
 # add and commit files
 git_run('add', '.')
