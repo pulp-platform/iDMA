@@ -119,7 +119,7 @@ IDMA_RTL_FILES  := $(IDMA_RTL_DIR)/idma_transport_layer \
 IDMA_VSIM_DIR   := $(IDMA_ROOT)/target/sim/vsim
 
 define idma_gen
-	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 $(if $7,--compute-ids $7) > $6
+	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 $(if $7,--compute-ids $7) $(if $8,--cpuif $8) > $6
 endef
 
 # Force an RTL regen when IDMA_VIDMA_IDS changes; rewritten only on change
@@ -182,6 +182,10 @@ IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontend
 IDMA_FE_REGS     := desc64
 IDMA_FE_REGS     += $(IDMA_FE_IDS)
 
+# Config-bus CPUIF for the register frontend: PeakRDL regblock --cpuif + matching wrapper
+# packing. apb4-flat (default, industry standard); also obi-flat / passthrough / axi4-lite-flat.
+IDMA_REG_CPUIF   ?= apb4-flat
+
 
 regwidth = $(word 1,$(subst _, ,$1))
 dimension = $(word 2,$(subst _, ,$1))
@@ -189,7 +193,7 @@ log2dimension = $(shell echo $$(( $$( echo "obase=2;$$(($(1)-1))" | bc | wc -c )
 
 $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv:
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_RTL_DIR) \
-	  --default-reset arst_n --cpuif apb4-flat \
+	  --default-reset arst_n --cpuif $(IDMA_REG_CPUIF) \
 	  --module-name idma_reg$*d_reg_top \
 	  --package idma_reg$*d_reg_pkg \
 	  -P SysAddrWidth=$(call regwidth,$*) \
@@ -205,6 +209,8 @@ $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(ID
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
 
 $(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv:
+	# desc64 has static, hand-written APB reg wrappers (idma_desc64_reg_wrapper.sv); it is
+	# APB-native and not part of the CPUIF selector — keep its reg_top apb4-flat.
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif apb4-flat \
 	  --module-name idma_desc64_reg_top \
@@ -216,7 +222,7 @@ $(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv $(
 	  --license_str="Copyright 2025 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51"
 
 $(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl
-	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@)
+	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@,,$(if $(filter desc64,$*),apb4-flat,$(IDMA_REG_CPUIF)))
 
 $(IDMA_HTML_DIR)/regs/idma_reg%d_reg/index.html:
 	$(PEAKRDL) html $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_reg$*d_reg \

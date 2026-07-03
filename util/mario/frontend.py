@@ -142,7 +142,7 @@ def render_reg_hjson(fe_ids: dict, tpl_file: str) -> str:
     return reg_hjson_rendered
 
 
-def render_reg_top(fe_ids: dict, tpl_file: str) -> str:
+def render_reg_top(fe_ids: dict, tpl_file: str, cpuif: str = 'apb4-flat') -> str:
     """Generate register top"""
     reg_top_rendered = ''
 
@@ -162,7 +162,8 @@ def render_reg_top(fe_ids: dict, tpl_file: str) -> str:
             'identifier': fe_id,
             'num_dim': int(fe_ids[fe_id][1]),
             'sep': sep,
-            'bit_width': fe_ids[fe_id][0]
+            'bit_width': fe_ids[fe_id][0],
+            'cpuif': cpuif
         }
 
         # render
