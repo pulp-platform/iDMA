@@ -96,6 +96,7 @@ module idma_channel_coupler #(
     ) i_aw_store (
         .clk_i,
         .rst_ni,
+        .clr_i        ( 1'b0                ),
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( aw_req_i            ),
@@ -113,6 +114,7 @@ module idma_channel_coupler #(
     ) i_aw_decoupled_store (
         .clk_i,
         .rst_ni,
+        .clr_i        ( 1'b0                ),
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( aw_decouple_aw_i    ),

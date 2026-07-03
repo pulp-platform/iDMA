@@ -141,6 +141,7 @@ module idma_error_handler #(
     ) i_r_addr_store (
         .clk_i,
         .rst_ni,
+        .clr_i        ( 1'b0                ),
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( r_addr_i            ),
@@ -161,6 +162,7 @@ module idma_error_handler #(
     ) i_w_addr_store (
         .clk_i,
         .rst_ni,
+        .clr_i        ( 1'b0                ),
         .flush_i      ( 1'b0                ),
         .usage_o      ( /* NOT CONNECTED */ ),
         .data_i       ( w_addr_i            ),

@@ -40,6 +40,7 @@ module idma_dataflow_element #(
         ) i_passthrough_stream_fifo (
             .clk_i,
             .rst_ni,
+            .clr_i        ( 1'b0        ),
             .flush_i      ( 1'b0        ),
             .data_i       ( data_i  [i] ),
             .valid_i      ( valid_i [i] ),

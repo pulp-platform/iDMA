@@ -445,6 +445,7 @@ ${rendered_read_ports[read_port]}
     ) i_write_stream_fork (
         .clk_i   ( clk_i                                    ),
         .rst_ni  ( rst_ni                                   ),
+        .clr_i   ( 1'b0                                     ),
         .valid_i ( w_dp_valid_i                             ),
         .ready_o ( w_dp_ready_o                             ),
         .valid_o ( { w_resp_fifo_in_valid, w_dp_req_valid } ),
@@ -510,6 +511,7 @@ ${rendered_write_ports[write_port]}
     ) i_write_response_fifo (
         .clk_i      ( clk_i                                          ),
         .rst_ni     ( rst_ni                                         ),
+        .clr_i      ( 1'b0                                           ),
         .flush_i    ( 1'b0                                           ),
         .usage_o    ( /* NOT CONNECTED */                            ),
         .data_i     ( w_dp_req_i.dst_protocol                        ),
@@ -528,6 +530,7 @@ ${rendered_write_ports[write_port]}
     ) i_write_response_fifo_multihead (
         .clk_i      ( clk_i                                          ),
         .rst_ni     ( rst_ni                                         ),
+        .clr_i      ( 1'b0                                           ),
         .flush_i    ( 1'b0                                           ),
         .usage_o    ( /* NOT CONNECTED */                            ),
         .data_i     ( w_dp_req_i.dst_head                            ),
