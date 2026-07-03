@@ -367,9 +367,9 @@ idma_desc64_reader #(
 );
 
 cc_stream_fifo #(
-    .FALL_THROUGH (1'b1),
-    .DEPTH       (InputFifoDepth),
-    .T      (addr_t)
+    .FallThrough (1'b1),
+    .Depth       (InputFifoDepth),
+    .data_t      (addr_t)
 ) i_input_addr_fifo (
     .clk_i,
     .rst_ni,
@@ -384,9 +384,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FALL_THROUGH (1'b1),
-    .DEPTH       (PendingFifoDepth + BackendDepth),
-    .T      (addr_t)
+    .FallThrough (1'b1),
+    .Depth       (PendingFifoDepth + BackendDepth),
+    .data_t      (addr_t)
 ) i_pending_addr_fifo (
     .clk_i,
     .rst_ni,
@@ -401,9 +401,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FALL_THROUGH (1'b0),
-    .DEPTH       (PendingFifoDepth),
-    .T      (idma_req_t)
+    .FallThrough (1'b0),
+    .Depth       (PendingFifoDepth),
+    .data_t      (idma_req_t)
 ) i_idma_request_fifo (
     .clk_i,
     .rst_ni,
@@ -418,9 +418,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FALL_THROUGH (1'b0),
-    .DEPTH       (PendingFifoDepth + MaxAWWPending + BackendDepth),
-    .T      (logic)
+    .FallThrough (1'b0),
+    .Depth       (PendingFifoDepth + MaxAWWPending + BackendDepth),
+    .data_t      (logic)
 ) i_irq_fifo (
     .clk_i,
     .rst_ni,
@@ -435,9 +435,9 @@ cc_stream_fifo #(
 );
 
 cc_stream_fifo #(
-    .FALL_THROUGH (1'b0),
-    .DEPTH       (MaxAWWPending),
-    .T      (addr_t)
+    .FallThrough (1'b0),
+    .Depth       (MaxAWWPending),
+    .data_t      (addr_t)
 ) i_aw_addrs (
     .clk_i,
     .rst_ni,

@@ -241,7 +241,7 @@ module idma_inst64_top #(
 
         cc_stream_fifo_optimal_wrap #(
             .Depth     ( DMAReqFifoDepth ),
-            .type_t    ( idma_nd_req_t   ),
+            .data_t    ( idma_nd_req_t   ),
             .PrintInfo ( 1'b0            )
         ) i_stream_fifo_optimal_wrap (
             .clk_i,
@@ -305,7 +305,7 @@ module idma_inst64_top #(
     //--------------------------------------
     // the response path needs to be decoupled
     cc_spill_register #(
-        .T       ( acc_res_t )
+        .data_t       ( acc_res_t )
     ) i_spill_register (
         .clk_i,
         .rst_ni,
