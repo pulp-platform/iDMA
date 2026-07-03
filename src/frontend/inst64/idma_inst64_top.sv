@@ -389,6 +389,7 @@ module idma_inst64_top #(
         ) i_stream_fifo_optimal_wrap (
             .clk_i,
             .rst_ni,
+            .clr_i      ( 1'b0                  ),
             .flush_i    ( 1'b0                  ),
             .usage_o    ( /* NC */              ),
             .data_i     ( idma_fe_req           ),
@@ -456,6 +457,7 @@ module idma_inst64_top #(
     ) i_spill_register (
         .clk_i,
         .rst_ni,
+        .clr_i   ( 1'b0            ),
         .valid_i ( acc_res_valid   ),
         .ready_o ( acc_res_ready   ),
         .data_i  ( acc_res         ),

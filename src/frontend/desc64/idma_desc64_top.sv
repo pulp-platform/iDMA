@@ -373,6 +373,7 @@ cc_stream_fifo #(
 ) i_input_addr_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (input_addr),
@@ -390,6 +391,7 @@ cc_stream_fifo #(
 ) i_pending_addr_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (feedback_addr),
@@ -407,6 +409,7 @@ cc_stream_fifo #(
 ) i_idma_request_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
     .usage_o   (idma_req_used),
     .data_i    (idma_req),
@@ -424,6 +427,7 @@ cc_stream_fifo #(
 ) i_irq_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (do_irq),
@@ -441,6 +445,7 @@ cc_stream_fifo #(
 ) i_aw_addrs (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (next_wb_addr),
