@@ -327,10 +327,9 @@ module idma_inst64_top #(
         );
 
         always_comb begin : gen_obi_response
-            if (obi_we_q[c]) begin
-                obi_write_rsp[c].r = obi_res_i[c].r;
-            end else begin
-                obi_read_rsp[c].r = obi_res_i[c].r;
+            assign obi_write_rsp[c].r = obi_res_i[c].r;
+            assign obi_read_rsp[c].r = obi_res_i[c].r;
+        end
             end
         end
 
