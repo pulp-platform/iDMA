@@ -245,6 +245,7 @@ cc_stream_fifo #(
 ) i_speculation_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (flush_q),
     .usage_o   (speculation_usage_short),
     .data_i    (staging_addr.addr),
@@ -262,6 +263,7 @@ cc_stream_fifo #(
 ) i_pending_ars (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (flush),
     .usage_o   ( /* unconnected */ ),
     .data_i    (next_ar),
@@ -279,6 +281,7 @@ cc_stream_fifo #(
 ) i_legalization_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
     .usage_o   (legalization_usage),
     .data_i    (staging_addr_legalization),

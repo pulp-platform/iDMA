@@ -101,6 +101,7 @@ module idma_mp_dist_midend #(
   ) i_stream_fork (
     .clk_i,
     .rst_ni,
+    .clr_i   ( 1'b0             ),
     .valid_i ( idma_req_valid_i ),
     .ready_o ( idma_req_ready_o ),
     .valid_o ( valid            ),

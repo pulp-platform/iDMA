@@ -123,7 +123,7 @@ module idma_rt_midend #(
         ) i_counter (
             .clk_i,
             .rst_ni,
-            .clear_i    ( 1'b0               ),
+            .clr_i      ( 1'b0               ),
             .en_i       ( cnt_ena        [c] ),
             .load_i     ( cnt_load       [c] ),
             .down_i     ( 1'b1               ),
@@ -162,6 +162,7 @@ module idma_rt_midend #(
     ) i_stream_arbiter (
         .clk_i,
         .rst_ni,
+        .clr_i       ( 1'b0             ),
         .inp_data_i  ( idma_nd_req      ),
         .inp_valid_i ( event_valid      ),
         .inp_ready_o ( event_ready      ),
@@ -178,6 +179,7 @@ module idma_rt_midend #(
     ) i_stream_arbiter_bypass (
         .clk_i,
         .rst_ni,
+        .clr_i       ( 1'b0                                 ),
         .inp_data_i  ( { ext_req,        int_req          } ),
         .inp_valid_i ( { nd_req_valid_i, nd_req_valid_int } ),
         .inp_ready_o ( { nd_req_ready_o, nd_req_ready_int } ),
@@ -205,6 +207,7 @@ module idma_rt_midend #(
     ) i_stream_fifo (
         .clk_i,
         .rst_ni,
+        .clr_i      ( 1'b0                                  ),
         .flush_i    ( 1'b0                                  ),
         .usage_o    ( /* NC */                              ),
         .data_i     ( choice                                ),

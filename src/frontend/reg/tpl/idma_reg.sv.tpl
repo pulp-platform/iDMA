@@ -233,6 +233,7 @@ module idma_${identifier} #(
   ) i_rr_arb_tree (
     .clk_i,
     .rst_ni,
+    .clr_i   ( 1'b0        ),
     .flush_i ( 1'b0        ),
     .rr_i    ( '0          ),
     .req_i   ( arb_valid   ),
