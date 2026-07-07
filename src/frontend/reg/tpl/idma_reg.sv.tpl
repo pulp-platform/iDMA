@@ -234,7 +234,6 @@ module idma_${identifier} #(
     .clk_i,
     .rst_ni,
     .clr_i   ( 1'b0        ),
-    .flush_i ( 1'b0        ),
     .rr_i    ( '0          ),
     .req_i   ( arb_valid   ),
     .gnt_o   ( arb_ready   ),
