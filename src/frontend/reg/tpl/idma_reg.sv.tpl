@@ -99,13 +99,16 @@ module idma_${identifier} #(
   logic     [NumRegs-1:0] arb_valid;
   logic     [NumRegs-1:0] arb_ready;
 
+  // per-port launch bookkeeping (see gen_core_regs: launch_pending latch)
+  logic    [NumRegs-1:0] launch_pending;
+  stream_t [NumRegs-1:0] held_stream;
+
+  // report the stream of the port whose launch is currently outstanding
   always_comb begin
       stream_idx_o = '0;
       for (int r = 0; r < NumRegs; r++) begin
-          for (int c = 0; c < NumStreams; c++) begin
-              if (dma_reg2hw[r].next_id[c].req && !dma_reg2hw[r].next_id[c].req_is_wr) begin
-                  stream_idx_o = c;
-              end
+          if (launch_pending[r]) begin
+              stream_idx_o = held_stream[r];
           end
       end
   end
@@ -175,66 +178,94 @@ module idma_${identifier} #(
       .hwif_in   ( dma_hw2reg       [i] )
     );
 
-    logic read_happens;
-    // launch-stall: hold the reg read-ack until the arbiter accepts the request
-    // (protocol-agnostic — driven into hwif rd_ack below, see gen_hw2reg_connections)
+    // A software read of `next_id` (the non-external rd_swacc strobe) launches a transfer.
+    // The strobe pulses for a single cycle, so it is captured into `launch_pending` and
+    // held until the arbiter accepts the request (arb_ready, which implies req_ready_i).
+    // This keeps arb_valid asserted and the payload stable across a backend stall, honoring
+    // rr_arb_tree LockIn=1 (no dropped launch).
+    logic     read_happens;
+    stream_t  read_stream;
+    dma_req_t nxt_dma_req;
 
     always_comb begin : proc_launch
         read_happens = 1'b0;
+        read_stream  = '0;
         for (int c = 0; c < NumStreams; c++) begin
-            read_happens |= dma_reg2hw[i].next_id[c].req & ~dma_reg2hw[i].next_id[c].req_is_wr;
+            if (dma_reg2hw[i].next_id[c].next_id.rd_swacc) begin
+                read_happens = 1'b1;
+                read_stream  = c;
+            end
         end
-        arb_valid[i] = read_happens;
     end
 
-    // assign request struct
+    // launch-pending latch: set on the read strobe (also on accept-and-reload in the same
+    // cycle so a read coinciding with an accept is not lost), clear on accept.
+    always_ff @(posedge clk_i or negedge rst_ni) begin : proc_launch_pending
+        if (!rst_ni) begin
+            launch_pending[i] <= 1'b0;
+            held_stream   [i] <= '0;
+            arb_dma_req   [i] <= '0;
+        end else begin
+            if (read_happens && (!launch_pending[i] || arb_ready[i])) begin
+                launch_pending[i] <= 1'b1;
+                held_stream   [i] <= read_stream;
+                arb_dma_req   [i] <= nxt_dma_req;
+            end else if (launch_pending[i] && arb_ready[i]) begin
+                launch_pending[i] <= 1'b0;
+            end
+        end
+    end
+
+    assign arb_valid[i] = launch_pending[i];
+
+    // assign request struct (combinational; captured into arb_dma_req above at launch time)
     always_comb begin : proc_hw_req_conv
       // all fields are zero per default
-      arb_dma_req[i] = '0;
+      nxt_dma_req = '0;
 
       // address and length
 % if bit_width == '32':
-      arb_dma_req[i]${sep}length   = dma_reg2hw[i].length[0].length.value;
-      arb_dma_req[i]${sep}src_addr = dma_reg2hw[i].src_addr[0].src_addr.value;
-      arb_dma_req[i]${sep}dst_addr = dma_reg2hw[i].dst_addr[0].dst_addr.value;
+      nxt_dma_req${sep}length   = dma_reg2hw[i].length[0].length.value;
+      nxt_dma_req${sep}src_addr = dma_reg2hw[i].src_addr[0].src_addr.value;
+      nxt_dma_req${sep}dst_addr = dma_reg2hw[i].dst_addr[0].dst_addr.value;
 % else:
-      arb_dma_req[i]${sep}length   = {dma_reg2hw[i].length[1].length.value,     dma_reg2hw[i].length[0].length.value};
-      arb_dma_req[i]${sep}src_addr = {dma_reg2hw[i].src_addr[1].src_addr.value, dma_reg2hw[i].src_addr[0].src_addr.value};
-      arb_dma_req[i]${sep}dst_addr = {dma_reg2hw[i].dst_addr[1].dst_addr.value, dma_reg2hw[i].dst_addr[0].dst_addr.value};
+      nxt_dma_req${sep}length   = {dma_reg2hw[i].length[1].length.value,     dma_reg2hw[i].length[0].length.value};
+      nxt_dma_req${sep}src_addr = {dma_reg2hw[i].src_addr[1].src_addr.value, dma_reg2hw[i].src_addr[0].src_addr.value};
+      nxt_dma_req${sep}dst_addr = {dma_reg2hw[i].dst_addr[1].dst_addr.value, dma_reg2hw[i].dst_addr[0].dst_addr.value};
 % endif
 
       // Protocols
-      arb_dma_req[i]${sep}opt.src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol.value);
-      arb_dma_req[i]${sep}opt.dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol.value);
+      nxt_dma_req${sep}opt.src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol.value);
+      nxt_dma_req${sep}opt.dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol.value);
 
       // Current backend only supports incremental burst
-      arb_dma_req[i]${sep}opt.src.burst = axi_pkg::BURST_INCR;
-      arb_dma_req[i]${sep}opt.dst.burst = axi_pkg::BURST_INCR;
+      nxt_dma_req${sep}opt.src.burst = axi_pkg::BURST_INCR;
+      nxt_dma_req${sep}opt.dst.burst = axi_pkg::BURST_INCR;
         // this frontend currently does not support cache variations
-      arb_dma_req[i]${sep}opt.src.cache = axi_pkg::CACHE_MODIFIABLE;
-      arb_dma_req[i]${sep}opt.dst.cache = axi_pkg::CACHE_MODIFIABLE;
+      nxt_dma_req${sep}opt.src.cache = axi_pkg::CACHE_MODIFIABLE;
+      nxt_dma_req${sep}opt.dst.cache = axi_pkg::CACHE_MODIFIABLE;
 
       // Backend options
-      arb_dma_req[i]${sep}opt.beo.decouple_aw    = dma_reg2hw[i].conf.decouple_aw.value;
-      arb_dma_req[i]${sep}opt.beo.decouple_rw    = dma_reg2hw[i].conf.decouple_rw.value;
-      arb_dma_req[i]${sep}opt.beo.src_max_llen   = dma_reg2hw[i].conf.src_max_llen.value;
-      arb_dma_req[i]${sep}opt.beo.dst_max_llen   = dma_reg2hw[i].conf.dst_max_llen.value;
-      arb_dma_req[i]${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.value;
-      arb_dma_req[i]${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.value;
+      nxt_dma_req${sep}opt.beo.decouple_aw    = dma_reg2hw[i].conf.decouple_aw.value;
+      nxt_dma_req${sep}opt.beo.decouple_rw    = dma_reg2hw[i].conf.decouple_rw.value;
+      nxt_dma_req${sep}opt.beo.src_max_llen   = dma_reg2hw[i].conf.src_max_llen.value;
+      nxt_dma_req${sep}opt.beo.dst_max_llen   = dma_reg2hw[i].conf.dst_max_llen.value;
+      nxt_dma_req${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.value;
+      nxt_dma_req${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.value;
 
 % if num_dim != 1:
       // ND connections
 % for nd in range(0, num_dim-1):
 % if bit_width == '32':
-      arb_dma_req[i].d_req[${nd}].reps = dma_reg2hw[i].dim[${nd}].reps[0].reps.value;
-      arb_dma_req[i].d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value;
-      arb_dma_req[i].d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value;
+      nxt_dma_req.d_req[${nd}].reps = dma_reg2hw[i].dim[${nd}].reps[0].reps.value;
+      nxt_dma_req.d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value;
+      nxt_dma_req.d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value;
 % else:
-      arb_dma_req[i].d_req[${nd}].reps = {dma_reg2hw[i].dim[${nd}].reps[1].reps.value,
+      nxt_dma_req.d_req[${nd}].reps = {dma_reg2hw[i].dim[${nd}].reps[1].reps.value,
                                       dma_reg2hw[i].dim[${nd}].reps[0].reps.value };
-      arb_dma_req[i].d_req[${nd}].src_strides = {dma_reg2hw[i].dim[${nd}].src_stride[1].src_stride.value,
+      nxt_dma_req.d_req[${nd}].src_strides = {dma_reg2hw[i].dim[${nd}].src_stride[1].src_stride.value,
                                              dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value};
-      arb_dma_req[i].d_req[${nd}].dst_strides = {dma_reg2hw[i].dim[${nd}].dst_stride[1].dst_stride.value,
+      nxt_dma_req.d_req[${nd}].dst_strides = {dma_reg2hw[i].dim[${nd}].dst_stride[1].dst_stride.value,
                                              dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value};
 % endif
 % endfor
@@ -242,41 +273,32 @@ module idma_${identifier} #(
       // Disable higher dimensions
       if ( dma_reg2hw[i].conf.enable_nd.value == 0) begin
 % for nd in range(0, num_dim-1):
-        arb_dma_req[i].d_req[${nd}].reps = ${"'0" if nd != num_dim-2 else "'d1"};
+        nxt_dma_req.d_req[${nd}].reps = ${"'0" if nd != num_dim-2 else "'d1"};
 % endfor
       end
 % for nd in range(1, num_dim-1):
       else if ( dma_reg2hw[i].conf.enable_nd.value == ${nd}) begin
 % for snd in range(nd, num_dim-1):
-        arb_dma_req[i].d_req[${snd}].reps = 'd1;
+        nxt_dma_req.d_req[${snd}].reps = 'd1;
 % endfor
       end
 % endfor
 % endif
     end
 
-    // observational registers
+    // observational registers (status/next_id/done_id are internal hw=w now: drive .next,
+    // read-side launch happens via the next_id rd_swacc strobe above)
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
-        assign dma_hw2reg[i].status[c].rd_data.busy  = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].status[c].rd_ack = dma_reg2hw[i].status[c].req
-                                              & ~dma_reg2hw[i].status[c].req_is_wr;
-        assign dma_hw2reg[i].next_id[c].rd_data.next_id = next_id_i;
-        assign dma_hw2reg[i].next_id[c].rd_ack = dma_reg2hw[i].next_id[c].req
-                                               & ~dma_reg2hw[i].next_id[c].req_is_wr
-                                               & arb_ready[i];
-        assign dma_hw2reg[i].done_id[c].rd_data.done_id = done_id_i[c];
-        assign dma_hw2reg[i].done_id[c].rd_ack = dma_reg2hw[i].done_id[c].req
-                                               & ~dma_reg2hw[i].done_id[c].req_is_wr;
+        assign dma_hw2reg[i].status[c].busy.next     = {midend_busy_i[c], busy_i[c]};
+        assign dma_hw2reg[i].next_id[c].next_id.next = next_id_i;
+        assign dma_hw2reg[i].done_id[c].done_id.next = done_id_i[c];
     end
 
     // tie-off unused channels
     for (genvar c = NumStreams; c < MaxNumStreams; c++) begin : gen_hw2reg_unused
-        assign dma_hw2reg[i].status[c].rd_data = '0;
-        assign dma_hw2reg[i].status[c].rd_ack  = '0;
-        assign dma_hw2reg[i].next_id[c].rd_data.next_id = '0;
-        assign dma_hw2reg[i].next_id[c].rd_ack = '0;
-        assign dma_hw2reg[i].done_id[c].rd_data.done_id = '0;
-        assign dma_hw2reg[i].done_id[c].rd_ack = '0;
+        assign dma_hw2reg[i].status[c].busy.next     = '0;
+        assign dma_hw2reg[i].next_id[c].next_id.next = '0;
+        assign dma_hw2reg[i].done_id[c].done_id.next = '0;
     end
 
   end
