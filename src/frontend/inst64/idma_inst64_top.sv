@@ -328,8 +328,8 @@ module idma_inst64_top #(
         );
 
         always_comb begin : gen_obi_response
-            assign obi_write_rsp[c].r = obi_res_i[c].r;
-            assign obi_read_rsp[c].r = obi_res_i[c].r;
+            obi_write_rsp[c].r = obi_res_i[c].r;
+            obi_read_rsp[c].r = obi_res_i[c].r;
         end
 
         logic [AwInFlightCntWidth-1:0] aw_inflight_q; // outstanding write counter
