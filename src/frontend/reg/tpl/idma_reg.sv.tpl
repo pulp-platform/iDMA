@@ -99,11 +99,15 @@ module idma_${identifier} #(
   logic     [NumRegs-1:0] arb_valid;
   logic     [NumRegs-1:0] arb_ready;
 
+  // hold the next_id launch across the read-stall (req is masked mid-stall)
+  logic [NumRegs-1:0][NumStreams-1:0] nxt_read_seen;
+  logic [NumRegs-1:0][NumStreams-1:0] nxt_read_pending_q;
+
   always_comb begin
       stream_idx_o = '0;
       for (int r = 0; r < NumRegs; r++) begin
           for (int c = 0; c < NumStreams; c++) begin
-              if (dma_reg2hw[r].next_id[c].req && !dma_reg2hw[r].next_id[c].req_is_wr) begin
+              if (nxt_read_seen[r][c] || nxt_read_pending_q[r][c]) begin
                   stream_idx_o = c;
               end
           end
@@ -175,14 +179,26 @@ module idma_${identifier} #(
       .hwif_in   ( dma_hw2reg       [i] )
     );
 
-    logic read_happens;
-    // launch-stall: hold the reg read-ack until the arbiter accepts the request
-    // (protocol-agnostic — driven into hwif rd_ack below, see gen_hw2reg_connections)
+    // next_id launch-pending latch: set on read, cleared on grant
+    for (genvar c = 0; c < NumStreams; c++) begin : gen_nxt_read_pending
+        assign nxt_read_seen[i][c] = dma_reg2hw[i].next_id[c].req
+                                   & ~dma_reg2hw[i].next_id[c].req_is_wr;
+        always_ff @(posedge clk_i or negedge rst_ni) begin : proc_nxt_read_pending
+            if (!rst_ni) begin
+                nxt_read_pending_q[i][c] <= 1'b0;
+            end else if (nxt_read_pending_q[i][c] & arb_ready[i]) begin
+                nxt_read_pending_q[i][c] <= 1'b0;
+            end else if (nxt_read_seen[i][c] & ~arb_ready[i]) begin
+                nxt_read_pending_q[i][c] <= 1'b1;
+            end
+        end
+    end
 
+    logic read_happens;
     always_comb begin : proc_launch
         read_happens = 1'b0;
         for (int c = 0; c < NumStreams; c++) begin
-            read_happens |= dma_reg2hw[i].next_id[c].req & ~dma_reg2hw[i].next_id[c].req_is_wr;
+            read_happens |= nxt_read_seen[i][c] | nxt_read_pending_q[i][c];
         end
         arb_valid[i] = read_happens;
     end
@@ -261,8 +277,7 @@ module idma_${identifier} #(
         assign dma_hw2reg[i].status[c].rd_ack = dma_reg2hw[i].status[c].req
                                               & ~dma_reg2hw[i].status[c].req_is_wr;
         assign dma_hw2reg[i].next_id[c].rd_data.next_id = next_id_i;
-        assign dma_hw2reg[i].next_id[c].rd_ack = dma_reg2hw[i].next_id[c].req
-                                               & ~dma_reg2hw[i].next_id[c].req_is_wr
+        assign dma_hw2reg[i].next_id[c].rd_ack = (nxt_read_seen[i][c] | nxt_read_pending_q[i][c])
                                                & arb_ready[i];
         assign dma_hw2reg[i].done_id[c].rd_data.done_id = done_id_i[c];
         assign dma_hw2reg[i].done_id[c].rd_ack = dma_reg2hw[i].done_id[c].req
