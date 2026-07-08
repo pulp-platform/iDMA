@@ -118,6 +118,7 @@ sources:
       # Level 1
       - test/frontend/tb_idma_desc64_top.sv
       - test/frontend/tb_idma_desc64_bench.sv
+      - test/tb_idma_reg_frontend.sv
       - test/future/idma_tb_per2axi.sv
       - test/future/TLToAXI4.v
       - test/midend/tb_idma_nd_midend.sv
