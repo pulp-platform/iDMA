@@ -98,20 +98,16 @@ module idma_${identifier} #(
   dma_req_t [NumRegs-1:0] arb_dma_req;
   logic     [NumRegs-1:0] arb_valid;
   logic     [NumRegs-1:0] arb_ready;
+  // winning port index from the arbiter (drives stream_idx_o, see below)
+  logic [cf_math_pkg::idx_width(NumRegs)-1:0] arb_idx;
 
   // per-port launch bookkeeping (see gen_core_regs: launch_pending latch)
   logic    [NumRegs-1:0] launch_pending;
   stream_t [NumRegs-1:0] held_stream;
 
-  // report the stream of the port whose launch is currently outstanding
-  always_comb begin
-      stream_idx_o = '0;
-      for (int r = 0; r < NumRegs; r++) begin
-          if (launch_pending[r]) begin
-              stream_idx_o = held_stream[r];
-          end
-      end
-  end
+  // stream of the *arbitrated* port: must track dma_req_o (the arbiter winner), not the
+  // last launch_pending port, else the transfer is tracked under the wrong stream.
+  assign stream_idx_o = req_valid_o ? held_stream[arb_idx] : '0;
 
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
@@ -321,7 +317,7 @@ module idma_${identifier} #(
     .gnt_i   ( req_ready_i ),
     .req_o   ( req_valid_o ),
     .data_o  ( dma_req_o   ),
-    .idx_o   ( /* NC */    )
+    .idx_o   ( arb_idx     )
   );
 
 endmodule

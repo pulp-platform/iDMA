@@ -16,7 +16,9 @@
 
 module tb_idma_reg_frontend import idma_pkg::*; #(
   // number of streams the elaborated DUT exposes (checked at instantiation)
-  parameter int unsigned NumStreams = 32'd1
+  parameter int unsigned NumStreams = 32'd1,
+  // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
+  parameter int unsigned NumRegs    = 32'd1
 );
 
   // --------------------------------------------------------------------------
@@ -27,7 +29,6 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   localparam int unsigned CfgDataWidth   = 32'd32;
   localparam int unsigned CfgStrbWidth   = CfgDataWidth / 32'd8;
   localparam int unsigned IdCounterWidth = 32'd32;
-  localparam int unsigned NumRegs        = 32'd1;
   // idma data-path (reg32_3d: 32-bit data, 3 ND dims)
   localparam int unsigned AddrWidth      = 32'd32;
   localparam int unsigned DataWidth      = 32'd32;
@@ -262,17 +263,25 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
     else if (issue) launch_accept_count <= launch_accept_count + 1;
   end
 
+  // Test 5 (multi-port arbitration) scoreboard state. Each config port programs a
+  // unique src_addr that encodes its target stream, so the arbiter's presented
+  // winner (dma_req_o) can be mapped back to a stream and compared to stream_idx_o.
+  logic [31:0] sb_addr_stream0;          // src_addr programmed for stream 0's port
+  logic [31:0] sb_addr_stream1;          // src_addr programmed for stream 1's port
+  int unsigned sb_mismatch;              // times stream_idx != the winner's stream
+  initial sb_mismatch = 0;
+
   // --------------------------------------------------------------------------
   // APB driver
   // --------------------------------------------------------------------------
-  task automatic apb_idle();
-    apb_req[0].psel    = 1'b0;
-    apb_req[0].penable = 1'b0;
-    apb_req[0].pwrite  = 1'b0;
-    apb_req[0].paddr   = '0;
-    apb_req[0].pwdata  = '0;
-    apb_req[0].pstrb   = '0;
-    apb_req[0].pprot   = '0;
+  task automatic apb_idle(input int unsigned port = 0);
+    apb_req[port].psel    = 1'b0;
+    apb_req[port].penable = 1'b0;
+    apb_req[port].pwrite  = 1'b0;
+    apb_req[port].paddr   = '0;
+    apb_req[port].pwdata  = '0;
+    apb_req[port].pstrb   = '0;
+    apb_req[port].pprot   = '0;
   endtask
 
   // Strict APB4 master. `access_cycles` (out) counts the ACCESS-phase config cycles
@@ -283,51 +292,54 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
                           input  logic [31:0] wdata,
                           output logic [31:0] rdata,
                           output int unsigned access_cycles,
-                          input  bit          is_next_id = 1'b0);
+                          input  bit          is_next_id = 1'b0,
+                          input  int unsigned port       = 0);
     access_cycles = 0;
     // SETUP phase: psel high, penable low, for one cycle
     @(negedge clk);
-    apb_req[0].psel    = 1'b1;
-    apb_req[0].penable = 1'b0;
-    apb_req[0].pwrite  = write;
-    apb_req[0].paddr   = addr;
-    apb_req[0].pwdata  = wdata;
-    apb_req[0].pstrb   = write ? '1 : '0;
-    apb_req[0].pprot   = '0;
+    apb_req[port].psel    = 1'b1;
+    apb_req[port].penable = 1'b0;
+    apb_req[port].pwrite  = write;
+    apb_req[port].paddr   = addr;
+    apb_req[port].pwdata  = wdata;
+    apb_req[port].pstrb   = write ? '1 : '0;
+    apb_req[port].pprot   = '0;
     if (is_next_id) nxt_read_active = 1'b1;
 
     // ACCESS phase: raise penable, then wait for pready at the posedge. Count the
     // ACCESS-phase cycles until pready — for a next_id read this is the read latency
     // the non-blocking contract bounds (must not depend on req_ready_i).
     @(negedge clk);
-    apb_req[0].penable = 1'b1;
+    apb_req[port].penable = 1'b1;
     forever begin
       @(posedge clk);
       access_cycles = access_cycles + 1;
-      if (apb_rsp[0].pready) begin
-        rdata = apb_rsp[0].prdata;      // sample in the completing cycle
+      if (apb_rsp[port].pready) begin
+        rdata = apb_rsp[port].prdata;   // sample in the completing cycle
         break;
       end
     end
     // retire the transaction: return to IDLE immediately (no extra held posedge)
-    apb_idle();
+    apb_idle(port);
     if (is_next_id) nxt_read_active = 1'b0;
     // mandatory idle cycle so the FSM's is_active fully drops with psel low
     @(negedge clk);
   endtask
 
-  task automatic apb_write(input logic [31:0] addr, input logic [31:0] data);
+  task automatic apb_write(input logic [31:0] addr, input logic [31:0] data,
+                           input int unsigned port = 0);
     logic [31:0] dummy;
     int unsigned cyc;
-    apb_xact(1'b1, addr, data, dummy, cyc);
+    apb_xact(1'b1, addr, data, dummy, cyc, 1'b0, port);
   endtask
 
   // APB4 read that respects pready; `cyc` returns the ACCESS-phase cycle count.
   task automatic apb_read(input  logic [31:0] addr,
                           output logic [31:0] data,
                           output int unsigned cyc,
-                          input  bit          is_next_id = 1'b0);
-    apb_xact(1'b0, addr, 32'h0, data, cyc, is_next_id);
+                          input  bit          is_next_id = 1'b0,
+                          input  int unsigned port       = 0);
+    apb_xact(1'b0, addr, 32'h0, data, cyc, is_next_id, port);
   endtask
 
   // --------------------------------------------------------------------------
@@ -335,21 +347,22 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   // --------------------------------------------------------------------------
   task automatic program_transfer(input logic [31:0] src,
                                    input logic [31:0] dst,
-                                   input logic [31:0] len);
+                                   input logic [31:0] len,
+                                   input int unsigned port = 0);
     // conf: plain 1D incremental copy, ND disabled
-    apb_write(REG_CONF,     32'h0);
-    apb_write(REG_SRC_ADDR, src);
-    apb_write(REG_DST_ADDR, dst);
-    apb_write(REG_LENGTH,   len);
+    apb_write(REG_CONF,     32'h0, port);
+    apb_write(REG_SRC_ADDR, src,   port);
+    apb_write(REG_DST_ADDR, dst,   port);
+    apb_write(REG_LENGTH,   len,   port);
   endtask
 
   // launch: read next_id (the transfer trigger, non-blocking); returns id and the
   // ACCESS-phase latency in `cyc`. Snapshots the accept count before the read so
   // an accept coinciding with the (non-blocking) read is still observed.
   task automatic launch(output logic [31:0] id, output int unsigned cyc,
-                        input int unsigned s = 0);
+                        input int unsigned s = 0, input int unsigned port = 0);
     launch_acc_base = launch_accept_count;
-    apb_read(reg_next_id(s), id, cyc, .is_next_id(1'b1));
+    apb_read(reg_next_id(s), id, cyc, .is_next_id(1'b1), .port(port));
   endtask
 
   // wait until the launch read since the last launch() has been accepted (the
@@ -411,7 +424,7 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   initial begin : test
     errors = 0;
     checks = 0;
-    apb_idle();
+    for (int unsigned p = 0; p < NumRegs; p++) apb_idle(p);
     req_ready = 1'b1;
 
     // reset
@@ -602,6 +615,90 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
       // done_id must advance in order to the last id
       poll_done(ids[3]);
       $display("[ ok ] Test4 done_id advanced in order to %0d", ids[3]);
+    end
+
+    // ------------------------------------------------------------------
+    // Test 5 — Concurrent multi-port launch: stream_idx must ride the
+    // arbitration (only meaningful when NumRegs>1 and NumStreams>1).
+    // Two config ports launch on *different* streams in the same window; on
+    // every grant stream_idx must match the ARBITRATED port's stream, not the
+    // last-pending port. This FAILS on the pre-fix RTL and PASSES after it.
+    // ------------------------------------------------------------------
+    if (NumRegs > 1 && NumStreams > 1) begin
+      logic [31:0] id_p0, id_p1;
+      int unsigned cyc0, cyc1;
+      $display("\n--- Test 5: concurrent multi-port arbitration (stream_idx) ---");
+      backend_auto_retire = 1'b0;
+      captured_q.delete();
+      req_ready = 1'b0;
+      // port 0 -> stream 0, port 1 -> stream 1, each with a unique src_addr
+      sb_addr_stream0 = 32'hAAAA_0000;
+      sb_addr_stream1 = 32'hBBBB_0000;
+      program_transfer(sb_addr_stream0, 32'hCCCC_0000, 32'h0000_0040, 0);
+      program_transfer(sb_addr_stream1, 32'hDDDD_0000, 32'h0000_0080, 1);
+      sb_mismatch = 0;
+      // launch both ports concurrently on different streams while the grant is held off,
+      // so both launch_pending latches are set at once (the arbiter must pick one).
+      fork
+        launch(id_p0, cyc0, 0, 0);       // port 0, stream 0
+        launch(id_p1, cyc1, 1, 1);       // port 1, stream 1
+      join
+      // Both launches are now pending with req_ready still low. rr_arb_tree (AxiVldRdy=1)
+      // *presents* its chosen winner on dma_req_o / idx_o even while the grant is withheld,
+      // so stream_idx_o must equal the winner's stream. On the pre-fix RTL stream_idx_o is
+      // the last-pending port's stream (held_stream[NumRegs-1]) regardless of the winner,
+      // so it disagrees with dma_req_o whenever the winner is not the last port. Check the
+      // presented (winner, stream_idx) pair across the whole held window.
+      begin
+        int unsigned held_checks;
+        held_checks = 0;
+        repeat (12) begin
+          @(negedge clk);
+          #(TCK/10);                     // let combinational DUT outputs settle
+          if (req_valid && !req_ready) begin
+            automatic int unsigned won_stream = 32'hFFFF_FFFF;
+            if      (dma_req.burst_req.src_addr == sb_addr_stream0) won_stream = 0;
+            else if (dma_req.burst_req.src_addr == sb_addr_stream1) won_stream = 1;
+            if (won_stream != 32'hFFFF_FFFF) begin
+              held_checks++;
+              if (stream_idx != won_stream[$bits(stream_idx)-1:0]) begin
+                sb_mismatch++;
+                $display("[Test5] MISMATCH: dma_req_o=port for stream %0d but stream_idx=%0d",
+                         won_stream, stream_idx);
+              end
+            end
+          end
+        end
+        check_eq(held_checks > 0, 1'b1, "Test5 winner presented while grant withheld");
+        check_eq(sb_mismatch, 32'd0,    "Test5 stream_idx matches arbitrated port (winner)");
+      end
+      // now let both launches drain and confirm both transfers are captured correctly
+      req_ready           = 1'b1;
+      backend_auto_retire = 1'b1;
+      begin
+        int unsigned tries;
+        tries = 0;
+        while (captured_q.size() < 2) begin
+          @(posedge clk);
+          tries++;
+          if (tries > 1000) $fatal(1, "Test5: both launches never drained (got %0d)",
+                                   captured_q.size());
+        end
+      end
+      check_eq(captured_q.size(), 32'd2, "Test5 both launches captured");
+      begin
+        logic saw_a, saw_b;
+        saw_a = 1'b0; saw_b = 1'b0;
+        foreach (captured_q[k]) begin
+          if (captured_q[k].burst_req.src_addr == sb_addr_stream0) saw_a = 1'b1;
+          if (captured_q[k].burst_req.src_addr == sb_addr_stream1) saw_b = 1'b1;
+        end
+        check_eq(saw_a, 1'b1, "Test5 port0/stream0 transfer captured");
+        check_eq(saw_b, 1'b1, "Test5 port1/stream1 transfer captured");
+      end
+      $display("[ ok ] Test5 concurrent arbitration: %0d mismatches", sb_mismatch);
+    end else begin
+      $display("\n--- Test 5: skipped (needs NumRegs>1 and NumStreams>1) ---");
     end
 
     // ------------------------------------------------------------------
