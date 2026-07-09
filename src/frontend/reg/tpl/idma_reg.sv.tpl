@@ -95,20 +95,19 @@ module idma_${identifier} #(
   idma_${identifier}_reg_pkg::idma_reg__in_t  dma_hw2reg [NumRegs-1:0];
 
   // arbitration output
-  dma_req_t [NumRegs-1:0] arb_dma_req;
-  logic     [NumRegs-1:0] arb_valid;
-  logic     [NumRegs-1:0] arb_ready;
+  typedef struct packed {
+    dma_req_t req;
+    stream_t  stream_idx;
+  } arb_payload_t;
 
-  always_comb begin
-      stream_idx_o = '0;
-      for (int r = 0; r < NumRegs; r++) begin
-          for (int c = 0; c < NumStreams; c++) begin
-              if (dma_reg2hw[r].next_id[c].req && !dma_reg2hw[r].next_id[c].req_is_wr) begin
-                  stream_idx_o = c;
-              end
-          end
-      end
-  end
+  arb_payload_t [NumRegs-1:0] arb_payload;
+  arb_payload_t               arb_payload_out;
+  stream_t      [NumRegs-1:0] arb_stream_idx;
+  logic         [NumRegs-1:0] arb_valid;
+  logic         [NumRegs-1:0] arb_ready;
+
+  assign dma_req_o    = arb_payload_out.req;
+  assign stream_idx_o = arb_payload_out.stream_idx;
 
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
@@ -181,8 +180,12 @@ module idma_${identifier} #(
 
     always_comb begin : proc_launch
         read_happens = 1'b0;
+        arb_stream_idx[i] = '0;
         for (int c = 0; c < NumStreams; c++) begin
-            read_happens |= dma_reg2hw[i].next_id[c].req & ~dma_reg2hw[i].next_id[c].req_is_wr;
+            if (dma_reg2hw[i].next_id[c].req & ~dma_reg2hw[i].next_id[c].req_is_wr) begin
+                read_happens = 1'b1;
+                arb_stream_idx[i] = stream_t'(c);
+            end
         end
         arb_valid[i] = read_happens;
     end
@@ -190,51 +193,52 @@ module idma_${identifier} #(
     // assign request struct
     always_comb begin : proc_hw_req_conv
       // all fields are zero per default
-      arb_dma_req[i] = '0;
+      arb_payload[i] = '0;
+      arb_payload[i].stream_idx = arb_stream_idx[i];
 
       // address and length
 % if bit_width == '32':
-      arb_dma_req[i]${sep}length   = dma_reg2hw[i].length[0].length.value;
-      arb_dma_req[i]${sep}src_addr = dma_reg2hw[i].src_addr[0].src_addr.value;
-      arb_dma_req[i]${sep}dst_addr = dma_reg2hw[i].dst_addr[0].dst_addr.value;
+      arb_payload[i].req${sep}length   = dma_reg2hw[i].length[0].length.value;
+      arb_payload[i].req${sep}src_addr = dma_reg2hw[i].src_addr[0].src_addr.value;
+      arb_payload[i].req${sep}dst_addr = dma_reg2hw[i].dst_addr[0].dst_addr.value;
 % else:
-      arb_dma_req[i]${sep}length   = {dma_reg2hw[i].length[1].length.value,     dma_reg2hw[i].length[0].length.value};
-      arb_dma_req[i]${sep}src_addr = {dma_reg2hw[i].src_addr[1].src_addr.value, dma_reg2hw[i].src_addr[0].src_addr.value};
-      arb_dma_req[i]${sep}dst_addr = {dma_reg2hw[i].dst_addr[1].dst_addr.value, dma_reg2hw[i].dst_addr[0].dst_addr.value};
+      arb_payload[i].req${sep}length   = {dma_reg2hw[i].length[1].length.value,     dma_reg2hw[i].length[0].length.value};
+      arb_payload[i].req${sep}src_addr = {dma_reg2hw[i].src_addr[1].src_addr.value, dma_reg2hw[i].src_addr[0].src_addr.value};
+      arb_payload[i].req${sep}dst_addr = {dma_reg2hw[i].dst_addr[1].dst_addr.value, dma_reg2hw[i].dst_addr[0].dst_addr.value};
 % endif
 
       // Protocols
-      arb_dma_req[i]${sep}opt.src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol.value);
-      arb_dma_req[i]${sep}opt.dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol.value);
+      arb_payload[i].req${sep}opt.src_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.src_protocol.value);
+      arb_payload[i].req${sep}opt.dst_protocol = idma_pkg::protocol_e'(dma_reg2hw[i].conf.dst_protocol.value);
 
       // Current backend only supports incremental burst
-      arb_dma_req[i]${sep}opt.src.burst = axi_pkg::BURST_INCR;
-      arb_dma_req[i]${sep}opt.dst.burst = axi_pkg::BURST_INCR;
+      arb_payload[i].req${sep}opt.src.burst = axi_pkg::BURST_INCR;
+      arb_payload[i].req${sep}opt.dst.burst = axi_pkg::BURST_INCR;
         // this frontend currently does not support cache variations
-      arb_dma_req[i]${sep}opt.src.cache = axi_pkg::CACHE_MODIFIABLE;
-      arb_dma_req[i]${sep}opt.dst.cache = axi_pkg::CACHE_MODIFIABLE;
+      arb_payload[i].req${sep}opt.src.cache = axi_pkg::CACHE_MODIFIABLE;
+      arb_payload[i].req${sep}opt.dst.cache = axi_pkg::CACHE_MODIFIABLE;
 
       // Backend options
-      arb_dma_req[i]${sep}opt.beo.decouple_aw    = dma_reg2hw[i].conf.decouple_aw.value;
-      arb_dma_req[i]${sep}opt.beo.decouple_rw    = dma_reg2hw[i].conf.decouple_rw.value;
-      arb_dma_req[i]${sep}opt.beo.src_max_llen   = dma_reg2hw[i].conf.src_max_llen.value;
-      arb_dma_req[i]${sep}opt.beo.dst_max_llen   = dma_reg2hw[i].conf.dst_max_llen.value;
-      arb_dma_req[i]${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.value;
-      arb_dma_req[i]${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.value;
+      arb_payload[i].req${sep}opt.beo.decouple_aw    = dma_reg2hw[i].conf.decouple_aw.value;
+      arb_payload[i].req${sep}opt.beo.decouple_rw    = dma_reg2hw[i].conf.decouple_rw.value;
+      arb_payload[i].req${sep}opt.beo.src_max_llen   = dma_reg2hw[i].conf.src_max_llen.value;
+      arb_payload[i].req${sep}opt.beo.dst_max_llen   = dma_reg2hw[i].conf.dst_max_llen.value;
+      arb_payload[i].req${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.value;
+      arb_payload[i].req${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.value;
 
 % if num_dim != 1:
       // ND connections
 % for nd in range(0, num_dim-1):
 % if bit_width == '32':
-      arb_dma_req[i].d_req[${nd}].reps = dma_reg2hw[i].dim[${nd}].reps[0].reps.value;
-      arb_dma_req[i].d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value;
-      arb_dma_req[i].d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value;
+      arb_payload[i].req.d_req[${nd}].reps = dma_reg2hw[i].dim[${nd}].reps[0].reps.value;
+      arb_payload[i].req.d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value;
+      arb_payload[i].req.d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value;
 % else:
-      arb_dma_req[i].d_req[${nd}].reps = {dma_reg2hw[i].dim[${nd}].reps[1].reps.value,
+      arb_payload[i].req.d_req[${nd}].reps = {dma_reg2hw[i].dim[${nd}].reps[1].reps.value,
                                       dma_reg2hw[i].dim[${nd}].reps[0].reps.value };
-      arb_dma_req[i].d_req[${nd}].src_strides = {dma_reg2hw[i].dim[${nd}].src_stride[1].src_stride.value,
+      arb_payload[i].req.d_req[${nd}].src_strides = {dma_reg2hw[i].dim[${nd}].src_stride[1].src_stride.value,
                                              dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value};
-      arb_dma_req[i].d_req[${nd}].dst_strides = {dma_reg2hw[i].dim[${nd}].dst_stride[1].dst_stride.value,
+      arb_payload[i].req.d_req[${nd}].dst_strides = {dma_reg2hw[i].dim[${nd}].dst_stride[1].dst_stride.value,
                                              dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value};
 % endif
 % endfor
@@ -242,13 +246,13 @@ module idma_${identifier} #(
       // Disable higher dimensions
       if ( dma_reg2hw[i].conf.enable_nd.value == 0) begin
 % for nd in range(0, num_dim-1):
-        arb_dma_req[i].d_req[${nd}].reps = ${"'0" if nd != num_dim-2 else "'d1"};
+        arb_payload[i].req.d_req[${nd}].reps = ${"'0" if nd != num_dim-2 else "'d1"};
 % endfor
       end
 % for nd in range(1, num_dim-1):
       else if ( dma_reg2hw[i].conf.enable_nd.value == ${nd}) begin
 % for snd in range(nd, num_dim-1):
-        arb_dma_req[i].d_req[${snd}].reps = 'd1;
+        arb_payload[i].req.d_req[${snd}].reps = 'd1;
 % endfor
       end
 % endfor
@@ -284,7 +288,7 @@ module idma_${identifier} #(
   // arbitration
   rr_arb_tree #(
     .NumIn     ( NumRegs   ),
-    .DataType  ( dma_req_t ),
+    .DataType  ( arb_payload_t ),
     .ExtPrio   ( 0         ),
     .AxiVldRdy ( 1         ),
     .LockIn    ( 1         )
@@ -295,10 +299,10 @@ module idma_${identifier} #(
     .rr_i    ( '0          ),
     .req_i   ( arb_valid   ),
     .gnt_o   ( arb_ready   ),
-    .data_i  ( arb_dma_req ),
+    .data_i  ( arb_payload ),
     .gnt_i   ( req_ready_i ),
     .req_o   ( req_valid_o ),
-    .data_o  ( dma_req_o   ),
+    .data_o  ( arb_payload_out ),
     .idx_o   ( /* NC */    )
   );
 
