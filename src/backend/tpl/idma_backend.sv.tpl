@@ -35,6 +35,14 @@ module idma_backend_${name_uniqueifier} #(
     /// If this is enabled, then the data inserted into the dataflow element
     /// will no longer be word aligned, but only a single shifter is needed
     parameter bit          CombinedShifter  = 1'b0,
+% if compute_eligible:
+    /// Elaborate the optional on-the-fly compute engine
+    parameter bit          EnableCompute    = 1'b0,
+    /// Per-operation compute support mask
+    parameter idma_pkg::compute_enable_t ComputeOps = '1,
+    /// Use full-duplex buffering inside the transpose compute engine
+    parameter bit          ComputeFullDuplex = 1'b1,
+% endif
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
     parameter bit          RAWCouplingAvail = 1'b\
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
@@ -172,18 +180,11 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     output idma_busy_t busy_o
 );
 
-    /// Extra write-descriptor slots covering the compute (transpose) tile-fill latency
-    localparam int unsigned ComputeFifoDepth = ${"StrbWidth" if enable_compute else "32'd0"};
-% if enable_compute:
-
-    /// Per-op compute set baked into this variant (frontends may cross-check)
-    localparam idma_pkg::compute_enable_t ComputeEnable =
-        '{${', '.join("%s: 1'b1" % op for op in compute_ops)}};
-`ifndef SYNTHESIS
-    // no engine flush on abort: compute is incompatible with error handling
-    initial assert (ErrorCap == idma_pkg::NO_ERROR_HANDLING) else
-        $fatal(1, "compute requires ErrorCap == NO_ERROR_HANDLING");
-`endif
+    /// Extra write-descriptor slots covering the compute (transpose) tile-fill latency.
+% if compute_eligible:
+    localparam int unsigned ComputeFifoDepth = EnableCompute ? StrbWidth : 32'd0;
+% else:
+    localparam int unsigned ComputeFifoDepth = 32'd0;
 % endif
 
     /// The localparam MetaFifoDepth holds the maximum number of transfers that can be
@@ -722,6 +723,11 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .DataWidth                   ( DataWidth                   ),
         .BufferDepth                 ( BufferDepth                 ),
         .MaskInvalidData             ( MaskInvalidData             ),
+% if compute_eligible:
+        .EnableCompute               ( EnableCompute               ),
+        .ComputeOps                  ( ComputeOps                  ),
+        .ComputeFullDuplex           ( ComputeFullDuplex           ),
+% endif
         .PrintFifoInfo               ( PrintFifoInfo               ),
         .r_dp_req_t                  ( r_dp_req_t                  ),
         .w_dp_req_t                  ( w_dp_req_t                  ),
@@ -873,10 +879,16 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
 % endif
     end else begin : gen_r_aw_bypass
 % if combined_aw_and_w:
+    % if compute_eligible:
+        // combined aw+w read-meta buffer; deepened for the compute engine tile read-ahead (cf. i_w_dp_req)
+        stream_fifo_optimal_wrap #(
+            .Depth        ( EnableCompute ? NumAxInFlight + ComputeFifoDepth : 32'd2 ),
+    % else:
         // Atleast one write protocol uses combined aw and w -> Need to buffer read meta requests
         // As a write could depend on up to two reads
         stream_fifo_optimal_wrap #(
             .Depth        ( 2                    ),
+    % endif
             .type_t       (\
     % if one_write_port:
  write_meta_channel_t ),
@@ -958,6 +970,10 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
             $fatal(1, "Parameter BufferDepth has to be >= 12!");
         tf_len_width_max : assert(TFLenWidth <= AddrWidth) else
             $fatal(1, "Parameter TFLenWidth has to be <= AddrWidth!");
+% if compute_eligible:
+        compute_error_handling : assert(!EnableCompute || ErrorCap == idma_pkg::NO_ERROR_HANDLING) else
+            $fatal(1, "EnableCompute requires ErrorCap == NO_ERROR_HANDLING!");
+% endif
     end
     )
 

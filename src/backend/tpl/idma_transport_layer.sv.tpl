@@ -21,6 +21,14 @@ module idma_transport_layer_${name_uniqueifier} #(
     parameter int unsigned BufferDepth = 32'd3,
     /// Mask invalid data on the manager interface
     parameter bit MaskInvalidData = 1'b1,
+% if compute_eligible:
+    /// Elaborate the optional on-the-fly compute engine
+    parameter bit EnableCompute = 1'b0,
+    /// Per-operation compute support mask
+    parameter idma_pkg::compute_enable_t ComputeOps = '1,
+    /// Use full-duplex buffering inside the transpose compute engine
+    parameter bit ComputeFullDuplex = 1'b1,
+% endif
     /// Print the info of the FIFO configuration
     parameter bit PrintFifoInfo = 1'b0,
     /// `r_dp_req_t` type:
@@ -231,9 +239,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
-% if one_write_port:
     logic                  w_beat_done;
-% endif
 
 % if not one_read_port:
     // Read multiplexed signals
@@ -387,39 +393,46 @@ ${rendered_read_ports[read_port]}
     // On-the-fly compute
     //--------------------------------------
 
-% if enable_compute:
-    logic                  cmp_active;
-    logic                  cmp_in_ready, cmp_out_valid;
-    byte_t [StrbWidth-1:0] cmp_data_o;
-    strb_t                 cmp_strb_o;
+% if compute_eligible:
+    if (EnableCompute) begin : gen_compute
+        logic                  cmp_active;
+        logic                  cmp_in_ready, cmp_out_valid;
+        byte_t [StrbWidth-1:0] cmp_data_o;
+        strb_t                 cmp_strb_o;
 
-    // beats retire on w_beat_done (strobe-independent)
-    idma_otf_compute #(
-        .StrbWidth           ( StrbWidth ),
-        .ComputeEnable       ( idma_pkg::compute_enable_t'{${', '.join("%s: 1'b1" % op for op in compute_ops)}} ),
-        .TransposeFullDuplex ( 1'b${'1' if compute_full_duplex else '0'} )
-    ) i_idma_otf_compute (
-        .clk_i,
-        .rst_ni,
-        .compute_i   ( w_dp_req_i.compute ),
-        .cfg_valid_i ( w_dp_valid_i        ),
-        .active_o    ( cmp_active          ),
-        .data_i      ( buffer_out          ),
-        .valid_i     ( &buffer_out_valid   ),
-        .in_ready_o  ( cmp_in_ready        ),
-        .data_o      ( cmp_data_o          ),
-        .strb_o      ( cmp_strb_o          ),
-        .valid_o     ( cmp_out_valid       ),
-        .ready_i     ( w_beat_done         )
-    );
+        // Beats retire on w_beat_done (strobe-independent).
+        idma_otf_compute #(
+            .StrbWidth           ( StrbWidth          ),
+            .ComputeEnable       ( ComputeOps         ),
+            .TransposeFullDuplex ( ComputeFullDuplex  )
+        ) i_idma_otf_compute (
+            .clk_i,
+            .rst_ni,
+            .compute_i   ( w_dp_req_i.compute ),
+            .cfg_valid_i ( w_dp_valid_i        ),
+            .active_o    ( cmp_active          ),
+            .data_i      ( buffer_out          ),
+            .valid_i     ( &buffer_out_valid   ),
+            .in_ready_o  ( cmp_in_ready        ),
+            .data_o      ( cmp_data_o          ),
+            .strb_o      ( cmp_strb_o          ),
+            .valid_o     ( cmp_out_valid       ),
+            .ready_i     ( w_beat_done         )
+        );
 
-    // whole-beat valid; edge masking carried on wr_strb
-    assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
-    assign wr_valid          = cmp_active ? {StrbWidth{cmp_out_valid}} : buffer_out_valid;
-    assign wr_strb           = cmp_active ? cmp_strb_o : '1;
-    // pop the buffer only on a compute input handshake
-    assign dataflow_ready_in = cmp_active ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}}
-                                          : buffer_out_ready_shifted;
+        // Whole-beat valid; edge masking is carried on wr_strb.
+        assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
+        assign wr_valid          = cmp_active ? {StrbWidth{cmp_out_valid}} : buffer_out_valid;
+        assign wr_strb           = cmp_active ? cmp_strb_o : '1;
+        // Pop the buffer only on a compute input handshake.
+        assign dataflow_ready_in = cmp_active ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}}
+                                              : buffer_out_ready_shifted;
+    end else begin : gen_no_compute
+        assign wr_data           = buffer_out;
+        assign wr_valid          = buffer_out_valid;
+        assign wr_strb           = '1;
+        assign dataflow_ready_in = buffer_out_ready_shifted;
+    end
 % else:
     assign wr_data           = buffer_out;
     assign wr_valid          = buffer_out_valid;
@@ -489,6 +502,22 @@ ${rendered_read_ports[read_port]}
         endcase
     end
 
+% if compute_eligible:
+    // route the active write port's beat-done to the compute engine retire
+    always_comb begin : gen_write_beat_done_mux
+        case(w_dp_req_i.dst_protocol)
+% for wp in used_write_protocols:
+    % if wp in ('axi', 'obi') and mh_format['aw'][wp] == '':
+        idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done;
+    % elif wp in ('axi', 'obi'):
+        idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done [w_dp_req_i.dst_head];
+    % endif
+% endfor
+        default: w_beat_done = 1'b0;
+        endcase
+    end
+
+% endif
 % endif
     //--------------------------------------
     // Write Ports
