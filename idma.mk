@@ -386,10 +386,6 @@ idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_nd_midend_b2b -do "run -all; quit"
 
-# Self-checking reg-frontend regression. Checks the non-blocking next_id launch
-# contract (bounded-latency read + no dropped launch) across NumStreams 1/2, and
-# the multi-port arbitration of stream_idx with NumRegs=2, NumStreams=2.
-# Run with the Questa SEPP wrapper.
 .PHONY: idma_sim_tb_idma_reg_frontend
 idma_sim_tb_idma_reg_frontend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
