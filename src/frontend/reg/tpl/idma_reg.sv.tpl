@@ -98,7 +98,7 @@ module idma_${identifier} #(
   dma_req_t [NumRegs-1:0] arb_dma_req_q;
   logic     [NumRegs-1:0] arb_valid;
   logic     [NumRegs-1:0] arb_ready;
-  logic [cf_math_pkg::idx_width(NumRegs)-1:0] arb_idx;
+  logic [cc_pkg::idx_width(NumRegs)-1:0] arb_idx;
 
   // per-port launch-pending latch
   logic    [NumRegs-1:0] launch_pending_q;
