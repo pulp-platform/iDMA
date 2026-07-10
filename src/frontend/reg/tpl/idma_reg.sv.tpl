@@ -95,19 +95,17 @@ module idma_${identifier} #(
   idma_${identifier}_reg_pkg::idma_reg__in_t  dma_hw2reg [NumRegs-1:0];
 
   // arbitration output
-  dma_req_t [NumRegs-1:0] arb_dma_req;
+  dma_req_t [NumRegs-1:0] arb_dma_req_q;
   logic     [NumRegs-1:0] arb_valid;
   logic     [NumRegs-1:0] arb_ready;
-  // winning port index from the arbiter (drives stream_idx_o, see below)
   logic [cf_math_pkg::idx_width(NumRegs)-1:0] arb_idx;
 
-  // per-port launch bookkeeping (see gen_core_regs: launch_pending latch)
-  logic    [NumRegs-1:0] launch_pending;
-  stream_t [NumRegs-1:0] held_stream;
+  // per-port launch-pending latch
+  logic    [NumRegs-1:0] launch_pending_q;
+  stream_t [NumRegs-1:0] held_stream_q;
 
-  // stream of the *arbitrated* port: must track dma_req_o (the arbiter winner), not the
-  // last launch_pending port, else the transfer is tracked under the wrong stream.
-  assign stream_idx_o = req_valid_o ? held_stream[arb_idx] : '0;
+  // stream of the arbitrated winner, not the last pending port
+  assign stream_idx_o = req_valid_o ? held_stream_q[arb_idx] : '0;
 
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
@@ -174,11 +172,7 @@ module idma_${identifier} #(
       .hwif_in   ( dma_hw2reg       [i] )
     );
 
-    // A software read of `next_id` (the non-external rd_swacc strobe) launches a transfer.
-    // The strobe pulses for a single cycle, so it is captured into `launch_pending` and
-    // held until the arbiter accepts the request (arb_ready, which implies req_ready_i).
-    // This keeps arb_valid asserted and the payload stable across a backend stall, honoring
-    // rr_arb_tree LockIn=1 (no dropped launch).
+    // a next_id rd_swacc strobe launches a transfer; latched until the arbiter accepts
     logic     read_happens;
     stream_t  read_stream;
     dma_req_t nxt_dma_req;
@@ -194,27 +188,26 @@ module idma_${identifier} #(
         end
     end
 
-    // launch-pending latch: set on the read strobe (also on accept-and-reload in the same
-    // cycle so a read coinciding with an accept is not lost), clear on accept.
+    // set on the read strobe (or an accept-and-reload in the same cycle), clear on accept
     always_ff @(posedge clk_i or negedge rst_ni) begin : proc_launch_pending
         if (!rst_ni) begin
-            launch_pending[i] <= 1'b0;
-            held_stream   [i] <= '0;
-            arb_dma_req   [i] <= '0;
+            launch_pending_q[i] <= 1'b0;
+            held_stream_q   [i] <= '0;
+            arb_dma_req_q   [i] <= '0;
         end else begin
-            if (read_happens && (!launch_pending[i] || arb_ready[i])) begin
-                launch_pending[i] <= 1'b1;
-                held_stream   [i] <= read_stream;
-                arb_dma_req   [i] <= nxt_dma_req;
-            end else if (launch_pending[i] && arb_ready[i]) begin
-                launch_pending[i] <= 1'b0;
+            if (read_happens && (!launch_pending_q[i] || arb_ready[i])) begin
+                launch_pending_q[i] <= 1'b1;
+                held_stream_q   [i] <= read_stream;
+                arb_dma_req_q   [i] <= nxt_dma_req;
+            end else if (launch_pending_q[i] && arb_ready[i]) begin
+                launch_pending_q[i] <= 1'b0;
             end
         end
     end
 
-    assign arb_valid[i] = launch_pending[i];
+    assign arb_valid[i] = launch_pending_q[i];
 
-    // assign request struct (combinational; captured into arb_dma_req above at launch time)
+    // combinational request struct, captured into arb_dma_req_q at launch time
     always_comb begin : proc_hw_req_conv
       // all fields are zero per default
       nxt_dma_req = '0;
@@ -282,8 +275,7 @@ module idma_${identifier} #(
 % endif
     end
 
-    // observational registers (status/next_id/done_id are internal hw=w now: drive .next,
-    // read-side launch happens via the next_id rd_swacc strobe above)
+    // observational registers: drive .next (read-side launch is the rd_swacc strobe above)
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
         assign dma_hw2reg[i].status[c].busy.next     = {midend_busy_i[c], busy_i[c]};
         assign dma_hw2reg[i].next_id[c].next_id.next = next_id_i;
@@ -313,7 +305,7 @@ module idma_${identifier} #(
     .rr_i    ( '0          ),
     .req_i   ( arb_valid   ),
     .gnt_o   ( arb_ready   ),
-    .data_i  ( arb_dma_req ),
+    .data_i  ( arb_dma_req_q ),
     .gnt_i   ( req_ready_i ),
     .req_o   ( req_valid_o ),
     .data_o  ( dma_req_o   ),
