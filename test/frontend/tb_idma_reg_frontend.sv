@@ -6,15 +6,17 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 // Self-checking testbench for the iDMA register frontend (idma_reg32_3d, apb4-flat).
-// Drives the APB config slave against a controllable backend stub and checks the
-// non-blocking next_id launch contract: the config read completes promptly (even
-// under backend backpressure) and the launch fires exactly once when the arbiter
-// grants. A per-read watchdog guards against any read that hangs.
+// Drives the APB config slave with the standard apb_test::apb_driver against a
+// controllable backend stub and checks the non-blocking next_id launch contract:
+// the config read completes promptly (even under backend backpressure) and the
+// launch fires exactly once when the arbiter grants. A per-read watchdog guards
+// against any read that hangs.
 
 `include "apb/typedef.svh"
+`include "apb/assign.svh"
 `include "idma/typedef.svh"
 
-module tb_idma_reg_frontend import idma_pkg::*; #(
+module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // number of streams the elaborated DUT exposes (checked at instantiation)
   parameter int unsigned NumStreams = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
@@ -25,6 +27,8 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   // Parameters
   // --------------------------------------------------------------------------
   localparam time         TCK            = 10ns;
+  localparam time         TA             = TCK * 1 / 4;   // driver application time
+  localparam time         TT             = TCK * 3 / 4;   // driver test (sample) time
   localparam int unsigned CfgAddrWidth   = 32'd32;
   localparam int unsigned CfgDataWidth   = 32'd32;
   localparam int unsigned CfgStrbWidth   = CfgDataWidth / 32'd8;
@@ -34,11 +38,16 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   localparam int unsigned DataWidth      = 32'd32;
   localparam int unsigned NumDim         = 32'd3;
   localparam int unsigned RepWidth       = 32'd32;
-  // bounded-latency bound for a non-blocking next_id read: it must complete within
-  // this many config-clock cycles of the ACCESS phase even while req_ready_i is low.
-  localparam int unsigned MaxReadLatency = 32'd2;
+  // apb_driver framing: the blocking driver.read() spans SETUP + first-ACCESS-check +
+  // trailing edge before returning, so a same-cycle (non-blocking) read takes this many
+  // config clocks end-to-end; each extra ACCESS wait state adds one more clock.
+  localparam int unsigned DrvFraming     = 32'd2;
+  // bounded-latency bound for a non-blocking next_id read: measured ACCESS-phase latency
+  // (raw driver.read span minus DrvFraming) must be 0 config-clock cycles — the read must
+  // complete in its first ACCESS check even while req_ready_i is low.
+  localparam int unsigned MaxReadLatency = 32'd0;
   // watchdog bound: any next_id APB read that does not complete within this many
-  // config-clock cycles is a hang (the non-blocking read completes in <= 2 cycles).
+  // config-clock cycles is a hang (the non-blocking read completes immediately).
   localparam int unsigned DeadlockCycles = 32'd2000;
 
   // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4
@@ -84,6 +93,13 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
 
   typedef logic [IdCounterWidth-1:0] cnt_width_t;
 
+  typedef apb_driver #(
+    .ADDR_WIDTH ( CfgAddrWidth ),
+    .DATA_WIDTH ( CfgDataWidth ),
+    .TA         ( TA           ),
+    .TT         ( TT           )
+  ) apb_driver_t;
+
   // --------------------------------------------------------------------------
   // Clock / reset
   // --------------------------------------------------------------------------
@@ -109,6 +125,30 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   cnt_width_t   [NumStreams-1:0] done_id;
   idma_busy_t   [NumStreams-1:0] busy;
   logic         [NumStreams-1:0] midend_busy;
+
+  // --------------------------------------------------------------------------
+  // APB DV interfaces + drivers: one per config port. Each interface is bridged
+  // to the DUT's packed dma_ctrl_req_i[i]/dma_ctrl_rsp_o[i] via the apb assign
+  // macros; one apb_driver per port lets Test 5 drive two ports concurrently.
+  // --------------------------------------------------------------------------
+  // virtual-interface handles (interface arrays can only be indexed by a constant,
+  // so each element is captured into this array from the generate loop below)
+  typedef virtual APB_DV #(.ADDR_WIDTH(CfgAddrWidth), .DATA_WIDTH(CfgDataWidth)) apb_dv_t;
+  apb_dv_t     apb_vif[NumRegs];
+  apb_driver_t drv[NumRegs];
+
+  for (genvar i = 0; i < NumRegs; i++) begin : gen_apb_bridge
+    APB_DV #(
+      .ADDR_WIDTH ( CfgAddrWidth ),
+      .DATA_WIDTH ( CfgDataWidth )
+    ) apb_dv (clk);
+    // master interface -> DUT req struct, DUT rsp struct -> master interface
+    `APB_ASSIGN_TO_REQ(apb_req[i], apb_dv)
+    assign apb_dv.pready  = apb_rsp[i].pready;
+    assign apb_dv.prdata  = apb_rsp[i].prdata;
+    assign apb_dv.pslverr = apb_rsp[i].pslverr;
+    initial apb_vif[i] = apb_dv;   // publish the vif handle for the driver
+  end
 
   // --------------------------------------------------------------------------
   // Transfer-id generator (owns the next/completed counters). Reset next=2.
@@ -228,8 +268,8 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
 
   // --------------------------------------------------------------------------
   // Watchdog: fatal if a next_id APB read stays outstanding too long.
-  // `nxt_read_active` is raised by apb_read on a next_id address and cleared
-  // when pready completes it.
+  // `nxt_read_active` is raised by launch() around the blocking driver.read and
+  // cleared when it returns — a driver.read that never returns is caught here.
   // --------------------------------------------------------------------------
   logic        nxt_read_active;
   int unsigned nxt_read_watchdog;
@@ -272,74 +312,30 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   initial sb_mismatch = 0;
 
   // --------------------------------------------------------------------------
-  // APB driver
+  // APB stimulus via apb_test::apb_driver (per-port drivers built in init).
   // --------------------------------------------------------------------------
-  task automatic apb_idle(input int unsigned port = 0);
-    apb_req[port].psel    = 1'b0;
-    apb_req[port].penable = 1'b0;
-    apb_req[port].pwrite  = 1'b0;
-    apb_req[port].paddr   = '0;
-    apb_req[port].pwdata  = '0;
-    apb_req[port].pstrb   = '0;
-    apb_req[port].pprot   = '0;
-  endtask
-
-  // Strict APB4 master. `access_cycles` (out) counts the ACCESS-phase config cycles
-  // a read waited for pready, so a test can bound the read latency. One APB
-  // transaction == one CPUIF request (a guaranteed idle cycle follows).
-  task automatic apb_xact(input  bit          write,
-                          input  logic [31:0] addr,
-                          input  logic [31:0] wdata,
-                          output logic [31:0] rdata,
-                          output int unsigned access_cycles,
-                          input  bit          is_next_id = 1'b0,
-                          input  int unsigned port       = 0);
-    access_cycles = 0;
-    // SETUP phase: psel high, penable low, for one cycle
-    @(negedge clk);
-    apb_req[port].psel    = 1'b1;
-    apb_req[port].penable = 1'b0;
-    apb_req[port].pwrite  = write;
-    apb_req[port].paddr   = addr;
-    apb_req[port].pwdata  = wdata;
-    apb_req[port].pstrb   = write ? '1 : '0;
-    apb_req[port].pprot   = '0;
-    if (is_next_id) nxt_read_active = 1'b1;
-
-    // ACCESS phase: raise penable, then wait for pready at the posedge. Count the
-    // ACCESS-phase cycles until pready — for a next_id read this is the read latency
-    // the non-blocking contract bounds (must not depend on req_ready_i).
-    @(negedge clk);
-    apb_req[port].penable = 1'b1;
-    forever begin
-      @(posedge clk);
-      access_cycles = access_cycles + 1;
-      if (apb_rsp[port].pready) begin
-        rdata = apb_rsp[port].prdata;   // sample in the completing cycle
-        break;
-      end
-    end
-    // retire the transaction: return to IDLE immediately (no extra held posedge)
-    apb_idle(port);
-    if (is_next_id) nxt_read_active = 1'b0;
-    // mandatory idle cycle so the FSM's is_active fully drops with psel low
-    @(negedge clk);
-  endtask
-
   task automatic apb_write(input logic [31:0] addr, input logic [31:0] data,
                            input int unsigned port = 0);
-    logic [31:0] dummy;
-    int unsigned cyc;
-    apb_xact(1'b1, addr, data, dummy, cyc, 1'b0, port);
+    logic err;
+    drv[port].write(addr, data, '1, err);
   endtask
 
-  // APB4 read that respects pready; `cyc` returns the ACCESS-phase cycle count.
-  task automatic apb_read(input  logic [31:0] addr,
-                          output logic [31:0] data,
-                          output int unsigned cyc,
-                          input  bit          is_next_id = 1'b0,
-                          input  int unsigned port       = 0);
-    apb_xact(1'b0, addr, 32'h0, data, cyc, is_next_id, port);
+  // next_id read via the driver, TIMED to recover the ACCESS-phase latency the
+  // non-blocking contract bounds. driver.read blocks until pready; measure the
+  // elapsed config clocks and subtract the fixed driver framing. The watchdog
+  // flag is held across the (blocking) call so a read that never returns fatals.
+  task automatic apb_read_next(input  logic [31:0] addr,
+                               output logic [31:0] data,
+                               output int unsigned cyc,
+                               input  int unsigned port = 0);
+    logic err;
+    time  t0;
+    nxt_read_active = 1'b1;
+    t0 = $time;
+    drv[port].read(addr, data, err);
+    // raw span in config clocks, minus the driver's fixed SETUP+trailing framing
+    cyc = (($time - t0) / TCK) - DrvFraming;
+    nxt_read_active = 1'b0;
   endtask
 
   // --------------------------------------------------------------------------
@@ -357,12 +353,12 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   endtask
 
   // launch: read next_id (the transfer trigger, non-blocking); returns id and the
-  // ACCESS-phase latency in `cyc`. Snapshots the accept count before the read so
-  // an accept coinciding with the (non-blocking) read is still observed.
+  // measured ACCESS-phase latency in `cyc`. Snapshots the accept count before the
+  // read so an accept coinciding with the (non-blocking) read is still observed.
   task automatic launch(output logic [31:0] id, output int unsigned cyc,
                         input int unsigned s = 0, input int unsigned port = 0);
     launch_acc_base = launch_accept_count;
-    apb_read(reg_next_id(s), id, cyc, .is_next_id(1'b1), .port(port));
+    apb_read_next(reg_next_id(s), id, cyc, port);
   endtask
 
   // wait until the launch read since the last launch() has been accepted (the
@@ -379,8 +375,8 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   endtask
 
   task automatic read_done(output logic [31:0] id, input int unsigned s = 0);
-    int unsigned cyc;
-    apb_read(reg_done_id(s), id, cyc);
+    logic err;
+    drv[0].read(reg_done_id(s), id, err);
   endtask
 
   // poll done_id until it reaches `id` (or a bounded number of tries)
@@ -424,11 +420,14 @@ module tb_idma_reg_frontend import idma_pkg::*; #(
   initial begin : test
     errors = 0;
     checks = 0;
-    for (int unsigned p = 0; p < NumRegs; p++) apb_idle(p);
     req_ready = 1'b1;
+    rst_n = 1'b0;
+    // let the generate-block initials publish their vif handles, then bind drivers
+    @(negedge clk);
+    for (int unsigned p = 0; p < NumRegs; p++) drv[p] = new (apb_vif[p]);
+    for (int unsigned p = 0; p < NumRegs; p++) drv[p].reset_master();
 
     // reset
-    rst_n = 1'b0;
     repeat (5) @(negedge clk);
     rst_n = 1'b1;
     repeat (2) @(negedge clk);
