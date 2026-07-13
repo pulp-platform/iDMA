@@ -112,12 +112,8 @@ jobs:
     steps:
       -
         uses: actions/checkout@v4
-        if: ${{ github.event_name == 'push' }}
-      -
-        uses: actions/checkout@v4
-        if: ${{ github.event_name == 'pull_request' }}
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       -
         uses: astral-sh/setup-uv@v7
         with:
