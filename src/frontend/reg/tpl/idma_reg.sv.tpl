@@ -242,6 +242,19 @@ module idma_${identifier} #(
       nxt_dma_req${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.value;
       nxt_dma_req${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.value;
 
+      // Optional on-the-fly compute settings are part of the transfer descriptor and
+      // are captured together with the address/stride fields when next_id is read.
+      nxt_dma_req${sep}opt.compute.enable                    =
+          dma_reg2hw[i].compute_cfg.compute_enable.value;
+      nxt_dma_req${sep}opt.compute.op                        =
+          idma_pkg::compute_op_e'(dma_reg2hw[i].compute_cfg.compute_op.value);
+      nxt_dma_req${sep}opt.compute.params.transpose.mode     =
+          dma_reg2hw[i].compute_cfg.transpose_mode.value;
+      nxt_dma_req${sep}opt.compute.params.transpose.tensor_m =
+          dma_reg2hw[i].compute_cfg.transpose_tensor_m.value;
+      nxt_dma_req${sep}opt.compute.params.transpose.tensor_n =
+          dma_reg2hw[i].compute_cfg.transpose_tensor_n.value;
+
 % if num_dim != 1:
       // ND connections
 % for nd in range(0, num_dim-1):

@@ -27,7 +27,7 @@ module idma_otf_transpose #(
   input  logic rst_ni,
   input  logic clear_i,
 
-  /// Element size select: 0->1B, 1->2B, 2->4B (E = 1<<transp_mode_i)
+  /// Element size select: 0->1B, 1->2B, 2->4B, 3->8B (E = 1<<transp_mode_i)
   input  logic [1:0]  transp_mode_i,
   /// Matrix dimensions in elements
   input  logic [DimWidth-1:0] tensor_size_m_i,
