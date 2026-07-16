@@ -235,11 +235,15 @@ $(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
 	$(PEAKRDL) html $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_desc64_reg
 
 # C header
-$(IDMA_SW_DIR)/idma_reg%d_regs.h:
-	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
+$(IDMA_SW_DIR)/idma_reg%d_regs.h :
+	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -i -o $@ \
 	  -P SysAddrWidth=$(call regwidth,$*) \
 	  -P NumDims=$(call dimension,$*) \
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+
+$(IDMA_SW_DIR)/idma_reg%d_regs_unpacked.h : $(IDMA_SW_DIR)/idma_reg%d_regs.h
+# with `packed` structs, the compiler may get confused and generate byte loads/stores to access fields.
+	sed -e "s/__attribute__ ((__packed__)) //" $^ > $@
 
 
 $(IDMA_SW_DIR)/idma_reg%d_raw_regs.h:
@@ -265,6 +269,7 @@ IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_re
 
 # C headers
 IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_regs.h)
+IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_regs_unpacked.h)
 
 # C headers with the "raw-header" plugin
 IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_raw_regs.h)
@@ -591,7 +596,7 @@ idma_nuke: idma_clean idma_nonfree_clean
 	rm -rf .bender
 
 idma_sw_clean:
-	rm -rf IDMA_SW_DIR/*.h
+	rm -rf $(IDMA_SW_DIR)/*.h
 
 
 # --------------
