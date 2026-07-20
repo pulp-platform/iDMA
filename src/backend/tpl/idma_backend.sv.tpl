@@ -873,10 +873,16 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
 % endif
     end else begin : gen_r_aw_bypass
 % if combined_aw_and_w:
+    % if enable_compute:
+        // combined aw+w read-meta buffer; deepened for the compute engine tile read-ahead (cf. i_w_dp_req)
+        stream_fifo_optimal_wrap #(
+            .Depth        ( NumAxInFlight + ComputeFifoDepth ),
+    % else:
         // Atleast one write protocol uses combined aw and w -> Need to buffer read meta requests
         // As a write could depend on up to two reads
         stream_fifo_optimal_wrap #(
             .Depth        ( 2                    ),
+    % endif
             .type_t       (\
     % if one_write_port:
  write_meta_channel_t ),

@@ -231,7 +231,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
-% if one_write_port:
+% if one_write_port or enable_compute:
     logic                  w_beat_done;
 % endif
 
@@ -489,6 +489,22 @@ ${rendered_read_ports[read_port]}
         endcase
     end
 
+% if enable_compute:
+    // route the active write port's beat-done to the compute engine retire
+    always_comb begin : gen_write_beat_done_mux
+        case(w_dp_req_i.dst_protocol)
+% for wp in used_write_protocols:
+    % if wp in ('axi', 'obi') and mh_format['aw'][wp] == '':
+        idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done;
+    % elif wp in ('axi', 'obi'):
+        idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done [w_dp_req_i.dst_head];
+    % endif
+% endfor
+        default: w_beat_done = 1'b0;
+        endcase
+    end
+
+% endif
 % endif
     //--------------------------------------
     // Write Ports

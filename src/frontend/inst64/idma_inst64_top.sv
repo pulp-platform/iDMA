@@ -22,6 +22,7 @@ module idma_inst64_top #(
     parameter int unsigned NumChannels     = 32'd1,
     parameter bit          TCDMAliasEnable = 1'b0,
     parameter int unsigned DMATracing      = 32'd0,
+    parameter idma_pkg::compute_enable_t ComputeEnable = '0,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -70,7 +71,7 @@ module idma_inst64_top #(
     localparam int unsigned TfIdWidth    = 32'd32;
     localparam int unsigned TFLenWidth   = AxiAddrWidth;
     localparam int unsigned RepWidth     = 32'd32;
-    localparam int unsigned NumDim       = 32'd2;
+    localparam int unsigned NumDim       = ComputeEnable.transpose ? 32'd4 : 32'd2;
     localparam int unsigned BufferDepth  = 32'd3;
     localparam int unsigned NumRules     = 32'd5;
     localparam int unsigned AwInFlightCntWidth = (NumAxInFlight < 2) ? 32'd1 : $clog2(NumAxInFlight + 1);
@@ -179,6 +180,7 @@ module idma_inst64_top #(
     logic [1:0] idma_fe_status;
     logic [2:0] idma_fe_sel_chan;
     logic       idma_fe_twod;
+    logic       idma_fe_tp_reject;
 
     // busy signals
     idma_pkg::idma_busy_t [NumChannels-1:0] idma_busy;
@@ -361,7 +363,7 @@ module idma_inst64_top #(
             .idma_req_t    ( idma_req_t    ),
             .idma_rsp_t    ( idma_rsp_t    ),
             .idma_nd_req_t ( idma_nd_req_t ),
-            .RepWidths     ( RepWidth      )
+            .RepWidths     ( {NumDim{RepWidth}} )
         ) i_idma_nd_midend (
             .clk_i,
             .rst_ni,
@@ -380,6 +382,31 @@ module idma_inst64_top #(
             .busy_o            ( idma_nd_busy      [c] )
         );
 
+        // FIFO output, before transpose expansion
+        idma_nd_req_t fifo_nd_req;
+        logic         fifo_nd_valid, fifo_nd_ready;
+
+        // expand a transpose into the engine's tiled walk; padded leading dim MP = ceil(M/NE)*NE
+        if (ComputeEnable.transpose) begin : gen_transpose
+            idma_transpose_midend #(
+                .NumDim        ( NumDim        ),
+                .StrbWidth     ( StrbWidth     ),
+                .addr_t        ( addr_t        ),
+                .idma_nd_req_t ( idma_nd_req_t )
+            ) i_idma_transpose_midend (
+                .nd_req_i ( fifo_nd_req           ),
+                .valid_i  ( fifo_nd_valid         ),
+                .ready_o  ( fifo_nd_ready         ),
+                .nd_req_o ( idma_nd_req       [c] ),
+                .valid_o  ( idma_nd_req_valid [c] ),
+                .ready_i  ( idma_nd_req_ready [c] )
+            );
+        end else begin : gen_no_transpose
+            assign idma_nd_req       [c] = fifo_nd_req;
+            assign idma_nd_req_valid [c] = fifo_nd_valid;
+            assign fifo_nd_ready         = idma_nd_req_ready [c];
+        end
+
         stream_fifo_optimal_wrap #(
             .Depth     ( DMAReqFifoDepth ),
             .type_t    ( idma_nd_req_t   ),
@@ -393,9 +420,9 @@ module idma_inst64_top #(
             .data_i     ( idma_fe_req           ),
             .valid_i    ( idma_fe_req_valid [c] ),
             .ready_o    ( idma_fe_req_ready [c] ),
-            .data_o     ( idma_nd_req       [c] ),
-            .valid_o    ( idma_nd_req_valid [c] ),
-            .ready_i    ( idma_nd_req_ready [c] )
+            .data_o     ( fifo_nd_req           ),
+            .valid_o    ( fifo_nd_valid         ),
+            .ready_i    ( fifo_nd_ready         )
         );
     end
 
@@ -536,10 +563,12 @@ module idma_inst64_top #(
         idma_fe_req_d.burst_req.opt.beo.src_reduce_len = 1'b0;
         idma_fe_req_d.burst_req.opt.beo.dst_reduce_len = 1'b0;
         idma_fe_req_d.burst_req.opt.last               = 1'b0;
+        idma_fe_req_d.burst_req.opt.compute            = '0;
 
         // frontend config
         idma_fe_cfg      = '0;
         idma_fe_status   = '0;
+        idma_fe_tp_reject = 1'b0;
         idma_fe_sel_chan = '0;
 
         // default handshaking
@@ -590,6 +619,30 @@ module idma_inst64_top #(
                         idma_inst64_snitch_pkg::DMCPY : begin
                             idma_fe_cfg      = acc_req_i.data_argb[1:0];
                             idma_fe_sel_chan = acc_req_i.data_argb[4:2];
+                            // transpose: argb = {enable, mode, tensor_m, tensor_n}
+                            if (ComputeEnable.transpose && acc_req_i.data_argb[5]) begin
+                                idma_fe_req_d.burst_req.opt.compute.enable = 1'b1;
+                                idma_fe_req_d.burst_req.opt.compute.op     =
+                                    idma_pkg::COMPUTE_TRANSPOSE;
+                                idma_fe_req_d.burst_req.opt.compute.params.transpose.mode     =
+                                    acc_req_i.data_argb[7:6];
+                                idma_fe_req_d.burst_req.opt.compute.params.transpose.tensor_m =
+                                    acc_req_i.data_argb[19:8];
+                                idma_fe_req_d.burst_req.opt.compute.params.transpose.tensor_n =
+                                    acc_req_i.data_argb[31:20];
+                            end
+                            // reject bad transpose: off, mode 3, zero dim, twod, unaligned
+                            if (acc_req_i.data_argb[5]) begin
+                                idma_fe_tp_reject = !ComputeEnable.transpose
+                                    | (acc_req_i.data_argb[7:6] == 2'd3)
+                                    | (acc_req_i.data_argb[19:8] == '0)
+                                    | (acc_req_i.data_argb[31:20] == '0)
+                                    | acc_req_i.data_argb[1]
+                                    | (|(idma_fe_req_d.burst_req.src_addr
+                                         & addr_t'((32'd1 << acc_req_i.data_argb[7:6]) - 32'd1)))
+                                    | (|(idma_fe_req_d.burst_req.dst_addr
+                                         & addr_t'((32'd1 << acc_req_i.data_argb[7:6]) - 32'd1)));
+                            end
                         end
                         default:;
                     endcase
@@ -605,7 +658,15 @@ module idma_inst64_top #(
                     // 3. wait for twod transfer to be accepted (ready)
                     // 4. send acc response (pvalid)
                     // 5. acknowledge acc request (qready)
-                    if (acc_res_ready) begin
+                    // DMCPY launch; transpose requests reject malformed configs
+                    if (idma_fe_tp_reject) begin
+                        // error response; the transfer is not launched
+                        if (acc_res_ready) begin
+                            acc_res.id      = acc_req_i.id;
+                            acc_res_valid   = 1'b1;
+                            acc_req_ready_o = 1'b1;
+                        end
+                    end else if (acc_res_ready) begin
                         idma_fe_req_valid[idma_fe_sel_chan] = 1'b1;
                         if (idma_fe_req_ready[idma_fe_sel_chan]) begin
                             acc_res.id      = acc_req_i.id;
@@ -767,6 +828,12 @@ module idma_inst64_top #(
         if (!idma_fe_twod) begin
             idma_fe_req.d_req[0].reps = 'd1;
         end
+        // keep higher dims inert for plain requests (the transpose expander overwrites them)
+        for (int d = 1; d <= NumDim-2; d++) begin
+            idma_fe_req.d_req[d].reps        = 'd1;
+            idma_fe_req.d_req[d].src_strides = '0;
+            idma_fe_req.d_req[d].dst_strides = '0;
+        end
     end
 
     //--------------------------------------
@@ -780,6 +847,15 @@ module idma_inst64_top #(
     //--------------------------------------
     // only activate tracer if requested
 `ifndef SYNTHESIS
+    initial assert (idma_pkg::TransposeDimWidth == 32'd12) else
+        $fatal(1, "DMCPY argb transpose packing requires TransposeDimWidth == 12");
+`ifndef VERILATOR
+    // a transpose-enabled frontend needs the engine baked into the backend
+    if (ComputeEnable.transpose) begin : gen_compute_check
+        initial assert (gen_backend[0].i_idma_backend_rw_axi_rw_init_rw_obi.ComputeEnable.transpose)
+            else $fatal(1, "transpose frontend needs the engine backend (IDMA_VIDMA_IDS)");
+    end
+`endif
     if (DMATracing) begin : gen_tracer
         for (genvar c = 0; c < NumChannels; c++) begin : gen_channels
             // derive the name of the trace file from the hart and channel IDs
