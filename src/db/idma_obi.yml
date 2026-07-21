@@ -63,6 +63,7 @@ legalizer_write_meta_channel: |
         a_optional: '0
     };
 read_template: |
+    if (ObiUseRReady) begin : gen_obi_read${mh}
     idma_obi_read #(
         .StrbWidth        ( StrbWidth           ),
         .byte_t           ( byte_t              ),
@@ -90,7 +91,64 @@ read_template: |
         .buffer_in_valid_o ( ${buffer_in_valid} ),
         .buffer_in_ready_i ( buffer_in_ready )
     );
+    end else begin : gen_obi_read_rready_conv${mh}
+    // Insert a response converter so the OBI subordinate is never back-pressured
+    typedef type(${read_request}.a) obi_read_a_chan_t;
+    typedef type(${read_response}.r) obi_read_r_chan_t;
+    ${req_t} obi_read_req_conv;
+    ${rsp_t} obi_read_rsp_conv;
+    idma_obi_read #(
+        .StrbWidth        ( StrbWidth           ),
+        .byte_t           ( byte_t              ),
+        .strb_t           ( strb_t              ),
+        .r_dp_req_t       ( r_dp_req_t          ),
+        .r_dp_rsp_t       ( r_dp_rsp_t          ),
+        .read_meta_chan_t ( read_meta_channel_t ),
+        .read_req_t       ( ${req_t}           ),
+        .read_rsp_t       ( ${rsp_t}           )
+    ) i_idma_obi_read${mh} (
+        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_valid_i      ( ${r_dp_valid_i} ),
+        .r_dp_ready_o      ( ${r_dp_ready_o} ),
+        .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
+        .r_dp_valid_o      ( ${r_dp_valid_o} ),
+        .r_dp_ready_i      ( ${r_dp_ready_i} ),
+        .read_meta_req_i   ( ${read_meta_request} ),
+        .read_meta_valid_i ( ${read_meta_valid} ),
+        .read_meta_ready_o ( ${read_meta_ready} ),
+        .read_req_o        ( obi_read_req_conv ),
+        .read_rsp_i        ( obi_read_rsp_conv ),
+        .r_chan_valid_o    ( ${r_chan_valid} ),
+        .r_chan_ready_o    ( ${r_chan_ready} ),
+        .buffer_in_o       ( ${buffer_in} ),
+        .buffer_in_valid_o ( ${buffer_in_valid} ),
+        .buffer_in_ready_i ( buffer_in_ready )
+    );
+    obi_rready_converter #(
+        .obi_a_chan_t ( obi_read_a_chan_t ),
+        .obi_r_chan_t ( obi_read_r_chan_t ),
+        .Depth        ( NumAxInFlight     ),
+        .CombRspReq   ( 1'b0              )
+    ) i_obi_read_rready_converter${mh} (
+        .clk_i        ( clk_i      ),
+        .rst_ni       ( rst_ni     ),
+        .test_mode_i  ( testmode_i ),
+        .sbr_a_chan_i ( obi_read_req_conv.a      ),
+        .req_i        ( obi_read_req_conv.req    ),
+        .gnt_o        ( obi_read_rsp_conv.gnt    ),
+        .sbr_r_chan_o ( obi_read_rsp_conv.r      ),
+        .rvalid_o     ( obi_read_rsp_conv.rvalid ),
+        .rready_i     ( obi_read_req_conv.rready ),
+        .mgr_a_chan_o ( ${read_request}.a        ),
+        .req_o        ( ${read_request}.req      ),
+        .gnt_i        ( ${read_response}.gnt     ),
+        .mgr_r_chan_i ( ${read_response}.r       ),
+        .rvalid_i     ( ${read_response}.rvalid  )
+    );
+    assign ${read_request}.rready = 1'b1;
+    end
 write_template: |
+    if (ObiUseRReady) begin : gen_obi_write${mh}
     idma_obi_write #(
         .StrbWidth            ( StrbWidth            ),
         .MaskInvalidData      ( MaskInvalidData      ),
@@ -119,6 +177,63 @@ write_template: |
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} )
     );
+    end else begin : gen_obi_write_rready_conv${mh}
+    // Insert a response converter so the OBI subordinate is never back-pressured
+    typedef type(${write_request}.a) obi_write_a_chan_t;
+    typedef type(${write_response}.r) obi_write_r_chan_t;
+    ${req_t} obi_write_req_conv;
+    ${rsp_t} obi_write_rsp_conv;
+    idma_obi_write #(
+        .StrbWidth            ( StrbWidth            ),
+        .MaskInvalidData      ( MaskInvalidData      ),
+        .byte_t               ( byte_t               ),
+        .data_t               ( data_t               ),
+        .strb_t               ( strb_t               ),
+        .w_dp_req_t           ( w_dp_req_t           ),
+        .w_dp_rsp_t           ( w_dp_rsp_t           ),
+        .write_meta_channel_t ( write_meta_channel_t ),
+        .write_req_t          ( ${req_t}            ),
+        .write_rsp_t          ( ${rsp_t}            )
+    ) i_idma_obi_write${mh} (
+        .w_dp_req_i         ( w_dp_req_i ),
+        .w_dp_valid_i       ( ${w_dp_valid_i} ),
+        .w_dp_ready_o       ( ${w_dp_ready_o} ),
+        .dp_poison_i        ( dp_poison_i ),
+        .w_dp_rsp_o         ( ${w_dp_rsp_o} ),
+        .w_dp_valid_o       ( ${w_dp_valid_o} ),
+        .w_dp_ready_i       ( ${w_dp_ready_i} ),
+        .aw_req_i           ( ${write_meta_request} ),
+        .aw_valid_i         ( ${write_meta_valid} ),
+        .aw_ready_o         ( ${write_meta_ready}  ),
+        .write_req_o        ( obi_write_req_conv ),
+        .write_rsp_i        ( obi_write_rsp_conv ),
+        .buffer_out_i       ( buffer_out_shifted ),
+        .buffer_out_valid_i ( buffer_out_valid_shifted ),
+        .buffer_out_ready_o ( ${buffer_out_ready} )
+    );
+    obi_rready_converter #(
+        .obi_a_chan_t ( obi_write_a_chan_t ),
+        .obi_r_chan_t ( obi_write_r_chan_t ),
+        .Depth        ( NumAxInFlight      ),
+        .CombRspReq   ( 1'b0               )
+    ) i_obi_write_rready_converter${mh} (
+        .clk_i        ( clk_i      ),
+        .rst_ni       ( rst_ni     ),
+        .test_mode_i  ( testmode_i ),
+        .sbr_a_chan_i ( obi_write_req_conv.a      ),
+        .req_i        ( obi_write_req_conv.req    ),
+        .gnt_o        ( obi_write_rsp_conv.gnt    ),
+        .sbr_r_chan_o ( obi_write_rsp_conv.r      ),
+        .rvalid_o     ( obi_write_rsp_conv.rvalid ),
+        .rready_i     ( obi_write_req_conv.rready ),
+        .mgr_a_chan_o ( ${write_request}.a        ),
+        .req_o        ( ${write_request}.req      ),
+        .gnt_i        ( ${write_response}.gnt     ),
+        .mgr_r_chan_i ( ${write_response}.r       ),
+        .rvalid_i     ( ${write_response}.rvalid  )
+    );
+    assign ${write_request}.rready = 1'b1;
+    end
 synth_wrapper_ports_write: |
     output logic                   obi_write_req_a_req_o,
     output addr_t                  obi_write_req_a_addr_o,

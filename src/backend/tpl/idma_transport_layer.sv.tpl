@@ -21,6 +21,10 @@ module idma_transport_layer_${name_uniqueifier} #(
     parameter int unsigned BufferDepth = 32'd3,
     /// Mask invalid data on the manager interface
     parameter bit MaskInvalidData = 1'b1,
+% if 'obi' in used_protocols:
+    /// Set to `0` if the OBI bus has no `rready`; inserts a response converter
+    parameter bit ObiUseRReady = 1'b1,
+% endif
     /// Print the info of the FIFO configuration
     parameter bit PrintFifoInfo = 1'b0,
     /// `r_dp_req_t` type:
