@@ -172,8 +172,8 @@ addrmap idma_reg #(
             desc = "Transpose tensor N dimension in elements. Must be non-zero when transpose is enabled.";
         } transpose_tensor_n [30:19] = 0;
         field {
-            desc = "Reserved.";
-        } reserved [31:31] = 0;
+            desc = "Use compact row-major output storage. When clear, transpose uses the legacy tile-padded layout.";
+        } transpose_compact [31:31] = 0;
     };
 
     regfile dim {

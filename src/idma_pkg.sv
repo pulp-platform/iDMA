@@ -90,10 +90,21 @@ package idma_pkg;
     /// Transpose tensor dimension width (elements)
     localparam int unsigned TransposeDimWidth = 32'd12;
 
-    /// Transpose options (E = 1<<mode: 1/2/4 B)
+    /// Transpose options.
+    ///
+    /// `E` denotes the width of one matrix element in bytes. The encoded
+    /// element width is `E = 1 << mode`, selecting 1, 2, 4, or 8 byte
+    /// elements. A transpose tile therefore contains `StrbWidth / E`
+    /// elements along each side, where `StrbWidth` is the datapath width in
+    /// bytes.
     typedef struct packed {
+        /// Store output rows without tile padding.
+        logic                         compact;
+        /// Base-2 logarithm of the element width in bytes (`E = 1 << mode`).
         logic [1:0]                   mode;
+        /// Number of rows in the source matrix, measured in elements.
         logic [TransposeDimWidth-1:0] tensor_m;
+        /// Number of columns in the source matrix, measured in elements.
         logic [TransposeDimWidth-1:0] tensor_n;
     } transpose_options_t;
 

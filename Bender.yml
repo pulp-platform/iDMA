@@ -68,6 +68,7 @@ sources:
       - src/midend/idma_nd_midend.sv
       - src/midend/idma_rt_midend.sv
       - src/midend/idma_transpose_midend.sv
+      - src/midend/idma_transpose_req_replay.sv
 
   # RISC-V opcode package for ooc use of inst64
   - target: all(rtl,snitch_cluster)

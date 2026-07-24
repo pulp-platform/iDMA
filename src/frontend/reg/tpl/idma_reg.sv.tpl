@@ -254,6 +254,9 @@ module idma_${identifier} #(
           dma_reg2hw[i].compute_cfg.transpose_tensor_m.value;
       nxt_dma_req${sep}opt.compute.params.transpose.tensor_n =
           dma_reg2hw[i].compute_cfg.transpose_tensor_n.value;
+      // Compact mode removes tile padding from destination rows.
+      nxt_dma_req${sep}opt.compute.params.transpose.compact  =
+          dma_reg2hw[i].compute_cfg.transpose_compact.value;
 
 % if num_dim != 1:
       // ND connections
