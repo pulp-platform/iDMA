@@ -41,6 +41,16 @@ module tb_idma_otf_transpose #(
   logic [StrbWidth-1:0]      dout_strb;
   logic                      dout_valid, dout_ready;
 
+  // The stream driver and monitor share a clocking block so neither can race
+  // sequential DUT logic when changing valid/ready or sampling a transferred beat.
+  clocking stream_cb @(posedge clk);
+    default input #1step output #0;
+    input din_ready;
+    output din_data, din_valid;
+    input dout_data, dout_strb, dout_valid;
+    output dout_ready;
+  endclocking
+
   idma_otf_transpose #(
     .StrbWidth  (StrbWidth),
     .FullDuplex (FullDuplex)
@@ -67,36 +77,48 @@ module tb_idma_otf_transpose #(
 
   task automatic drive_inputs(input int unsigned m, n, eb, ne, yt, nt);
     int unsigned beat = 0;
-    din_valid = 1'b0; din_data = '0;
-    @(posedge clk);
+    logic [StrbWidth-1:0][7:0] beat_data;
+    @(stream_cb);
+    stream_cb.din_valid <= 1'b0;
+    stream_cb.din_data <= '0;
     for (int unsigned ct = 0; ct < nt; ct++)
       for (int unsigned rt = 0; rt < yt; rt++)
         for (int unsigned row = 0; row < ne; row++) begin
-          if (backpressure) begin din_valid = 1'b0; repeat (beat % 3) @(posedge clk); end
+          if (backpressure) begin
+            stream_cb.din_valid <= 1'b0;
+            repeat (beat % 3) @(stream_cb);
+          end
+          beat_data = '0;
           for (int unsigned c = 0; c < ne; c++) begin
             automatic int unsigned gr = rt*ne + row;
             automatic int unsigned gc = ct*ne + c;
             for (int unsigned b = 0; b < eb; b++)
-              din_data[c*eb + b] = (gr < m && gc < n) ? inb[(gr*n + gc)*eb + b] : PAD;
+              beat_data[c*eb + b] = (gr < m && gc < n) ? inb[(gr*n + gc)*eb + b] : PAD;
           end
-          din_valid = 1'b1;
-          do @(posedge clk); while (!din_ready);
+          stream_cb.din_data <= beat_data;
+          stream_cb.din_valid <= 1'b1;
+          do @(stream_cb); while (!stream_cb.din_ready);
           beat++;
         end
-    din_valid = 1'b0;
+    stream_cb.din_valid <= 1'b0;
+    stream_cb.din_data <= '0;
   endtask
 
   task automatic capture_outputs(input int unsigned m, n, eb, ne, yt, nt);
     int unsigned beat = 0;
-    dout_ready = 1'b0;
+    @(stream_cb);
+    stream_cb.dout_ready <= 1'b0;
     for (int unsigned ct = 0; ct < nt; ct++)
       for (int unsigned rt = 0; rt < yt; rt++)
         for (int unsigned k = 0; k < ne; k++) begin
-          if (backpressure) begin dout_ready = 1'b0; repeat (beat % 4) @(posedge clk); end
-          dout_ready = 1'b1;
-          do @(posedge clk); while (!dout_valid);
+          if (backpressure) begin
+            stream_cb.dout_ready <= 1'b0;
+            repeat (beat % 4) @(stream_cb);
+          end
+          stream_cb.dout_ready <= 1'b1;
+          do @(stream_cb); while (!stream_cb.dout_valid);
           for (int unsigned e = 0; e < ne; e++) begin
-            if (dout_strb[e*eb]) begin     // element e valid (element-granular mask)
+            if (stream_cb.dout_strb[e*eb]) begin // element e valid (element-granular mask)
               automatic int unsigned tr = ct*ne + k;   // transposed row (= original col, 0..n-1)
               automatic int unsigned tc = rt*ne + e;   // transposed col (= original row, 0..m-1)
               if (tr >= n || tc >= m) begin
@@ -105,9 +127,11 @@ module tb_idma_otf_transpose #(
               end else begin
                 for (int unsigned b = 0; b < eb; b++) begin
                   automatic int gold = gm_get((tr*m + tc)*eb + b);
-                  if (int'(dout_data[e*eb + b]) !== gold) begin
+                  if (int'(stream_cb.dout_data[e*eb + b]) !== gold) begin
                     errors++;
-                    if (errors <= 16) $display("MISMATCH T(%0d,%0d).b%0d=%0d golden=%0d", tr, tc, b, dout_data[e*eb+b], gold);
+                    if (errors <= 16)
+                      $display("MISMATCH T(%0d,%0d).b%0d=%0d golden=%0d",
+                               tr, tc, b, stream_cb.dout_data[e*eb+b], gold);
                   end
                 end
                 wrote[tr*m + tc] = 1'b1;
@@ -116,8 +140,7 @@ module tb_idma_otf_transpose #(
           end
           beat++;
         end
-    @(posedge clk);
-    dout_ready = 1'b0;
+    stream_cb.dout_ready <= 1'b0;
   endtask
 
   // Run one m x n transpose of eb-byte elements; returns the mismatch count.

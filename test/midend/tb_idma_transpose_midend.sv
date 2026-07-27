@@ -8,9 +8,9 @@
 `include "idma/typedef.svh"
 
 /// Unit check for idma_transpose_midend: the expanded NumDim=4 ND request must
-/// match the golden geometry that tb_idma_transpose_nd hand-builds, and a
-/// non-transpose request must pass through unchanged. Sweeps a geometry list
-/// internally (one elaboration per bus width).
+/// match the golden compact and tile-padded geometries, and a non-transpose
+/// request must pass through unchanged. Sweeps a geometry list internally
+/// (one elaboration per bus width).
 module tb_idma_transpose_midend #(
   parameter int unsigned DataWidth = 512,
   parameter int unsigned AddrWidth = 64
@@ -54,18 +54,21 @@ module tb_idma_transpose_midend #(
     end
   endtask
 
-  // Check the expanded geometry for one m x n transpose of eb-byte elements.
-  task automatic chk_geom(input int unsigned m, input int unsigned n, input int unsigned eb);
+  // Check both compact and tile-padded expansion for one transpose geometry.
+  task automatic chk_geom(input int unsigned m, input int unsigned n, input int unsigned eb,
+                          input bit compact);
     automatic int unsigned ne   = StrbWidth/eb;
     automatic int unsigned mode = (eb==4) ? 2 : (eb==2) ? 1 : 0;
     automatic int unsigned yt   = (m + ne - 1)/ne;
     automatic int unsigned nt   = (n + ne - 1)/ne;
     automatic int unsigned mp   = yt*ne;
+    automatic int unsigned dp   = compact ? m : mp;
     nd_in = '0;
     nd_in.burst_req.src_addr = 64'h1000;
     nd_in.burst_req.dst_addr = 64'h2000;
     nd_in.burst_req.opt.compute.enable                    = 1'b1;
     nd_in.burst_req.opt.compute.op                        = COMPUTE_TRANSPOSE;
+    nd_in.burst_req.opt.compute.params.transpose.compact  = compact;
     nd_in.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
     nd_in.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
     nd_in.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
@@ -74,19 +77,20 @@ module tb_idma_transpose_midend #(
     chk("length",  nd_out.burst_req.length,     ne*eb);
     chk("d0.reps", nd_out.d_req[0].reps,        ne);
     chk("d0.src",  nd_out.d_req[0].src_strides, addr_t'(n*eb));
-    chk("d0.dst",  nd_out.d_req[0].dst_strides, addr_t'(mp*eb));
+    chk("d0.dst",  nd_out.d_req[0].dst_strides, addr_t'(dp*eb));
     chk("d1.reps", nd_out.d_req[1].reps,        yt);
     chk("d1.src",  nd_out.d_req[1].src_strides, addr_t'(n*eb));
-    chk("d1.dst",  nd_out.d_req[1].dst_strides, addr_t'(int'(ne*eb) - int'((ne-1)*mp*eb)));
+    chk("d1.dst",  nd_out.d_req[1].dst_strides, addr_t'(int'(ne*eb) - int'((ne-1)*dp*eb)));
     chk("d2.reps", nd_out.d_req[2].reps,        nt);
     chk("d2.src",  nd_out.d_req[2].src_strides, addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb)));
-    chk("d2.dst",  nd_out.d_req[2].dst_strides, addr_t'(int'(mp*eb) - int'((yt-1)*ne*eb)));
+    chk("d2.dst",  nd_out.d_req[2].dst_strides, addr_t'(int'(dp*eb) - int'((yt-1)*ne*eb)));
     // addresses + compute must survive untouched
     chk("src_addr", nd_out.burst_req.src_addr, 64'h1000);
     chk("dst_addr", nd_out.burst_req.dst_addr, 64'h2000);
     chk("cmp_en",   nd_out.burst_req.opt.compute.enable, 1);
-    if (errs == 0) $display("[MID] PASS: %0dx%0d EB=%0d golden (NE=%0d YT=%0d NT=%0d MP=%0d)",
-                            m, n, eb, ne, yt, nt, mp);
+    if (errs == 0)
+      $display("[MID] PASS: %0dx%0d EB=%0d compact=%0d (NE=%0d YT=%0d NT=%0d DP=%0d)",
+               m, n, eb, compact, ne, yt, nt, dp);
   endtask
 
   initial begin
@@ -104,10 +108,12 @@ module tb_idma_transpose_midend #(
     // --- transpose cases ---
     for (int unsigned k = 0; k < NCases; k++) begin
       if (Cases[k][2] > StrbWidth) continue;   // element must fit the bus
-      chk_geom(Cases[k][0], Cases[k][1], Cases[k][2]);
+      chk_geom(Cases[k][0], Cases[k][1], Cases[k][2], 1'b0);
+      chk_geom(Cases[k][0], Cases[k][1], Cases[k][2], 1'b1);
     end
 
-    if (errs == 0) $display("[MID] ALL PASS (%0d cases, StrbWidth=%0d)", NCases, StrbWidth);
+    if (errs == 0) $display("[MID] ALL PASS (%0d geometries x 2 layouts, StrbWidth=%0d)",
+                            NCases, StrbWidth);
     else           $fatal(1, "[MID] FAIL: %0d mismatches", errs);
     $finish;
   end

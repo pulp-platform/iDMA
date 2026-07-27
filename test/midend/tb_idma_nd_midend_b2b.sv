@@ -47,6 +47,12 @@ module tb_idma_nd_midend_b2b;
 
   clk_rst_gen #(.ClkPeriod(TCK), .RstClkCycles(1)) i_clk_rst_gen (.clk_o(clk), .rst_no(rst_n));
 
+  clocking req_cb @(posedge clk);
+    default input #1step output #0;
+    input nd_req_ready;
+    output nd_req, nd_req_valid;
+  endclocking
+
   idma_nd_midend #(
     .NumDim(NumDim), .addr_t(addr_t), .idma_req_t(idma_req_t),
     .idma_rsp_t(idma_rsp_t), .idma_nd_req_t(idma_nd_req_t), .RepWidths(RepWidths)
@@ -101,23 +107,24 @@ module tb_idma_nd_midend_b2b;
     repeat (3) @(posedge clk);
 
     // ── transfer 1 ──
-    nd_req = mk_req(S1, D1); nd_req_valid = 1'b1;
-    @(posedge clk);
-    while (!nd_req_ready) @(posedge clk);
-    // ── transfer 2 : BACK-TO-BACK (keep valid high, swap payload the cycle after accept) ──
-    nd_req = mk_req(S2, D2);
-    @(posedge clk);
-    while (!nd_req_ready) @(posedge clk);
-    nd_req_valid = 1'b0;
-    nd_req = '0;
+    @(req_cb);
+    req_cb.nd_req <= mk_req(S1, D1);
+    req_cb.nd_req_valid <= 1'b1;
+    do @(req_cb); while (!req_cb.nd_req_ready);
+    // ── transfer 2: keep valid high and replace the payload after T1's accept ──
+    req_cb.nd_req <= mk_req(S2, D2);
+    do @(req_cb); while (!req_cb.nd_req_ready);
+    req_cb.nd_req_valid <= 1'b0;
+    req_cb.nd_req <= '0;
     // ── idle gap ──
-    repeat (5) @(posedge clk);
+    repeat (5) @(req_cb);
     // ── transfer 3 : after the gap ──
-    nd_req = mk_req(S3, D3); nd_req_valid = 1'b1;
-    @(posedge clk);
-    while (!nd_req_ready) @(posedge clk);
-    nd_req_valid = 1'b0;
-    repeat (3) @(posedge clk);
+    req_cb.nd_req <= mk_req(S3, D3);
+    req_cb.nd_req_valid <= 1'b1;
+    do @(req_cb); while (!req_cb.nd_req_ready);
+    req_cb.nd_req_valid <= 1'b0;
+    req_cb.nd_req <= '0;
+    repeat (3) @(req_cb);
 
     // ── checks ──
     if (cap_src.size() != 3*NB)

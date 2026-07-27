@@ -500,31 +500,8 @@ idma_vcs_clean:
 # Verilator
 # --------------
 
-.PHONY: idma_verilator_clean
-
-IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
-IDMA_VLT_ARGS  := --cc \
-				  --Wall \
-				  --Wno-fatal \
-				  +1800-2017ext+ \
-				  --assert \
-				  --error-limit 1000 \
-				  --hierarchical \
-				  --no-skip-identical
-
-IDMA_VLT_TOP     ?=
-IDMA_VLT_PARAMS  ?=
-
-.PRECIOUS: $(IDMA_VLT_DIR)/%_elab.log
-
-$(IDMA_VLT_DIR)/%_elab.log: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
-	mkdir -p $(IDMA_VLT_DIR)
-	# We need a dedicated pickle here to set the defines
-	$(BENDER) pickle $(IDMA_PICKLE_TARGETS) --top $(IDMA_VLT_TOP) -D VERILATOR --expand-macros -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv
-	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
-
-idma_verilator_clean:
-	rm -rf $(IDMA_VLT_DIR)
+include $(IDMA_ROOT)/target/sim/vlt/testbenches.mk
+include $(IDMA_ROOT)/target/sim/vlt/vlt.mk
 
 
 # ---------------

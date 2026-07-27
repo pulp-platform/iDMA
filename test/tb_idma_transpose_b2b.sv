@@ -5,10 +5,10 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// End-to-end back-to-back transpose regression: per geometry, two transposes of
-// one source to DIFFERENT dst bases through the ND midend -> rw_axi backend ->
-// axi_sim_mem. A stale base across transfers would leave the second dst
-// untouched. Sweeps a geometry list internally (one run per bus width).
+// End-to-end back-to-back transpose regression: per geometry, two transposes
+// with different layout modes and destination bases pass through the transpose
+// and ND midends, safe edge replay, rw_axi backend, and axi_sim_mem. This catches
+// stale base addresses as well as stale compact/padded configuration.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -58,10 +58,12 @@ module tb_idma_transpose_b2b
   typedef struct packed { axi_write_meta_channel_t axi; } write_meta_channel_t;
 
   logic clk, rst_n;
-  idma_req_t   idma_req;   logic req_valid, req_ready;
+  idma_req_t   nd_burst_req, idma_req;
+  logic        nd_burst_valid, nd_burst_ready, req_valid, req_ready;
   idma_rsp_t   idma_rsp;   logic rsp_valid, rsp_ready;
   idma_eh_req_t idma_eh_req; logic eh_req_valid, eh_req_ready;
-  idma_nd_req_t nd_req;    logic nd_req_valid, nd_req_ready;
+  idma_nd_req_t transpose_req, nd_req;
+  logic         transpose_req_valid, transpose_req_ready, nd_req_valid, nd_req_ready;
   idma_rsp_t   nd_rsp;     logic nd_rsp_valid, nd_rsp_ready;
   axi_req_t axi_read_req, axi_write_req, axi_req, axi_req_mem;
   axi_rsp_t axi_read_rsp, axi_write_rsp, axi_rsp, axi_rsp_mem;
@@ -71,6 +73,15 @@ module tb_idma_transpose_b2b
   assign eh_req_valid = 1'b0;
 
   clk_rst_gen #(.ClkPeriod(TCK), .RstClkCycles(1)) i_clk_rst_gen (.clk_o(clk), .rst_no(rst_n));
+
+  // Keep testbench drives and samples out of the DUT's active clocking region.
+  clocking req_rsp_cb @(posedge clk);
+    default input #1step output #0;
+    input transpose_req_ready;
+    output transpose_req_valid;
+    output transpose_req;
+    input nd_rsp_valid, nd_rsp_ready;
+  endclocking
 
   axi_rw_join #(.axi_req_t(axi_req_t), .axi_resp_t(axi_rsp_t)) i_axi_rw_join (
     .clk_i(clk), .rst_ni(rst_n),
@@ -93,6 +104,14 @@ module tb_idma_transpose_b2b
     .mon_w_data_o(), .mon_w_addr_o(), .mon_w_valid_o()
   );
 
+  // Convert the matrix dimensions and layout bit into the tiled ND walk.
+  idma_transpose_midend #(
+    .NumDim(NumDim), .StrbWidth(StrbWidth), .addr_t(addr_t), .idma_nd_req_t(idma_nd_req_t)
+  ) i_transpose_midend (
+    .nd_req_i(transpose_req), .valid_i(transpose_req_valid), .ready_o(transpose_req_ready),
+    .nd_req_o(nd_req), .valid_o(nd_req_valid), .ready_i(nd_req_ready)
+  );
+
   idma_nd_midend #(
     .NumDim(NumDim), .addr_t(addr_t), .idma_req_t(idma_req_t),
     .idma_rsp_t(idma_rsp_t), .idma_nd_req_t(idma_nd_req_t), .RepWidths(RepWidths)
@@ -100,9 +119,19 @@ module tb_idma_transpose_b2b
     .clk_i(clk), .rst_ni(rst_n),
     .nd_req_i(nd_req), .nd_req_valid_i(nd_req_valid), .nd_req_ready_o(nd_req_ready),
     .nd_rsp_o(nd_rsp), .nd_rsp_valid_o(nd_rsp_valid), .nd_rsp_ready_i(nd_rsp_ready),
-    .burst_req_o(idma_req), .burst_req_valid_o(req_valid), .burst_req_ready_i(req_ready),
+    .burst_req_o(nd_burst_req), .burst_req_valid_o(nd_burst_valid),
+    .burst_req_ready_i(nd_burst_ready),
     .burst_rsp_i(idma_rsp), .burst_rsp_valid_i(rsp_valid), .burst_rsp_ready_o(rsp_ready),
     .busy_o(nd_busy)
+  );
+
+  // Replay descriptors for nonexistent partial-tile rows before they reach AXI.
+  idma_transpose_req_replay #(
+    .StrbWidth(StrbWidth), .idma_req_t(idma_req_t)
+  ) i_transpose_req_replay (
+    .clk_i(clk), .rst_ni(rst_n),
+    .req_i(nd_burst_req), .valid_i(nd_burst_valid), .ready_o(nd_burst_ready),
+    .req_o(idma_req), .valid_o(req_valid), .ready_i(req_ready)
   );
 
   idma_backend_rw_axi #(
@@ -134,59 +163,72 @@ module tb_idma_transpose_b2b
     return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
   endfunction
 
-  // one m x n transpose of the source at sb -> dst base `db`; returns error count
+  task automatic send_transpose_req(input idma_nd_req_t req);
+    @(req_rsp_cb);
+    req_rsp_cb.transpose_req <= req;
+    req_rsp_cb.transpose_req_valid <= 1'b1;
+    do @(req_rsp_cb); while (!req_rsp_cb.transpose_req_ready);
+    req_rsp_cb.transpose_req <= '0;
+    req_rsp_cb.transpose_req_valid <= 1'b0;
+  endtask
+
+  task automatic wait_nd_rsp;
+    while (!(req_rsp_cb.nd_rsp_valid && req_rsp_cb.nd_rsp_ready)) @(req_rsp_cb);
+  endtask
+
+  // One transpose to `db` in the selected layout; returns its error count.
   task automatic do_transpose(input int unsigned m, input int unsigned n, input int unsigned eb,
-                              input addr_t db, output int unsigned errs);
+                              input bit compact, input addr_t db, output int unsigned errs);
     automatic int unsigned ne   = StrbWidth / eb;
     automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
     automatic int unsigned yt   = (m + ne - 1) / ne;
     automatic int unsigned nt   = (n + ne - 1) / ne;
     automatic int unsigned mp   = yt * ne;
+    automatic int unsigned dp   = compact ? m : mp;
     errs = 0;
-    // pre-fill full padded dst extent with sentinel
+    // Back the padded envelope in both modes. Bytes beyond the compact matrix
+    // become guards against stale strides or nonzero edge writes.
     for (int unsigned i = 0; i < nt*ne; i++)
       for (int unsigned j = 0; j < mp; j++)
         for (int unsigned b = 0; b < eb; b++)
           wr_mem(db + (i*mp + j)*eb + b, 8'hCC);
-    nd_req = '0;
-    nd_req.burst_req.length   = tf_len_t'(ne*eb);
-    nd_req.burst_req.src_addr = sb;
-    nd_req.burst_req.dst_addr = db;
-    nd_req.burst_req.opt.src_protocol = idma_pkg::AXI;
-    nd_req.burst_req.opt.dst_protocol = idma_pkg::AXI;
-    nd_req.burst_req.opt.src.burst    = axi_pkg::BURST_INCR;
-    nd_req.burst_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    nd_req.burst_req.opt.beo.decouple_rw = 1'b1;
-    nd_req.burst_req.opt.beo.decouple_aw = 1'b1;
-    nd_req.burst_req.opt.compute.enable                    = 1'b1;
-    nd_req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;
-    nd_req.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
-    nd_req.burst_req.opt.last         = 1'b1;
-    nd_req.d_req[0].reps = reps_t'(ne); nd_req.d_req[0].src_strides = addr_t'(int'(n*eb));                          nd_req.d_req[0].dst_strides = addr_t'(int'(mp*eb));
-    nd_req.d_req[1].reps = reps_t'(yt); nd_req.d_req[1].src_strides = addr_t'(int'(n*eb));                          nd_req.d_req[1].dst_strides = addr_t'(int'(ne*eb) - int'((ne-1)*mp*eb));
-    nd_req.d_req[2].reps = reps_t'(nt); nd_req.d_req[2].src_strides = addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb));  nd_req.d_req[2].dst_strides = addr_t'(int'(mp*eb) - int'((yt-1)*ne*eb));
-    nd_req_valid = 1'b1;
-    do @(posedge clk); while (!nd_req_ready);   // drop valid the cycle accept is seen (compliant)
-    nd_req_valid = 1'b0;
-    nd_req = '0;
-    while (!(nd_rsp_valid && nd_rsp_ready)) @(posedge clk);
+    transpose_req = '0;
+    transpose_req.burst_req.src_addr = sb;
+    transpose_req.burst_req.dst_addr = db;
+    transpose_req.burst_req.opt.src_protocol = idma_pkg::AXI;
+    transpose_req.burst_req.opt.dst_protocol = idma_pkg::AXI;
+    transpose_req.burst_req.opt.src.burst    = axi_pkg::BURST_INCR;
+    transpose_req.burst_req.opt.dst.burst    = axi_pkg::BURST_INCR;
+    transpose_req.burst_req.opt.beo.decouple_rw = 1'b1;
+    transpose_req.burst_req.opt.beo.decouple_aw = 1'b1;
+    transpose_req.burst_req.opt.compute.enable                    = 1'b1;
+    transpose_req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;
+    transpose_req.burst_req.opt.compute.params.transpose.compact  = compact;
+    transpose_req.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
+    transpose_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
+    transpose_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
+    transpose_req.burst_req.opt.last = 1'b1;
+
+    send_transpose_req(transpose_req);
+    wait_nd_rsp();
     repeat (20) @(posedge clk);
-    // data + padding checks
+    // Check data at either compact or padded destination row pitch.
     for (int unsigned c = 0; c < n; c++)
       for (int unsigned r = 0; r < m; r++)
         for (int unsigned b = 0; b < eb; b++)
-          if (rd_mem(db + (c*mp + r)*eb + b) !== rd_mem(sb + (r*n + c)*eb + b)) begin
+          if (rd_mem(db + (c*dp + r)*eb + b) !== rd_mem(sb + (r*n + c)*eb + b)) begin
             errs++; if (errs <= 8) $display("[B2BT] @db=%0h MISMATCH out_T[%0d][%0d].b%0d", db, c, r, b);
           end
-    for (int unsigned i = 0; i < nt*ne; i++)
-      for (int unsigned j = 0; j < mp; j++)
-        if (i >= n || j >= m)
-          for (int unsigned b = 0; b < eb; b++)
-            if (rd_mem(db + (i*mp + j)*eb + b) !== 8'hCC) begin
-              errs++; if (errs <= 8) $display("[B2BT] @db=%0h PADDING CLOBBERED row=%0d col=%0d", db, i, j);
-            end
+    // Padded holes or the tail after a compact matrix must remain untouched.
+    for (int unsigned byte_idx = 0; byte_idx < nt*ne*mp*eb; byte_idx++)
+      if (byte_idx >= n*dp*eb ||
+          (!compact && ((byte_idx / eb) / mp >= n || (byte_idx / eb) % mp >= m)))
+        if (rd_mem(db + byte_idx) !== 8'hCC) begin
+          errs++;
+          if (errs <= 8)
+            $display("[B2BT] @db=%0h UNUSED DESTINATION BYTE CLOBBERED at +0x%0h",
+                     db, byte_idx);
+        end
   endtask
 
   initial begin
@@ -194,7 +236,8 @@ module tb_idma_transpose_b2b
     automatic addr_t db1 = 'h0000_4000;
     automatic addr_t db2 = 'h0000_8000;   // DIFFERENT base — a stale-addr bug misplaces xfer 2
     automatic int unsigned m, n, eb;
-    nd_req_valid = 1'b0; nd_rsp_ready = 1'b1; nd_req = '0;
+    automatic bit first_compact;
+    transpose_req_valid = 1'b0; nd_rsp_ready = 1'b1; transpose_req = '0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
 
@@ -206,15 +249,21 @@ module tb_idma_transpose_b2b
         for (int unsigned c = 0; c < n; c++)
           for (int unsigned b = 0; b < eb; b++)
             wr_mem(sb + (r*n + c)*eb + b, 8'((( (r*n+c)*eb + b )*7 + 3) & 8'hFF));
-      $display("[B2BT] %0dx%0d EB=%0d: xfer1 -> db=%0h, xfer2 -> db=%0h", m, n, eb, db1, db2);
-      do_transpose(m, n, eb, db1, e1);
-      do_transpose(m, n, eb, db2, e2);   // back-to-back, distinct base
-      if (e1 == 0 && e2 == 0) $display("[B2BT] PASS: %0dx%0d EB=%0d both back-to-back transposes correct", m, n, eb);
+      // Alternate the order so both padded->compact and compact->padded
+      // transitions are covered while retaining distinct destination bases.
+      first_compact = bit'(k & 1);
+      $display("[B2BT] %0dx%0d EB=%0d: compact=%0d -> db=%0h, compact=%0d -> db=%0h",
+               m, n, eb, first_compact, db1, !first_compact, db2);
+      do_transpose(m, n, eb, first_compact, db1, e1);
+      do_transpose(m, n, eb, !first_compact, db2, e2);
+      if (e1 == 0 && e2 == 0)
+        $display("[B2BT] PASS: %0dx%0d EB=%0d both layouts correct back-to-back", m, n, eb);
       else                    $display("[B2BT] FAIL: %0dx%0d EB=%0d xfer1=%0d xfer2=%0d", m, n, eb, e1, e2);
       total += e1 + e2;
     end
 
-    if (total == 0) $display("[B2BT] ALL PASS (%0d cases, StrbWidth=%0d)", NCases, StrbWidth);
+    if (total == 0) $display("[B2BT] ALL PASS (%0d mixed-layout cases, StrbWidth=%0d)",
+                             NCases, StrbWidth);
     else            $fatal(1, "[B2BT] FAIL: %0d total mismatches", total);
     repeat (5) @(posedge clk);
     $finish();

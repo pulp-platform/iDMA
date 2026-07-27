@@ -125,6 +125,16 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   cnt_width_t   [NumStreams-1:0] done_id;
   idma_busy_t   [NumStreams-1:0] busy;
   logic         [NumStreams-1:0] midend_busy;
+  logic         issue;
+  logic         retire;
+
+  // Sample the backend request immediately before the active edge and apply
+  // backpressure after it, avoiding races with the DUT's arbitration state.
+  clocking backend_cb @(posedge clk);
+    default input #1step output #0;
+    input req_valid, dma_req, stream_idx, issue;
+    output req_ready;
+  endclocking
 
   // --------------------------------------------------------------------------
   // APB DV interfaces + drivers: one per config port. Each interface is bridged
@@ -154,9 +164,6 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // Transfer-id generator (owns the next/completed counters). Reset next=2.
   // issue on an accepted launch, retire on a modeled backend completion.
   // --------------------------------------------------------------------------
-  logic issue;
-  logic retire;
-
   idma_transfer_id_gen #(
     .IdWidth ( IdCounterWidth )
   ) i_id_gen (
@@ -231,8 +238,8 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   end
 
   // Unified backend model: capture launches, count outstanding, and retire FIFO.
-  always @(posedge clk) begin
-    automatic bit accept    = rst_n && req_valid && req_ready;
+  always @(backend_cb) begin
+    automatic bit accept    = rst_n && backend_cb.issue;
     automatic bit do_retire = 1'b0;
 
     retire <= 1'b0;
@@ -242,7 +249,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     end else begin
       // 1) capture an accepted launch
       if (accept)
-        captured_q.push_back(dma_req);
+        captured_q.push_back(backend_cb.dma_req);
 
       // 2) advance / fire the retire timer
       if (backend_auto_retire && retire_timer == 0) begin
@@ -298,9 +305,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // --------------------------------------------------------------------------
   int unsigned launch_accept_count;
   int unsigned launch_acc_base;         // accept-count snapshot taken at a launch read
-  always @(posedge clk) begin
+  always @(backend_cb) begin
     if (!rst_n) launch_accept_count <= 0;
-    else if (issue) launch_accept_count <= launch_accept_count + 1;
+    else if (backend_cb.issue) launch_accept_count <= launch_accept_count + 1;
   end
 
   // Test 5 (multi-port arbitration) scoreboard state. Each config port programs a
@@ -367,11 +374,17 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     int unsigned tries;
     tries = 0;
     while (launch_accept_count == launch_acc_base) begin
-      @(posedge clk);
+      @(backend_cb);
       tries++;
       if (tries > 1000)
         $fatal(1, "wait_launch_accepted: launch never accepted");
     end
+  endtask
+
+  // Drive backend backpressure through the clocking block after the active edge.
+  task automatic set_req_ready(input logic ready);
+    @(backend_cb);
+    backend_cb.req_ready <= ready;
   endtask
 
   task automatic read_done(output logic [31:0] id, input int unsigned s = 0);
@@ -441,7 +454,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     // ------------------------------------------------------------------
     $display("\n--- Test 1: basic launch ---");
     backend_auto_retire = 1'b1;
-    req_ready           = 1'b1;
+    set_req_ready(1'b1);
     captured_q.delete();
     program_transfer(32'h1000_0000, 32'h2000_0000, 32'h0000_0040);
     // id gen resets next=2, so the very first launch must return id 2
@@ -473,7 +486,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     backend_auto_retire = 1'b0;       // no auto retire while we hold the stall
     captured_q.delete();
     // model a busy backend: hold req_ready LOW so the arbiter cannot grant
-    req_ready = 1'b0;
+    set_req_ready(1'b0);
     program_transfer(32'h3000_0000, 32'h4000_0000, 32'h0000_0080);
     exp_id = next_id;                 // id that this launch returns
     // the read completes despite req_ready low — the non-blocking property
@@ -485,7 +498,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     // the launch is held pending (not yet granted): id must not have advanced yet
     check_eq(next_id, exp_id, "Test2 id held (no issue) while req_ready low");
     // release backpressure — the held launch now completes exactly once
-    req_ready = 1'b1;
+    set_req_ready(1'b1);
     wait_launch_accepted();
     check_eq(captured_q.size(), 32'd1, "Test2 launch accepted exactly once");
     if (captured_q.size() > 0) begin
@@ -505,7 +518,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $display("\n--- Test 2b: launch integrity (late grant, no drop) ---");
     backend_auto_retire = 1'b0;
     captured_q.delete();
-    req_ready = 1'b0;
+    set_req_ready(1'b0);
     program_transfer(32'h7000_0000, 32'h8000_0000, 32'h0000_00C0);
     exp_id = next_id;
     begin
@@ -516,17 +529,17 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       check_eq(rcyc <= MaxReadLatency, 1'b1, "Test2b read within bounded latency (BP)");
       check_eq(id3, exp_id, "Test2b launch id == next_id");
       // hold the grant off for several cycles: the launch must stay pending, not drop
-      repeat (12) @(posedge clk);
+      repeat (12) @(backend_cb);
       check_eq(launch_accept_count, acc_before, "Test2b no accept while req_ready low");
-      check_eq(req_valid, 1'b1, "Test2b req_valid held high across late grant");
+      check_eq(backend_cb.req_valid, 1'b1, "Test2b req_valid held high across late grant");
       check_eq(captured_q.size(), 32'd0, "Test2b nothing captured before grant");
       // release: exactly one accept, exactly one captured launch
-      req_ready = 1'b1;
+      set_req_ready(1'b1);
       wait_launch_accepted();
       check_eq(launch_accept_count, acc_before + 32'd1, "Test2b launch fired exactly once");
     end
     // give the arbiter a settle cycle, then confirm no second spurious launch
-    repeat (4) @(posedge clk);
+    repeat (4) @(backend_cb);
     check_eq(captured_q.size(), 32'd1, "Test2b exactly one launch captured");
     if (captured_q.size() > 0) begin
       check_eq(captured_q[0].burst_req.src_addr, 32'h7000_0000, "Test2b src_addr held");
@@ -549,7 +562,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       $display("\n--- Test 3: multi-stream stream_idx held until grant ---");
       backend_auto_retire = 1'b0;
       captured_q.delete();
-      req_ready = 1'b0;
+      set_req_ready(1'b0);
       program_transfer(32'h5000_0000, 32'h6000_0000, 32'h0000_0100);
       exp_id     = next_id;
       held1_cnt  = 0;
@@ -559,16 +572,16 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       check_eq(rcyc <= MaxReadLatency, 1'b1, "Test3 read within bounded latency (BP)");
       // while the launch is pending (req_valid high, grant withheld) stream_idx==1
       repeat (12) begin
-        @(posedge clk);
-        if (req_valid && !req_ready) begin
-          if (stream_idx == 1) held1_cnt++;
-          else                 bad_idx = 1'b1;   // wrong / dropped stream index
+        @(backend_cb);
+        if (backend_cb.req_valid) begin
+          if (backend_cb.stream_idx == 1) held1_cnt++;
+          else                            bad_idx = 1'b1;   // wrong / dropped stream index
         end
       end
       check_eq(held1_cnt >= 32'd8, 1'b1, "Test3 stream_idx held == 1 across stall");
       check_eq(bad_idx, 1'b0, "Test3 stream_idx never pointed at wrong stream");
       // release: exactly one accept on stream 1
-      req_ready = 1'b1;
+      set_req_ready(1'b1);
       wait_launch_accepted();
       check_eq(launch_accept_count, acc_before + 32'd1, "Test3 stream1 accepted once");
       check_eq(id2, exp_id, "Test3 stream1 launch id == next_id");
@@ -589,7 +602,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     // ------------------------------------------------------------------
     $display("\n--- Test 4: back-to-back launches ---");
     backend_auto_retire = 1'b1;
-    req_ready           = 1'b1;
+    set_req_ready(1'b1);
     captured_q.delete();
     begin
       logic [31:0] ids[4];
@@ -629,7 +642,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       $display("\n--- Test 5: concurrent multi-port arbitration (stream_idx) ---");
       backend_auto_retire = 1'b0;
       captured_q.delete();
-      req_ready = 1'b0;
+      set_req_ready(1'b0);
       // port 0 -> stream 0, port 1 -> stream 1, each with a unique src_addr
       sb_addr_stream0 = 32'hAAAA_0000;
       sb_addr_stream1 = 32'hBBBB_0000;
@@ -652,18 +665,17 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
         int unsigned held_checks;
         held_checks = 0;
         repeat (12) begin
-          @(negedge clk);
-          #(TCK/10);                     // let combinational DUT outputs settle
-          if (req_valid && !req_ready) begin
+          @(backend_cb);
+          if (backend_cb.req_valid) begin
             automatic int unsigned won_stream = 32'hFFFF_FFFF;
-            if      (dma_req.burst_req.src_addr == sb_addr_stream0) won_stream = 0;
-            else if (dma_req.burst_req.src_addr == sb_addr_stream1) won_stream = 1;
+            if (backend_cb.dma_req.burst_req.src_addr == sb_addr_stream0) won_stream = 0;
+            else if (backend_cb.dma_req.burst_req.src_addr == sb_addr_stream1) won_stream = 1;
             if (won_stream != 32'hFFFF_FFFF) begin
               held_checks++;
-              if (stream_idx != won_stream[$bits(stream_idx)-1:0]) begin
+              if (backend_cb.stream_idx != won_stream[$bits(stream_idx)-1:0]) begin
                 sb_mismatch++;
                 $display("[Test5] MISMATCH: dma_req_o=port for stream %0d but stream_idx=%0d",
-                         won_stream, stream_idx);
+                         won_stream, backend_cb.stream_idx);
               end
             end
           end
@@ -672,13 +684,13 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
         check_eq(sb_mismatch, 32'd0,    "Test5 stream_idx matches arbitrated port (winner)");
       end
       // now let both launches drain and confirm both transfers are captured correctly
-      req_ready           = 1'b1;
+      set_req_ready(1'b1);
       backend_auto_retire = 1'b1;
       begin
         int unsigned tries;
         tries = 0;
         while (captured_q.size() < 2) begin
-          @(posedge clk);
+          @(backend_cb);
           tries++;
           if (tries > 1000) $fatal(1, "Test5: both launches never drained (got %0d)",
                                    captured_q.size());
