@@ -173,7 +173,7 @@ def main():
     par.add_argument('--bender', default=os.environ.get('BENDER', 'bender'))
     par.add_argument('--target', action='append', default=[],
                      help='bender target; repeat, e.g. --target rtl --target idma_test')
-    par.add_argument('--vlt-dir', default=os.path.join(ROOT, 'target/sim/verilator'))
+    par.add_argument('--vlt-dir', default=os.path.join(ROOT, 'target/lint/verilator'))
     par.add_argument('--verilator', default=os.environ.get('VERILATOR'))
     par.add_argument('--makeflags', default=os.environ.get('IDMA_VLT_MAKEFLAGS'))
     args = par.parse_args()
