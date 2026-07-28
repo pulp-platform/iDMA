@@ -63,7 +63,7 @@ module idma_nd_midend #(
 );
 
     /// How many bits are required to index the counters
-    localparam int unsigned StrideSelWidth = $clog2(NumDim-1) + 'd1;
+    localparam int unsigned StrideSelWidth = $clog2(NumDim);
 
 `ifndef SYNTHESIS
     // strides are added with same-width arithmetic; narrower strides would not sign-extend
