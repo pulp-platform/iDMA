@@ -150,8 +150,8 @@ logic       next_wb_addr_ready;
 
 localparam int unsigned PendingFifoDepthBits = `MAX($clog2(PendingFifoDepth), 1);
 
-logic [PendingFifoDepthBits-1:0] idma_req_used;
-logic [PendingFifoDepthBits:0]   idma_req_available;
+logic [PendingFifoDepthBits:0] idma_req_used;
+logic [PendingFifoDepthBits:0] idma_req_available;
 
 logic [1:0]                        ws_per_writeback;
 // one bit extra for the 32 bit case

@@ -80,7 +80,7 @@ localparam logic [2:0]  AxiSize   = `MIN(`MIN($clog2(DataWidthBytes),
 localparam logic [7:0]  AxiLength = DescriptorSize / DataWidthBytes - 1;
 
 localparam int unsigned SpeculationWidth      = $clog2(NSpeculation + 1);
-localparam int unsigned SpeculationUsageWidth = $clog2(NSpeculation);
+localparam int unsigned SpeculationUsageWidth = $clog2(NSpeculation + 1);
 
 typedef struct packed {
     logic  speculative;
