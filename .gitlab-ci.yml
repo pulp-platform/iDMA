@@ -5,6 +5,9 @@
 # Authors:
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
+variables:
+  IDMA_NONFREE_COMMIT: common-cells-v2
+
 default:
   interruptible: true
   hooks:
