@@ -149,9 +149,10 @@ logic       next_wb_addr_ready;
 `define MAX(a, b) (a) > (b) ? a : b
 
 localparam int unsigned PendingFifoDepthBits = `MAX($clog2(PendingFifoDepth), 1);
+localparam int unsigned PendingFifoUsageWidth = `MAX($clog2(PendingFifoDepth + 1), 1);
 
-logic [PendingFifoDepthBits:0] idma_req_used;
-logic [PendingFifoDepthBits:0] idma_req_available;
+logic [PendingFifoUsageWidth-1:0] idma_req_used;
+logic [PendingFifoDepthBits:0]    idma_req_available;
 
 logic [1:0]                        ws_per_writeback;
 // one bit extra for the 32 bit case
