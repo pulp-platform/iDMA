@@ -239,7 +239,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
+% if 'axi' in used_write_protocols:
     logic                  w_beat_done;
+% endif
 
 % if not one_read_port:
     // Read multiplexed signals
@@ -261,7 +263,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic ${mh_format['aw'][protocol]}${protocol}_w_dp_ready;
     w_dp_rsp_t ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp;
     logic ${mh_format['aw'][protocol]}${protocol}_aw_ready;
+    % if protocol == 'axi':
     logic ${mh_format['aw'][protocol]}${protocol}_w_beat_done;
+    % endif
 
     %endfor
     logic w_dp_req_valid, w_dp_req_ready;
@@ -507,9 +511,9 @@ ${rendered_read_ports[read_port]}
     always_comb begin : gen_write_beat_done_mux
         case(w_dp_req_i.dst_protocol)
 % for wp in used_write_protocols:
-    % if wp in ('axi', 'obi') and mh_format['aw'][wp] == '':
+    % if wp == 'axi' and mh_format['aw'][wp] == '':
         idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done;
-    % elif wp in ('axi', 'obi'):
+    % elif wp == 'axi':
         idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done [w_dp_req_i.dst_head];
     % endif
 % endfor
