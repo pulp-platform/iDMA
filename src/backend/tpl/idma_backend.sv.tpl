@@ -268,6 +268,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         read_meta_channel_t ar_req;
         tf_len_t            num_bytes;
         offset_t            start_lane;
+        logic               deadlock_free;
     } idma_r_req_t;
 
     /// AR request and the metadata needed to reserve byte-lane buffer entries when it is issued.
@@ -279,6 +280,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         read_meta_channel_t ar_req;
         tf_len_t            num_bytes;
         offset_t            start_lane;
+        logic               deadlock_free;
     } read_reservation_req_t;
 
     /// The iDMA write request bundles an `AW` type and a datapath write response type together. It
@@ -317,6 +319,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         logic [2:0]             dst_max_llen;
         logic                   src_reduce_len;
         logic                   dst_reduce_len;
+        logic                   deadlock_free;
         id_t                    axi_id;
         idma_pkg::axi_options_t src_axi_opt;
         idma_pkg::axi_options_t dst_axi_opt;
@@ -484,6 +487,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             .DataWidth         ( DataWidth         ),
             .AddrWidth         ( AddrWidth         ),
             .BurstLen          ( BurstLen          ),
+            .BufferDepth       ( BufferDepth       ),
             .idma_req_t        ( idma_req_t        ),
             .idma_r_req_t      ( idma_r_req_t      ),
             .idma_w_req_t      ( idma_w_req_t      ),
@@ -541,6 +545,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         assign r_req.start_lane = OffsetWidth'(
             idma_req_i.src_addr[OffsetWidth-1:0] - r_req.r_dp_req.shift
         );
+
+        // Deadlock-free mode is not supported without the hardware legalizer.
+        assign r_req.deadlock_free = 1'b0;
 
         // assemble write datapath request
         assign w_req.w_dp_req = '{
@@ -702,9 +709,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         r_reservation_req.src_protocol = r_req.r_dp_req.src_protocol;
         r_reservation_req.src_head     = r_req.r_dp_req.src_head;
 % endif
-        r_reservation_req.ar_req       = r_req.ar_req;
-        r_reservation_req.num_bytes    = r_req.num_bytes;
-        r_reservation_req.start_lane   = r_req.start_lane;
+        r_reservation_req.ar_req        = r_req.ar_req;
+        r_reservation_req.num_bytes     = r_req.num_bytes;
+        r_reservation_req.start_lane    = r_req.start_lane;
+        r_reservation_req.deadlock_free = r_req.deadlock_free;
     end
 
     cc_fall_through_register #(

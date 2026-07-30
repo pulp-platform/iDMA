@@ -100,7 +100,7 @@ module tb_idma_desc64_top
             burst.opt.beo.src_reduce_len == burst.opt.beo.dst_reduce_len;
         }
         constraint reduce_len_zero_c { burst.opt.beo.src_reduce_len == 1'b0; }
-        constraint beo_zero_c {
+        constraint unsupported_beo_zero_c {
             burst.opt.beo.decouple_aw   == '0 && burst.opt.beo.src_max_llen == '0 &&
             burst.opt.beo.dst_max_llen == '0 && burst.opt.last           == '0 &&
             burst.opt.beo.decouple_rw  == '0;
@@ -468,7 +468,8 @@ module tb_idma_desc64_top
         //                bit 2: cache read alloc
         //                bit 3: cache write alloc
         // bits 23:16     AXI ID used for the transfer
-        // bits 31:26     unused/reserved
+        // bit  24        enable deadlock-free mode
+        // bits 31:25     unused/reserved
         automatic logic [63:0] result = '0;
         automatic logic [31:0] flags  = '0;
 
@@ -482,7 +483,8 @@ module tb_idma_desc64_top
         flags[11:8]  = stim.burst.opt.src.cache;
         flags[15:12] = stim.burst.opt.dst.cache;
         flags[23:16] = stim.burst.opt.axi_id;
-        flags[31:26] = '0;
+        flags[24]    = stim.burst.opt.beo.deadlock_free;
+        flags[31:25] = '0;
 
         result[31:0]  = stim.burst.length;
         result[63:32] = flags;
