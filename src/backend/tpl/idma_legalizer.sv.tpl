@@ -29,6 +29,8 @@ module idma_legalizer_${name_uniqueifier} #(
     parameter int unsigned AddrWidth       = 32'd24,
     /// Burst Len (for actual burst length do 8 byte * 2^(BurstLen))
     parameter int unsigned BurstLen = 4'd8,
+    /// Depth of each byte-lane data FIFO
+    parameter int unsigned BufferDepth = 32'd3,
     /// 1D iDMA request type:
     /// - `length`: the length of the transfer in bytes
     /// - `*_addr`: the source / target byte addresses of the transfer
@@ -141,6 +143,13 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     /// Page length type
     typedef logic [  PageAddrWidth:0] page_len_t;
 
+    /// Largest power-of-two beat count that fits completely into a byte-lane FIFO
+    localparam int unsigned BufferMaxLlen =
+        BufferDepth > 1 ? $clog2(BufferDepth + 1) - 1 : 0;
+    /// Clamp to the protocol limit and the width of the runtime maximum-length field.
+    localparam int unsigned SafeReadMaxLlen =
+        BufferMaxLlen < BurstLen ? BufferMaxLlen :
+        BurstLen < 3'd7 ? BurstLen : 3'd7;
 
     // state: internally hold one transfer, this is mutated
     idma_mut_tf_t     r_tf_d,   r_tf_q;
@@ -554,10 +563,17 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             decouple_rw:    req.opt.beo.decouple_rw,
             decouple_aw:    req.opt.beo.decouple_aw,
 % endif
-            src_max_llen:   req.opt.beo.src_max_llen,
+            src_max_llen:   req.opt.beo.deadlock_free
+                                ? ((req.opt.beo.src_reduce_len &&
+                                    (req.opt.beo.src_max_llen < SafeReadMaxLlen))
+                                       ? req.opt.beo.src_max_llen
+                                       : 3'(SafeReadMaxLlen))
+                                : req.opt.beo.src_max_llen,
             dst_max_llen:   req.opt.beo.dst_max_llen,
-            src_reduce_len: req.opt.beo.src_reduce_len,
+            src_reduce_len: req.opt.beo.src_reduce_len |
+                            req.opt.beo.deadlock_free,
             dst_reduce_len: req.opt.beo.dst_reduce_len,
+            deadlock_free:  req.opt.beo.deadlock_free,
             axi_id:         req.opt.axi_id,
             src_axi_opt:    req.opt.src,
             dst_axi_opt:    req.opt.dst,
@@ -787,6 +803,7 @@ ${database[protocol]['legalizer_read_meta_channel']}
     };
     assign r_req_o.num_bytes = r_num_bytes;
     assign r_req_o.start_lane = OffsetWidth'(r_addr_offset - opt_tf_q.read_shift);
+    assign r_req_o.deadlock_free = opt_tf_q.deadlock_free;
 
     // Write meta channel and data path
 % if one_write_port:
