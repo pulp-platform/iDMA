@@ -192,6 +192,10 @@ regwidth = $(word 1,$(subst _, ,$1))
 dimension = $(word 2,$(subst _, ,$1))
 log2dimension = $(shell echo $$(( $$( echo "obase=2;$$(($(1)-1))" | bc | wc -c ) - 1 )) )
 
+# Shared SPDX license header (raw-header takes plain text; c-header gets the //-prefixed variant)
+IDMA_LICENSE   := Copyright 2026 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51
+IDMA_C_HDR_LIC := // $(subst \n,\n// ,$(IDMA_LICENSE))\n
+
 $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv:
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif $(IDMA_REG_CPUIF) \
@@ -236,10 +240,12 @@ $(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
 
 # C header
 $(IDMA_SW_DIR)/idma_reg%d_regs.h :
-	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -i -o $@ \
+	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
+	  -b ltoh --type-style hier --rename idma_reg$*d \
 	  -P SysAddrWidth=$(call regwidth,$*) \
 	  -P NumDims=$(call dimension,$*) \
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+	sed -i '1i$(IDMA_C_HDR_LIC)' $@
 
 $(IDMA_SW_DIR)/idma_reg%d_regs_unpacked.h : $(IDMA_SW_DIR)/idma_reg%d_regs.h
 # with `packed` structs, the compiler may get confused and generate byte loads/stores to access fields.
@@ -249,9 +255,22 @@ $(IDMA_SW_DIR)/idma_reg%d_regs_unpacked.h : $(IDMA_SW_DIR)/idma_reg%d_regs.h
 $(IDMA_SW_DIR)/idma_reg%d_raw_regs.h:
 	$(PEAKRDL) raw-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
 	  --format c \
+	  --license_str="$(IDMA_LICENSE)" \
 	  -P SysAddrWidth=$(call regwidth,$*) \
 	  -P NumDims=$(call dimension,$*) \
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
+
+
+$(IDMA_SW_DIR)/idma_desc64_regs.h:
+	$(PEAKRDL) c-header $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $@ \
+	  -b ltoh --type-style hier --rename idma_desc64
+	sed -i '1i$(IDMA_C_HDR_LIC)' $@
+$(IDMA_SW_DIR)/idma_desc64_regs_unpacked.h: $(IDMA_SW_DIR)/idma_desc64_regs.h
+	sed -e "s/__attribute__ ((__packed__)) //" $< > $@
+$(IDMA_SW_DIR)/idma_desc64_raw_regs.h:
+	$(PEAKRDL) raw-header $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $@ \
+	  --format c --base_name idma_desc64 \
+	  --license_str="$(IDMA_LICENSE)"
 
 idma_reg_clean:
 	rm -rf $(IDMA_HTML_DIR)/regs
@@ -268,11 +287,11 @@ IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
 IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
 
 # C headers
-IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_regs.h)
-IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_regs_unpacked.h)
+IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_regs.h)
+IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_regs_unpacked.h)
 
 # C headers with the "raw-header" plugin
-IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_IDS),$(IDMA_SW_DIR)/idma_$Y_raw_regs.h)
+IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_raw_regs.h)
 
 # ---------------
 # RTL assembly
