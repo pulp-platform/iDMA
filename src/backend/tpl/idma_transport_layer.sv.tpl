@@ -45,11 +45,9 @@ module idma_transport_layer_${name_uniqueifier} #(
     parameter type write_meta_channel_tagged_t = logic,
 % endif
     /// Read Meta channel type
-    parameter type read_meta_channel_t = logic\
-% if not one_read_port:
-,
-    parameter type read_meta_channel_tagged_t = logic\
-% endif
+    parameter type read_meta_channel_t = logic,
+    /// Read request with byte-lane reservation metadata
+    parameter type read_reservation_req_t = logic\
 % for protocol in used_protocols:
 ,
     /// ${database[protocol]['full_name']} Request and Response channel type
@@ -156,11 +154,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     input  logic w_dp_ready_i,
 
     /// Read meta request
-% if not one_read_port:
-    input  read_meta_channel_tagged_t ar_req_i,
-% else:
-    input  read_meta_channel_t ar_req_i,
-% endif
+    input  read_reservation_req_t ar_req_i,
     /// Read meta request valid
     input  logic ar_valid_i,
     /// Read meta request ready

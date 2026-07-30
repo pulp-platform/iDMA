@@ -236,6 +236,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
     /// The datapath write request type holds all the information required to configure the write
     /// part of the datapath. The type consists of:
+    /// - `num_bytes`: The number of useful bytes in this legalized write request
     /// - `offset`: The bus offset of the write
     /// - `trailer`: How many empty bytes are required to pad the transfer to a multiple of the
     ///              bus width.
@@ -245,6 +246,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     typedef struct packed {
         idma_pkg::protocol_e  dst_protocol;
         idma_pkg::multihead_t dst_head;  // ignored unless multi-head (one head: tied 0)
+        tf_len_t              num_bytes;
         offset_t              offset;
         offset_t              tailer;
         offset_t              shift;
@@ -261,18 +263,25 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         user_t          user;
     } w_dp_rsp_t;
 
-    /// The iDMA read request bundles an `AR` type and a datapath read response type together.
+    /// The iDMA read request bundles the AR request, its reservation metadata, and the
+    /// corresponding datapath request.
     typedef struct packed {
         r_dp_req_t          r_dp_req;
         read_meta_channel_t ar_req;
+        tf_len_t            num_bytes;
+        offset_t            start_lane;
     } idma_r_req_t;
-% if not one_read_port:
+
+    /// AR request and the metadata needed to reserve byte-lane buffer entries when it is issued.
     typedef struct packed {
+% if not one_read_port:
         idma_pkg::protocol_e  src_protocol;
         idma_pkg::multihead_t src_head;
-        read_meta_channel_t   ar_req;
-    } read_meta_channel_tagged_t;
 % endif
+        read_meta_channel_t ar_req;
+        tf_len_t            num_bytes;
+        offset_t            start_lane;
+    } read_reservation_req_t;
 
     /// The iDMA write request bundles an `AW` type and a datapath write response type together. It
     /// has an additional flags:
@@ -339,9 +348,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     idma_w_req_t w_req;
     logic        r_valid, w_valid;
     logic        r_ready, w_ready;
-% if not one_read_port:
-    read_meta_channel_tagged_t  r_meta_req_tagged;
-% endif
+    read_reservation_req_t r_reservation_req;
 % if not one_write_port:
     write_meta_channel_tagged_t w_meta_req_tagged;
 %endif
@@ -379,12 +386,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     write_meta_channel_tagged_t aw_req_dp;
 % endif
 
-    // Ax request from the decoupling stage to the datapath
-% if one_read_port:
-    read_meta_channel_t ar_req_dp;
-% else:
-    read_meta_channel_tagged_t ar_req_dp;
-% endif
+    // AR request and reservation metadata from the decoupling stage to the datapath
+    read_reservation_req_t ar_req_dp;
 
     // flush and preemptively empty the legalizer
     logic legalizer_flush, legalizer_kill;
@@ -502,11 +505,16 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             decouple_aw:  idma_req_i.opt.beo.decouple_aw,
             is_single:    len == '0
         };
+        assign r_req.num_bytes = idma_req_i.length;
+        assign r_req.start_lane = OffsetWidth'(
+            idma_req_i.src_addr[OffsetWidth-1:0] - r_req.r_dp_req.shift
+        );
 
         // assemble write datapath request
         assign w_req.w_dp_req = '{
             dst_protocol: idma_req_i.opt.dst_protocol,
             dst_head:     idma_req_i.opt.dst_head,
+            num_bytes:    idma_req_i.length,
             offset:       idma_req_i.dst_addr[OffsetWidth-1:0],
             tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.dst_addr[OffsetWidth-1:0]),
             shift:        OffsetWidth'(- idma_req_i.dst_addr[OffsetWidth-1:0]),
@@ -656,24 +664,20 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .ready_i    ( w_dp_req_out_ready  )
     );
 
-    // Add fall-through register to allow the input to be ready if the output is not. This
-    // does not add a cycle of delay
+    // Keep reservation metadata aligned with the AR while the datapath request independently
+    // remains queued until all responses belonging to the burst have arrived.
+    always_comb begin : assign_r_reservation_req
 % if not one_read_port:
-    always_comb begin : assign_r_meta_req
-        r_meta_req_tagged.src_protocol = r_req.r_dp_req.src_protocol;
-        r_meta_req_tagged.src_head = r_req.r_dp_req.src_head;
-        r_meta_req_tagged.ar_req       = r_req.ar_req;
-    end
+        r_reservation_req.src_protocol = r_req.r_dp_req.src_protocol;
+        r_reservation_req.src_head     = r_req.r_dp_req.src_head;
 % endif
+        r_reservation_req.ar_req       = r_req.ar_req;
+        r_reservation_req.num_bytes    = r_req.num_bytes;
+        r_reservation_req.start_lane   = r_req.start_lane;
+    end
 
     fall_through_register #(
-        .T          (\
-% if one_read_port:
- read_meta_channel_t\
-% else:
- read_meta_channel_tagged_t\
-% endif
- )
+        .T          ( read_reservation_req_t )
     ) i_ar_fall_through_register (
         .clk_i      ( clk_i             ),
         .rst_ni     ( rst_ni            ),
@@ -681,13 +685,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .clr_i      ( 1'b0              ),
         .valid_i    ( r_valid           ),
         .ready_o    ( ar_ready          ),
-        .data_i     (\
-% if one_read_port:
- r_req.ar_req\
-% else:
- r_meta_req_tagged\
-% endif
- ),
+        .data_i     ( r_reservation_req ),
         .valid_o    ( ar_valid_dp       ),
         .ready_i    ( ar_ready_dp       ),
         .data_o     ( ar_req_dp         )
@@ -737,11 +735,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if not one_write_port:
         .write_meta_channel_tagged_t ( write_meta_channel_tagged_t ),
 % endif
-        .read_meta_channel_t         ( read_meta_channel_t         )\
-% if not one_read_port:
-,
-        .read_meta_channel_tagged_t  ( read_meta_channel_tagged_t  )\
-% endif
+        .read_meta_channel_t         ( read_meta_channel_t         ),
+        .read_reservation_req_t      ( read_reservation_req_t      )\
 % for protocol in used_protocols:
 ,
     % if database[protocol]['read_slave'] == 'true':

@@ -543,6 +543,8 @@ ${database[protocol]['legalizer_read_meta_channel']}
         decouple_aw:  opt_tf_q.decouple_aw,
         is_single:    r_num_bytes <= StrbWidth
     };
+    assign r_req_o.num_bytes = r_num_bytes;
+    assign r_req_o.start_lane = OffsetWidth'(r_addr_offset - opt_tf_q.read_shift);
 
     // Write meta channel and data path
 % if one_write_port:
@@ -554,6 +556,7 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
         w_req_o.w_dp_req = '{
             dst_protocol: opt_tf_q.dst_protocol,
             dst_head:     opt_tf_q.dst_head,
+            num_bytes:    w_num_bytes,
             offset:       w_addr_offset,
             tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
             shift:        opt_tf_q.write_shift,
@@ -590,6 +593,7 @@ ${database[protocol]['legalizer_write_data_path']}
             w_req_o.w_dp_req = '{
                 dst_protocol: opt_tf_q.dst_protocol,
                 dst_head:     opt_tf_q.dst_head,
+                num_bytes:    w_num_bytes,
                 offset:       w_addr_offset,
                 tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
                 shift:        opt_tf_q.write_shift,

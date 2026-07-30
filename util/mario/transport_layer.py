@@ -66,7 +66,7 @@ def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
                 read_dp_response = 'r_dp_rsp_o'
                 read_dp_valid_out = 'r_dp_valid_o'
                 read_dp_ready_in = 'r_dp_ready_i'
-                read_meta_request = 'ar_req_i'
+                read_meta_request = 'ar_req_i.ar_req'
                 read_meta_valid = 'ar_valid_i'
                 read_meta_ready = 'ar_ready_o'
                 r_chan_valid = 'r_chan_valid_o'
