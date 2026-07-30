@@ -10,6 +10,8 @@
 """ MARIO synth wrapper interaction"""
 from mako.template import Template
 
+from mario.util import compute_eligible
+
 
 def render_synth_wrapper(prot_ids: dict, db: dict, tpl_file: str) -> str:
     """Generate synth wrapper"""
@@ -54,7 +56,8 @@ def render_synth_wrapper(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'used_protocols': prot_ids[prot_id]['used'],
             'one_read_port': srp,
             'one_write_port': swp,
-            'any_mh': any_mh
+            'any_mh': any_mh,
+            'compute_eligible': compute_eligible(used_read_prots, used_write_prots, db)
         }
 
         # render
