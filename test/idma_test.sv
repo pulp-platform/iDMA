@@ -709,6 +709,7 @@ package idma_test;
             idma.req.opt.beo.dst_max_llen   <= #TA dst_max_llen;
             idma.req.opt.beo.src_reduce_len <= #TA src_reduce_len;
             idma.req.opt.beo.dst_reduce_len <= #TA dst_reduce_len;
+            idma.req.opt.beo.deadlock_free  <= #TA 1'b0;
             idma.req.opt.compute.enable              <= #TA transpose_en;
             idma.req.opt.compute.op                  <= #TA transpose_en ? idma_pkg::COMPUTE_TRANSPOSE
                                                                          : idma_pkg::COMPUTE_NONE;
@@ -733,6 +734,7 @@ package idma_test;
             idma.req.opt.beo.dst_max_llen   <= #TA '0;
             idma.req.opt.beo.src_reduce_len <= #TA '0;
             idma.req.opt.beo.dst_reduce_len <= #TA '0;
+            idma.req.opt.beo.deadlock_free  <= #TA '0;
             idma.req_valid                  <= #TA '0;
         endtask
 
@@ -886,6 +888,7 @@ package idma_test;
             nd_idma.req.burst_req.opt.beo.dst_max_llen   <= #TA dst_max_llen;
             nd_idma.req.burst_req.opt.beo.src_reduce_len <= #TA src_reduce_len;
             nd_idma.req.burst_req.opt.beo.dst_reduce_len <= #TA dst_reduce_len;
+            nd_idma.req.burst_req.opt.beo.deadlock_free  <= #TA 1'b0;
             // connect ND signals
             nd_idma.req.d_req                            <= #TA n_dims;
             nd_idma.req_valid                            <= #TA 1;
@@ -905,6 +908,7 @@ package idma_test;
             nd_idma.req.burst_req.opt.beo.dst_max_llen   <= #TA '0;
             nd_idma.req.burst_req.opt.beo.src_reduce_len <= #TA '0;
             nd_idma.req.burst_req.opt.beo.dst_reduce_len <= #TA '0;
+            nd_idma.req.burst_req.opt.beo.deadlock_free  <= #TA '0;
             nd_idma.req.d_req                            <= #TA '0;
             nd_idma.req_valid                            <= #TA '0;
         endtask

@@ -70,6 +70,7 @@ package idma_pkg;
     /// Backend option type:
     /// - `decouple_aw`: `AWs` will only be sent after the first corresponding `R` is received
     /// - `decouple_rw`: decouples the `R` and `W` channels completely: can cause deadlocks
+    /// - `deadlock_free`: reserve data-buffer space before issuing each read request
     /// - `*_max_llen`: the maximum log length of a burst
     /// - `*_reduce_len`: should bursts be reduced in length?
     typedef struct packed {
@@ -79,6 +80,7 @@ package idma_pkg;
         logic [2:0] dst_max_llen;
         logic       src_reduce_len;
         logic       dst_reduce_len;
+        logic       deadlock_free;
     } backend_options_t;
 
     /// Compute operation selector

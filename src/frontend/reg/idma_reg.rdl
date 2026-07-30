@@ -55,6 +55,9 @@ addrmap idma_reg #(
         field {
             desc = "Selection of the destination protocol";
          } dst_protocol [2*NumProtBits+11+Log2NumDims-1:11+Log2NumDims+NumProtBits] = 0;
+        field {
+            desc = "Reserve data-buffer space before issuing read requests";
+        } deadlock_free [2*NumProtBits+11+Log2NumDims:2*NumProtBits+11+Log2NumDims] = 0;
     };
 
     reg status {

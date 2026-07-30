@@ -42,9 +42,13 @@ If the CPU uses a data cache, descriptors must be in an uncached or cache-cohere
 | 11:8 | `src_cache` | AXI cache attributes for source (bufferable, modifiable, read-alloc, write-alloc) |
 | 15:12 | `dst_cache` | AXI cache attributes for destination |
 | 23:16 | `axi_id` | AXI ID for the transfer |
-| 31:24 | — | Reserved |
+| 24 | `deadlock_free` | Reserve byte-lane data-buffer capacity before issuing each read request |
+| 31:25 | — | Reserved |
 
-**Typical flags values**: `0x00000000` — default (INCR burst, no decoupling, no IRQ). `0x00000001` — IRQ on completion. `0x00000061` — decouple_aw + decouple_rw + IRQ.
+The `deadlock_free` flag prevents the read side from issuing more data than the internal
+byte-lane FIFOs can hold. It has no effect in backends built without the hardware legalizer.
+
+**Typical flags values**: `0x00000000` — default (INCR burst, no decoupling, no IRQ). `0x00000001` — IRQ on completion. `0x00000061` — decouple_aw + decouple_rw + IRQ. `0x01000000` — deadlock-free mode.
 
 ## Descriptor Chain Example
 
