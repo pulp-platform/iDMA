@@ -271,7 +271,7 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
             % if index != len(used_non_bursting_read_protocols)-1:
 ,\
             % endif
-        % endfor       
+        % endfor
 } ),
     % endif
 
@@ -290,7 +290,7 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
         .OffsetWidth   ( OffsetWidth ),
         .addr_t        ( addr_t      ),
         .len_t         ( page_len_t  )
-    ) i_read_pow2_splitter ( 
+    ) i_read_pow2_splitter (
         .addr_i              ( r_tf_q.addr ),
         .length_i            ( \
         % if database[read_protocol]['tltoaxi4_compatibility_mode'] == "true":
@@ -350,7 +350,7 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
             % if index != len(used_non_bursting_write_protocols)-1:
 ,\
             % endif
-        % endfor       
+        % endfor
 } ),
     % endif
 
@@ -374,7 +374,7 @@ $clog2(${database[write_protocol]['page_size']}) ),
         .OffsetWidth   ( OffsetWidth ),
         .addr_t        ( addr_t      ),
         .len_t         ( page_len_t  )
-    ) i_write_pow2_splitter ( 
+    ) i_write_pow2_splitter (
         .addr_i              ( w_tf_q.addr ),
         .length_i            ( \
         % if database[write_protocol]['tltoaxi4_compatibility_mode'] == "true":
@@ -437,7 +437,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             % if index != len(used_non_bursting_or_force_decouple_read_protocols)-1:
 ,\
             % endif
-        % endfor 
+        % endfor
  })\
     % endif
     % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
@@ -448,7 +448,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             % if index != len(used_non_bursting_or_force_decouple_write_protocols)-1:
 ,\
             % endif
-        % endfor 
+        % endfor
  })\
     % endif
 ) begin
@@ -785,6 +785,8 @@ ${database[protocol]['legalizer_read_meta_channel']}
         is_single:    r_num_bytes <= StrbWidth
 % endif
     };
+    assign r_req_o.num_bytes = r_num_bytes;
+    assign r_req_o.start_lane = OffsetWidth'(r_addr_offset - opt_tf_q.read_shift);
 
     // Write meta channel and data path
 % if one_write_port:
@@ -796,6 +798,7 @@ ${database[used_write_protocols[0]]['legalizer_write_data_path']}
         w_req_o.w_dp_req = '{
             dst_protocol: opt_w_q.dst_protocol,
             dst_head:     opt_w_q.dst_head,
+            num_bytes:    w_num_bytes,
             offset:       w_addr_offset,
             tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
             shift:        opt_w_q.write_shift,
@@ -832,6 +835,7 @@ ${database[protocol]['legalizer_write_data_path']}
             w_req_o.w_dp_req = '{
                 dst_protocol: opt_w_q.dst_protocol,
                 dst_head:     opt_w_q.dst_head,
+                num_bytes:    w_num_bytes,
                 offset:       w_addr_offset,
                 tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
                 shift:        opt_w_q.write_shift,
@@ -879,7 +883,7 @@ ${database[protocol]['legalizer_write_data_path']}
                 % if index != len(used_non_bursting_or_force_decouple_read_protocols)-1:
 ,\
                 % endif
-            % endfor 
+            % endfor
  })\
         % endif
         % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
@@ -890,9 +894,9 @@ ${database[protocol]['legalizer_write_data_path']}
                 % if index != len(used_non_bursting_or_force_decouple_write_protocols)-1:
 ,\
                 % endif
-            % endfor 
+            % endfor
  })\
-        % endif       
+        % endif
 ) begin
             r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
             w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
