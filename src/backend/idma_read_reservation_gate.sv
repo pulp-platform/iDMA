@@ -88,7 +88,9 @@ module idma_read_reservation_gate #(
       // A pop in the current cycle frees an entry in time for the accepted request.
       projected_usage = {1'b0, lane_usage[lane]} + {1'b0, lane_reservation[lane]};
       available_capacity = (UsageWidth + 1)'(BufferDepth);
-      available_capacity = available_capacity + buffer_pop_i[lane];
+      // The following line would save a cycle but make ar_valid dependent on w_ready, which
+      // produces a combinational loop, which we don't want.
+      // available_capacity = available_capacity + buffer_pop_i[lane];
       lane_fits[lane] = projected_usage <= available_capacity;
     end
   end
