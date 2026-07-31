@@ -130,8 +130,7 @@ write_template: |
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} ),
-        .mask_ext_i         ( mask_ext_shifted ),
-        .w_beat_done_o      ( ${w_beat_done} )
+        .mask_ext_i         ( mask_ext_shifted )
     );
 synth_wrapper_ports_write: |
     output id_t                    axi_aw_id_o,

@@ -189,7 +189,7 @@ def render_write_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
 
             if swp:
                 write_dp_valid_in = 'w_dp_valid_i'
-                write_dp_ready_out = 'w_dp_ready_o'
+                write_dp_ready_out = 'w_dp_req_ready'
                 write_dp_response = 'w_dp_rsp_o'
                 write_dp_valid_out = 'w_dp_valid_o'
                 write_dp_ready_in = 'w_dp_ready_i'
@@ -243,7 +243,6 @@ aw_valid_i\
                 'write_request': f'{wp}_write_req_o{mh_bus}',
                 'write_response': f'{wp}_write_rsp_i{mh_bus}',
                 'buffer_out_ready': buffer_out_ready,
-                'w_beat_done': 'w_beat_done' if swp else f'{wp}_w_beat_done{mh_bus}',
                 'mh': mh
             }
 

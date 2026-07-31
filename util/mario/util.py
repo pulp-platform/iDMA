@@ -44,12 +44,10 @@ def prot_key(used_prots: list, key: str, feature: str, db: dict) -> list:
 
 def compute_eligible(used_read_prots: list, used_write_prots: list, db: dict) -> bool:
     """Return true if this backend topology has data paths that can host compute."""
-    read_compute_protocols = {'AXI', 'OBI'}
-    write_compute_protocols = {'AXI'}
+    compute_protocols = {'AXI', 'OBI'}
     read_protocols = {db[prot]['protocol_enum'] for prot in used_read_prots}
     write_protocols = {db[prot]['protocol_enum'] for prot in used_write_prots}
-    return bool(read_protocols & read_compute_protocols) \
-        and bool(write_protocols & write_compute_protocols)
+    return bool(read_protocols & compute_protocols) and bool(write_protocols & compute_protocols)
 
 
 def prepare_ids(id_strs: list) -> dict:
