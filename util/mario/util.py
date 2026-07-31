@@ -42,6 +42,14 @@ def prot_key(used_prots: list, key: str, feature: str, db: dict) -> list:
     return res
 
 
+def compute_eligible(used_read_prots: list, used_write_prots: list, db: dict) -> bool:
+    """Return true if this backend topology has data paths that can host compute."""
+    compute_protocols = {'AXI', 'OBI'}
+    read_protocols = {db[prot]['protocol_enum'] for prot in used_read_prots}
+    write_protocols = {db[prot]['protocol_enum'] for prot in used_write_prots}
+    return bool(read_protocols & compute_protocols) and bool(write_protocols & compute_protocols)
+
+
 def prepare_ids(id_strs: list) -> dict:
     """Parses and validates the IDs """
 
@@ -163,31 +171,4 @@ def prepare_fids(fe_strs: list) -> dict:
     for reg in re.findall(r'reg([0-9]+)_([0-9]+)d', ' '.join(fe_strs)):
         res[f'reg{reg[0]}_{reg[1]}d'] = reg
 
-    return res
-
-
-def prepare_compute_ids(compute_id_strs: list) -> dict:
-    """Parses compute configuration IDs: <variant>[:<op>[,<op>...]][:fd|hd]"""
-    res = {}
-    for cid_str in (compute_id_strs or []):
-        parts = cid_str.split(':')
-        variant = parts[0]
-        if variant == '':
-            print(f'[MARIO] empty compute variant in "{cid_str}"', file=sys.stderr)
-            sys.exit(1)
-        if variant in res:
-            print(f'[MARIO] duplicate compute variant "{variant}"', file=sys.stderr)
-            sys.exit(1)
-        ops = ['transpose']
-        full_duplex = True
-        for part in parts[1:]:
-            if part in ('fd', 'hd'):
-                full_duplex = part == 'fd'
-            else:
-                ops = part.split(',')
-        for op in ops:
-            if op not in ('transpose',):
-                print(f'[MARIO] {op} is a non-supported compute op in {cid_str}', file=sys.stderr)
-                sys.exit(1)
-        res[variant] = {'ops': ops, 'full_duplex': full_duplex}
     return res

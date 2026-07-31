@@ -43,14 +43,6 @@ IDMA_OCCAMY_IDS  := \
 					rw_axi_rw_init_rw_obi
 IDMA_ADD_IDS     ?=
 IDMA_BACKEND_IDS ?= $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
-# Compute-hosting variants (single AXI write); empty default = stock has no compute
-IDMA_VIDMA_IDS   ?=
-# Compute variants (strip the optional :op:fd suffix) must be built backends
-_idma_vidma_unknown := $(filter-out $(IDMA_BACKEND_IDS),\
-	$(foreach c,$(IDMA_VIDMA_IDS),$(firstword $(subst :, ,$(c)))))
-ifneq ($(_idma_vidma_unknown),)
-  $(error iDMA: IDMA_VIDMA_IDS variant(s) not in IDMA_BACKEND_IDS: $(_idma_vidma_unknown))
-endif
 
 # generated frontends
 IDMA_BASE_FE_IDS := reg32_3d reg64_2d reg64_1d
@@ -120,26 +112,17 @@ IDMA_RTL_FILES  := $(IDMA_RTL_DIR)/idma_transport_layer \
 IDMA_VSIM_DIR   := $(IDMA_ROOT)/target/sim/vsim
 
 define idma_gen
-	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 $(if $7,--compute-ids $7) $(if $8,--cpuif $8) > $6
+	$(PYTHON) $(IDMA_GEN) --entity $1 --tpl $2 --db $3 --ids $4 --fids $5 $(if $7,--cpuif $7) > $6
 endef
 
-# Force an RTL regen when IDMA_VIDMA_IDS changes; rewritten only on change
-IDMA_VIDMA_STAMP := $(IDMA_RTL_DIR)/.vidma_ids
-.PHONY: idma_vidma_stamp_check
-idma_vidma_stamp_check:
-	@mkdir -p $(IDMA_RTL_DIR)
-	@printf '%s' '$(IDMA_VIDMA_IDS)' | cmp -s - $(IDMA_VIDMA_STAMP) 2>/dev/null || \
-		printf '%s' '$(IDMA_VIDMA_IDS)' > $(IDMA_VIDMA_STAMP)
-$(IDMA_VIDMA_STAMP): idma_vidma_stamp_check ;
+$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl $(IDMA_DB_FILES)
+	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_transport_layer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
-	$(call idma_gen,transport,$(IDMA_ROOT)/src/backend/tpl/idma_transport_layer.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
+$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl $(IDMA_DB_FILES)
+	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/idma_legalizer_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
-	$(call idma_gen,legalizer,$(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
-
-$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl $(IDMA_DB_FILES) $(IDMA_VIDMA_STAMP)
-	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@,$(IDMA_VIDMA_IDS))
+$(IDMA_RTL_DIR)/idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_legalizer_%.sv $(IDMA_RTL_DIR)/idma_transport_layer_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl $(IDMA_DB_FILES)
+	$(call idma_gen,backend,$(IDMA_ROOT)/src/backend/tpl/idma_backend.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
 
 $(IDMA_RTL_DIR)/idma_backend_synth_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/idma_backend_%.sv $(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl $(IDMA_DB_FILES)
 	$(call idma_gen,synth_wrapper,$(IDMA_ROOT)/src/backend/tpl/idma_backend_synth.sv.tpl,$(IDMA_DB_FILES),$*,,$@)
@@ -160,7 +143,6 @@ idma_rtl_clean:
 	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
 	rm -f  $(IDMA_RTL_DIR)/include/idma/tracer.svh
 	rm -rf $(IDMA_RTL_DIR)/include/idma
-	rm -f  $(IDMA_VIDMA_STAMP)
 
 # assemble the required files
 IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
@@ -227,7 +209,7 @@ $(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv $(
 	  --license_str="Copyright 2025 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51"
 
 $(IDMA_RTL_DIR)/idma_%_top.sv: $(IDMA_GEN) $(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl
-	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@,,$(if $(filter desc64,$*),apb4-flat,$(IDMA_REG_CPUIF)))
+	$(call idma_gen,reg_top,$(IDMA_FE_DIR)/reg/tpl/idma_reg.sv.tpl,,,$*,$@,$(if $(filter desc64,$*),apb4-flat,$(IDMA_REG_CPUIF)))
 
 $(IDMA_HTML_DIR)/regs/idma_reg%d_reg/index.html:
 	$(PEAKRDL) html $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_reg$*d_reg \
@@ -411,9 +393,6 @@ idma_sim_tb_idma_otf_transpose:
 
 # Multi-tile transpose via the ND midend -> rw_axi backend -> axi_sim_mem.
 # Run with the Questa SEPP wrapper: make idma_sim_tb_idma_transpose_nd VSIM="questa-2023.4 vsim"
-# These tests need the compute engine: build rw_axi with compute (stamp regens).
-idma_sim_tb_idma_transpose_nd idma_sim_tb_idma_transpose_b2b: IDMA_VIDMA_IDS := rw_axi
-
 .PHONY: idma_sim_tb_idma_transpose_nd
 idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"

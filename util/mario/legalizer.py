@@ -21,7 +21,7 @@ def prot_force_decouple(used_prots: list, db: dict) -> list:
     return res
 
 
-def render_legalizer(prot_ids: dict, db: dict, tpl_file: str, compute_cfg: dict = None) -> str:
+def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
     """Generate legalizer"""
     legalizer_rendered = ''
 
@@ -71,7 +71,6 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str, compute_cfg: dict 
             'used_protocols': prot_ids[prot_id]['used'],
             'one_read_port': srp,
             'one_write_port': swp,
-            'enable_compute': prot_id in (compute_cfg or {}),
             'no_read_bursting':
                 not has_read_bursting,
             'has_page_read_bursting':

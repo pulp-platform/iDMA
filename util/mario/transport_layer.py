@@ -10,6 +10,8 @@
 """ MARIO transport layer interaction"""
 from mako.template import Template
 
+from mario.util import compute_eligible
+
 
 def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
     """Renders the port instantiations of the read managers"""
@@ -254,8 +256,7 @@ aw_valid_i\
     return res
 
 
-def render_transport_layer(prot_ids: dict, db: dict, tpl_file: str, compute_cfg: dict = None
-                           ) -> str:
+def render_transport_layer(prot_ids: dict, db: dict, tpl_file: str) -> str:
     """Generate Transport Layer"""
     transport_rendered = ''
 
@@ -278,6 +279,7 @@ def render_transport_layer(prot_ids: dict, db: dict, tpl_file: str, compute_cfg:
                     mh_format['a' + dir][mhp] = f'[{num_heads-1}:0] '
 
         # Render Transport Layer
+        is_compute_eligible = compute_eligible(prot_ids[prot_id]['ar'], prot_ids[prot_id]['aw'], db)
         context = {
             'name_uniqueifier': prot_id,
             'database': db,
@@ -288,11 +290,7 @@ def render_transport_layer(prot_ids: dict, db: dict, tpl_file: str, compute_cfg:
             'one_write_port': len(prot_ids[prot_id]['aw']) == 1 and not any_mh['aw'],
             'mh_format': mh_format,
             'any_mh': any_mh,
-            'enable_compute': prot_id in (compute_cfg or {}),
-            'compute_ops':
-                compute_cfg[prot_id]['ops'] if prot_id in (compute_cfg or {}) else [],
-            'compute_full_duplex':
-                compute_cfg[prot_id]['full_duplex'] if prot_id in (compute_cfg or {}) else True,
+            'compute_eligible': is_compute_eligible,
             'rendered_read_ports': render_read_mgr_inst(prot_id, prot_ids, db),
             'rendered_write_ports': render_write_mgr_inst(prot_id, prot_ids, db)
         }

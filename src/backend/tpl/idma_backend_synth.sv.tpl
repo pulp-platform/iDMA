@@ -43,6 +43,14 @@ module idma_backend_synth_${name_uniqueifier} #(
 % else:
 0,
 % endif
+% if compute_eligible:
+    /// Elaborate the optional on-the-fly compute engine
+    parameter bit          EnableCompute       = 1'b0,
+    /// Per-operation compute support mask
+    parameter idma_pkg::compute_enable_t ComputeOps = '1,
+    /// Use full-duplex buffering inside the transpose compute engine
+    parameter bit          ComputeFullDuplex   = 1'b1,
+% endif
     /// Mask invalid data on the manager interface
     parameter bit          MaskInvalidData     = 1'b1,
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
@@ -301,6 +309,11 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .BufferDepth          ( BufferDepth             ),
         .NumAxInFlight        ( NumAxInFlight           ),
         .MemSysDepth          ( MemSysDepth             ),
+% if compute_eligible:
+        .EnableCompute        ( EnableCompute           ),
+        .ComputeOps           ( ComputeOps              ),
+        .ComputeFullDuplex    ( ComputeFullDuplex       ),
+% endif
         .RAWCouplingAvail     ( RAWCouplingAvail        ),
         .HardwareLegalizer    ( HardwareLegalizer       ),
         .RejectZeroTransfers  ( RejectZeroTransfers     ),
