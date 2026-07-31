@@ -61,7 +61,7 @@ jobs:
     -
       name: Build hardware
       run: |
-        uv run --locked make -B idma_hw_all \
+        uv run --locked make -B idma_hw_all idma_sw_all \
           IDMA_BACKEND_IDS="${{ inputs.IDMA_BACKEND_IDS }}" \
           IDMA_REG_CPUIF="${{ inputs.IDMA_REG_CPUIF }}"
     -
