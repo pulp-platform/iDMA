@@ -47,7 +47,11 @@ module idma_transport_layer_${name_uniqueifier} #(
     /// Read Meta channel type
     parameter type read_meta_channel_t = logic,
     /// Read request with byte-lane reservation metadata
-    parameter type read_reservation_req_t = logic\
+    parameter type read_reservation_req_t = logic,
+    /// Transfer byte-count type
+    parameter type tf_len_t = logic,
+    /// Byte-lane offset type
+    parameter type offset_t = logic\
 % for protocol in used_protocols:
 ,
     /// ${database[protocol]['full_name']} Request and Response channel type
@@ -233,6 +237,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
+    logic                  ar_gated_valid, ar_gated_ready;
+    strb_t                 buffer_out_handshake;
 
 % if not one_read_port:
     // Read multiplexed signals
@@ -278,6 +284,30 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     // Read Ports
     //--------------------------------------
 
+    // Reserve space in every byte-lane FIFO before allowing a read-address request to reach the
+    // memory interface.  Entries are returned when the corresponding bytes leave the dataflow
+    // buffer, including when the optional compute engine consumes a complete beat.
+    assign buffer_out_handshake = buffer_out_valid & dataflow_ready_in;
+
+    idma_read_reservation_gate #(
+        .StrbWidth      ( StrbWidth      ),
+        .BufferDepth    ( BufferDepth    ),
+        .NumAxInFlight  ( NumAxInFlight  ),
+        .len_t          ( tf_len_t       ),
+        .lane_t         ( offset_t       )
+    ) i_idma_read_reservation_gate (
+        .clk_i,
+        .rst_ni,
+        .ar_valid_i      ( ar_valid_i                 ),
+        .ar_ready_o      ( ar_ready_o                 ),
+        .ar_valid_o      ( ar_gated_valid             ),
+        .ar_ready_i      ( ar_gated_ready             ),
+        .num_bytes_i     ( ar_req_i.num_bytes         ),
+        .start_lane_i    ( ar_req_i.start_lane        ),
+        .deadlock_free_i ( ar_req_i.deadlock_free     ),
+        .buffer_pop_i    ( buffer_out_handshake       )
+    );
+
 % for read_port in used_read_protocols:
 ${rendered_read_ports[read_port]}
 
@@ -291,12 +321,13 @@ ${rendered_read_ports[read_port]}
         case(ar_req_i.src_protocol)
 % for rp in used_read_protocols:
     % if mh_format['ar'][rp] == '':
-        idma_pkg::${database[rp]['protocol_enum']}: ar_ready_o = ${rp}_ar_ready;
+        idma_pkg::${database[rp]['protocol_enum']}: ar_gated_ready = ${rp}_ar_ready;
     % else:
-        idma_pkg::${database[rp]['protocol_enum']}: ar_ready_o = ${rp}_ar_ready [ar_req_i.src_head];
+        idma_pkg::${database[rp]['protocol_enum']}: ar_gated_ready =
+            ${rp}_ar_ready [ar_req_i.src_head];
     % endif
 % endfor
-        default:       ar_ready_o = 1'b0;
+        default:       ar_gated_ready = 1'b0;
         endcase
     end
 

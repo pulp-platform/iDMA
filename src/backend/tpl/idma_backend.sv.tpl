@@ -744,7 +744,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .write_meta_channel_tagged_t ( write_meta_channel_tagged_t ),
 % endif
         .read_meta_channel_t         ( read_meta_channel_t         ),
-        .read_reservation_req_t      ( read_reservation_req_t      )\
+        .read_reservation_req_t      ( read_reservation_req_t      ),
+        .tf_len_t                    ( tf_len_t                    ),
+        .offset_t                    ( offset_t                    )\
 % for protocol in used_protocols:
 ,
     % if database[protocol]['read_slave'] == 'true':

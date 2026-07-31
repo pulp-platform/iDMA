@@ -67,8 +67,8 @@ def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
                 read_dp_valid_out = 'r_dp_valid_o'
                 read_dp_ready_in = 'r_dp_ready_i'
                 read_meta_request = 'ar_req_i.ar_req'
-                read_meta_valid = 'ar_valid_i'
-                read_meta_ready = 'ar_ready_o'
+                read_meta_valid = 'ar_gated_valid'
+                read_meta_ready = 'ar_gated_ready'
                 r_chan_valid = 'r_chan_valid_o'
                 r_chan_ready = 'r_chan_ready_o'
                 buffer_in = 'buffer_in'
@@ -103,13 +103,13 @@ r_dp_ready_i\
                 if num_heads == 1:
                     read_meta_valid = f'''\
 (ar_req_i.src_protocol == idma_pkg::{db[rp]["protocol_enum"]}) & \
-ar_valid_i\
+ar_gated_valid\
 '''
                 else:
                     read_meta_valid = f'''\
 (ar_req_i.src_protocol == idma_pkg::{db[rp]["protocol_enum"]}) & \
 (ar_req_i.src_head == {curr_head}) & \
-ar_valid_i\
+ar_gated_valid\
 '''
                 read_meta_ready = f'{rp}_ar_ready{mh_bus}'
                 r_chan_valid = f'{rp}_r_chan_valid{mh_bus}'
