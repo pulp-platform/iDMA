@@ -239,9 +239,6 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
-% if 'axi' in used_write_protocols:
-    logic                  w_beat_done;
-% endif
 
 % if not one_read_port:
     // Read multiplexed signals
@@ -263,12 +260,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic ${mh_format['aw'][protocol]}${protocol}_w_dp_ready;
     w_dp_rsp_t ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp;
     logic ${mh_format['aw'][protocol]}${protocol}_aw_ready;
-    % if protocol == 'axi':
-    logic ${mh_format['aw'][protocol]}${protocol}_w_beat_done;
-    % endif
 
     %endfor
-    logic w_dp_req_valid, w_dp_req_ready;
+    logic w_dp_req_valid;
     logic w_dp_rsp_mux_valid, w_dp_rsp_mux_ready;
     logic w_dp_rsp_valid, w_dp_rsp_ready;
     w_dp_rsp_t w_dp_rsp_mux;
@@ -280,6 +274,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     idma_pkg::multihead_t w_resp_fifo_out_head;
 % endif
     logic w_resp_fifo_out_valid, w_resp_fifo_out_ready;
+% endif
+    logic w_dp_req_ready;
+% if one_write_port:
+    assign w_dp_ready_o = w_dp_req_ready;
 % endif
 
     //--------------------------------------
@@ -404,7 +402,6 @@ ${rendered_read_ports[read_port]}
         byte_t [StrbWidth-1:0] cmp_data_o;
         strb_t                 cmp_strb_o;
 
-        // Beats retire on w_beat_done (strobe-independent).
         idma_otf_compute #(
             .StrbWidth           ( StrbWidth          ),
             .ComputeEnable       ( ComputeOps         ),
@@ -421,14 +418,12 @@ ${rendered_read_ports[read_port]}
             .data_o      ( cmp_data_o          ),
             .strb_o      ( cmp_strb_o          ),
             .valid_o     ( cmp_out_valid       ),
-            .ready_i     ( w_beat_done         )
+            .ready_i     ( w_dp_req_ready      )
         );
 
-        // Whole-beat valid; edge masking is carried on wr_strb.
         assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
         assign wr_valid          = cmp_active ? {StrbWidth{cmp_out_valid}} : buffer_out_valid;
         assign wr_strb           = cmp_active ? cmp_strb_o : '1;
-        // Pop the buffer only on a compute input handshake.
         assign dataflow_ready_in = cmp_active ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}}
                                               : buffer_out_ready_shifted;
     end else begin : gen_no_compute
@@ -506,22 +501,6 @@ ${rendered_read_ports[read_port]}
         endcase
     end
 
-% if compute_eligible:
-    // route the active write port's beat-done to the compute engine retire
-    always_comb begin : gen_write_beat_done_mux
-        case(w_dp_req_i.dst_protocol)
-% for wp in used_write_protocols:
-    % if wp == 'axi' and mh_format['aw'][wp] == '':
-        idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done;
-    % elif wp == 'axi':
-        idma_pkg::${database[wp]['protocol_enum']}: w_beat_done = ${wp}_w_beat_done [w_dp_req_i.dst_head];
-    % endif
-% endfor
-        default: w_beat_done = 1'b0;
-        endcase
-    end
-
-% endif
 % endif
     //--------------------------------------
     // Write Ports
