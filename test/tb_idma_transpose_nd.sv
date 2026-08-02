@@ -36,11 +36,11 @@ module tb_idma_transpose_nd
 
   // Geometry cases (M, N, EB) swept in one elaboration: aligned + edge
   // (M or N not a multiple of NE) for int8/fp16/fp32. EB>StrbWidth cases skip.
-  localparam int unsigned NCases = 13;
+  localparam int unsigned NCases = 14;
   localparam int unsigned Cases [NCases][3] = '{
     '{ 8,  8, 1}, '{16, 16, 1}, '{16,  8, 1}, '{ 8,  8, 2}, '{ 6,  8, 1},
     '{ 8,  6, 1}, '{ 6,  6, 1}, '{ 5,  7, 1}, '{10,  6, 1}, '{ 5,  5, 2},
-    '{32, 24, 1}, '{ 9,  5, 4}, '{13, 19, 1}
+    '{32, 24, 1}, '{ 9,  5, 4}, '{13, 19, 1}, '{ 9,  5, 8}
   };
 
   // ── Types ──
@@ -219,7 +219,7 @@ module tb_idma_transpose_nd
   task automatic run_case(input int unsigned m, input int unsigned n, input int unsigned eb,
                           input bit compact, output int unsigned errs);
     automatic int unsigned ne   = StrbWidth / eb;        // tile side (elements)
-    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic int unsigned mode = (eb == 8) ? 3 : (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
     automatic int unsigned yt   = (m + ne - 1) / ne;     // row-tiles
     automatic int unsigned nt   = (n + ne - 1) / ne;     // col-tiles
     automatic int unsigned mp   = yt * ne;               // padded Aᵀ row pitch (StrbWidth-aligned)
@@ -239,9 +239,11 @@ module tb_idma_transpose_nd
         for (int unsigned b = 0; b < eb; b++)
           wr_mem(db + (i*mp + j)*eb + b, 8'hCC);
 
-    // arm the AW-bounds guard for this case
-    chk_db     = db;
-    chk_aw_hi  = db + addr_t'(nt*ne*mp*eb);
+    // arm the AW-bounds guard for this case. A misaligned base lets the DMA
+    // issue AWs down to the aligned-down address (strobe-masked partial beat),
+    // so the legal window spans [aligndown(db), alignup(db+size)).
+    chk_db     = db & ~addr_t'(StrbWidth-1);
+    chk_aw_hi  = (db + addr_t'(nt*ne*mp*eb) + StrbWidth-1) & ~addr_t'(StrbWidth-1);
     chk_active = 1'b1;
 
     // The transpose midend derives all reps and strides from this base request.
@@ -304,21 +306,27 @@ module tb_idma_transpose_nd
     @(posedge rst_n);
     repeat (5) @(posedge clk);
 
-    for (int unsigned k = 0; k < NCases; k++) begin
-      if (Cases[k][2] > StrbWidth) continue;   // element must fit the bus
-      for (int unsigned compact = 0; compact < 2; compact++) begin
-        run_case(Cases[k][0], Cases[k][1], Cases[k][2], bit'(compact), ce);
-        if (ce == 0)
-          $display("[TPN] PASS: %0dx%0d EB=%0d compact=%0d",
-                   Cases[k][0], Cases[k][1], Cases[k][2], compact);
-        else
-          $display("[TPN] FAIL: %0dx%0d EB=%0d compact=%0d (%0d mismatches)",
-                   Cases[k][0], Cases[k][1], Cases[k][2], compact, ce);
-        total += ce;
+    // Sweep aligned and misaligned (sub-beat) src/dst bases so the transpose
+    // exercises the offset write/read path (2-beat rows) as well.
+    for (int unsigned misalign = 0; misalign < 2; misalign++) begin
+      sb = 'h0000_1000 + (misalign ? 1 : 0);
+      db = 'h0000_4000 + (misalign ? 3 : 0);
+      for (int unsigned k = 0; k < NCases; k++) begin
+        if (Cases[k][2] > StrbWidth) continue;   // element must fit the bus
+        for (int unsigned compact = 0; compact < 2; compact++) begin
+          run_case(Cases[k][0], Cases[k][1], Cases[k][2], bit'(compact), ce);
+          if (ce == 0)
+            $display("[TPN] PASS: %0dx%0d EB=%0d compact=%0d misalign=%0d",
+                     Cases[k][0], Cases[k][1], Cases[k][2], compact, misalign);
+          else
+            $display("[TPN] FAIL: %0dx%0d EB=%0d compact=%0d misalign=%0d (%0d mismatches)",
+                     Cases[k][0], Cases[k][1], Cases[k][2], compact, misalign, ce);
+          total += ce;
+        end
       end
     end
 
-    if (total == 0) $display("[TPN] ALL PASS (%0d geometries x 2 layouts, StrbWidth=%0d)",
+    if (total == 0) $display("[TPN] ALL PASS (%0d geometries x 2 layouts x 2 alignments, StrbWidth=%0d)",
                              NCases, StrbWidth);
     else            $fatal(1, "[TPN] FAIL: %0d total mismatches", total);
     repeat (5) @(posedge clk);

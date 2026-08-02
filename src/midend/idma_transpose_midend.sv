@@ -118,6 +118,9 @@ module idma_transpose_midend #(
             assert (nd_req_i.burst_req.opt.compute.params.transpose.tensor_m != '0 &&
                     nd_req_i.burst_req.opt.compute.params.transpose.tensor_n != '0) else
                 $error("idma_transpose_midend: zero-size tensor (M or N == 0)");
+            assert (nd_req_i.burst_req.opt.compute.params.transpose.mode <= Log2Strb) else
+                $error("idma_transpose_midend: element size %0d B exceeds datapath %0d B",
+                       1 << nd_req_i.burst_req.opt.compute.params.transpose.mode, StrbWidth);
         end
     end
 `endif

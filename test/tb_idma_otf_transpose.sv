@@ -145,7 +145,7 @@ module tb_idma_otf_transpose #(
 
   // Run one m x n transpose of eb-byte elements; returns the mismatch count.
   task automatic run_case(input int unsigned m, n, eb, output int unsigned errs);
-    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic int unsigned mode = (eb == 8) ? 3 : (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
     automatic int unsigned ne   = StrbWidth / eb;
     automatic int unsigned yt   = (m + ne - 1) / ne;
     automatic int unsigned nt   = (n + ne - 1) / ne;

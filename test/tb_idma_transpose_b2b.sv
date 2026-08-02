@@ -29,8 +29,8 @@ module tb_idma_transpose_b2b
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
 
   // Geometry cases (M, N, EB); EB>StrbWidth cases skip.
-  localparam int unsigned NCases = 4;
-  localparam int unsigned Cases [NCases][3] = '{ '{6, 8, 1}, '{8, 8, 1}, '{13, 19, 1}, '{5, 5, 2} };
+  localparam int unsigned NCases = 5;
+  localparam int unsigned Cases [NCases][3] = '{ '{6, 8, 1}, '{8, 8, 1}, '{13, 19, 1}, '{5, 5, 2}, '{9, 5, 8} };
 
   typedef logic [AddrWidth-1:0]  addr_t;
   typedef logic [DataWidth-1:0]  data_t;
@@ -180,7 +180,7 @@ module tb_idma_transpose_b2b
   task automatic do_transpose(input int unsigned m, input int unsigned n, input int unsigned eb,
                               input bit compact, input addr_t db, output int unsigned errs);
     automatic int unsigned ne   = StrbWidth / eb;
-    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic int unsigned mode = (eb == 8) ? 3 : (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
     automatic int unsigned yt   = (m + ne - 1) / ne;
     automatic int unsigned nt   = (n + ne - 1) / ne;
     automatic int unsigned mp   = yt * ne;
