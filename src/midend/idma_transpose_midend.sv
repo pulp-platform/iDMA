@@ -105,11 +105,10 @@ module idma_transpose_midend #(
                RepW, (TensorW > Log2Strb+1) ? TensorW : Log2Strb+1);
     initial assert (LenW > Log2Strb) else
         $fatal(1, "idma_transpose_midend: length field %0d b cannot hold StrbWidth", LenW);
-    // reserved mode 3 (EB=8) and zero-size tensors are out of contract
+    // Zero-size tensors are out of contract.  Modes 0..3 select 1, 2, 4,
+    // and 8 byte elements; mode 3 degenerates to NE=1 for a 64-bit datapath.
     always_comb begin : check_domain
         if (is_transpose) begin
-            assert (nd_req_i.burst_req.opt.compute.params.transpose.mode != 2'd3) else
-                $error("idma_transpose_midend: reserved element mode 3 (EB=8)");
             assert (nd_req_i.burst_req.opt.compute.params.transpose.tensor_m != '0 &&
                     nd_req_i.burst_req.opt.compute.params.transpose.tensor_n != '0) else
                 $error("idma_transpose_midend: zero-size tensor (M or N == 0)");

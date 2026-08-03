@@ -151,6 +151,31 @@ addrmap idma_reg #(
         } reps [31:0] = 0;
     };
 
+    reg compute_cfg {
+        name = "compute_cfg";
+        desc = "Per-transfer on-the-fly compute configuration. The fields are sampled when next_id is read to launch a transfer.";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Enable on-the-fly compute for the launched transfer.";
+        } compute_enable [0:0] = 0;
+        field {
+            desc = "Compute operation selector. Currently, 1 selects transpose.";
+        } compute_op [4:1] = 0;
+        field {
+            desc = "Transpose element-size mode. The element size is 1 << transpose_mode bytes, encoding 8b, 16b, 32b, and 64b elements.";
+        } transpose_mode [6:5] = 0;
+        field {
+            desc = "Transpose tensor M dimension in elements. Must be non-zero when transpose is enabled.";
+        } transpose_tensor_m [18:7] = 0;
+        field {
+            desc = "Transpose tensor N dimension in elements. Must be non-zero when transpose is enabled.";
+        } transpose_tensor_n [30:19] = 0;
+        field {
+            desc = "Reserved.";
+        } reserved [31:31] = 0;
+    };
+
     regfile dim {
         dst_stride dst_stride[SysAddrWidth/32];
         src_stride src_stride[SysAddrWidth/32];
@@ -166,6 +191,7 @@ addrmap idma_reg #(
              src_addr src_addr[SysAddrWidth/32];
              length   length[SysAddrWidth/32];
              dim      dim[NumDims-1 | NumDims == 1];
+             compute_cfg compute_cfg;
 };
 
 `endif // IDMA_REG_RDL
