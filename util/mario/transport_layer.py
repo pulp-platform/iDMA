@@ -243,6 +243,7 @@ aw_valid_i\
                 'write_request': f'{wp}_write_req_o{mh_bus}',
                 'write_response': f'{wp}_write_rsp_i{mh_bus}',
                 'buffer_out_ready': buffer_out_ready,
+                'w_beat_done': 'w_beat_done' if swp else f'{wp}_w_beat_done{mh_bus}',
                 'mh': mh
             }
 

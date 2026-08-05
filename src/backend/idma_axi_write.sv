@@ -75,7 +75,9 @@ module idma_axi_write #(
     /// Ready to buffer
     output strb_t buffer_out_ready_o,
     /// External write-strobe mask (ANDed into wstrb); tie to '1 when unused
-    input  strb_t mask_ext_i
+    input  strb_t mask_ext_i,
+    /// Pulses when a write beat is accepted on the bus (strobe-independent)
+    output logic  w_beat_done_o
 );
     // offsets needed for masks to empty buffer
     strb_t w_first_mask;
@@ -173,6 +175,8 @@ module idma_axi_write #(
 
     // write happening: both the bus (w_ready) and the buffer (ready_to_write) is high
     assign write_happening = ready_to_write & write_rsp_i.w_ready;
+
+    assign w_beat_done_o = write_happening;
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
