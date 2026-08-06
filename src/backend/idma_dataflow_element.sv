@@ -36,6 +36,7 @@ module idma_dataflow_element #(
         cc_passthrough_stream_fifo #(
             .data_t       ( byte_t        ),
             .Depth        ( BufferDepth   ),
+            .SameCycleRW  ( 1'b0          ),
             .PrintInfo    ( PrintFifoInfo )
         ) i_passthrough_stream_fifo (
             .clk_i,
