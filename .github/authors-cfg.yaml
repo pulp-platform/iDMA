@@ -6,10 +6,10 @@
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 header-regex: >
-  (?:#\!/.*\n)*[/|#]+ Copyright ([0-9]+) ETH Zurich and University of Bologna\.\n[/|#]+ Solderpad Hardware License, Version 0\.51, see LICENSE for details\.\n[/|#]+ SPDX-License-Identifier: SHL-0\.51\n\n[/|#]+ Authors:\n((?:[/#]+ - [0-9A-Za-z ]+<[0-9A-Za-z\.]+@[0-9A-Za-z\.]+>\n)+)
+  (?:#\!/.*\n)*[/|#]+ Copyright ([0-9]+) [^\n]+\n(?:[/|#][^\n]*\n|\n)*?[/|#]+ SPDX-License-Identifier: (?:SHL-0\.51|Apache-2\.0)\n(?:[/|#][^\n]*\n|\n)*?[/|#]+ Authors:\n((?:[/|#]+ - [0-9A-Za-z .]+<[^\s>]+@[^\s>]+>\n)+)
 
 author-regex: >
-  ([0-9A-Za-z ]+)<([0-9A-Za-z\.]+@[0-9A-Za-z\.]+)>
+  ([0-9A-Za-z .]+)<([^\s>]+@[^\s>]+)>
 
 excludes:
   - LICENSE
@@ -41,10 +41,6 @@ allowed-years:
   - 2025
   - 2026
 
-allowed-authors:
-  Axel Vanoni: axvanoni@ethz.ch
-  Daniel Keller: dankeller@iis.ee.ethz.ch
-  Michael Rogenmoser: michaero@iis.ee.ethz.ch
-  Samuel Riedel: sriedel@iis.ee.ethz.ch
-  Thomas Benz: tbenz@iis.ee.ethz.ch
-  Tobias Senti: tsenti@ethz.ch
+allowed-domains:
+  - ethz.ch
+  - mosaic-soc.com
