@@ -171,7 +171,7 @@ module idma_otf_compute #(
   end
 
   // pragma translate_off
-  // NOT IMPLEMENTED: config change while an MX unit holds state (pipelining needs identical cfg)
+  // backstop: the backend request interlock must never let a differing config in while busy
   always @(posedge clk_i) if (rst_ni && cfg_valid_i && (compute_i != latched_q))
     assert (!(mx_busy || dq_busy))
       else $fatal(1, "idma_otf_compute: compute config changed while an MX unit is busy");

@@ -291,27 +291,38 @@ module tb_idma_mxrand
         for (int unsigned i = 0; i < BNb * 33 + 2 * Margin; i++)
           wr_mem(DstBase + k * 'h2000 - Margin + i, 8'hC5);
       end
+      for (int unsigned i = 0; i < 512; i++) begin
+        wr_mem(SrcBase + 'hC000 + i, 8'((i * 89 + 5) ^ (i >> 3)));
+        wr_mem(DstBase + 'hC000 + i, 8'hC5);
+      end
       rsp_cnt = 0;
-      for (int unsigned k = 0; k < BK; k++) begin
+      for (int unsigned k = 0; k <= BK; k++) begin
         idma_req = '0;
-        idma_req.length   = tf_len_t'(BNb * 128);
-        idma_req.src_addr = SrcBase + k * 'h2000;
-        idma_req.dst_addr = DstBase + k * 'h2000;
+        if (k < BK) begin
+          idma_req.length   = tf_len_t'(BNb * 128);
+          idma_req.src_addr = SrcBase + k * 'h2000;
+          idma_req.dst_addr = DstBase + k * 'h2000;
+          idma_req.opt.compute.enable = 1'b1;
+          idma_req.opt.compute.op     = idma_pkg::COMPUTE_MXQUANT;
+        end else begin
+          // different config issued pipelined: the hardware interlock must drain first
+          idma_req.length   = tf_len_t'(512);
+          idma_req.src_addr = SrcBase + 'hC000;
+          idma_req.dst_addr = DstBase + 'hC000;
+        end
         idma_req.opt.src_protocol = idma_pkg::AXI;
         idma_req.opt.dst_protocol = idma_pkg::AXI;
         idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
         idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
         idma_req.opt.beo.decouple_rw = 1'b1;
         idma_req.opt.beo.decouple_aw = 1'b1;
-        idma_req.opt.compute.enable  = 1'b1;
-        idma_req.opt.compute.op      = idma_pkg::COMPUTE_MXQUANT;
         idma_req.opt.last            = 1'b1;
         req_valid = 1'b1;
         do @(posedge clk); while (!req_ready);
       end
       req_valid = 1'b0;
       idma_req = '0;
-      while (rsp_cnt < BK) @(posedge clk);
+      while (rsp_cnt < BK + 1) @(posedge clk);
       repeat (20) @(posedge clk);
       for (int unsigned k = 0; k < BK; k++) begin
         for (int unsigned i = 0; i < BNb * 33; i++)
@@ -327,6 +338,11 @@ module tb_idma_mxrand
             if (errs <= 8) $display("[MXRD] b2b k%0d canary hit", k);
           end
       end
+      for (int unsigned i = 0; i < 512; i++)
+        if (rd_mem(DstBase + 'hC000 + i) !== 8'((i * 89 + 5) ^ (i >> 3))) begin
+          errs++;
+          if (errs <= 8) $display("[MXRD] interlock copy dst[%0d] wrong", i);
+        end
     end
 
     if (errs == 0) $display("[MXRD] ALL PASS (%0d transfers, StrbWidth=%0d, StallPct=%0d)",
