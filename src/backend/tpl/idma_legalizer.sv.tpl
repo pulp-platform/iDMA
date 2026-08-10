@@ -724,8 +724,7 @@ ${database[protocol]['legalizer_write_data_path']}
     // compute retires on the per-beat write pulse; TileLink writes retire per burst
     `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.dst_protocol == idma_pkg::TILELINK)), clk_i, !rst_ni)
-    // NOT IMPLEMENTED: multi-beat transpose write bursts (the seam retires per write
-    // transaction; the transpose midend decomposition keeps every burst single-beat)
+    // NOT IMPLEMENTED: multi-beat transpose write bursts (midend strips are single-beat)
     `ASSERT_NEVER(ComputeTransposeSingleBeat, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &
                   (req_i.length > StrbWidth)), clk_i, !rst_ni)

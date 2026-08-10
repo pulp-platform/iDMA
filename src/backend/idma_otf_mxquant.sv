@@ -63,8 +63,7 @@ module idma_otf_mxquant
   logic fp16_act;
   assign fp16_act = (Fp16En != 1'b0) && src_fp16_i;
 
-  // lane-exact pop: a tail beat pops only its own bytes, keeping any follow-on
-  // transfer's data intact (same-config back-to-back streaming)
+  // lane-exact pop: a tail beat pops only its own bytes
   logic [PopW-1:0] pop_cnt;
   always_comb begin
     pop_cnt = '0;

@@ -418,7 +418,6 @@ ${rendered_read_ports[read_port]}
             .data_o       ( cmp_data_o          ),
             .strb_o       ( cmp_strb_o          ),
             .lane_valid_o ( cmp_lane_valid      ),
-            // transpose retires per write transaction; the MX units retire lane-exactly
             .ready_i      ( w_dp_req_ready      ),
             .lane_ready_i ( buffer_out_ready_shifted )
         );
