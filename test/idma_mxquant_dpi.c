@@ -49,9 +49,11 @@ static uint8_t block_scale_e5m2(const uint32_t *block, size_t len) {
   uint32_t max_exp = 0;
   for (size_t i = 0; i < len; ++i) {
     uint32_t exp = (block[i] >> 23) & 0xFFu;
-    if (exp > max_exp) max_exp = exp;
+    if (exp != 0xFFu && exp > max_exp) max_exp = exp;
   }
   int32_t scaled = (int32_t)max_exp - 127 - 15;
+  if (scaled < -128) scaled = -128;
+  else if (scaled > 127) scaled = 127;
   return (uint8_t)(scaled & 0xFF);
 }
 

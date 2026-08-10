@@ -125,8 +125,16 @@ module tb_idma_mxquant
     return sgn | exp | man;
   endfunction
 
-  // deterministic FP32 pattern; last 8 elements cover zero/subnormal/Inf/NaN/max
+  // deterministic FP32 pattern; block 0 all-tiny (scale clamp), block 1 Inf/NaN
+  // poisoned with finite lanes (scale-scan exclusion), last 8 elements specials
   function automatic logic [31:0] fp32_gen(input int unsigned e, input int unsigned total);
+    if (e < 32)
+      return 32'((e & 1) << 31) | 32'(((1 + (e % 13)) & 8'hFF) << 23) | 32'((e * 977) & 23'h7FFFFF);
+    if (e < 64) begin
+      if (e == 32) return 32'h7F80_0000;
+      if (e == 33) return 32'hFFC0_0001;
+      return 32'((e & 1) << 31) | 32'(((100 + (e % 30)) & 8'hFF) << 23) | 32'((e * 331) & 23'h7FFFFF);
+    end
     if (e + 8 >= total) begin
       unique case (e % 8)
         0: return 32'h0000_0000;

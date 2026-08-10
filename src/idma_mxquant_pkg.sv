@@ -26,16 +26,22 @@ package idma_mxquant_pkg;
     else return int'(scale) - 256;
   endfunction
 
+  // Inf/NaN lanes are excluded from the scan and the scale saturates instead of
+  // wrapping (two deliberate corrections vs the viDMA ALCU)
   function automatic logic [7:0] compute_block_scale_with_bias(
       input logic [31:0] fp32_bits[MxBlockSize], input int bias);
     logic [7:0] max_exp;
     logic [7:0] elem_exp;
+    int         scale;
     max_exp = 8'd0;
     for (int i = 0; i < MxBlockSize; i++) begin
       elem_exp = fp32_bits[i][30:23];
-      if (elem_exp > max_exp) max_exp = elem_exp;
+      if (elem_exp != 8'hFF && elem_exp > max_exp) max_exp = elem_exp;
     end
-    return 8'((int'(max_exp) - Fp32Bias - bias));
+    scale = int'(max_exp) - Fp32Bias - bias;
+    if (scale < -128) scale = -128;
+    else if (scale > 127) scale = 127;
+    return 8'(scale);
   endfunction
 
   // RNE FP32 -> E5M2 with full subnormal support. The split normal/subnormal
