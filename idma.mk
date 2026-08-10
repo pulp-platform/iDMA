@@ -360,6 +360,7 @@ $(IDMA_VSIM_DIR)/compile_%.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL
 IDMA_VLOG_ARGS  := -suppress vlog-2583 \
 			  	   -suppress vlog-13314 \
 			  	   -suppress vlog-13233 \
+			  	   +define+INC_ASSERT \
 			  	   -timescale \"1 ns / 1 ps\"
 
 define idma_generate_vsim
@@ -423,6 +424,50 @@ idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	# the TB sweeps the geometry list internally; one run per bus width
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_b2b -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_b2b -do "run -all; quit"
+
+.PHONY: idma_sim_tb_idma_mxquant
+idma_sim_tb_idma_mxquant: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxquant -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxquant -do "run -all; quit"
+
+.PHONY: idma_sim_tb_idma_mxroundtrip
+idma_sim_tb_idma_mxroundtrip: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxroundtrip -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxroundtrip -do "run -all; quit"
+
+.PHONY: idma_sim_tb_idma_mxrand
+idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxrand -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxrand -do "run -all; quit"
+
+.PHONY: idma_sim_tb_idma_mxperf
+idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxperf -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxperf -do "run -all; quit"
+
+# each case must print its guard assert; case 6 needs the op compiled out, case 4 a 1024-bit bus
+.PHONY: idma_sim_tb_idma_mxneg
+idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); set -e; \
+	for c in "1 ComputeSizeAligned 64 1" "2 ComputeSrcAligned 64 1" "3 ComputeDstAligned 64 1" \
+	         "4 ComputeMxquantFp16Width 1024 1" "5 ComputeMxdequantBeatAligned 64 1" \
+	         "6 ComputeOpUnsupported 64 0" "7 ComputeMxSrcProtocol 64 1" \
+	         "8 ComputeMxDstProtocol 64 1" "9 in-flight.state|config.changed.while 64 1" \
+	         "10 ComputeTransposeSingleBeat 64 1"; do \
+	  set -- $$c; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 \
+	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \
+	  if grep -qE "(ASSERT FAILED.*$$2|$$2)" mxneg_$$1.log; then echo "[MXNEG] case $$1 $$2 FIRED"; \
+	  else echo "[MXNEG] case $$1 $$2 DID NOT FIRE (see mxneg_$$1.log)"; exit 1; fi; \
+	done
 
 .PHONY: idma_sim_tb_idma_transpose_midend
 idma_sim_tb_idma_transpose_midend: $(IDMA_VSIM_DIR)/compile.tcl

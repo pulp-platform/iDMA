@@ -447,6 +447,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         // hardware legalizer is present
         idma_legalizer_${name_uniqueifier} #(
             .CombinedShifter   ( CombinedShifter   ),
+% if compute_eligible:
+            .EnableCompute     ( EnableCompute     ),
+            .ComputeOps        ( ComputeOps        ),
+% endif
             .DataWidth         ( DataWidth         ),
             .AddrWidth         ( AddrWidth         ),
             .BurstLen          ( BurstLen          ),
@@ -973,6 +977,8 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
 % if compute_eligible:
         compute_error_handling : assert(!EnableCompute || ErrorCap == idma_pkg::NO_ERROR_HANDLING) else
             $fatal(1, "EnableCompute requires ErrorCap == NO_ERROR_HANDLING!");
+        compute_combined_shifter : assert(!EnableCompute || !CombinedShifter) else
+            $fatal(1, "EnableCompute requires CombinedShifter == 0!");
 % endif
     end
     )

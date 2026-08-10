@@ -83,9 +83,31 @@ package idma_pkg;
 
     /// Compute operation selector
     typedef enum logic [3:0] {
-        COMPUTE_NONE      = 4'd0,
-        COMPUTE_TRANSPOSE = 4'd1
+        COMPUTE_NONE         = 4'd0,
+        COMPUTE_TRANSPOSE    = 4'd1,
+        COMPUTE_MXQUANT      = 4'd2, // FP32 -> MXFP8, 128B -> 33B per 32-elem block
+        COMPUTE_MXQUANT_FP16 = 4'd3, // FP16 -> MXFP8,  64B -> 33B per 32-elem block
+        COMPUTE_MXDEQUANT    = 4'd4  // MXFP8 -> FP32,  33B -> 128B per 32-elem block
     } compute_op_e;
+
+    /// Per-op source:dest byte ratio; the legalizer sizes the write length from it.
+    function automatic int unsigned compute_in_bytes(compute_op_e op);
+        unique case (op)
+            COMPUTE_MXQUANT:      return 32'd128;
+            COMPUTE_MXQUANT_FP16: return 32'd64;
+            COMPUTE_MXDEQUANT:    return 32'd33;
+            default:              return 32'd1;
+        endcase
+    endfunction
+
+    function automatic int unsigned compute_out_bytes(compute_op_e op);
+        unique case (op)
+            COMPUTE_MXQUANT:      return 32'd33;
+            COMPUTE_MXQUANT_FP16: return 32'd33;
+            COMPUTE_MXDEQUANT:    return 32'd128;
+            default:              return 32'd1;
+        endcase
+    endfunction
 
     /// Transpose tensor dimension width (elements)
     localparam int unsigned TransposeDimWidth = 32'd12;
@@ -112,6 +134,8 @@ package idma_pkg;
     /// Compile-time per-op compute feature enables
     typedef struct packed {
         logic transpose;
+        logic mxquant;
+        logic mxdequant;
     } compute_enable_t;
 
     /// Supported Protocols
