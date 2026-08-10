@@ -62,16 +62,18 @@ def lint_authors(file: str, config: dict) -> int:
     # parse authors
     authors = re.findall(config['author-regex'], header_info[0][1])
 
-    # check for authors
+    # check each author's email domain against the allowed domains
     for author in authors:
-        if not author[0].strip() in config['allowed-authors']:
-            print(f' -> Unknown author {author[0].strip()}')
+        email = author[1].strip()
+        if email.count('@') != 1:
+            print(f' -> Malformed author email: {email}')
             return 1
-        # check email
-        else:
-            if author[1].strip() != config['allowed-authors'][author[0].strip()]:
-                print(f' -> Wrong email address {author[1].strip()}')
-                return 1
+        domain = email.split('@', 1)[1].lower()
+        allowed = all(domain.split('.')) and any(
+            domain == d or domain.endswith('.' + d) for d in config['allowed-domains'])
+        if not allowed:
+            print(f' -> Author email domain not allowed: {email}')
+            return 1
 
     # all checks pass
     return 0
