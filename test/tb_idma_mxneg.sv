@@ -152,6 +152,8 @@ module tb_idma_mxneg
       end
       10: issue(Src, Dst, 4 * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      11: issue(Src, Dst, 32'd264 << 22, idma_pkg::COMPUTE_MXDEQUANT,
+                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 
