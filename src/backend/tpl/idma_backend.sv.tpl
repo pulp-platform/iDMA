@@ -40,8 +40,8 @@ module idma_backend_${name_uniqueifier} #(
     parameter bit          EnableCompute    = 1'b0,
     /// Per-operation compute support mask
     parameter idma_pkg::compute_enable_t ComputeOps = '1,
-    /// Use full-duplex buffering inside the transpose compute engine
-    parameter bit          ComputeFullDuplex = 1'b1,
+    /// Implementation tuning knobs for the compute engines
+    parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
     parameter bit          RAWCouplingAvail = 1'b\
@@ -441,12 +441,44 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
 
     //--------------------------------------
+    // Compute config serialization interlock
+    //--------------------------------------
+    logic req_valid_leg, leg_ready;
+% if compute_eligible:
+    if (EnableCompute) begin : gen_compute_cfg_gate
+        // a request whose compute config differs from the last accepted one waits
+        // until the datapath drained: its reads must not race a draining engine
+        idma_pkg::compute_options_t cmp_cfg_q;
+        logic backend_active, cmp_cfg_stall;
+        assign backend_active = busy_o.buffer_busy | busy_o.r_dp_busy | busy_o.w_dp_busy |
+                                busy_o.r_leg_busy | busy_o.w_leg_busy | busy_o.raw_coupler_busy;
+        assign cmp_cfg_stall  = req_valid & (idma_req_i.opt.compute != cmp_cfg_q) & backend_active;
+        assign req_valid_leg  = req_valid & ~cmp_cfg_stall;
+        assign req_ready_o    = leg_ready & ~cmp_cfg_stall;
+        always_ff @(posedge clk_i or negedge rst_ni) begin
+            if (!rst_ni)                        cmp_cfg_q <= '0;
+            else if (req_valid_leg & leg_ready) cmp_cfg_q <= idma_req_i.opt.compute;
+        end
+    end else begin : gen_no_compute_cfg_gate
+        assign req_valid_leg = req_valid;
+        assign req_ready_o   = leg_ready;
+    end
+% else:
+    assign req_valid_leg = req_valid;
+    assign req_ready_o   = leg_ready;
+% endif
+
+    //--------------------------------------
     // Legalization
     //--------------------------------------
     if (HardwareLegalizer) begin : gen_hw_legalizer
         // hardware legalizer is present
         idma_legalizer_${name_uniqueifier} #(
             .CombinedShifter   ( CombinedShifter   ),
+% if compute_eligible:
+            .EnableCompute     ( EnableCompute     ),
+            .ComputeOps        ( ComputeOps        ),
+% endif
             .DataWidth         ( DataWidth         ),
             .AddrWidth         ( AddrWidth         ),
             .BurstLen          ( BurstLen          ),
@@ -459,8 +491,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             .clk_i     ( clk_i             ),
             .rst_ni    ( rst_ni            ),
             .req_i     ( idma_req_i        ),
-            .valid_i   ( req_valid         ),
-            .ready_o   ( req_ready_o       ),
+            .valid_i   ( req_valid_leg     ),
+            .ready_o   ( leg_ready         ),
             .r_req_o   ( r_req             ),
             .w_req_o   ( w_req             ),
             .r_valid_o ( r_valid           ),
@@ -481,8 +513,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         ) i_stream_fork (
             .clk_i   ( clk_i                ),
             .rst_ni  ( rst_ni               ),
-            .valid_i ( req_valid            ),
-            .ready_o ( req_ready_o          ),
+            .valid_i ( req_valid_leg        ),
+            .ready_o ( leg_ready            ),
             .valid_o ( { r_valid, w_valid } ),
             .ready_i ( { r_ready, w_ready } )
         );
@@ -726,7 +758,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if compute_eligible:
         .EnableCompute               ( EnableCompute               ),
         .ComputeOps                  ( ComputeOps                  ),
-        .ComputeFullDuplex           ( ComputeFullDuplex           ),
+        .ComputeTuning               ( ComputeTuning               ),
 % endif
         .PrintFifoInfo               ( PrintFifoInfo               ),
         .r_dp_req_t                  ( r_dp_req_t                  ),
@@ -973,6 +1005,8 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
 % if compute_eligible:
         compute_error_handling : assert(!EnableCompute || ErrorCap == idma_pkg::NO_ERROR_HANDLING) else
             $fatal(1, "EnableCompute requires ErrorCap == NO_ERROR_HANDLING!");
+        compute_combined_shifter : assert(!EnableCompute || !CombinedShifter) else
+            $fatal(1, "EnableCompute requires CombinedShifter == 0!");
 % endif
     end
     )

@@ -9,7 +9,7 @@
 
 """ MARIO legalizer interaction"""
 from mako.template import Template
-from mario.util import indent_block, eval_key, prot_key
+from mario.util import indent_block, eval_key, prot_key, compute_eligible
 
 
 def prot_force_decouple(used_prots: list, db: dict) -> list:
@@ -66,6 +66,7 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         context = {
             'name_uniqueifier': prot_id,
             'database': db,
+            'compute_eligible': compute_eligible(used_read_prots, used_write_prots, db),
             'used_read_protocols': used_read_prots,
             'used_write_protocols': used_write_prots,
             'used_protocols': prot_ids[prot_id]['used'],

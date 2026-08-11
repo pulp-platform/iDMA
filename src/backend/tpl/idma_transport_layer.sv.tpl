@@ -26,8 +26,8 @@ module idma_transport_layer_${name_uniqueifier} #(
     parameter bit EnableCompute = 1'b0,
     /// Per-operation compute support mask
     parameter idma_pkg::compute_enable_t ComputeOps = '1,
-    /// Use full-duplex buffering inside the transpose compute engine
-    parameter bit ComputeFullDuplex = 1'b1,
+    /// Implementation tuning knobs for the compute engines
+    parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
     /// Print the info of the FIFO configuration
     parameter bit PrintFifoInfo = 1'b0,
@@ -398,14 +398,14 @@ ${rendered_read_ports[read_port]}
 % if compute_eligible:
     if (EnableCompute) begin : gen_compute
         logic                  cmp_active;
-        logic                  cmp_in_ready, cmp_out_valid;
+        logic                  cmp_in_ready;
         byte_t [StrbWidth-1:0] cmp_data_o;
-        strb_t                 cmp_strb_o;
+        strb_t                 cmp_strb_o, cmp_lane_valid;
 
         idma_otf_compute #(
             .StrbWidth           ( StrbWidth          ),
             .ComputeEnable       ( ComputeOps         ),
-            .TransposeFullDuplex ( ComputeFullDuplex  )
+            .ComputeTuning       ( ComputeTuning      )
         ) i_idma_otf_compute (
             .clk_i,
             .rst_ni,
@@ -415,14 +415,15 @@ ${rendered_read_ports[read_port]}
             .data_i      ( buffer_out          ),
             .valid_i     ( &buffer_out_valid   ),
             .in_ready_o  ( cmp_in_ready        ),
-            .data_o      ( cmp_data_o          ),
-            .strb_o      ( cmp_strb_o          ),
-            .valid_o     ( cmp_out_valid       ),
-            .ready_i     ( w_dp_req_ready      )
+            .data_o       ( cmp_data_o          ),
+            .strb_o       ( cmp_strb_o          ),
+            .lane_valid_o ( cmp_lane_valid      ),
+            .ready_i      ( w_dp_req_ready      ),
+            .lane_ready_i ( buffer_out_ready_shifted )
         );
 
         assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
-        assign wr_valid          = cmp_active ? {StrbWidth{cmp_out_valid}} : buffer_out_valid;
+        assign wr_valid          = cmp_active ? cmp_lane_valid : buffer_out_valid;
         assign wr_strb           = cmp_active ? cmp_strb_o : '1;
         assign dataflow_ready_in = cmp_active ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}}
                                               : buffer_out_ready_shifted;

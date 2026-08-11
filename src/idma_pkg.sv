@@ -81,11 +81,43 @@ package idma_pkg;
         logic       dst_reduce_len;
     } backend_options_t;
 
+    /// MX block geometry (OCP MX): 32 elements per block, width-independent
+    localparam int unsigned MxBlockElems     = 32'd32;
+    /// Compressed block: 1B E8M0 scale + 32B E5M2
+    localparam int unsigned MxBlockBytes     = MxBlockElems + 32'd1;
+    localparam int unsigned MxFp32BlockBytes = 32'd4 * MxBlockElems;
+    localparam int unsigned MxFp16BlockBytes = 32'd2 * MxBlockElems;
+
     /// Compute operation selector
     typedef enum logic [3:0] {
-        COMPUTE_NONE      = 4'd0,
-        COMPUTE_TRANSPOSE = 4'd1
+        COMPUTE_NONE         = 4'd0,
+        COMPUTE_TRANSPOSE    = 4'd1,
+        COMPUTE_MXQUANT        = 4'd2, // FP32 -> MXFP8, 128B -> 33B per 32-elem block
+        COMPUTE_MXQUANT_FP16   = 4'd3, // FP16 -> MXFP8,  64B -> 33B per 32-elem block
+        COMPUTE_MXDEQUANT      = 4'd4, // MXFP8 -> FP32,  33B -> 128B per 32-elem block
+        COMPUTE_MXDEQUANT_FP16 = 4'd5  // MXFP8 -> FP16,  33B ->  64B per 32-elem block
     } compute_op_e;
+
+    /// Per-op source:dest byte ratio; the legalizer sizes the write length from it.
+    function automatic int unsigned compute_in_bytes(compute_op_e op);
+        unique case (op)
+            COMPUTE_MXQUANT:        return MxFp32BlockBytes;
+            COMPUTE_MXQUANT_FP16:   return MxFp16BlockBytes;
+            COMPUTE_MXDEQUANT:      return MxBlockBytes;
+            COMPUTE_MXDEQUANT_FP16: return MxBlockBytes;
+            default:                return 32'd1;
+        endcase
+    endfunction
+
+    function automatic int unsigned compute_out_bytes(compute_op_e op);
+        unique case (op)
+            COMPUTE_MXQUANT:        return MxBlockBytes;
+            COMPUTE_MXQUANT_FP16:   return MxBlockBytes;
+            COMPUTE_MXDEQUANT:      return MxFp32BlockBytes;
+            COMPUTE_MXDEQUANT_FP16: return MxFp16BlockBytes;
+            default:                return 32'd1;
+        endcase
+    endfunction
 
     /// Transpose tensor dimension width (elements)
     localparam int unsigned TransposeDimWidth = 32'd12;
@@ -109,10 +141,41 @@ package idma_pkg;
         compute_params_t params;
     } compute_options_t;
 
-    /// Compile-time per-op compute feature enables
+    /// Compile-time per-op compute feature enables; `mxfp16` gates the FP16
+    /// source/destination format paths of the MX ops (area opt-out)
     typedef struct packed {
         logic transpose;
+        logic mxquant;
+        logic mxdequant;
+        logic mxfp16;
     } compute_enable_t;
+
+    /// Implementation tuning knobs for the compute engines
+    typedef struct packed {
+        /// Transpose engine duplex (1: two banks full rate, 0: one bank half area)
+        logic transpose_full_duplex;
+    } compute_tuning_t;
+
+    /// MX element transfer format (FP32 is the architectural base format)
+    typedef enum logic [0:0] { MX_FMT_FP32, MX_FMT_FP16 } mx_fmt_e;
+
+    /// Single source of truth: element transfer format of an MX op
+    function automatic mx_fmt_e compute_op_fmt(compute_op_e op);
+        return (op inside {COMPUTE_MXQUANT_FP16, COMPUTE_MXDEQUANT_FP16})
+               ? MX_FMT_FP16 : MX_FMT_FP32;
+    endfunction
+
+    /// Single source of truth: is `op` elaborated under this feature mask?
+    function automatic logic compute_op_supported(compute_enable_t ena, compute_op_e op);
+        unique case (op)
+            COMPUTE_TRANSPOSE:      return ena.transpose;
+            COMPUTE_MXQUANT:        return ena.mxquant;
+            COMPUTE_MXQUANT_FP16:   return ena.mxquant   & ena.mxfp16;
+            COMPUTE_MXDEQUANT:      return ena.mxdequant;
+            COMPUTE_MXDEQUANT_FP16: return ena.mxdequant & ena.mxfp16;
+            default:                return 1'b0;
+        endcase
+    endfunction
 
     /// Supported Protocols
     /// - `AXI`: Full AXI

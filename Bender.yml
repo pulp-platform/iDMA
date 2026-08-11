@@ -34,6 +34,7 @@ sources:
     files:
       # Level 0
       - src/idma_pkg.sv
+      - src/idma_mxquant_pkg.sv
       # Level 1
       - src/backend/idma_axil_read.sv
       - src/backend/idma_axil_write.sv
@@ -44,6 +45,8 @@ sources:
       - src/backend/idma_channel_coupler.sv
       - src/backend/idma_dataflow_element.sv
       - src/backend/idma_otf_transpose.sv
+      - src/backend/idma_otf_mxquant.sv
+      - src/backend/idma_otf_mxdequant.sv
       - src/backend/idma_otf_compute.sv
       - src/backend/idma_error_handler.sv
       - src/backend/idma_init_read.sv
@@ -133,8 +136,13 @@ sources:
   - target: idma_test
     files:
       - target/rtl/tb_idma_generated.sv
-      - test/tb_idma_transpose_nd.sv
-      - test/tb_idma_transpose_b2b.sv
+      - test/backend/tb_idma_transpose_nd.sv
+      - test/backend/tb_idma_transpose_b2b.sv
+      - test/backend/tb_idma_mxquant.sv
+      - test/backend/tb_idma_mxroundtrip.sv
+      - test/backend/tb_idma_mxrand.sv
+      - test/backend/tb_idma_mxneg.sv
+      - test/backend/tb_idma_mxperf.sv
 
   # Multi-head directed backend testbenches
   - target: multihead
