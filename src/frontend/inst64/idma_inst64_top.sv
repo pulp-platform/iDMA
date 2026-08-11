@@ -221,7 +221,7 @@ module idma_inst64_top #(
             .CombinedShifter      ( 1'b1                        ),
             .EnableCompute        ( 1'b0                        ),
             .ComputeOps           ( '0                          ),
-            .ComputeFullDuplex    ( 1'b1                        ),
+            .ComputeTuning        ( '1                          ),
             .RAWCouplingAvail     ( 1'b0                        ),
             .MaskInvalidData      ( 1'b0                        ),
             .HardwareLegalizer    ( 1'b1                        ),

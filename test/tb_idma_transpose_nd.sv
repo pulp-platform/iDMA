@@ -125,8 +125,8 @@ module tb_idma_transpose_nd
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(BufferDepth),
-    .EnableCompute(1'b1), .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1}),
-    .ComputeFullDuplex(1'b1),
+    .EnableCompute(1'b1), .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, default: '0}),
+    .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(AxIF), .MemSysDepth(0),
     .idma_req_t(idma_req_t), .idma_rsp_t(idma_rsp_t), .idma_eh_req_t(idma_eh_req_t),

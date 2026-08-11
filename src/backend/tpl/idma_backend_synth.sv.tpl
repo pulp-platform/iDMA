@@ -48,8 +48,8 @@ module idma_backend_synth_${name_uniqueifier} #(
     parameter bit          EnableCompute       = 1'b0,
     /// Per-operation compute support mask
     parameter idma_pkg::compute_enable_t ComputeOps = '1,
-    /// Use full-duplex buffering inside the transpose compute engine
-    parameter bit          ComputeFullDuplex   = 1'b1,
+    /// Implementation tuning knobs for the compute engines
+    parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
     /// Mask invalid data on the manager interface
     parameter bit          MaskInvalidData     = 1'b1,
@@ -312,7 +312,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
 % if compute_eligible:
         .EnableCompute        ( EnableCompute           ),
         .ComputeOps           ( ComputeOps              ),
-        .ComputeFullDuplex    ( ComputeFullDuplex       ),
+        .ComputeTuning        ( ComputeTuning           ),
 % endif
         .RAWCouplingAvail     ( RAWCouplingAvail        ),
         .HardwareLegalizer    ( HardwareLegalizer       ),
