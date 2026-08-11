@@ -14,11 +14,20 @@ package idma_float_pkg;
   localparam int unsigned MxFp16BlockBytes       = idma_pkg::MxFp16BlockBytes;
   localparam int unsigned MxCompressedBlockBytes = idma_pkg::MxBlockBytes;
 
-  localparam int E5m2Bias   = 15;
-  localparam int E5m2ExpMax = 15;
-  localparam int E5m2ExpMin = -14;
-  localparam int Fp32Bias   = 127;
-  localparam int Fp16Bias   = 15;
+  localparam int unsigned E5m2ExpBits = 5;
+  localparam int unsigned Fp32ExpBits = 8;
+  localparam int unsigned Fp16ExpBits = 5;
+
+  // IEEE-754 symmetric bias: 2**(exp_bits-1) - 1
+  function automatic int fp_bias(input int unsigned exp_bits);
+    return (1 << (exp_bits - 1)) - 1;
+  endfunction
+
+  localparam int E5m2Bias   = fp_bias(E5m2ExpBits);
+  localparam int E5m2ExpMax = E5m2Bias;
+  localparam int E5m2ExpMin = 1 - E5m2Bias;
+  localparam int Fp32Bias   = fp_bias(Fp32ExpBits);
+  localparam int Fp16Bias   = fp_bias(Fp16ExpBits);
 
   function automatic int decode_signed_scale(input logic [7:0] scale);
     if (scale < 128) return int'(scale);
