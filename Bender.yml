@@ -143,6 +143,7 @@ sources:
       - test/tb_idma_mxrand.sv
       - test/tb_idma_mxneg.sv
       - test/tb_idma_mxperf.sv
+      - test/tb_idma_mxclear.sv
 
   # Multi-head directed backend testbenches
   - target: multihead

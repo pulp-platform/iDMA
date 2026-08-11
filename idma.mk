@@ -461,6 +461,17 @@ idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxperf -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxperf -do "run -all; quit"
 
+.PHONY: idma_sim_tb_idma_mxclear
+idma_sim_tb_idma_mxclear: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); set -e; \
+	for c in "1 quant" "0 dequant"; do \
+	  set -- $$c; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gQuant=$$1 tb_idma_mxclear -do "run -all; quit" > mxclear_$$2.log 2>&1 || true; \
+	  if grep -qE "clear.with.in-flight.state" mxclear_$$2.log; then echo "[MXCLR] $$2 clear-guard FIRED"; \
+	  else echo "[MXCLR] $$2 clear-guard DID NOT FIRE (see mxclear_$$2.log)"; exit 1; fi; \
+	done
+
 # each case must print its guard assert; case 6 needs the op compiled out, case 4 a 1024-bit bus
 .PHONY: idma_sim_tb_idma_mxneg
 idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
