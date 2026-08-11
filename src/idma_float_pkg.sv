@@ -35,6 +35,7 @@ package idma_float_pkg;
   endfunction
 
   // Inf/NaN lanes are excluded from the scan; the scale saturates instead of wrapping
+  // TODO: signed 2's-complement scale, not OCP E8M0 (unsigned bias-127); internal only for now.
   function automatic logic [7:0] compute_block_scale_with_bias(
       input logic [31:0] fp32_bits[MxBlockSize], input int bias);
     logic [7:0] max_exp;
@@ -90,6 +91,7 @@ package idma_float_pkg;
 
     unbiased   = int'(expf) - Fp32Bias;
     scaled_exp = unbiased - decoded_scale;
+    // TODO: FP32 subnormal inputs use a phantom implicit-1; non-IEEE but they flush to zero.
     full_mant  = {1'b1, manf};
 
     if (scaled_exp > E5m2ExpMax) return {sign, 5'h1E, 2'd3}; // saturate

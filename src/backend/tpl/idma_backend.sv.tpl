@@ -1007,6 +1007,9 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
             $fatal(1, "EnableCompute requires ErrorCap == NO_ERROR_HANDLING!");
         compute_combined_shifter : assert(!EnableCompute || !CombinedShifter) else
             $fatal(1, "EnableCompute requires CombinedShifter == 0!");
+        compute_mxfp16_width : assert(!EnableCompute || !ComputeOps.mxfp16 ||
+                                      StrbWidth <= 32'd64) else
+            $fatal(1, "ComputeMxFp16Width: MX FP16 requires StrbWidth <= 64!");
 % endif
     end
     )

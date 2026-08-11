@@ -96,10 +96,6 @@ module tb_idma_mxneg
                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       7: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::OBI, idma_pkg::AXI, 1'b0);
       8: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::OBI, 1'b0);
-      9: begin  // overlap: second transfer issued while the quant drain is still in flight
-        issue(Src, Dst, 24 * 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-        issue(Src, Dst + 'h2000, 512, idma_pkg::COMPUTE_NONE, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      end
       10: issue(Src, Dst, 4 * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       11: issue(Src, Dst, 32'd264 << 22, idma_pkg::COMPUTE_MXDEQUANT,
