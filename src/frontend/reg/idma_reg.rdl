@@ -160,7 +160,7 @@ addrmap idma_reg #(
             desc = "Enable on-the-fly compute for the launched transfer.";
         } compute_enable [0:0] = 0;
         field {
-            desc = "Compute operation selector. Currently, 1 selects transpose.";
+            desc = "Compute operation selector: 1 transpose, 2 MX quant (FP32 source), 3 MX quant (FP16 source), 4 MX dequant.";
         } compute_op [4:1] = 0;
         field {
             desc = "Transpose element-size mode. The element size is 1 << transpose_mode bytes, encoding 8b, 16b, 32b, and 64b elements.";

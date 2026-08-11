@@ -174,6 +174,7 @@ module idma_axi_write #(
     // write happening: both the bus (w_ready) and the buffer (ready_to_write) is high
     assign write_happening = ready_to_write & write_rsp_i.w_ready;
 
+
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
 

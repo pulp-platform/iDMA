@@ -17,6 +17,12 @@ module idma_legalizer_${name_uniqueifier} #(
     /// If this is enabled, then the data inserted into the dataflow element
     /// will no longer be word aligned, but only a single shifter is needed
     parameter bit          CombinedShifter = 1'b0,
+% if compute_eligible:
+    /// On-the-fly compute engine is elaborated in the transport layer
+    parameter bit          EnableCompute   = 1'b0,
+    /// Per-operation compute support mask
+    parameter idma_pkg::compute_enable_t ComputeOps = '1,
+% endif
     /// Data width
     parameter int unsigned DataWidth       = 32'd16,
     /// Address width
@@ -476,6 +482,17 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 user: req_i.user,
                 default: '0
             };
+% if compute_eligible:
+            // size-changing compute: write length follows the per-op byte ratio
+            if (EnableCompute && req_i.opt.compute.enable) begin
+                unique case (req_i.opt.compute.op)
+                    idma_pkg::COMPUTE_MXQUANT:      w_tf_d.length = (req_i.length >> 7) * 33;
+                    idma_pkg::COMPUTE_MXQUANT_FP16: w_tf_d.length = (req_i.length >> 6) * 33;
+                    idma_pkg::COMPUTE_MXDEQUANT:    w_tf_d.length = (req_i.length / 33) * 128;
+                    default: ;
+                endcase
+            end
+% endif
             // options
             opt_tf_d = '{
                 src_protocol:   req_i.opt.src_protocol,
@@ -682,5 +699,60 @@ ${database[protocol]['legalizer_write_data_path']}
                   req_i.opt.src.burst != axi_pkg::BURST_INCR), clk_i, !rst_ni)
     `ASSERT_NEVER(OnlyIncrementalBurstsDST, (ready_o & valid_i &
                   req_i.opt.dst.burst != axi_pkg::BURST_INCR), clk_i, !rst_ni)
+
+    // size-changing compute: length must be a whole multiple of the op's input granule
+    `ASSERT_NEVER(ComputeSizeAligned, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.length %
+                   idma_pkg::compute_in_bytes(req_i.opt.compute.op) != 0)), clk_i, !rst_ni)
+    // size-changing compute requires beat-aligned addresses
+    `ASSERT_NEVER(ComputeSrcAligned, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
+                  (req_i.src_addr[OffsetWidth-1:0] != '0)), clk_i, !rst_ni)
+    `ASSERT_NEVER(ComputeDstAligned, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
+                  (req_i.dst_addr[OffsetWidth-1:0] != '0)), clk_i, !rst_ni)
+    // FP16 MX quant packs at most one block per beat
+    `ASSERT_NEVER(ComputeMxquantFp16Width, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.opt.compute.op == idma_pkg::COMPUTE_MXQUANT_FP16) &
+                  (StrbWidth > 64)), clk_i, !rst_ni)
+    // mxdequant input must additionally be beat-aligned (33k % StrbWidth == 0)
+    `ASSERT_NEVER(ComputeMxdequantBeatAligned, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) &
+                  (req_i.length % (33*StrbWidth) != 0)), clk_i, !rst_ni)
+    // NOT IMPLEMENTED: dequant output length that overflows the length field
+    `ASSERT_NEVER(ComputeMxdequantLengthFits, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) &
+                  ($bits(req_i.length) < 64) &
+                  (((64'(req_i.length) / 64'd33) * 64'd128) >=
+                   (64'd1 << $bits(req_i.length)))), clk_i, !rst_ni)
+    // compute retires on the per-beat write pulse; TileLink writes retire per burst
+    `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.opt.dst_protocol == idma_pkg::TILELINK)), clk_i, !rst_ni)
+    // NOT IMPLEMENTED: multi-beat transpose write bursts (midend strips are single-beat)
+    `ASSERT_NEVER(ComputeTransposeSingleBeat, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &
+                  (req_i.length > StrbWidth)), clk_i, !rst_ni)
+    // NOT IMPLEMENTED: size-changing compute is validated on AXI src/dst only (TODO: OBI)
+    `ASSERT_NEVER(ComputeMxSrcProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
+                  (req_i.opt.src_protocol != idma_pkg::AXI)), clk_i, !rst_ni)
+    `ASSERT_NEVER(ComputeMxDstProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
+                  (req_i.opt.dst_protocol != idma_pkg::AXI)), clk_i, !rst_ni)
+% if compute_eligible:
+    // the requested op must be elaborated in this configuration
+    `ASSERT_NEVER(ComputeOpUnsupported, (ready_o & valid_i & req_i.opt.compute.enable & ~(
+                  EnableCompute & (
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) & ComputeOps.transpose) |
+                  (((req_i.opt.compute.op == idma_pkg::COMPUTE_MXQUANT) |
+                    (req_i.opt.compute.op == idma_pkg::COMPUTE_MXQUANT_FP16))
+                   & ComputeOps.mxquant) |
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) & ComputeOps.mxdequant)))),
+                  clk_i, !rst_ni)
+% endif
 
 endmodule
