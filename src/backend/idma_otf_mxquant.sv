@@ -16,7 +16,8 @@
 module idma_otf_mxquant
   import idma_mxquant_pkg::*;
 #(
-  parameter int unsigned StrbWidth = 32'd8
+  parameter int unsigned StrbWidth = 32'd8,
+  parameter bit          Fp16En    = 1'b1
 ) (
   input  logic clk_i,
   input  logic rst_ni,
@@ -44,9 +45,9 @@ module idma_otf_mxquant
   localparam int unsigned ElemsFP16   = StrbWidth / 2;
   localparam int unsigned FillW       = $clog2(MxBlockSize) + 1;
   // FP16 is illegal above StrbWidth 64 (legalizer ComputeMxquantFp16Width), so gate it off
-  localparam bit          Fp16En      = (StrbWidth <= 64);
-  localparam int unsigned ElemsMax    = Fp16En ? ElemsFP16 : ElemsFP32;
-  localparam bit          FullBeat    = (!Fp16En) && (ElemsFP32 == MxBlockSize);
+  localparam bit          Fp16Up      = Fp16En && (StrbWidth <= 64);
+  localparam int unsigned ElemsMax    = Fp16Up ? ElemsFP16 : ElemsFP32;
+  localparam bit          FullBeat    = (!Fp16Up) && (ElemsFP32 == MxBlockSize);
   localparam int unsigned PopW        = $clog2(StrbWidth + 1);
   localparam int unsigned IdxW        = (ElemsMax > 1) ? $clog2(ElemsMax) : 1;
 
@@ -61,7 +62,7 @@ module idma_otf_mxquant
   logic [OffsetWidth-1:0] pack_off_d;
 
   logic fp16_act;
-  assign fp16_act = (Fp16En != 1'b0) && src_fp16_i;
+  assign fp16_act = (Fp16Up != 1'b0) && src_fp16_i;
 
   // lane-exact pop: a tail beat pops only its own bytes
   logic [PopW-1:0] pop_cnt;

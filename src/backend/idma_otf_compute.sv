@@ -54,10 +54,14 @@ module idma_otf_compute #(
                          (eff_compute.op == idma_pkg::COMPUTE_TRANSPOSE) & ComputeEnable.transpose;
   assign sel_mxquant   = eff_compute.enable & ComputeEnable.mxquant &
                          ((eff_compute.op == idma_pkg::COMPUTE_MXQUANT) |
-                          (eff_compute.op == idma_pkg::COMPUTE_MXQUANT_FP16));
-  assign mx_fp16       = (eff_compute.op == idma_pkg::COMPUTE_MXQUANT_FP16);
-  assign sel_mxdequant = eff_compute.enable &
-                         (eff_compute.op == idma_pkg::COMPUTE_MXDEQUANT) & ComputeEnable.mxdequant;
+                          ((eff_compute.op == idma_pkg::COMPUTE_MXQUANT_FP16)
+                           & ComputeEnable.mxfp16));
+  assign mx_fp16       = (eff_compute.op == idma_pkg::COMPUTE_MXQUANT_FP16) |
+                         (eff_compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16);
+  assign sel_mxdequant = eff_compute.enable & ComputeEnable.mxdequant &
+                         ((eff_compute.op == idma_pkg::COMPUTE_MXDEQUANT) |
+                          ((eff_compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)
+                           & ComputeEnable.mxfp16));
 
   assign active_o = sel_transpose | sel_mxquant | sel_mxdequant;
 
@@ -97,7 +101,8 @@ module idma_otf_compute #(
 
   if (ComputeEnable.mxquant) begin : gen_mxquant
     idma_otf_mxquant #(
-      .StrbWidth ( StrbWidth )
+      .StrbWidth ( StrbWidth            ),
+      .Fp16En    ( ComputeEnable.mxfp16 )
     ) i_idma_otf_mxquant (
       .clk_i,
       .rst_ni,
@@ -123,11 +128,13 @@ module idma_otf_compute #(
 
   if (ComputeEnable.mxdequant) begin : gen_mxdequant
     idma_otf_mxdequant #(
-      .StrbWidth ( StrbWidth )
+      .StrbWidth ( StrbWidth            ),
+      .Fp16En    ( ComputeEnable.mxfp16 )
     ) i_idma_otf_mxdequant (
       .clk_i,
       .rst_ni,
       .clear_i      ( ~sel_mxdequant          ),
+      .dst_fp16_i   ( mx_fp16                 ),
       .data_i       ( data_i                  ),
       .valid_i      ( valid_i & sel_mxdequant ),
       .ready_o      ( dq_in_ready             ),

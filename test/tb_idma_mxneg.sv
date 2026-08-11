@@ -87,7 +87,7 @@ module tb_idma_mxneg
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, mxquant: 1'b1,
+    .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, mxquant: 1'b1, mxfp16: 1'b1,
                                             mxdequant: EnDequant, default: '0}),
     .ComputeFullDuplex(1'b1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
@@ -153,6 +153,8 @@ module tb_idma_mxneg
       10: issue(Src, Dst, 4 * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       11: issue(Src, Dst, 32'd264 << 22, idma_pkg::COMPUTE_MXDEQUANT,
+                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      12: issue(Src, Dst, 33 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT_FP16,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase

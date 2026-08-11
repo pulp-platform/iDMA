@@ -5,9 +5,9 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// MX roundtrip: COMPUTE_MXQUANT_FP16 (src -> mid, 64B -> 33B blocks) followed
-// back-to-back by COMPUTE_MXDEQUANT (mid -> dst, 33B -> 128B) through one
-// rw_axi backend. Both stages checked byte-exact against the DPI-C golden
+// MX roundtrip through one rw_axi backend: at <=512b FP16 -> MXFP8 -> FP16
+// (COMPUTE_MXQUANT_FP16 then COMPUTE_MXDEQUANT_FP16), above FP32 -> MXFP8 ->
+// FP32. Both stages checked byte-exact against the DPI-C golden
 // (idma_mxquant_dpi.c); quant->dequant is thus the exact E5M2 identity.
 
 `include "axi/typedef.svh"
@@ -27,6 +27,7 @@ module tb_idma_mxroundtrip
   import "DPI-C" function void gm_mxquant(input int num_blocks);
   import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
   import "DPI-C" function void gm_mxdequant(input int num_blocks);
+  import "DPI-C" function void gm_mxdequant_fp16(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
 
   localparam time TA = 1ns, TT = 9ns, TCK = 10ns;
@@ -94,7 +95,7 @@ module tb_idma_mxroundtrip
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, default: '0}),
+    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, mxfp16: 1'b1, default: '0}),
     .ComputeFullDuplex(1'b1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth), .MemSysDepth(0),
@@ -163,7 +164,7 @@ module tb_idma_mxroundtrip
     automatic addr_t src = 'h0001_0000, mid = 'h0003_0000, dst = 'h0005_0000;
     automatic int unsigned qL  = NumBlocks * QuantInBytes;
     automatic int unsigned mL  = NumBlocks * 33;
-    automatic int unsigned dL  = NumBlocks * 128;
+    automatic int unsigned dL  = NumBlocks * (QuantFp16 ? 64 : 128);
     automatic int unsigned e1 = 0, e2 = 0;
     automatic logic [15:0] h;
     automatic logic [31:0] w;
@@ -201,9 +202,10 @@ module tb_idma_mxroundtrip
       end
 
     for (int unsigned i = 0; i < mL; i++) gm_load(int'(i), int'(rd_mem(mid + i)));
-    gm_mxdequant(int'(NumBlocks));
+    if (QuantFp16) gm_mxdequant_fp16(int'(NumBlocks)); else gm_mxdequant(int'(NumBlocks));
 
-    do_xfer(mid, dst, mL, idma_pkg::COMPUTE_MXDEQUANT);
+    do_xfer(mid, dst, mL,
+            QuantFp16 ? idma_pkg::COMPUTE_MXDEQUANT_FP16 : idma_pkg::COMPUTE_MXDEQUANT);
     for (int unsigned i = 0; i < dL; i++)
       if (rd_mem(dst + i) !== 8'(gm_get(int'(i)))) begin
         e2++; if (e2 <= 8) $display("[MXRT] dequant dst[%0d]=%02h exp %02h", i, rd_mem(dst+i), 8'(gm_get(int'(i))));

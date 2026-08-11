@@ -85,27 +85,30 @@ package idma_pkg;
     typedef enum logic [3:0] {
         COMPUTE_NONE         = 4'd0,
         COMPUTE_TRANSPOSE    = 4'd1,
-        COMPUTE_MXQUANT      = 4'd2, // FP32 -> MXFP8, 128B -> 33B per 32-elem block
-        COMPUTE_MXQUANT_FP16 = 4'd3, // FP16 -> MXFP8,  64B -> 33B per 32-elem block
-        COMPUTE_MXDEQUANT    = 4'd4  // MXFP8 -> FP32,  33B -> 128B per 32-elem block
+        COMPUTE_MXQUANT        = 4'd2, // FP32 -> MXFP8, 128B -> 33B per 32-elem block
+        COMPUTE_MXQUANT_FP16   = 4'd3, // FP16 -> MXFP8,  64B -> 33B per 32-elem block
+        COMPUTE_MXDEQUANT      = 4'd4, // MXFP8 -> FP32,  33B -> 128B per 32-elem block
+        COMPUTE_MXDEQUANT_FP16 = 4'd5  // MXFP8 -> FP16,  33B ->  64B per 32-elem block
     } compute_op_e;
 
     /// Per-op source:dest byte ratio; the legalizer sizes the write length from it.
     function automatic int unsigned compute_in_bytes(compute_op_e op);
         unique case (op)
-            COMPUTE_MXQUANT:      return 32'd128;
-            COMPUTE_MXQUANT_FP16: return 32'd64;
-            COMPUTE_MXDEQUANT:    return 32'd33;
-            default:              return 32'd1;
+            COMPUTE_MXQUANT:        return 32'd128;
+            COMPUTE_MXQUANT_FP16:   return 32'd64;
+            COMPUTE_MXDEQUANT:      return 32'd33;
+            COMPUTE_MXDEQUANT_FP16: return 32'd33;
+            default:                return 32'd1;
         endcase
     endfunction
 
     function automatic int unsigned compute_out_bytes(compute_op_e op);
         unique case (op)
-            COMPUTE_MXQUANT:      return 32'd33;
-            COMPUTE_MXQUANT_FP16: return 32'd33;
-            COMPUTE_MXDEQUANT:    return 32'd128;
-            default:              return 32'd1;
+            COMPUTE_MXQUANT:        return 32'd33;
+            COMPUTE_MXQUANT_FP16:   return 32'd33;
+            COMPUTE_MXDEQUANT:      return 32'd128;
+            COMPUTE_MXDEQUANT_FP16: return 32'd64;
+            default:                return 32'd1;
         endcase
     endfunction
 
@@ -131,11 +134,13 @@ package idma_pkg;
         compute_params_t params;
     } compute_options_t;
 
-    /// Compile-time per-op compute feature enables
+    /// Compile-time per-op compute feature enables; `mxfp16` gates the FP16
+    /// source/destination format paths of the MX ops (area opt-out)
     typedef struct packed {
         logic transpose;
         logic mxquant;
         logic mxdequant;
+        logic mxfp16;
     } compute_enable_t;
 
     /// Supported Protocols

@@ -30,6 +30,7 @@ module tb_idma_mxrand
   import "DPI-C" function void gm_mxquant(input int num_blocks);
   import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
   import "DPI-C" function void gm_mxdequant(input int num_blocks);
+  import "DPI-C" function void gm_mxdequant_fp16(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
 
   localparam time TA = 1ns, TT = 9ns, TCK = 10ns;
@@ -125,7 +126,7 @@ module tb_idma_mxrand
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, default: '0}),
+    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, mxfp16: 1'b1, default: '0}),
     .ComputeFullDuplex(1'b1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth), .MemSysDepth(0),
@@ -236,16 +237,17 @@ module tb_idma_mxrand
           end
           if (fp16) gm_mxquant(int'(nb)); else gm_mxquant_fp32(int'(nb));
         end
-        default: begin  // MX dequant, k blocks with k % StrbWidth == 0
+        default: begin  // MX dequant, k blocks with k % StrbWidth == 0; FP16 out at <=512b
+          fp16 = (StrbWidth <= 64) && $urandom_range(1);
           nb = StrbWidth * ((StrbWidth >= 64) ? 1 : $urandom_range(1, 2));
-          L  = nb * 33; WL = nb * 128;
+          L  = nb * 33; WL = nb * (fp16 ? 64 : 128);
           src = SrcBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
           dst = DstBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
           for (int unsigned i = 0; i < L; i++) begin
             wr_mem(src + i, 8'((salt + i * 197) ^ (i >> 2)));
             gm_load(int'(i), int'(8'((salt + i * 197) ^ (i >> 2))));
           end
-          gm_mxdequant(int'(nb));
+          if (fp16) gm_mxdequant_fp16(int'(nb)); else gm_mxdequant(int'(nb));
         end
       endcase
 
@@ -255,7 +257,8 @@ module tb_idma_mxrand
         0:       do_xfer(src, dst, L, 1'b0, idma_pkg::COMPUTE_NONE);
         1:       do_xfer(src, dst, L, 1'b1,
                          fp16 ? idma_pkg::COMPUTE_MXQUANT_FP16 : idma_pkg::COMPUTE_MXQUANT);
-        default: do_xfer(src, dst, L, 1'b1, idma_pkg::COMPUTE_MXDEQUANT);
+        default: do_xfer(src, dst, L, 1'b1,
+                         fp16 ? idma_pkg::COMPUTE_MXDEQUANT_FP16 : idma_pkg::COMPUTE_MXDEQUANT);
       endcase
 
       for (int unsigned i = 0; i < WL; i++) begin

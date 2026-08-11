@@ -86,7 +86,7 @@ module tb_idma_mxperf
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, default: '0}),
+    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, mxfp16: 1'b1, default: '0}),
     .ComputeFullDuplex(1'b1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth), .MemSysDepth(0),
@@ -199,7 +199,7 @@ module tb_idma_mxperf
   localparam int unsigned KB2b = 8;
 
   initial begin
-    automatic int unsigned cp_r, cp_w, q32_r, q32_w, q16_r, q16_w, dq_r, dq_w;
+    automatic int unsigned cp_r, cp_w, q32_r, q32_w, q16_r, q16_w, dq_r, dq_w, dq16_r, dq16_w;
     automatic int unsigned bcp_r, bcp_w, bq_r, bq_w, bdq_r, bdq_w;
     automatic int unsigned errs = 0;
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
@@ -213,6 +213,10 @@ module tb_idma_mxperf
       measure("mxquant16", Src, Dst, NbQ * 64,  1'b1, idma_pkg::COMPUTE_MXQUANT_FP16, q16_r, q16_w);
     else begin q16_r = cp_r; q16_w = 100; end
     measure("mxdequant",   Src, Dst, NbDq * 33, 1'b1, idma_pkg::COMPUTE_MXDEQUANT, dq_r,  dq_w);
+    if (StrbWidth <= 64)
+      measure("mxdequant16", Src, Dst, NbDq * 33, 1'b1, idma_pkg::COMPUTE_MXDEQUANT_FP16,
+              dq16_r, dq16_w);
+    else begin dq16_r = 0; dq16_w = cp_w; end
 
     // pipelined back-to-back streams: aggregate window includes inter-transfer boundaries
     measure_b2b("b2b-copy",    Src, Dst, NbB2b * 128,  KB2b, 1'b0,
@@ -231,6 +235,9 @@ module tb_idma_mxperf
     end
     if (dq_w + UtilSlackPct < cp_w) begin
       errs++; $display("[MXPF] FAIL mxdequant W %0d%% vs copy %0d%%", dq_w, cp_w);
+    end
+    if (dq16_w + UtilSlackPct < cp_w) begin
+      errs++; $display("[MXPF] FAIL mxdequant16 W %0d%% vs copy %0d%%", dq16_w, cp_w);
     end
     // no bubbles between transfers on the wide configs (512b/1024b targets)
     if (StrbWidth >= 64) begin

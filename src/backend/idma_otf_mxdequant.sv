@@ -14,11 +14,14 @@
 module idma_otf_mxdequant
   import idma_mxquant_pkg::*;
 #(
-  parameter int unsigned StrbWidth = 32'd8
+  parameter int unsigned StrbWidth = 32'd8,
+  parameter bit          Fp16En    = 1'b1
 ) (
   input  logic clk_i,
   input  logic rst_ni,
   input  logic clear_i,
+  /// Expand to FP16 (64B/block) instead of FP32 (128B/block)
+  input  logic dst_fp16_i,
 
   input  logic [StrbWidth-1:0][7:0] data_i,
   input  logic                      valid_i,
@@ -141,36 +144,43 @@ module idma_otf_mxdequant
     else                      return {sign, es[7:0], om};
   endfunction
 
-  logic signed [7:0]  dec_sc;
-  logic [XB-1:0][7:0] exp_bytes;
-  assign dec_sc = signed'(merged[0]);
+  logic                 fp16_act;
+  logic signed [7:0]    dec_sc;
+  logic [XB-1:0][7:0]   exp32_bytes, exp_bytes;
+  logic [XB/2-1:0][7:0] exp16_bytes;
+  assign fp16_act = (Fp16En != 1'b0) && dst_fp16_i;
+  assign dec_sc   = signed'(merged[0]);
   for (genvar e = 0; e < MxBlockSize; e++) begin : gen_exp
     logic [31:0] w;
     assign w = mx_dq(merged[e+1], dec_sc);
-    assign exp_bytes[4*e+3 : 4*e] = w;
+    assign exp32_bytes[4*e+3 : 4*e] = w;
+    if (Fp16En) begin : gen_fp16
+      assign exp16_bytes[2*e+1 : 2*e] = fp32_bits_to_fp16(w);
+    end else begin : gen_no_fp16
+      assign exp16_bytes[2*e+1 : 2*e] = '0;
+    end
   end
+  assign exp_bytes = fp16_act ? {{(XB/2){8'd0}}, exp16_bytes} : exp32_bytes;
 
-  // write: rotate the 128B block by wr_off, page-decoded byte enables
+  // per-block insert length: 64B (FP16) or 128B (FP32)
+  logic [OccW-1:0] blk_bytes;
+  assign blk_bytes = fp16_act ? OccW'(XB/2) : OccW'(XB);
+
+  // write: rotate the block by wr_off; enables select insert-length ring positions
   logic [PtrW-1:0]    wr_ptr;
   logic [XBW-1:0]     wr_off;
-  logic               wr_pg;
   logic [XB-1:0][7:0] wrot [XBW+1];
-  logic [XB-1:0]      lt_off;
   logic [BufSize-1:0] wren;
   assign wr_ptr    = rd_q + occ_q[PtrW-1:0];
   assign wr_off    = wr_ptr[XBW-1:0];
-  assign wr_pg     = wr_ptr[PtrW-1];
   assign wrot[XBW] = exp_bytes;
   for (genvar b = 0; b < XBW; b++) begin : gen_wrot
     for (genvar i = 0; i < XB; i++) begin : gen_wrot_byte
       assign wrot[b][i] = wr_off[b] ? wrot[b+1][(i + XB - (1 << b)) % XB] : wrot[b+1][i];
     end
   end
-  for (genvar i = 0; i < XB; i++) begin : gen_lt
-    assign lt_off[i] = (XBW'(i) < wr_off);
-  end
   for (genvar s = 0; s < BufSize; s++) begin : gen_wren
-    assign wren[s] = do_expand & (((s >= XB) == wr_pg) ^ lt_off[s % XB]);
+    assign wren[s] = do_expand & (OccW'(PtrW'(s) - wr_ptr) < blk_bytes);
   end
 
   // read: log-stage rotator at rd_q; DC prunes it to the StrbWidth funnel
@@ -183,7 +193,7 @@ module idma_otf_mxdequant
   end
   assign data_o = out_vld ? rrot[0][StrbWidth-1:0] : '0;
 
-  assign occ_d = occ_a + (do_expand ? OccW'(XB) : '0);
+  assign occ_d = occ_a + (do_expand ? blk_bytes : '0);
 
   // pragma translate_off
   always @(posedge clk_i) if (rst_ni)

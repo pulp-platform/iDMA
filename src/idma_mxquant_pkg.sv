@@ -158,6 +158,45 @@ package idma_mxquant_pkg;
     return {sign, exp32, man32};
   endfunction
 
+  // IEEE FP32 -> FP16 narrowing: RNE, overflow saturates to +-Inf, NaN keeps a payload bit
+  function automatic logic [15:0] fp32_bits_to_fp16(input logic [31:0] fp32_bits);
+    logic        sign;
+    logic [ 7:0] exp32;
+    logic [22:0] man32;
+    int          unb;
+    logic [12:0] rest;
+    logic [ 9:0] man16;
+    logic [10:0] rounded;
+    logic [24:0] full;
+    int          sh;
+    logic        guard, sticky;
+    sign  = fp32_bits[31];
+    exp32 = fp32_bits[30:23];
+    man32 = fp32_bits[22:0];
+    if (exp32 == 8'hFF) return (man32 != '0) ? {sign, 5'h1F, 10'h200} : {sign, 5'h1F, 10'd0};
+    if (exp32 == 8'd0) return {sign, 15'd0};
+    unb = int'(exp32) - Fp32Bias;
+    if (unb > 15) return {sign, 5'h1F, 10'd0};
+    if (unb >= -14) begin
+      man16 = man32[22:13];
+      rest  = man32[12:0];
+      rounded = {1'b0, man16} + 11'((rest > 13'h1000) || (rest == 13'h1000 && man16[0]));
+      if (rounded[10]) begin
+        if (unb == 15) return {sign, 5'h1F, 10'd0};
+        return {sign, 5'(unb + Fp16Bias + 1), 10'd0};
+      end
+      return {sign, 5'(unb + Fp16Bias), rounded[9:0]};
+    end
+    if (unb < -25) return {sign, 15'd0};
+    full   = {1'b1, man32, 1'b0};
+    sh     = -14 - unb;
+    man16  = 10'(full >> (sh + 14));
+    guard  = full[sh+13];
+    sticky = ((full << (12 - sh)) != '0);
+    rounded = {1'b0, man16} + 11'(guard && (man16[0] || sticky));
+    return {sign, rounded[10] ? {5'd1, 10'd0} : {5'd0, rounded[9:0]}};
+  endfunction
+
   // MXFP8 (E5M2) -> FP32 dequantization with the decoded block scale applied.
   function automatic logic [31:0] mxfp8_byte_to_fp32_prescaled(input logic [7:0] byte_val,
                                                                input int scaled);

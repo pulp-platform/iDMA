@@ -488,7 +488,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 unique case (req_i.opt.compute.op)
                     idma_pkg::COMPUTE_MXQUANT:      w_tf_d.length = (req_i.length >> 7) * 33;
                     idma_pkg::COMPUTE_MXQUANT_FP16: w_tf_d.length = (req_i.length >> 6) * 33;
-                    idma_pkg::COMPUTE_MXDEQUANT:    w_tf_d.length = (req_i.length / 33) * 128;
+                    idma_pkg::COMPUTE_MXDEQUANT:      w_tf_d.length = (req_i.length / 33) * 128;
+                    idma_pkg::COMPUTE_MXDEQUANT_FP16: w_tf_d.length = (req_i.length / 33) * 64;
                     default: ;
                 endcase
             end
@@ -719,13 +720,20 @@ ${database[protocol]['legalizer_write_data_path']}
                   (StrbWidth > 64)), clk_i, !rst_ni)
     // mxdequant input must additionally be beat-aligned (33k % StrbWidth == 0)
     `ASSERT_NEVER(ComputeMxdequantBeatAligned, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) &
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) |
+                   (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)) &
                   (req_i.length % (33*StrbWidth) != 0)), clk_i, !rst_ni)
+    // FP16 MX dequant expands at most one block per beat
+    `ASSERT_NEVER(ComputeMxdequantFp16Width, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16) &
+                  (StrbWidth > 64)), clk_i, !rst_ni)
     // NOT IMPLEMENTED: dequant output length that overflows the length field
     `ASSERT_NEVER(ComputeMxdequantLengthFits, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) &
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) |
+                   (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)) &
                   ($bits(req_i.length) < 64) &
-                  (((64'(req_i.length) / 64'd33) * 64'd128) >=
+                  (((64'(req_i.length) / 64'd33) *
+                    64'(idma_pkg::compute_out_bytes(req_i.opt.compute.op))) >=
                    (64'd1 << $bits(req_i.length)))), clk_i, !rst_ni)
     // compute retires on the per-beat write pulse; TileLink writes retire per burst
     `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
@@ -748,10 +756,12 @@ ${database[protocol]['legalizer_write_data_path']}
     `ASSERT_NEVER(ComputeOpUnsupported, (ready_o & valid_i & req_i.opt.compute.enable & ~(
                   EnableCompute & (
                   ((req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) & ComputeOps.transpose) |
-                  (((req_i.opt.compute.op == idma_pkg::COMPUTE_MXQUANT) |
-                    (req_i.opt.compute.op == idma_pkg::COMPUTE_MXQUANT_FP16))
-                   & ComputeOps.mxquant) |
-                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) & ComputeOps.mxdequant)))),
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXQUANT) & ComputeOps.mxquant) |
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXQUANT_FP16)
+                   & ComputeOps.mxquant & ComputeOps.mxfp16) |
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) & ComputeOps.mxdequant) |
+                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)
+                   & ComputeOps.mxdequant & ComputeOps.mxfp16)))),
                   clk_i, !rst_ni)
 % endif
 

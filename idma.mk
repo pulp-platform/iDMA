@@ -461,7 +461,7 @@ idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	         "4 ComputeMxquantFp16Width 1024 1" "5 ComputeMxdequantBeatAligned 64 1" \
 	         "6 ComputeOpUnsupported 64 0" "7 ComputeMxSrcProtocol 64 1" \
 	         "8 ComputeMxDstProtocol 64 1" "10 ComputeTransposeSingleBeat 64 1" \
-	         "11 ComputeMxdequantLengthFits 64 1"; do \
+	         "11 ComputeMxdequantLengthFits 64 1" "12 ComputeMxdequantFp16Width 1024 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \

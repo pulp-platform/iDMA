@@ -113,6 +113,44 @@ static uint32_t dequant_e5m2_fp32(uint8_t b, int scaled) {
 }
 
 // Dequantize num_blocks 33B MX blocks from gm_in into 128B FP32 blocks in gm_out.
+// IEEE FP32 -> FP16 narrowing: RNE, overflow saturates to +-Inf (mirrors the pkg fn)
+static uint16_t fp32_to_fp16_bits(uint32_t f) {
+  uint32_t sign = (f >> 31) & 1u, exp32 = (f >> 23) & 0xFFu, man32 = f & 0x7FFFFFu;
+  if (exp32 == 0xFFu) return (uint16_t)((sign << 15) | (0x1Fu << 10) | (man32 ? 0x200u : 0u));
+  if (exp32 == 0u) return (uint16_t)(sign << 15);
+  int unb = (int)exp32 - 127;
+  if (unb > 15) return (uint16_t)((sign << 15) | (0x1Fu << 10));
+  if (unb >= -14) {
+    uint32_t man16 = man32 >> 13, rest = man32 & 0x1FFFu;
+    uint32_t rounded = man16 + ((rest > 0x1000u) || (rest == 0x1000u && (man16 & 1u)));
+    if (rounded >> 10) {
+      if (unb == 15) return (uint16_t)((sign << 15) | (0x1Fu << 10));
+      return (uint16_t)((sign << 15) | ((uint32_t)(unb + 16) << 10));
+    }
+    return (uint16_t)((sign << 15) | ((uint32_t)(unb + 15) << 10) | rounded);
+  }
+  if (unb < -25) return (uint16_t)(sign << 15);
+  uint32_t full = (1u << 24) | (man32 << 1);
+  int sh = -14 - unb;
+  uint32_t man16 = full >> (sh + 14);
+  uint32_t guard = (full >> (sh + 13)) & 1u;
+  uint32_t sticky = (full & ((1u << (sh + 13)) - 1u)) != 0u;
+  uint32_t rounded = man16 + (guard && ((man16 & 1u) || sticky));
+  if (rounded >> 10) return (uint16_t)((sign << 15) | (1u << 10));
+  return (uint16_t)((sign << 15) | rounded);
+}
+
+void gm_mxdequant_fp16(int num_blocks) {
+  for (int b = 0; b < num_blocks; ++b) {
+    int dec = (int)(int8_t)gm_in[b*33];
+    for (int e = 0; e < 32; ++e) {
+      uint16_t h = fp32_to_fp16_bits(dequant_e5m2_fp32(gm_in[b*33 + 1 + e], dec));
+      gm_out[b*64 + e*2]     = (uint8_t)(h & 0xFFu);
+      gm_out[b*64 + e*2 + 1] = (uint8_t)(h >> 8);
+    }
+  }
+}
+
 void gm_mxdequant(int num_blocks) {
   for (int b = 0; b < num_blocks; ++b) {
     int dec = (int)(int8_t)gm_in[b*33];
