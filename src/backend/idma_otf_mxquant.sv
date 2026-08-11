@@ -5,15 +5,12 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// On-the-fly MX quantization sub-unit for the iDMA compute seam. Collects a
-// 32-element block over the input beats (FP32 4B/elem, FP16 2B/elem widened to
-// FP32), quantizes to one 33B MX block ([1B E8M0 scale][32B E5M2]) and packs it
-// into StrbWidth-wide output beats. lane_valid_o reports pack occupancy per
-// lane; the write manager's own beat mask decides acceptance, so a partial
-// presentation can only ever complete the transfer's genuine tail beat.
-// FP16 requires StrbWidth <= 64 (<=1 block completes per beat).
+// On-the-fly MX quantizer: gathers a 32-element block from the input beats
+// (FP32 4B/elem, or FP16 2B/elem widened to FP32) and emits one 33B MX block
+// ([1B E8M0 scale][32B E5M2]) packed into StrbWidth-wide output beats.
+// FP16 requires StrbWidth <= 64 (at most one block completes per beat).
 module idma_otf_mxquant
-  import idma_mxquant_pkg::*;
+  import idma_float_pkg::*;
 #(
   parameter int unsigned StrbWidth = 32'd8,
   parameter bit          Fp16En    = 1'b1
@@ -155,9 +152,21 @@ module idma_otf_mxquant
     if (scaled_exp < -10'sd17) return {sign, 5'd0, 2'd0};
     // scaled_exp in {-15,-16,-17} <=> low bits {01,00,11}; sh_amt {22,23,24}
     case (scaled_exp[1:0])
-      2'b01:   begin sub_kept = {2'b00, full_mant[23:22]}; sub_guard = full_mant[21]; sub_stky = (full_mant[20:0] != 21'd0); end
-      2'b00:   begin sub_kept = {3'b000, full_mant[23]};   sub_guard = full_mant[22]; sub_stky = (full_mant[21:0] != 22'd0); end
-      default: begin sub_kept = 4'd0;                      sub_guard = full_mant[23]; sub_stky = (full_mant[22:0] != 23'd0); end
+      2'b01: begin
+        sub_kept  = {2'b00, full_mant[23:22]};
+        sub_guard = full_mant[21];
+        sub_stky  = (full_mant[20:0] != 21'd0);
+      end
+      2'b00: begin
+        sub_kept  = {3'b000, full_mant[23]};
+        sub_guard = full_mant[22];
+        sub_stky  = (full_mant[21:0] != 22'd0);
+      end
+      default: begin
+        sub_kept  = 4'd0;
+        sub_guard = full_mant[23];
+        sub_stky  = (full_mant[22:0] != 23'd0);
+      end
     endcase
     if (sub_guard && (sub_kept[0] || sub_stky)) sub_kept = sub_kept + 4'd1;
     if (sub_kept == 4'd0)     return {sign, 5'd0, 2'd0};

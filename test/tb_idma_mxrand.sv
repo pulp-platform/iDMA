@@ -71,10 +71,12 @@ module tb_idma_mxrand
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, mxfp16: 1'b1, default: '0}),
+    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1,
+                                            mxfp16: 1'b1, default: '0}),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
-    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth), .MemSysDepth(0),
+    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth),
+    .MemSysDepth(0),
     .idma_req_t(idma_req_t), .idma_rsp_t(idma_rsp_t), .idma_eh_req_t(idma_eh_req_t),
     .idma_busy_t(idma_busy_t), .axi_req_t(axi_req_t), .axi_rsp_t(axi_rsp_t),
     .write_meta_channel_t(write_meta_channel_t), .read_meta_channel_t(read_meta_channel_t)
@@ -212,7 +214,8 @@ module tb_idma_mxrand
       for (int unsigned i = 0; i < Margin; i++) begin
         if (rd_mem(dst - Margin + i) !== 8'hC5 || rd_mem(dst + WL + i) !== 8'hC5) begin
           errs++;
-          if (errs <= 8) $display("[MXRD] x%0d op%0d canary hit near dst=%08h WL=%0d", x, op, dst, WL);
+          if (errs <= 8)
+            $display("[MXRD] x%0d op%0d canary hit near dst=%08h WL=%0d", x, op, dst, WL);
         end
       end
     end

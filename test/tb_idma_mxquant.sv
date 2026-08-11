@@ -39,10 +39,12 @@ module tb_idma_mxquant
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
-    .EnableCompute(1'b1), .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxfp16: 1'b1, default: '0}),
+    .EnableCompute(1'b1),
+    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxfp16: 1'b1, default: '0}),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
-    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth), .MemSysDepth(0),
+    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth),
+    .MemSysDepth(0),
     .idma_req_t(idma_req_t), .idma_rsp_t(idma_rsp_t), .idma_eh_req_t(idma_eh_req_t),
     .idma_busy_t(idma_busy_t), .axi_req_t(axi_req_t), .axi_rsp_t(axi_rsp_t),
     .write_meta_channel_t(write_meta_channel_t), .read_meta_channel_t(read_meta_channel_t)
@@ -55,8 +57,10 @@ module tb_idma_mxquant
     .axi_write_req_o(axi_write_req), .axi_write_rsp_i(axi_write_rsp), .busy_o(busy)
   );
 
-  stream_watchdog #(.NumCycles(8000)) i_r_wd (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
-  stream_watchdog #(.NumCycles(8000)) i_w_wd (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+  stream_watchdog #(.NumCycles(8000)) i_r_wd (
+    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
+  stream_watchdog #(.NumCycles(8000)) i_w_wd (
+    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
 
 
   // deterministic FP16 normal for global element index e
@@ -75,7 +79,8 @@ module tb_idma_mxquant
     if (e < 64) begin
       if (e == 32) return 32'h7F80_0000;
       if (e == 33) return 32'hFFC0_0001;
-      return 32'((e & 1) << 31) | 32'(((100 + (e % 30)) & 8'hFF) << 23) | 32'((e * 331) & 23'h7FFFFF);
+      return 32'((e & 1) << 31) | 32'(((100 + (e % 30)) & 8'hFF) << 23)
+             | 32'((e * 331) & 23'h7FFFFF);
     end
     if (e + 8 >= total) begin
       unique case (e % 8)
@@ -89,7 +94,8 @@ module tb_idma_mxquant
         7: return 32'h0080_0000;
       endcase
     end
-    return 32'((e & 1) << 31) | 32'(((64 + (e % 128)) & 8'hFF) << 23) | 32'((e * 2654435761) & 23'h7FFFFF);
+    return 32'((e & 1) << 31) | 32'(((64 + (e % 128)) & 8'hFF) << 23)
+           | 32'((e * 2654435761) & 23'h7FFFFF);
   endfunction
 
   // one num_blocks FP16->MXFP8 transfer; returns error count
@@ -130,7 +136,7 @@ module tb_idma_mxquant
     for (int unsigned i = 0; i < WL; i++)
       if (rd_mem(dst + i) !== 8'(gm_get(int'(i)))) begin
         errs++; if (errs <= 8) $display("[MXQ] dst[%0d] blk%0d.%0d = %02h exp %02h",
-                                        i, i/BlkOutBytes, i%BlkOutBytes, rd_mem(dst+i), 8'(gm_get(int'(i))));
+          i, i/BlkOutBytes, i%BlkOutBytes, rd_mem(dst+i), 8'(gm_get(int'(i))));
       end
   endtask
 
@@ -172,7 +178,7 @@ module tb_idma_mxquant
     for (int unsigned i = 0; i < WL; i++)
       if (rd_mem(dst + i) !== 8'(gm_get(int'(i)))) begin
         errs++; if (errs <= 8) $display("[MXQ] fp32 dst[%0d] blk%0d.%0d = %02h exp %02h",
-                                        i, i/BlkOutBytes, i%BlkOutBytes, rd_mem(dst+i), 8'(gm_get(int'(i))));
+          i, i/BlkOutBytes, i%BlkOutBytes, rd_mem(dst+i), 8'(gm_get(int'(i))));
       end
   endtask
 

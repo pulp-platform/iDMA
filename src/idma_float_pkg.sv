@@ -5,9 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// MX quantization numeric core: FP16/FP32 -> MXFP8 (E5M2) with E8M0 block
-/// scale.
-package idma_mxquant_pkg;
+/// FP-cast core for MX compute: FP16/FP32 <-> MXFP8 (E5M2) with E8M0 block scale.
+package idma_float_pkg;
 
   // block geometry is single-homed in idma_pkg
   localparam int unsigned MxBlockSize            = idma_pkg::MxBlockElems;

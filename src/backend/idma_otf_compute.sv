@@ -5,10 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// On-the-fly compute dispatcher: latches the per-transfer compute options
-/// and dispatches one op per transfer to its sub-unit. Back-to-back transfers
-/// with an identical config may pipeline (lane-exact retire keeps the pack
-/// sound across tails); any config change requires the engine to be drained.
+/// On-the-fly compute dispatcher: routes one op per transfer to its sub-unit.
+/// A config change drains the engine before the next transfer starts.
 module idma_otf_compute #(
   /// Byte lanes per beat (= DataWidth/8)
   parameter int unsigned StrbWidth       = 32'd8,
@@ -36,7 +34,6 @@ module idma_otf_compute #(
   output logic [StrbWidth-1:0]      strb_o,
   output logic [StrbWidth-1:0]      lane_valid_o,
   input  logic                      ready_i,
-  /// Byte lanes the write accepted this cycle (lane-exact retire for the MX units)
   input  logic [StrbWidth-1:0]      lane_ready_i
 );
 

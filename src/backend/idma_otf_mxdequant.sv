@@ -5,14 +5,11 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// On-the-fly MX dequantization sub-unit: collects 33B MX blocks
-// ([1B E8M0 scale][32B E5M2]) from the input beats and expands one block per
-// cycle (drain-bound: 33B in -> 128B out, so throughput-neutral) into a 256B
-// circular pack buffer. Input length must be beat-aligned (33k % StrbWidth
-// == 0); output (128k) is then always whole beats, so only full beats are
-// ever presented.
+// On-the-fly MX dequantizer: gathers 33B MX blocks ([1B E8M0 scale][32B E5M2])
+// from the input beats and expands each to a 128B FP32 block (33B in -> 128B
+// out). Input length must be beat-aligned (33*k % StrbWidth == 0).
 module idma_otf_mxdequant
-  import idma_mxquant_pkg::*;
+  import idma_float_pkg::*;
 #(
   parameter int unsigned StrbWidth = 32'd8,
   parameter bit          Fp16En    = 1'b1

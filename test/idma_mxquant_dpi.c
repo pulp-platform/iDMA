@@ -90,7 +90,7 @@ static uint8_t quantize_fp32_e5m2(uint32_t bits, int8_t scale) {
   }
 }
 
-// Same rounding as idma_mxquant_pkg::mxfp8_byte_to_fp32_prescaled.
+// Same rounding as idma_float_pkg::mxfp8_byte_to_fp32_prescaled.
 static uint32_t dequant_e5m2_fp32(uint8_t b, int scaled) {
   uint32_t sign = (b >> 7) & 1u, exp5 = (b >> 2) & 0x1Fu, mant = b & 3u;
   uint32_t sign_bit = sign << 31;
@@ -112,7 +112,7 @@ static uint32_t dequant_e5m2_fp32(uint8_t b, int scaled) {
 }
 
 // IEEE FP32 -> FP16 narrowing: RNE, overflow saturates to +-Inf (same rounding
-// as idma_mxquant_pkg::fp32_bits_to_fp16)
+// as idma_float_pkg::fp32_bits_to_fp16)
 static uint16_t fp32_to_fp16_bits(uint32_t f) {
   uint32_t sign = (f >> 31) & 1u, exp32 = (f >> 23) & 0xFFu, man32 = f & 0x7FFFFFu;
   if (exp32 == 0xFFu) return (uint16_t)((sign << 15) | (0x1Fu << 10) | (man32 ? 0x200u : 0u));
