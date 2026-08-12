@@ -12,6 +12,8 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'iDMA Documentation',
+      // Site-wide WIP banner, injected into every page's route data.
+      routeMiddleware: './src/routeData.ts',
       social: {
         github: 'https://github.com/pulp-platform/iDMA',
       },

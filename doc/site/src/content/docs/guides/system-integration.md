@@ -54,7 +54,7 @@ All iDMA modules use a single clock (`clk_i`) and synchronous active-low reset (
 Wire the three layers together. The key connections are:
 - Frontend `dma_req_o` / `req_valid_o` / `req_ready_i` -> Midend ND request input
 - Midend `burst_req_o` / `burst_req_valid_o` / `burst_req_ready_i` -> Backend request input
-- Backend `idma_rsp_o` / `rsp_valid_o` / `rsp_ready_i` -> back through midend to frontend
+- Backend `idma_rsp_o` / `rsp_valid_o` / `rsp_ready_i` -> midend response input; the register frontend surfaces completion to software through its `done_id_i` / `busy_i` feedback (driven by the SoC's transfer-ID tracker), not a direct `idma_rsp_t` port
 
 The following skeleton shows how the three layers connect. Signal types come from the macros defined in step 2 above - `fe_req` is `idma_nd_req_t`, `be_req` is `idma_req_t`:
 
@@ -62,22 +62,24 @@ The following skeleton shows how the three layers connect. Signal types come fro
 // Frontend -> Midend -> Backend
 
 idma_reg64_2d #(
-    .NumRegs    ( 1          ),
-    .NumStreams  ( 1          ),
-    .reg_req_t  ( reg_req_t  ),
-    .reg_rsp_t  ( reg_rsp_t  ),
-    .dma_req_t  ( idma_nd_req_t )
+    .NumRegs     ( 1             ),
+    .NumStreams  ( 1             ),
+    .apb_req_t   ( apb_req_t     ),  // config bus follows IDMA_REG_CPUIF (apb4-flat default)
+    .apb_rsp_t   ( apb_rsp_t     ),
+    .dma_req_t   ( idma_nd_req_t )
 ) i_frontend (
     .clk_i,
     .rst_ni,
-    .reg_req_i     ( dma_reg_req  ),
-    .reg_rsp_o     ( dma_reg_rsp  ),
-    .dma_req_o     ( fe_req       ),
-    .req_valid_o   ( fe_valid     ),
-    .req_ready_i   ( fe_ready     ),
-    .dma_rsp_i     ( fe_rsp       ),
-    .rsp_valid_i   ( fe_rsp_valid ),
-    .rsp_ready_o   ( fe_rsp_ready )
+    .dma_ctrl_req_i ( dma_ctrl_req ),  // APB4 config slave, one per NumRegs port
+    .dma_ctrl_rsp_o ( dma_ctrl_rsp ),
+    .dma_req_o      ( fe_req       ),
+    .req_valid_o    ( fe_valid     ),
+    .req_ready_i    ( fe_ready     ),
+    .next_id_i      ( fe_next_id   ),  // current transfer ID returned on next_id read
+    .stream_idx_o   ( fe_stream    ),
+    .done_id_i      ( fe_done_id   ),  // per-stream completed IDs (from the ID tracker)
+    .busy_i         ( be_busy      ),  // per-stream backend busy flags
+    .midend_busy_i  ( me_busy      )
 );
 
 idma_nd_midend #(

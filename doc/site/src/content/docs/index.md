@@ -68,7 +68,7 @@ Key locations:
 
 - `src/db/*.yml` - protocol capability databases
 - `src/backend/tpl/` - backend templates
-- `src/frontend/tpl/` - register frontend templates
+- `src/frontend/reg/tpl/` - register frontend templates
 - `util/gen_idma.py` - generator entry point
 - `util/mario/` - generator modules
 

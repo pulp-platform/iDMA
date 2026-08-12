@@ -3,9 +3,11 @@ title: Verification
 description: Testbench architecture, job files, and simulation workflow for iDMA.
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 ## Verification Overview
 
-iDMA uses a SystemVerilog testbench driven by **job files** that describe transfer sequences. The testbench compares hardware behavior against a byte-accurate golden model. Tests are run with Questa or VCS, with job files located in `jobs/<backend_variant>/`.
+iDMA uses a SystemVerilog testbench driven by **job files** that describe transfer sequences. The testbench compares hardware behavior against a byte-accurate golden model. The full job-file testbenches run under Questa or VCS; Verilator is wired for elaboration/lint only. Job files live in `jobs/backend_<variant>/`.
 
 For documentation quality checks, see [Docs Verification Plan](../docs-verification/).
 
@@ -115,7 +117,7 @@ Here is an example with two back-to-back transfers in a single job file (64 byte
 
 ## Available Test Suites
 
-Each backend variant has its own set of job files under `jobs/<variant>/`:
+Each backend variant has its own set of job files under `jobs/backend_<variant>/`:
 
 **Basic** - start here for bring-up and sanity checks:
 
@@ -167,7 +169,7 @@ The on-the-fly compute engines have dedicated self-checking testbenches, checked
 | `idma_sim_tb_idma_transpose_b2b` | ND midend -> `rw_axi` | Two back-to-back transposes to distinct destinations |
 | `idma_sim_tb_idma_mxquant` | `rw_axi` backend, `COMPUTE_MXQUANT{,_FP16}` | FP32/FP16 -> MXFP8 33 B blocks, golden `idma_mxquant_dpi.c`; one run crosses a 4K page |
 
-Invoke with the Questa SEPP wrapper, e.g.:
+These `idma_sim_tb_*` targets drive Questa directly (they source `compile.tcl` and run under vsim), so they are Questa-only; pass the tool binaries through the `VSIM` / `VLOG` / `VLIB` variables:
 
 ```bash
 make idma_sim_tb_idma_mxquant VSIM="questa-2023.4 vsim" \
@@ -176,37 +178,64 @@ make idma_sim_tb_idma_mxquant VSIM="questa-2023.4 vsim" \
 
 ## Running Simulations
 
+`idma.mk` wires three simulators. Questa and VCS run the full job-file testbenches; Verilator is wired for elaboration/lint only (it Verilates a chosen top with `--cc`, not a full behavioral run). Each flow takes its tool binaries as make variables, whose defaults are the bare `vsim` / `vcs` / `verilator` names; the Questa examples below use the `questa-2023.4` SEPP wrapper.
+
 ### Prerequisites
 
-Before running any simulation, generate the RTL and simulation scripts:
+Generate the RTL (and, for Questa/VCS, the compile scripts) first:
 
 ```bash
 make idma_hw_all    # Generate RTL into target/rtl/
-make idma_sim_all   # Generate compile.tcl and start.tcl into target/sim/vsim/
+make idma_sim_all   # Generate compile.tcl + start.tcl (Questa) and compile.sh (VCS)
 ```
 
-### Compile
+### Compile and Run
 
-Compile the generated design with Questa:
+<Tabs syncKey="sim">
+  <TabItem label="Questa">
 
-```bash
-cd target/sim/vsim
-questa-2023.4 vsim -c -do "source compile.tcl; quit"
-```
+  Compile with the generated `compile.tcl`, then run a job file with the `+job_file` plusarg:
 
-### Run
+  ```bash
+  cd target/sim/vsim
+  questa-2023.4 vsim -c -do "source compile.tcl; quit"
+  questa-2023.4 vsim -c -t 1ps -voptargs=+acc \
+    +job_file=../../../jobs/backend_rw_axi/simple.txt \
+    -logfile output.log \
+    tb_idma_backend_rw_axi \
+    -do "source start.tcl; run -all"
+  ```
 
-Run a simulation against a specific job file:
+  Replace `backend_rw_axi` and `tb_idma_backend_rw_axi` with the desired variant. The `+job_file` plusarg points to the job file describing the test sequence.
 
-```bash
-questa-2023.4 vsim -c -t 1ps -voptargs=+acc \
-  +job_file=../../../jobs/backend_rw_axi/simple.txt \
-  -logfile output.log \
-  tb_idma_backend_rw_axi \
-  -do "source start.tcl; run -all"
-```
+  </TabItem>
+  <TabItem label="VCS">
 
-Replace `backend_rw_axi` and `tb_idma_backend_rw_axi` with the desired variant. The `+job_file` plusarg points to the job file describing the test sequence.
+  Analyze the sources (this generates and runs `target/sim/vcs/compile.sh`), elaborate a specific testbench into a `simv` binary, then run it with the same `+job_file` plusarg:
+
+  ```bash
+  make idma_vcs_compile VCS=vcs VLOGAN=vlogan
+  make target/sim/vcs/bin/rw_axi.vcs IDMA_VCS_TB=tb_idma_backend_rw_axi
+  cd target/sim/vcs
+  ./bin/rw_axi.vcs +job_file=../../../jobs/backend_rw_axi/simple.txt
+  ```
+
+  `IDMA_VCS_TB` selects the testbench top; the `bin/<name>.vcs` output name is yours to choose.
+
+  </TabItem>
+  <TabItem label="Verilator">
+
+  Verilator is wired for elaboration / lint only (`--cc`), not a full job-file run. It pickles the design with `-D VERILATOR` and Verilates a chosen top, writing the result to `target/sim/verilator/<top>_elab.log`:
+
+  ```bash
+  make target/sim/verilator/idma_backend_synth_rw_axi_elab.log \
+    IDMA_VLT_TOP=idma_backend_synth_rw_axi VERILATOR=verilator
+  ```
+
+  Use this as a fast structural / lint check; run Questa or VCS for behavioral job-file simulation.
+
+  </TabItem>
+</Tabs>
 
 ### Debugging Failures
 
@@ -223,10 +252,6 @@ Check the `busy_o` flags to identify which subunit stalled:
 | `eh_fsm_busy` | Error handler waiting for software action |
 
 Key signals to trace in waveforms: `idma_req_i`/`req_valid_i`/`req_ready_o` (request handshake), `idma_rsp_o`/`rsp_valid_o` (response), `busy_o` (subunit status), and the AXI AR/AW/R/W/B channels on the bus interface.
-
-### VCS
-
-Simulation scripts for VCS are generated alongside Questa scripts via `make idma_sim_all`. The flow is analogous - compile with the generated script, then run with the `+job_file` plusarg.
 
 ## Source Files
 
