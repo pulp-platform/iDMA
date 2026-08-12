@@ -26,8 +26,8 @@ import idma_desc64_reg_pkg::idma_desc64_reg__in_t; #(
     input  logic                  input_addr_ready_i
 );
 
-    import idma_desc64_addrmap_pkg::IDMA_DESC64_REG_DESC_ADDR_BASE_ADDR;
-    import idma_desc64_addrmap_pkg::IDMA_DESC64_REG_STATUS_BASE_ADDR;
+    import idma_desc64_addrmap_pkg::IDMA_DESC64_DESC_ADDR_BASE_ADDR;
+    import idma_desc64_addrmap_pkg::IDMA_DESC64_STATUS_BASE_ADDR;
 
     logic     apb_psel, apb_psel_q, apb_penable, apb_pready;
     logic     input_addr_valid_q, input_addr_valid_d;
@@ -55,7 +55,7 @@ import idma_desc64_reg_pkg::idma_desc64_reg__in_t; #(
     assign apb_penable = apb_psel_q & apb_req_i.penable;
 
     always_comb begin
-        if (apb_req_i.paddr == IDMA_DESC64_REG_DESC_ADDR_BASE_ADDR) begin
+        if (apb_req_i.paddr == IDMA_DESC64_DESC_ADDR_BASE_ADDR) begin
             apb_psel = apb_req_i.psel & input_addr_ready_i;
         end else begin
             apb_psel = apb_req_i.psel;
@@ -66,7 +66,7 @@ import idma_desc64_reg_pkg::idma_desc64_reg__in_t; #(
 
     always_comb begin
         // only take into account the fifo if a write is going to it
-        if (apb_req_i.paddr == IDMA_DESC64_REG_DESC_ADDR_BASE_ADDR) begin
+        if (apb_req_i.paddr == IDMA_DESC64_DESC_ADDR_BASE_ADDR) begin
             apb_rsp_o.pready = apb_pready & (input_addr_ready_i | ~input_addr_valid_q);
         end else begin
             apb_rsp_o.pready = apb_pready;
