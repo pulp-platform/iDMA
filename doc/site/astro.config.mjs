@@ -36,6 +36,7 @@ export default defineConfig({
             },
             { label: 'Midend', slug: 'architecture/midend' },
             { label: 'Backend', slug: 'architecture/backend' },
+            { label: 'Compute', slug: 'architecture/compute' },
           ],
         },
         {

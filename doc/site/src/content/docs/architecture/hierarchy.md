@@ -10,11 +10,11 @@ site under `public/fig/graph/`.
 
 :::note[Draft]
 This page is a starting point for aligning the site with the regenerated
-hierarchy graphs — the figures and prose are still being brought up to date with
+hierarchy graphs - the figures and prose are still being brought up to date with
 the latest repository state.
 :::
 
-## Backend — `rw_axi`
+## Backend - `rw_axi`
 
 ![idma_backend_synth_rw_axi](/fig/graph/idma_backend_synth_rw_axi.png)
 

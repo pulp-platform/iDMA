@@ -33,13 +33,30 @@ Transfer options select protocols and carry sideband signals. Each request embed
 typedef struct packed {
     idma_pkg::protocol_e        src_protocol;  // Source bus protocol
     idma_pkg::protocol_e        dst_protocol;  // Destination bus protocol
+    idma_pkg::multihead_t       src_head;      // Source head select (multi-head)
+    idma_pkg::multihead_t       dst_head;      // Destination head select (multi-head)
     axi_id_t                    axi_id;        // AXI transaction ID
     idma_pkg::axi_options_t     src;           // Source AXI options
     idma_pkg::axi_options_t     dst;           // Destination AXI options
     idma_pkg::backend_options_t beo;           // Backend engine options
+    idma_pkg::compute_options_t compute;       // On-the-fly compute selection
     logic                       last;          // Last transfer flag (for midend)
 } options_t;
 ```
+
+## Compute Options (`compute_options_t`)
+
+`compute` selects an optional on-the-fly transform for the transfer. It is inert unless the backend is elaborated with `EnableCompute` and the op is enabled in `ComputeOps`. See [Compute](../compute/) for op semantics and constraints.
+
+```verilog
+typedef struct packed {
+    logic             enable;  // Arm compute for this transfer
+    compute_op_e      op;      // Op selector (transpose, MX quant/dequant)
+    compute_params_t  params;  // Per-op parameters (transpose tensor dims/mode)
+} compute_options_t;
+```
+
+`compute_op_e` encodes `COMPUTE_NONE`, `COMPUTE_TRANSPOSE`, `COMPUTE_MXQUANT`, `COMPUTE_MXQUANT_FP16`, `COMPUTE_MXDEQUANT`, and `COMPUTE_MXDEQUANT_FP16`. The enum is generated from `idma_reg.rdl` so RTL and the SW headers share one encoding.
 
 ## Transfer Response (`idma_rsp_t`)
 

@@ -21,9 +21,9 @@ For documentation quality checks, see [Docs Verification Plan](../docs-verificat
 
 ### Golden Model
 
-The testbench uses a **golden model** — a software reference implementation that predicts the expected memory state after each DMA transfer. By comparing the hardware's actual memory writes against the model's predictions, the testbench detects functional bugs without requiring hand-written expected values.
+The testbench uses a **golden model** - a software reference implementation that predicts the expected memory state after each DMA transfer. By comparing the hardware's actual memory writes against the model's predictions, the testbench detects functional bugs without requiring hand-written expected values.
 
-The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that simulates DMA transfers at the byte granularity. It replicates the legalizer's burst splitting logic (page boundaries, maximum burst lengths) and error handling behavior (continue/abort semantics). After each transfer, the testbench compares the hardware memory state against the model's expected state to detect mismatches. The golden model uses the `max_src_len` and `max_dst_len` fields from the job file to configure burst splitting — these must match the protocol's actual limits for comparisons to pass. If `max_src_len`/`max_dst_len` don't match the protocol's actual burst limits, the golden model will split bursts differently than the hardware legalizer, causing false mismatches.
+The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that simulates DMA transfers at the byte granularity. It replicates the legalizer's burst splitting logic (page boundaries, maximum burst lengths) and error handling behavior (continue/abort semantics). After each transfer, the testbench compares the hardware memory state against the model's expected state to detect mismatches. The golden model uses the `max_src_len` and `max_dst_len` fields from the job file to configure burst splitting - these must match the protocol's actual limits for comparisons to pass. If `max_src_len`/`max_dst_len` don't match the protocol's actual burst limits, the golden model will split bursts differently than the hardware legalizer, causing false mismatches.
 
 ## Job File Format
 
@@ -86,7 +86,7 @@ rc0xc       #   read error at 0xc, action: continue
 
 ### Writing Custom Job Files
 
-To create a custom test, write a text file following the format above. Each field is on its own line, with transfers concatenated back-to-back (no blank lines between them). The `max_src_len` and `max_dst_len` fields control burst splitting in the golden model — set to 256 for AXI (matching the protocol maximum) or 1 for single-beat protocols (OBI, INIT, AXI Stream).
+To create a custom test, write a text file following the format above. Each field is on its own line, with transfers concatenated back-to-back (no blank lines between them). The `max_src_len` and `max_dst_len` fields control burst splitting in the golden model - set to 256 for AXI (matching the protocol maximum) or 1 for single-beat protocols (OBI, INIT, AXI Stream).
 
 Here is an example with two back-to-back transfers in a single job file (64 bytes followed by 128 bytes, no errors):
 
@@ -117,7 +117,7 @@ Here is an example with two back-to-back transfers in a single job file (64 byte
 
 Each backend variant has its own set of job files under `jobs/<variant>/`:
 
-**Basic** — start here for bring-up and sanity checks:
+**Basic** - start here for bring-up and sanity checks:
 
 | Job File | Description |
 |----------|-------------|
@@ -125,7 +125,7 @@ Each backend variant has its own set of job files under `jobs/<variant>/`:
 | `small.txt` | A few short transfers |
 | `tiny.txt` | Very small (sub-word) transfers |
 
-**Stress** — increasing transfer sizes for throughput and boundary testing:
+**Stress** - increasing transfer sizes for throughput and boundary testing:
 
 | Job File | Description |
 |----------|-------------|
@@ -133,7 +133,7 @@ Each backend variant has its own set of job files under `jobs/<variant>/`:
 | `large.txt` | Longer transfers approaching page boundaries |
 | `huge.txt` | Large transfers spanning multiple pages |
 
-**Pattern** — specific address and access patterns:
+**Pattern** - specific address and access patterns:
 
 | Job File | Description |
 |----------|-------------|
@@ -142,19 +142,37 @@ Each backend variant has its own set of job files under `jobs/<variant>/`:
 | `same_dst.txt` | Multiple transfers to the same destination |
 | `zero_transfer.txt` | Zero-length transfer (tests `RejectZeroTransfers`) |
 
-**Error** — error injection and handling:
+**Error** - error injection and handling:
 
 | Job File | Description |
 |----------|-------------|
 | `error_simple.txt` | Transfers with injected read/write errors and continue/abort actions |
 | `error_mixed.txt` | Complex error scenarios with multiple error types |
 
-For initial bring-up, start with `simple.txt` on the `rw_axi` variant — it's the smallest test on the most common backend.
+For initial bring-up, start with `simple.txt` on the `rw_axi` variant - it's the smallest test on the most common backend.
 
 :::note[Figure placeholder]
 Diagram: verification testbench architecture.
 Show job parser feeding the DUT wrapper, simulated memory, and golden model checker.
 :::
+
+## Compute Testbenches
+
+The on-the-fly compute engines have dedicated self-checking testbenches, checked byte-exact against DPI-C golden models (they are separate from the job-file backend flow):
+
+| Make target | DUT | Checks |
+|-------------|-----|--------|
+| `idma_sim_tb_idma_otf_transpose` | `idma_otf_transpose` standalone | Transpose engine over `StrbWidth` and `FullDuplex` sweeps, golden `idma_transpose_dpi.c` |
+| `idma_sim_tb_idma_transpose_nd` | ND midend -> `rw_axi` -> `axi_sim_mem` | Multi-tile transpose end-to-end at `DataWidth` 32/64 |
+| `idma_sim_tb_idma_transpose_b2b` | ND midend -> `rw_axi` | Two back-to-back transposes to distinct destinations |
+| `idma_sim_tb_idma_mxquant` | `rw_axi` backend, `COMPUTE_MXQUANT{,_FP16}` | FP32/FP16 -> MXFP8 33 B blocks, golden `idma_mxquant_dpi.c`; one run crosses a 4K page |
+
+Invoke with the Questa SEPP wrapper, e.g.:
+
+```bash
+make idma_sim_tb_idma_mxquant VSIM="questa-2023.4 vsim" \
+  VLOG="questa-2023.4 vlog" VLIB="questa-2023.4 vlib"
+```
 
 ## Running Simulations
 
@@ -198,21 +216,21 @@ Check the `busy_o` flags to identify which subunit stalled:
 
 | Flag | Stuck means |
 |------|-------------|
-| `r_leg_busy` | Legalizer can't split — check transfer parameters |
-| `r_dp_busy` | Read channel not getting responses — check memory slave |
-| `buffer_busy` | Write channel not draining — check write backpressure |
-| `w_dp_busy` | Write channel blocked — check destination memory |
+| `r_leg_busy` | Legalizer can't split - check transfer parameters |
+| `r_dp_busy` | Read channel not getting responses - check memory slave |
+| `buffer_busy` | Write channel not draining - check write backpressure |
+| `w_dp_busy` | Write channel blocked - check destination memory |
 | `eh_fsm_busy` | Error handler waiting for software action |
 
 Key signals to trace in waveforms: `idma_req_i`/`req_valid_i`/`req_ready_o` (request handshake), `idma_rsp_o`/`rsp_valid_o` (response), `busy_o` (subunit status), and the AXI AR/AW/R/W/B channels on the bus interface.
 
 ### VCS
 
-Simulation scripts for VCS are generated alongside Questa scripts via `make idma_sim_all`. The flow is analogous — compile with the generated script, then run with the `+job_file` plusarg.
+Simulation scripts for VCS are generated alongside Questa scripts via `make idma_sim_all`. The flow is analogous - compile with the generated script, then run with the `+job_file` plusarg.
 
 ## Source Files
 
-- `test/idma_test.sv` — Test package (job class, golden model, drivers)
-- `test/tpl/tb_idma_backend.sv.tpl` — Testbench template (generates per-variant TBs)
-- `test/include/tb_tasks.svh` — Memory tasks, job parser (`read_jobs`)
-- `jobs/` — Job files organized by backend variant
+- `test/idma_test.sv` - Test package (job class, golden model, drivers)
+- `test/tpl/tb_idma_backend.sv.tpl` - Testbench template (generates per-variant TBs)
+- `test/include/tb_tasks.svh` - Memory tasks, job parser (`read_jobs`)
+- `jobs/` - Job files organized by backend variant

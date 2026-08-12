@@ -5,7 +5,7 @@ description: How iDMA reports and propagates errors across the frontend, midend,
 
 ## Error Handling Overview
 
-iDMA propagates error information from the backend (bus-level faults) back through the midend to the frontend, where software can read error status registers. Error handling is optional — controlled by the `ErrorCap` parameter. When enabled (`ErrorCap = ERROR_HANDLING`), the error handler FSM monitors datapath responses and gives software the choice to continue or abort a faulting transfer.
+iDMA propagates error information from the backend (bus-level faults) back through the midend to the frontend, where software can read error status registers. Error handling is optional - controlled by the `ErrorCap` parameter. When enabled (`ErrorCap = ERROR_HANDLING`), the error handler FSM monitors datapath responses and gives software the choice to continue or abort a faulting transfer.
 
 ## Error Types
 
@@ -36,7 +36,7 @@ typedef struct packed {
 } idma_rsp_t;
 ```
 
-The `burst_addr` field reports the base address of the AXI burst that faulted — this is the address from the AR or AW channel, not the individual beat address.
+The `burst_addr` field reports the base address of the AXI burst that faulted - this is the address from the AR or AW channel, not the individual beat address.
 
 ## Error Handler FSM
 
@@ -57,7 +57,7 @@ The error handler (`idma_error_handler`) implements a 5-state FSM:
 
 The `WAIT_LAST_W` state exists because write errors on the last burst of a transfer require special handling. Normally, the backend emits a completion response when the last write finishes. But if that last write *also* faults, the error response must be sent *before* the completion response, requiring an extra `EMIT_EXTRA_RSP` state.
 
-Read errors have higher priority than write errors — if both occur simultaneously, the read error is reported first.
+Read errors have higher priority than write errors - if both occur simultaneously, the read error is reported first.
 
 ## Actions
 
@@ -82,7 +82,7 @@ The DMA reads 256 bytes starting at `0x1000`. At address `0x1040`, the slave ret
 2. **Wait for response**: Poll or wait for `rsp_valid`
 3. **Check `rsp.error`**: If 0, transfer completed successfully
 4. **Read error details**: Extract `rsp.pld.err_type`, `rsp.pld.cause`, and `rsp.pld.burst_addr`
-5. **Issue action**: Write CONTINUE or ABORT to the error handler request interface (`idma_eh_req_i` + `eh_req_valid_i`), then wait for the final completion response. Note: this is a raw backend port. How it is exposed depends on the frontend: in register-based systems, the SoC typically connects it to a dedicated control register. In Snitch systems, the response is returned through `DMSTAT` polling. The descriptor frontend does not expose an error handler action interface — errors are reported via IRQ only
+5. **Issue action**: Write CONTINUE or ABORT to the error handler request interface (`idma_eh_req_i` + `eh_req_valid_i`), then wait for the final completion response. Note: this is a raw backend port. How it is exposed depends on the frontend: in register-based systems, the SoC typically connects it to a dedicated control register. In Snitch systems, the response is returned through `DMSTAT` polling. The descriptor frontend does not expose an error handler action interface - errors are reported via IRQ only
 
 ## Error Visibility by Frontend
 
@@ -100,11 +100,11 @@ After issuing CONTINUE or ABORT and receiving the final completion response, the
 
 - **AXI-to-AXI only**: The error handler is only instantiated for backend variants with a single AXI read port and a single AXI write port (i.e., the `rw_axi` variant). Mixed-protocol variants (`r_obi_w_axi`, `r_axi_w_obi`) and multi-port variants (`rw_axi_rw_axis`) will produce a fatal elaboration error (`$fatal`) if `ErrorCap = ERROR_HANDLING`. See the [Backend](../architecture/backend/) page for the full variant matrix
 - **ErrorCap parameter**: Must be set at elaboration time. When `NO_ERROR_HANDLING`, all error signals are tied to neutral values and the error handler is bypassed
-- **AXI compliance**: Once a burst is issued, all beats must complete — the error handler cannot cancel individual beats mid-burst. ABORT takes effect at burst boundaries
+- **AXI compliance**: Once a burst is issued, all beats must complete - the error handler cannot cancel individual beats mid-burst. ABORT takes effect at burst boundaries
 - **Outstanding transfer limit**: The error handler tracks outstanding transfers with a credit counter sized to `MetaFifoDepth`. The `cnt_busy` signal indicates transfers are still in-flight
 
 ## Source Files
 
-- `src/backend/idma_error_handler.sv` — Error handler FSM
-- `src/idma_pkg.sv` — Error type definitions (`err_type_e`, `eh_action_e`, `error_cap_e`)
-- `src/include/idma/typedef.svh` — `err_payload_t` macro
+- `src/backend/idma_error_handler.sv` - Error handler FSM
+- `src/idma_pkg.sv` - Error type definitions (`err_type_e`, `eh_action_e`, `error_cap_e`)
+- `src/include/idma/typedef.svh` - `err_payload_t` macro

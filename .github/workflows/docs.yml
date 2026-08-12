@@ -32,6 +32,13 @@ jobs:
         with:
           enable-cache: true
       -
+        name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: doc/site/package-lock.json
+      -
         name: Install RISC-V GCC toolchain
         uses: pulp-platform/pulp-actions/riscv-gcc-install@v2.5.0
         with:
@@ -53,7 +60,7 @@ jobs:
         name: Create publish docs
         uses: actions/upload-pages-artifact@v5
         with:
-          path: target/doc/html
+          path: doc/site/dist
 
   deploy-pages:
     needs: doc

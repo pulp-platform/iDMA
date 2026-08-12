@@ -17,7 +17,7 @@ iDMA's SystemVerilog is generated from templates, so the first step in any check
 make idma_hw_all
 ```
 
-On first run this provisions a local `uv` environment (`uv sync --locked`) — no manual venv setup or activation needed — and renders the templates into `target/rtl/`, which Bender exposes through its `rtl` and `synth` targets.
+On first run this provisions a local `uv` environment (`uv sync --locked`) - no manual venv setup or activation needed - and renders the templates into `target/rtl/`, which Bender exposes through its `rtl` and `synth` targets.
 
 When iDMA is pulled as a Bender dependency, regenerate its RTL from the consuming repo the same way:
 
@@ -78,7 +78,12 @@ A frontend produces `idma_req_t`. If you do not use a frontend, you can drive th
 
 The backend produces one `idma_rsp_t` per completed transfer. Check `error` and `err_payload_t` to determine whether the transfer succeeded.
 
+## Optional: On-the-Fly Compute
+
+Compute-eligible backends (AXI/OBI read and write) can transform the stream while it moves: tiled transpose and OCP-microscaling MX quant/dequant. Elaborate it with `EnableCompute = 1` plus a `ComputeOps` mask, then arm it per transfer via the request's `compute` option. See [Compute](../../architecture/compute/).
+
 ## Next Steps
 
 - For a full integration recipe, see [System Integration](../system-integration/).
 - For ND transfers, see [Programming Model](../../architecture/programming-model/).
+- For on-the-fly transpose and MX quant/dequant, see [Compute](../../architecture/compute/).
