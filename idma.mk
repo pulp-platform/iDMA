@@ -424,6 +424,18 @@ idma_sim_tb_idma_reg_frontend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 tb_idma_reg_frontend -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 -gNumRegs=2 tb_idma_reg_frontend -do "run -all; quit"
 
+# Tightly-coupled inst64 frontend driven over the snitch accelerator bus.
+# Run with the Questa SEPP wrapper:
+#   make idma_sim_tb_idma_inst64_axi_copy VSIM="questa-2023.4 vsim"
+.PHONY: idma_sim_tb_idma_inst64_axi_copy
+idma_sim_tb_idma_inst64_axi_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_axi_copy.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_axi_copy.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_inst64_axi_copy \
+		-logfile inst64_axi_copy.log -do "run -all; quit"
+	# Questa does not propagate $$fatal to the exit code; gate on the transcript
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_axi_copy.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_axi_copy.log
+
 .PHONY: idma_sim_tb_idma_transpose_b2b
 idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
