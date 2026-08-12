@@ -151,6 +151,17 @@ addrmap idma_reg #(
         } reps [31:0] = 0;
     };
 
+    // Single source of the compute op encoding: idma_pkg::compute_op_e and the
+    // generated SW headers both derive from it.
+    enum compute_op {
+        none           = 4'd0 { desc = "No compute (plain copy)."; };
+        transpose      = 4'd1 { desc = "Tiled transpose."; };
+        mxquant        = 4'd2 { desc = "MX quant, FP32 source (128B -> 33B per 32-element block)."; };
+        mxquant_fp16   = 4'd3 { desc = "MX quant, FP16 source (64B -> 33B per 32-element block)."; };
+        mxdequant      = 4'd4 { desc = "MX dequant, FP32 destination (33B -> 128B per 32-element block)."; };
+        mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (33B -> 64B per 32-element block)."; };
+    };
+
     reg compute_cfg {
         name = "compute_cfg";
         desc = "Per-transfer on-the-fly compute configuration. The fields are sampled when next_id is read to launch a transfer.";
@@ -160,7 +171,8 @@ addrmap idma_reg #(
             desc = "Enable on-the-fly compute for the launched transfer.";
         } compute_enable [0:0] = 0;
         field {
-            desc = "Compute operation selector: 1 transpose, 2 MX quant (FP32 source), 3 MX quant (FP16 source), 4 MX dequant (FP32 dest), 5 MX dequant (FP16 dest).";
+            desc = "Compute operation selector (idma_pkg::compute_op_e).";
+            encode = compute_op;
         } compute_op [4:1] = 0;
         field {
             desc = "Transpose element-size mode. The element size is 1 << transpose_mode bytes, encoding 8b, 16b, 32b, and 64b elements.";

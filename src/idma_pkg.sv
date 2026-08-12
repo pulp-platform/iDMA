@@ -10,6 +10,8 @@
 /// Contains all static type definitions
 package idma_pkg;
 
+    `include "idma/compute.svh"
+
     /// Error Handling Capabilities
     /// - `NO_ERROR_HANDLING`: No error handling hardware is present
     /// - `ERROR_HANDLING`: Error handling hardware is present
@@ -88,15 +90,6 @@ package idma_pkg;
     localparam int unsigned MxFp32BlockBytes = 32'd4 * MxBlockElems;
     localparam int unsigned MxFp16BlockBytes = 32'd2 * MxBlockElems;
 
-    /// Compute operation selector
-    typedef enum logic [3:0] {
-        COMPUTE_NONE         = 4'd0,
-        COMPUTE_TRANSPOSE    = 4'd1,
-        COMPUTE_MXQUANT        = 4'd2, // FP32 -> MXFP8, 128B -> 33B per 32-elem block
-        COMPUTE_MXQUANT_FP16   = 4'd3, // FP16 -> MXFP8,  64B -> 33B per 32-elem block
-        COMPUTE_MXDEQUANT      = 4'd4, // MXFP8 -> FP32,  33B -> 128B per 32-elem block
-        COMPUTE_MXDEQUANT_FP16 = 4'd5  // MXFP8 -> FP16,  33B ->  64B per 32-elem block
-    } compute_op_e;
 
     /// Per-op source:dest byte ratio; the legalizer sizes the write length from it.
     function automatic int unsigned compute_in_bytes(compute_op_e op);
