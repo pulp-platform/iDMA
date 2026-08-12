@@ -137,9 +137,10 @@ $(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT
 	mkdir -p $(IDMA_RTL_DIR)/include/idma
 	$(call idma_gen,tracer,$(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
 
-$(IDMA_RTL_DIR)/include/idma/compute.svh: $(IDMA_UTIL_DIR)/gen_compute_svh.py $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl
+$(IDMA_RTL_DIR)/include/idma/compute.svh: $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl
 	mkdir -p $(IDMA_RTL_DIR)/include/idma
-	$(PYTHON) $(IDMA_UTIL_DIR)/gen_compute_svh.py $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl > $@
+	$(PEAKRDL) raw-header $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl \
+	  --template $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl -o $@
 
 idma_rtl_clean:
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
