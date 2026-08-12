@@ -1,14 +1,14 @@
 packages:
   apb:
-    revision: 77ddf073f194d44b9119949d2421be59789e69ae
-    version: 0.2.4
+    revision: 6a2bd0fe9f0822322104ac602fac5739fb063aa0
+    version: null
     source:
       Git: https://github.com/pulp-platform/apb.git
     dependencies:
     - common_cells
   axi:
-    revision: a8c53cee2520d328d390c507c88818e8ac144c8c
-    version: 0.39.10
+    revision: 0ccc838fe06aeeb857eb83c6be9a915c4bf99566
+    version: null
     source:
       Git: https://github.com/pulp-platform/axi.git
     dependencies:
@@ -16,15 +16,15 @@ packages:
     - common_verification
     - tech_cells_generic
   axi_stream:
-    revision: 54891ff40455ca94a37641b9da4604647878cc07
-    version: 0.1.1
+    revision: 834639c9a39d00c063cef184164525416ef5b119
+    version: null
     source:
       Git: https://github.com/pulp-platform/axi_stream.git
     dependencies:
     - common_cells
   common_cells:
-    revision: 1281545696eb3fcba50ec5b4275993476a3c710e
-    version: 1.40.0
+    revision: 03d98106aa19952a10360d2230def85144a0008b
+    version: 2.0.0-beta.2
     source:
       Git: https://github.com/pulp-platform/common_cells.git
     dependencies:
@@ -37,8 +37,8 @@ packages:
       Git: https://github.com/pulp-platform/common_verification.git
     dependencies: []
   obi:
-    revision: 0155fc34e900c7c884e081c0a1114a247937ff69
-    version: 0.1.7
+    revision: b69af4aa00630efd14b1c5cbf9bac977f23ce840
+    version: null
     source:
       Git: https://github.com/pulp-platform/obi.git
     dependencies:

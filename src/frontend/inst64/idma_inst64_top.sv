@@ -41,7 +41,6 @@ module idma_inst64_top #(
 ) (
     input  logic                          clk_i,
     input  logic                          rst_ni,
-    input  logic                          testmode_i,
     // AXI4 bus
     output axi_req_t    [NumChannels-1:0] axi_req_o,
     input  axi_res_t    [NumChannels-1:0] axi_res_i,
@@ -243,7 +242,6 @@ module idma_inst64_top #(
         ) i_idma_backend_rw_axi_rw_init_rw_obi (
             .clk_i,
             .rst_ni,
-            .testmode_i,
             .idma_req_i       ( idma_req       [c] ),
             .req_valid_i      ( idma_req_valid [c] ),
             .req_ready_o      ( idma_req_ready [c] ),
@@ -283,11 +281,12 @@ module idma_inst64_top #(
         );
 
         // INIT setup
-        spill_register #(
-            .T       ( logic [7:0] )
+        cc_spill_register #(
+            .data_t  ( logic [7:0] )
         ) i_spill_register_init (
             .clk_i,
             .rst_ni,
+            .clr_i   ( 1'b0                               ),
             .valid_i ( init_read_req[c].req_valid         ),
             .ready_o ( init_read_rsp[c].req_ready         ),
             .data_i  ( init_read_req[c].req_chan.cfg[7:0] ),
@@ -307,9 +306,9 @@ module idma_inst64_top #(
         end
 
         `FF(obi_we_q[c], obi_we_d[c], '0, clk_i, rst_ni)
-        stream_mux #(
-            .DATA_T       ( obi_a_chan_t ),
-            .N_INP        ( 32'd2  )
+        cc_stream_mux #(
+            .data_t       ( obi_a_chan_t ),
+            .NumInp       ( 32'd2  )
         ) i_obi_rw_mux (
             .inp_data_i   ( {obi_write_req[c].a,        obi_read_req[c].a     } ),
             .inp_valid_i  ( {obi_write_req[c].req,      obi_read_req[c].req   } ),
@@ -320,8 +319,8 @@ module idma_inst64_top #(
             .oup_ready_i  ( obi_res_i[c].gnt                                    )
         );
 
-        stream_demux #(
-            .N_OUP       ( 32'd2 )
+        cc_stream_demux #(
+            .NumOup      ( 32'd2 )
         ) i_obi_rw_demux (
             .inp_valid_i ( obi_res_i[c].rvalid ),
             .inp_ready_o ( obi_req_o[c].rready ),
@@ -383,14 +382,14 @@ module idma_inst64_top #(
             .busy_o            ( idma_nd_busy      [c] )
         );
 
-        stream_fifo_optimal_wrap #(
+        cc_stream_fifo_optimal_wrap #(
             .Depth     ( DMAReqFifoDepth ),
-            .type_t    ( idma_nd_req_t   ),
+            .data_t    ( idma_nd_req_t   ),
             .PrintInfo ( 1'b0            )
         ) i_stream_fifo_optimal_wrap (
             .clk_i,
             .rst_ni,
-            .testmode_i,
+            .clr_i      ( 1'b0                  ),
             .flush_i    ( 1'b0                  ),
             .usage_o    ( /* NC */              ),
             .data_i     ( idma_fe_req           ),
@@ -453,11 +452,12 @@ module idma_inst64_top #(
     // Spill register for response channel
     //--------------------------------------
     // the response path needs to be decoupled
-    spill_register #(
-        .T            ( acc_res_t )
+    cc_spill_register #(
+        .data_t       ( acc_res_t )
     ) i_spill_register (
         .clk_i,
         .rst_ni,
+        .clr_i   ( 1'b0            ),
         .valid_i ( acc_res_valid   ),
         .ready_o ( acc_res_ready   ),
         .data_i  ( acc_res         ),
@@ -467,7 +467,7 @@ module idma_inst64_top #(
     );
 
     // Address Decode
-    addr_decode #(
+    cc_addr_decode #(
     .NoIndices  ( NoIndices ),
     .NoRules    ( NoRules        ),
     .addr_t     ( addr_t           ),
@@ -482,7 +482,7 @@ module idma_inst64_top #(
     .default_idx_i    ( idma_pkg::ToSoC                                              )
     );
     // address decoder for destination address
-    addr_decode #(
+    cc_addr_decode #(
     .NoIndices  ( NoIndices ),
     .addr_t     ( addr_t           ),
     .NoRules    ( NoRules        ),

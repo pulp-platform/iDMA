@@ -63,7 +63,7 @@ module idma_nd_midend #(
 );
 
     /// How many bits are required to index the counters
-    localparam int unsigned StrideSelWidth = $clog2(NumDim-1) + 'd1;
+    localparam int unsigned StrideSelWidth = $clog2(NumDim);
 
 `ifndef SYNTHESIS
     // strides are added with same-width arithmetic; narrower strides would not sign-extend
@@ -157,8 +157,8 @@ module idma_nd_midend #(
     //--------------------------------------
     // The popcount is used to identify the highest stage that is done. This is then added to the
     // current address register.
-    popcount #(
-        .INPUT_WIDTH ( NumDim-1  )
+    cc_popcount #(
+        .InputWidth ( NumDim-1  )
     ) i_popcount (
         .data_i      ( stage_clear  ),
         .popcount_o  ( stride_sel_d )

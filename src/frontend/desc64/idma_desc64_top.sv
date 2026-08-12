@@ -149,9 +149,10 @@ logic       next_wb_addr_ready;
 `define MAX(a, b) (a) > (b) ? a : b
 
 localparam int unsigned PendingFifoDepthBits = `MAX($clog2(PendingFifoDepth), 1);
+localparam int unsigned PendingFifoUsageWidth = `MAX($clog2(PendingFifoDepth + 1), 1);
 
-logic [PendingFifoDepthBits-1:0] idma_req_used;
-logic [PendingFifoDepthBits:0]   idma_req_available;
+logic [PendingFifoUsageWidth-1:0] idma_req_used;
+logic [PendingFifoDepthBits:0]    idma_req_available;
 
 logic [1:0]                        ws_per_writeback;
 // one bit extra for the 32 bit case
@@ -366,15 +367,15 @@ idma_desc64_reader #(
     .idma_req_inflight_o         (idma_req_inflight)
 );
 
-stream_fifo #(
-    .FALL_THROUGH (1'b1),
-    .DEPTH        (InputFifoDepth),
-    .T            (addr_t)
+cc_stream_fifo #(
+    .FallThrough (1'b1),
+    .Depth       (InputFifoDepth),
+    .data_t      (addr_t)
 ) i_input_addr_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (input_addr),
     .valid_i   (input_addr_valid),
@@ -384,15 +385,15 @@ stream_fifo #(
     .ready_i   (queued_addr_ready)
 );
 
-stream_fifo #(
-    .FALL_THROUGH (1'b1),
-    .DEPTH        (PendingFifoDepth + BackendDepth),
-    .T            (addr_t)
+cc_stream_fifo #(
+    .FallThrough (1'b1),
+    .Depth       (PendingFifoDepth + BackendDepth),
+    .data_t      (addr_t)
 ) i_pending_addr_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (feedback_addr),
     .valid_i   (feedback_addr_valid),
@@ -402,15 +403,15 @@ stream_fifo #(
     .ready_i   (next_wb_addr_ready && idma_rsp_valid_i)
 );
 
-stream_fifo #(
-    .FALL_THROUGH (1'b0),
-    .DEPTH        (PendingFifoDepth),
-    .T            (idma_req_t)
+cc_stream_fifo #(
+    .FallThrough (1'b0),
+    .Depth       (PendingFifoDepth),
+    .data_t      (idma_req_t)
 ) i_idma_request_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (idma_req_used),
     .data_i    (idma_req),
     .valid_i   (idma_req_valid),
@@ -420,15 +421,15 @@ stream_fifo #(
     .ready_i   (idma_req_ready_i)
 );
 
-stream_fifo #(
-    .FALL_THROUGH (1'b0),
-    .DEPTH        (PendingFifoDepth + MaxAWWPending + BackendDepth),
-    .T            (logic)
+cc_stream_fifo #(
+    .FallThrough (1'b0),
+    .Depth       (PendingFifoDepth + MaxAWWPending + BackendDepth),
+    .data_t      (logic)
 ) i_irq_fifo (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (do_irq),
     .valid_i   (do_irq_valid),
@@ -438,15 +439,15 @@ stream_fifo #(
     .ready_i   (master_rsp_i.b_valid)
 );
 
-stream_fifo #(
-    .FALL_THROUGH (1'b0),
-    .DEPTH        (MaxAWWPending),
-    .T            (addr_t)
+cc_stream_fifo #(
+    .FallThrough (1'b0),
+    .Depth       (MaxAWWPending),
+    .data_t      (addr_t)
 ) i_aw_addrs (
     .clk_i,
     .rst_ni,
+    .clr_i     (1'b0),
     .flush_i   (1'b0),
-    .testmode_i(1'b0),
     .usage_o   (/* unconnected */),
     .data_i    (next_wb_addr),
     .valid_i   (next_wb_addr_valid && idma_rsp_valid_i),

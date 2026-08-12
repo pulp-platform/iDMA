@@ -78,8 +78,6 @@ module idma_transport_layer_${name_uniqueifier} #(
     input  logic clk_i,
     /// Asynchronous reset, active low
     input  logic rst_ni,
-    /// Testmode in
-    input  logic testmode_i,
 % for protocol in used_read_protocols:
 
     /// ${database[protocol]['full_name']} read request
@@ -382,7 +380,6 @@ ${rendered_read_ports[read_port]}
     ) i_dataflow_element (
         .clk_i       ( clk_i                    ),
         .rst_ni      ( rst_ni                   ),
-        .testmode_i  ( testmode_i               ),
         .data_i      ( buffer_in_shifted        ),
         .valid_i     ( buffer_in_valid          ),
         .ready_o     ( buffer_in_ready          ),
@@ -456,11 +453,12 @@ ${rendered_read_ports[read_port]}
     //--------------------------------------
 
     // Split write request to write response fifo and write ports
-    stream_fork #(
-        .N_OUP ( 2 )
+    cc_stream_fork #(
+        .NumOup ( 2 )
     ) i_write_stream_fork (
         .clk_i   ( clk_i                                    ),
         .rst_ni  ( rst_ni                                   ),
+        .clr_i   ( 1'b0                                     ),
         .valid_i ( w_dp_valid_i                             ),
         .ready_o ( w_dp_ready_o                             ),
         .valid_o ( { w_resp_fifo_in_valid, w_dp_req_valid } ),
@@ -519,14 +517,14 @@ ${rendered_write_ports[write_port]}
     // Insert when data write happens
     // Remove when write response comes
 
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth        ( NumAxInFlight        ),
-        .type_t       ( idma_pkg::protocol_e ),
+        .data_t       ( idma_pkg::protocol_e ),
         .PrintInfo    ( PrintFifoInfo        )
     ) i_write_response_fifo (
         .clk_i      ( clk_i                                          ),
         .rst_ni     ( rst_ni                                         ),
-        .testmode_i ( testmode_i                                     ),
+        .clr_i      ( 1'b0                                           ),
         .flush_i    ( 1'b0                                           ),
         .usage_o    ( /* NOT CONNECTED */                            ),
         .data_i     ( w_dp_req_i.dst_protocol                        ),
@@ -538,14 +536,14 @@ ${rendered_write_ports[write_port]}
     );
 
 % if not mh_format['aw'][wp] == '':
-    stream_fifo_optimal_wrap #(
+    cc_stream_fifo_optimal_wrap #(
         .Depth        ( NumAxInFlight         ),
-        .type_t       ( idma_pkg::multihead_t ),
+        .data_t       ( idma_pkg::multihead_t ),
         .PrintInfo    ( PrintFifoInfo         )
     ) i_write_response_fifo_multihead (
         .clk_i      ( clk_i                                          ),
         .rst_ni     ( rst_ni                                         ),
-        .testmode_i ( testmode_i                                     ),
+        .clr_i      ( 1'b0                                           ),
         .flush_i    ( 1'b0                                           ),
         .usage_o    ( /* NOT CONNECTED */                            ),
         .data_i     ( w_dp_req_i.dst_head                            ),
@@ -596,13 +594,12 @@ ${rendered_write_ports[write_port]}
     end
 
     // Fall through register for the write response to be ready
-    fall_through_register #(
-        .T ( w_dp_rsp_t )
+    cc_fall_through_register #(
+        .data_t ( w_dp_rsp_t )
     ) i_write_rsp_channel_reg (
         .clk_i      ( clk_i      ),
         .rst_ni     ( rst_ni     ),
         .clr_i      ( 1'b0       ),
-        .testmode_i ( testmode_i ),
 
         .valid_i ( w_dp_rsp_mux_valid ),
         .ready_o ( w_dp_rsp_mux_ready ),
@@ -614,8 +611,8 @@ ${rendered_write_ports[write_port]}
     );
 
     // Join write response fifo and write port responses
-    stream_join #(
-        .N_INP ( 2 )
+    cc_stream_join #(
+        .NumInp ( 2 )
     ) i_write_stream_join (
         .inp_valid_i ( { w_resp_fifo_out_valid, w_dp_rsp_valid } ),
         .inp_ready_o ( { w_resp_fifo_out_ready, w_dp_rsp_ready } ),
