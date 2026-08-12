@@ -7,7 +7,7 @@ description: The backend executes 1D transfers over concrete transport protocols
 
 The backend is the lowest layer of the iDMA pipeline. It takes 1D transfer requests from the midend and drives the actual bus transactions. Each backend variant targets a specific combination of read and write protocols. Generated modules follow the naming pattern `idma_backend_<variant>` (e.g., `idma_backend_rw_axi`, `idma_backend_r_obi_w_axi`).
 
-![Backend Architecture](/fig/backend.svg)
+![Backend Architecture](/iDMA/fig/backend.svg)
 
 ### Transfer Lifecycle
 
@@ -92,7 +92,7 @@ Each backend variant combines a set of read and write protocols:
 
 The active set is `IDMA_BACKEND_IDS` in `idma.mk`; extend it with `IDMA_ADD_IDS` for custom protocol combinations.
 
-![Variant Matrix](/fig/variant_matrix.svg)
+![Variant Matrix](/iDMA/fig/variant_matrix.svg)
 
 ## Legalizer
 
@@ -100,7 +100,7 @@ The legalizer decomposes a 1D transfer request into a sequence of protocol-legal
 
 The legalizer is pure control path: it does not touch the data. It computes page/burst boundaries, splits transfers accordingly, and emits `offset`, `tailer`, and `shift` values that the transport layer uses for data realignment.
 
-![Legalizer](/fig/legalizer.svg)
+![Legalizer](/iDMA/fig/legalizer.svg)
 
 ### Splitting Rules
 

@@ -9,6 +9,8 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
+  site: 'https://pulp-platform.github.io',
+  base: '/iDMA',
   integrations: [
     starlight({
       title: 'iDMA Documentation',

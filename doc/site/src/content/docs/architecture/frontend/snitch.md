@@ -7,7 +7,7 @@ description: ISA-coupled frontend for Snitch cores using Xdma custom instruction
 
 The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V core through custom Xdma ISA extensions. DMA transfers are launched directly from the instruction stream via the accelerator bus interface, eliminating register file overhead and enabling single-cycle transfer submission.
 
-![Snitch Integration](/fig/system_integration_alt.svg)
+![Snitch Integration](/iDMA/fig/system_integration_alt.svg)
 
 ## Xdma Instruction Set
 

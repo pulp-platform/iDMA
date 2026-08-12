@@ -29,6 +29,7 @@ exclude-ext:
   - json
   - toml
   - md
+  - mdx
   - lock
   - local
 
