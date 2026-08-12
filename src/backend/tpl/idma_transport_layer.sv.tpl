@@ -312,9 +312,6 @@ ${rendered_read_ports[read_port]}
 % for rp in used_read_protocols:
     % if mh_format['ar'][rp] == '':
             idma_pkg::${database[rp]['protocol_enum']}: begin
-                //r_chan_valid_o  = ${rp}_r_chan_valid;
-                //r_chan_ready_o  = ${rp}_r_chan_ready;
-
                 r_dp_ready_o    = ${rp}_r_dp_ready;
                 r_dp_rsp_o      = ${rp}_r_dp_rsp;
                 r_dp_valid_o    = ${rp}_r_dp_valid;
@@ -324,9 +321,6 @@ ${rendered_read_ports[read_port]}
             end
     % else:
             idma_pkg::${database[rp]['protocol_enum']}: begin
-                //r_chan_valid_o  = ${rp}_r_chan_valid [r_dp_req_i.src_head];
-                //r_chan_ready_o  = ${rp}_r_chan_ready [r_dp_req_i.src_head];
-
                 r_dp_ready_o    = ${rp}_r_dp_ready [r_dp_req_i.src_head];
                 r_dp_rsp_o      = ${rp}_r_dp_rsp [r_dp_req_i.src_head];
                 r_dp_valid_o    = ${rp}_r_dp_valid [r_dp_req_i.src_head];
@@ -337,9 +331,6 @@ ${rendered_read_ports[read_port]}
     % endif
 % endfor
             default: begin
-                //r_chan_valid_o  = 1'b0;
-                //r_chan_ready_o  = 1'b0;
-
                 r_dp_ready_o    = 1'b0;
                 r_dp_rsp_o      = '0;
                 r_dp_valid_o    = 1'b0;
@@ -349,9 +340,6 @@ ${rendered_read_ports[read_port]}
             end
             endcase
         end else begin
-            //r_chan_valid_o  = 1'b0;
-            //r_chan_ready_o  = 1'b0;
-
             r_dp_ready_o    = 1'b0;
             r_dp_rsp_o      = '0;
             r_dp_valid_o    = 1'b0;

@@ -69,8 +69,6 @@ def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
                 read_meta_request = 'ar_req_i'
                 read_meta_valid = 'ar_valid_i'
                 read_meta_ready = 'ar_ready_o'
-                r_chan_valid = 'r_chan_valid_o'
-                r_chan_ready = 'r_chan_ready_o'
                 buffer_in = 'buffer_in'
                 buffer_in_valid = 'buffer_in_valid'
             else:
@@ -112,8 +110,6 @@ ar_valid_i\
 ar_valid_i\
 '''
                 read_meta_ready = f'{rp}_ar_ready{mh_bus}'
-                r_chan_valid = f'{rp}_r_chan_valid{mh_bus}'
-                r_chan_ready = f'{rp}_r_chan_ready{mh_bus}'
                 buffer_in = f'{rp}_buffer_in{mh_bus}'
                 buffer_in_valid = f'{rp}_buffer_in_valid{mh_bus}'
 
@@ -131,8 +127,6 @@ ar_valid_i\
                 'read_meta_ready': read_meta_ready,
                 'read_request': f'{rp}_read_req_{read_port_dir_req_str}{mh_bus}',
                 'read_response': f'{rp}_read_rsp_{read_port_dir_rsp_str}{mh_bus}',
-                'r_chan_valid': r_chan_valid,
-                'r_chan_ready': r_chan_ready,
                 'buffer_in': buffer_in,
                 'buffer_in_valid': buffer_in_valid,
                 'mh': mh

@@ -63,10 +63,6 @@ module idma_tilelink_read #(
     /// TileLink read manager port response
     input  read_rsp_t read_rsp_i,
 
-    /// Response channel valid and ready
-    output logic r_chan_ready_o,
-    output logic r_chan_valid_o,
-
     /// Data to Buffer
     output byte_t [StrbWidth-1:0] buffer_in_o,
     /// Valid to Buffer
@@ -206,9 +202,6 @@ module idma_tilelink_read #(
     // r_dp_valid_o is triggered once the last element is here or an error occurs
     assign r_dp_valid_o = read_rsp_i.d_valid & in_ready & (last
         | read_rsp_i.d.corrupt | read_rsp_i.d.denied);
-
-    assign r_chan_ready_o = read_req_o.d_ready;
-    assign r_chan_valid_o = read_rsp_i.d_valid;
 
     //--------------------------------------
     // State

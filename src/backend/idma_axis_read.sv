@@ -54,10 +54,6 @@ module idma_axis_read #(
     /// AXI Stream read manager port response
     output read_rsp_t read_rsp_o,
 
-    /// Response channel valid and ready
-    output logic r_chan_ready_o,
-    output logic r_chan_valid_o,
-
     /// Data to Buffer
     output byte_t [StrbWidth-1:0] buffer_in_o,
     /// Valid to Buffer
@@ -124,8 +120,6 @@ module idma_axis_read #(
 
     // r_dp_ready_o is triggered by the last element arriving from the read
     assign r_dp_req_ready_o = r_dp_req_valid_i & r_dp_rsp_ready_i & read_req_i.tvalid & in_ready;
-    assign r_chan_ready_o   = read_rsp_o.tready;
-    assign r_chan_valid_o   = read_req_i.tvalid;
 
     // connect r_dp response payload
     assign r_dp_rsp_o.resp  = '0;
