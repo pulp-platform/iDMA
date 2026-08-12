@@ -25,7 +25,7 @@ IDMA_ROOT   ?= $(shell $(BENDER) path idma)
 UV_RUN      := $(UV) run --locked --project $(IDMA_ROOT)
 PYTHON      ?= $(UV_RUN) python
 PEAKRDL     ?= $(UV_RUN) peakrdl
-SPHINXBUILD ?= $(UV_RUN) sphinx-build
+NPM         ?= npm
 
 # Shell
 SHELL := /bin/bash
@@ -164,7 +164,6 @@ IDMA_WAVE_ALL    += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backen
 
 .PHONY: idma_reg_clean
 
-IDMA_DOC_SRC_DIR := $(IDMA_ROOT)/doc/src
 IDMA_DOC_FIG_DIR := $(IDMA_ROOT)/doc/fig
 IDMA_DOC_OUT_DIR := $(IDMA_ROOT)/target/doc
 IDMA_HTML_DIR    := $(IDMA_DOC_OUT_DIR)/html
@@ -618,13 +617,19 @@ idma_trace_clean:
 # Doc
 # ---------------
 
-.PHONY: idma_spinx_doc idma_spinx_doc_clean
+.PHONY: idma_doc_site idma_doc_clean
 
-idma_spinx_doc: $(IDMA_RTL_DOC_ALL)
-	$(SPHINXBUILD) -M html $(IDMA_DOC_SRC_DIR) $(IDMA_DOC_OUT_DIR)
+IDMA_SITE_DIR := $(IDMA_ROOT)/doc/site
 
-idma_spinx_doc_clean:
+# Copy the generated hierarchy graphs into the Astro site's static assets
+idma_doc_site: $(IDMA_RTL_DOC_ALL)
+	mkdir -p $(IDMA_SITE_DIR)/public/fig/graph
+	cp -f $(IDMA_DOC_FIG_DIR)/graph/*.png $(IDMA_SITE_DIR)/public/fig/graph/
+
+idma_doc_clean:
 	rm -rf $(IDMA_DOC_OUT_DIR)
+	rm -rf $(IDMA_SITE_DIR)/dist
+	rm -rf $(IDMA_SITE_DIR)/public/fig/graph
 
 
 # --------------
@@ -653,7 +658,7 @@ idma_nonfree_clean:
 
 .PHONY: idma_clean_all idma_clean idma_misc_clean idma_sw_clean
 
-idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_spinx_doc_clean idma_trace_clean idma_sw_clean
+idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_doc_clean idma_trace_clean idma_sw_clean
 
 idma_misc_clean:
 	rm -rf scripts/__pycache__
@@ -674,7 +679,9 @@ idma_sw_clean:
 
 .PHONY: idma_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
 
-idma_doc_all: idma_spinx_doc
+# Build the Starlight/Astro site (output in doc/site/dist) after staging the graphs
+idma_doc_all: idma_doc_site
+	cd $(IDMA_SITE_DIR); $(NPM) ci && $(NPM) run build
 
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 

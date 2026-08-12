@@ -17,9 +17,10 @@ This guide covers the practical steps for integrating iDMA into a system-on-chip
 
 Select a frontend, midend, and backend based on your requirements:
 
-- **Backend**: Pick the variant matching your bus protocols — see the [variant matrix](../architecture/backend/#variant-matrix). If your SoC uses AXI4 throughout, `rw_axi` is the standard choice. Use `r_obi_w_axi` when reading from OBI-attached memory but writing via AXI. The Occamy variants (`r_obi_rw_init_w_axi`, `r_axi_rw_init_rw_obi`) add the INIT protocol for efficient memory zeroing. The backend page also covers [legalizer splitting rules](../architecture/backend/#splitting-rules) and [error handling](../architecture/backend/#error-handler) constraints.
-- **Frontend**: Choose based on your SoC's control interface — see the [frontend comparison](../architecture/frontend/#choosing-a-frontend)
+- **Backend**: Pick the variant matching your bus protocols - see the [variant matrix](../architecture/backend/#variant-matrix). If your SoC uses AXI4 throughout, `rw_axi` is the standard choice. Use `r_obi_w_axi` when reading from OBI-attached memory but writing via AXI. The Occamy variants (`r_obi_rw_init_w_axi`, `r_axi_rw_init_rw_obi`) add the INIT protocol for efficient memory zeroing. The backend page also covers [legalizer splitting rules](../architecture/backend/#splitting-rules) and [error handling](../architecture/backend/#error-handler) constraints.
+- **Frontend**: Choose based on your SoC's control interface - see the [frontend comparison](../architecture/frontend/#choosing-a-frontend). The register frontend now exposes a selectable PeakRDL CPUIF (`IDMA_REG_CPUIF`): `apb4-flat` (default), `obi-flat`, or `axi4-lite-flat`
 - **Midend**: Use the [ND midend](../architecture/midend/#nd-midend) for 2D/3D transfers, [RT midend](../architecture/midend/#rt-midend) for periodic transfers, or skip the midend entirely for 1D-only systems
+- **Compute** (optional): On AXI/OBI backends you can transform the stream in flight (transpose, MX quant/dequant) with `EnableCompute` - see [Compute](../architecture/compute/)
 
 ### 2. Define Types
 
@@ -44,7 +45,7 @@ typedef logic [StrideWidth-1:0] strides_t;
 `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, reps_t, strides_t)
 ```
 
-The `IDMA_TYPEDEF_FULL_REQ_T` macro is a convenience wrapper that internally invokes `IDMA_TYPEDEF_OPTIONS_T` and `IDMA_TYPEDEF_REQ_T`. Use the `FULL_` variants for integration — they define all intermediate types automatically. The non-`FULL_` macros (`IDMA_TYPEDEF_REQ_T`, `IDMA_TYPEDEF_OPTIONS_T`) define individual types and require you to provide the intermediate types manually. Use `FULL_` unless you need custom intermediate types.
+The `IDMA_TYPEDEF_FULL_REQ_T` macro is a convenience wrapper that internally invokes `IDMA_TYPEDEF_OPTIONS_T` and `IDMA_TYPEDEF_REQ_T`. Use the `FULL_` variants for integration - they define all intermediate types automatically. The non-`FULL_` macros (`IDMA_TYPEDEF_REQ_T`, `IDMA_TYPEDEF_OPTIONS_T`) define individual types and require you to provide the intermediate types manually. Use `FULL_` unless you need custom intermediate types.
 
 ### 3. Instantiate
 
@@ -53,30 +54,32 @@ All iDMA modules use a single clock (`clk_i`) and synchronous active-low reset (
 Wire the three layers together. The key connections are:
 - Frontend `dma_req_o` / `req_valid_o` / `req_ready_i` -> Midend ND request input
 - Midend `burst_req_o` / `burst_req_valid_o` / `burst_req_ready_i` -> Backend request input
-- Backend `idma_rsp_o` / `rsp_valid_o` / `rsp_ready_i` -> back through midend to frontend
+- Backend `idma_rsp_o` / `rsp_valid_o` / `rsp_ready_i` -> midend response input; the register frontend surfaces completion to software through its `done_id_i` / `busy_i` feedback (driven by the SoC's transfer-ID tracker), not a direct `idma_rsp_t` port
 
-The following skeleton shows how the three layers connect. Signal types come from the macros defined in step 2 above — `fe_req` is `idma_nd_req_t`, `be_req` is `idma_req_t`:
+The following skeleton shows how the three layers connect. Signal types come from the macros defined in step 2 above - `fe_req` is `idma_nd_req_t`, `be_req` is `idma_req_t`:
 
 ```verilog
 // Frontend -> Midend -> Backend
 
 idma_reg64_2d #(
-    .NumRegs    ( 1          ),
-    .NumStreams  ( 1          ),
-    .reg_req_t  ( reg_req_t  ),
-    .reg_rsp_t  ( reg_rsp_t  ),
-    .dma_req_t  ( idma_nd_req_t )
+    .NumRegs     ( 1             ),
+    .NumStreams  ( 1             ),
+    .apb_req_t   ( apb_req_t     ),  // config bus follows IDMA_REG_CPUIF (apb4-flat default)
+    .apb_rsp_t   ( apb_rsp_t     ),
+    .dma_req_t   ( idma_nd_req_t )
 ) i_frontend (
     .clk_i,
     .rst_ni,
-    .reg_req_i     ( dma_reg_req  ),
-    .reg_rsp_o     ( dma_reg_rsp  ),
-    .dma_req_o     ( fe_req       ),
-    .req_valid_o   ( fe_valid     ),
-    .req_ready_i   ( fe_ready     ),
-    .dma_rsp_i     ( fe_rsp       ),
-    .rsp_valid_i   ( fe_rsp_valid ),
-    .rsp_ready_o   ( fe_rsp_ready )
+    .dma_ctrl_req_i ( dma_ctrl_req ),  // APB4 config slave, one per NumRegs port
+    .dma_ctrl_rsp_o ( dma_ctrl_rsp ),
+    .dma_req_o      ( fe_req       ),
+    .req_valid_o    ( fe_valid     ),
+    .req_ready_i    ( fe_ready     ),
+    .next_id_i      ( fe_next_id   ),  // current transfer ID returned on next_id read
+    .stream_idx_o   ( fe_stream    ),
+    .done_id_i      ( fe_done_id   ),  // per-stream completed IDs (from the ID tracker)
+    .busy_i         ( be_busy      ),  // per-stream backend busy flags
+    .midend_busy_i  ( me_busy      )
 );
 
 idma_nd_midend #(
@@ -110,7 +113,7 @@ idma_backend_rw_axi #(
     .idma_rsp_t   ( idma_rsp_t   ),
     .axi_req_t    ( axi_req_t    ),
     .axi_rsp_t    ( axi_rsp_t    )
-    // Bus ports — variant-specific, see generated module for full port list
+    // Bus ports - variant-specific, see generated module for full port list
 ) i_backend (
     .clk_i,
     .rst_ni,
@@ -121,7 +124,7 @@ idma_backend_rw_axi #(
     .rsp_valid_o   ( be_rsp_valid ),
     .rsp_ready_i   ( be_rsp_ready ),
     .busy_o        ( busy         )
-    // AXI read/write ports omitted — variant-specific
+    // AXI read/write ports omitted - variant-specific
 );
 ```
 
@@ -131,16 +134,16 @@ Recommended parameter presets:
 
 | | Minimum Area | Balanced | High Throughput |
 |---|-------------|----------|-----------------|
-| `DataWidth` | 32 | 64 | 256–512 |
+| `DataWidth` | 32 | 64 | 256-512 |
 | `BufferDepth` | 2 | 3 | 3 |
-| `NumAxInFlight` | 2 | 3 | 4–8 |
-| `MemSysDepth` | 0 | 0 | 8–16 |
+| `NumAxInFlight` | 2 | 3 | 4-8 |
+| `MemSysDepth` | 0 | 0 | 8-16 |
 | `CombinedShifter` | 1 | 0 | 0 |
 | `RAWCouplingAvail` | 0 | 1 | 1 |
 | `HardwareLegalizer` | 0 | 1 | 1 |
 | `ErrorCap` | `NO_ERROR_HANDLING` | `ERROR_HANDLING` | `ERROR_HANDLING` |
 
-**Minimum Area** sacrifices throughput for gate count — single shifter, no coupling, software legalization. **Balanced** adds hardware legalization and coupling for correct-by-default behavior. **High Throughput** uses deep FIFOs and wide buses to saturate memory bandwidth.
+**Minimum Area** sacrifices throughput for gate count - single shifter, no coupling, software legalization. **Balanced** adds hardware legalization and coupling for correct-by-default behavior. **High Throughput** uses deep FIFOs and wide buses to saturate memory bandwidth.
 
 :::caution[Parameter misconfiguration]
 Setting `RAWCouplingAvail=1` on a mixed-protocol backend (e.g., `r_obi_w_axi`) where the write protocol has no AW channel will cause synthesis errors. Set `ErrorCap=ERROR_HANDLING` only on single-read/single-write AXI variants (`rw_axi`), or the design will `$fatal` during elaboration.
@@ -176,7 +179,7 @@ The following SoCs provide canonical integration examples spanning different bus
 | **Data Width** | 32-bit |
 | **Key File** | [`rtl/idma/croc_idma.sv`](https://github.com/pulp-platform/croc/blob/main/rtl/idma/croc_idma.sv) |
 
-**Start here** for a minimal OBI-based integration. Croc is a minimal OBI-based SoC with a custom register frontend — the smallest and simplest example.
+**Start here** for a minimal OBI-based integration. Croc is a minimal OBI-based SoC with a custom register frontend - the smallest and simplest example.
 
 ### Snitch Cluster
 
@@ -208,4 +211,4 @@ Shows multi-core DMA sharing and the mchan/iDMA selection mechanism. The PULP cl
 
 ## Dependency Management
 
-iDMA uses [Bender](https://github.com/pulp-platform/bender) for RTL dependency management. Add iDMA to your `Bender.yml` and run `bender update` to pull it and its transitive dependencies (`axi`, `common_cells`, `register_interface`, `obi`). Bender resolves the source file list for your build system — use `bender script vsim` for Questa or `bender script vcs` for VCS.
+iDMA uses [Bender](https://github.com/pulp-platform/bender) for RTL dependency management. Add iDMA to your `Bender.yml` and run `bender update` to pull it and its transitive dependencies (`axi`, `axi_stream`, `common_cells`, `apb`, `obi`, `common_verification`). As of 0.7.0 the register frontend exposes a native config bus and `register_interface` is no longer a dependency. Bender resolves the source file list for your build system; use `bender script vsim` for Questa or `bender script vcs` for VCS.

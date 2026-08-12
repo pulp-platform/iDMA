@@ -7,6 +7,24 @@ description: Minimal steps to integrate iDMA and run a transfer.
 
 This guide shows the shortest path to an end-to-end iDMA transfer: choose a backend, define types, wire modules, and launch a request. It assumes a single clock domain and a 1D transfer flow.
 
+## Build the Generated RTL
+
+iDMA's SystemVerilog is generated from templates, so the first step in any checkout is to render it.
+
+**Prerequisites:** [`bender >= 0.32.0`](https://github.com/pulp-platform/bender) and [`Python >= 3.11`](https://www.python.org/downloads/) with [`uv`](https://docs.astral.sh/uv/).
+
+```bash
+make idma_hw_all
+```
+
+On first run this provisions a local `uv` environment (`uv sync --locked`) - no manual venv setup or activation needed - and renders the templates into `target/rtl/`, which Bender exposes through its `rtl` and `synth` targets.
+
+When iDMA is pulled as a Bender dependency, regenerate its RTL from the consuming repo the same way:
+
+```bash
+make -C $(bender path idma) idma_hw_all
+```
+
 ## 1. Choose a Backend Variant
 
 Pick the backend variant that matches your read/write protocols. For AXI-to-AXI systems, start with `rw_axi`.
@@ -60,7 +78,12 @@ A frontend produces `idma_req_t`. If you do not use a frontend, you can drive th
 
 The backend produces one `idma_rsp_t` per completed transfer. Check `error` and `err_payload_t` to determine whether the transfer succeeded.
 
+## Optional: On-the-Fly Compute
+
+Compute-eligible backends (AXI/OBI read and write) can transform the stream while it moves: tiled transpose and OCP-microscaling MX quant/dequant. Elaborate it with `EnableCompute = 1` plus a `ComputeOps` mask, then arm it per transfer via the request's `compute` option. See [Compute](../../architecture/compute/).
+
 ## Next Steps
 
 - For a full integration recipe, see [System Integration](../system-integration/).
 - For ND transfers, see [Programming Model](../../architecture/programming-model/).
+- For on-the-fly transpose and MX quant/dequant, see [Compute](../../architecture/compute/).

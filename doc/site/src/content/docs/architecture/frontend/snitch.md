@@ -13,7 +13,7 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 
 A DMA transfer requires three steps: (1) set the source and destination addresses (`DMSRC`, `DMDST`), (2) launch the transfer with a length and config (`DMCPY`/`DMCPYI`), (3) poll for completion (`DMSTAT`/`DMSTATI`). Optional instructions set 2D parameters (`DMSTR`, `DMREP`) and AXI user fields (`DMUSER`).
 
-All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` — `rd` receives the transfer ID, `rs1` provides the length.
+All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` - `rd` receives the transfer ID, `rs1` provides the length.
 
 | Instruction | Operands | Description |
 |-------------|----------|-------------|
@@ -28,15 +28,15 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
 
 **Status select values** (`DMSTAT`/`DMSTATI`):
-- `0`: Completed transfer ID — compare against the ID returned by `DMCPY` to check if a specific transfer has finished
-- `1`: Next transfer ID — the ID that will be assigned to the next submitted transfer
-- `2`: Busy flag — 1 if any transfer is in-flight on this channel
-- `3`: Backend FIFO full flag — 1 if the request FIFO is full; software should wait before submitting more transfers
+- `0`: Completed transfer ID - compare against the ID returned by `DMCPY` to check if a specific transfer has finished
+- `1`: Next transfer ID - the ID that will be assigned to the next submitted transfer
+- `2`: Busy flag - 1 if any transfer is in-flight on this channel
+- `3`: Backend FIFO full flag - 1 if the request FIFO is full; software should wait before submitting more transfers
 
 **Config field** (`DMCPY`/`DMCPYI`):
 - Bit 0: Reserved
 - Bit 1: Enable 2D mode (use previously set strides/reps). If 2D mode is enabled but `DMSTR`/`DMREP` were not called since the last transfer, the previously set stride and repetition values are reused. On reset, these default to zero
-- Bits 4:2: Channel select — `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
+- Bits 4:2: Channel select - `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
 
 ## Parameters
 
@@ -86,10 +86,10 @@ Show DMSRC/DMDST setup, DMSTR/DMREP for ND, DMCPY launch, DMSTAT polling.
 
 The `idma_inst64_top` module instantiates `NumChannels` independent backends, each paired with an ND midend (`NumDim=2`, `BufferDepth=3`). The frontend instruction decoder fills an `idma_nd_req_t` struct from the instruction stream and routes it to the selected channel's request FIFO. A per-channel transfer ID generator tracks issue and retire events. Each backend produces separate AXI read and write manager ports. The `axi_rw_join` module merges them into a single AXI manager port for connection to the SoC interconnect.
 
-When `NumChannels > 1`, each channel has its own independent backend and ND midend. The channel is selected via the config field in `DMCPY`/`DMCPYI` (bits 4:2). Channels operate independently — one can be busy while another accepts new transfers. The AXI ports from all channels are merged via `axi_rw_join`, so they share bus bandwidth.
+When `NumChannels > 1`, each channel has its own independent backend and ND midend. The channel is selected via the config field in `DMCPY`/`DMCPYI` (bits 4:2). Channels operate independently - one can be busy while another accepts new transfers. The AXI ports from all channels are merged via `axi_rw_join`, so they share bus bandwidth.
 
 ## Source Files
 
-- `src/frontend/inst64/idma_inst64_top.sv` — Top-level module
-- `src/frontend/inst64/idma_inst64_snitch_pkg.sv` — Instruction encodings
-- `src/frontend/inst64/idma_inst64_events.sv` — Performance event counters
+- `src/frontend/inst64/idma_inst64_top.sv` - Top-level module
+- `src/frontend/inst64/idma_inst64_snitch_pkg.sv` - Instruction encodings
+- `src/frontend/inst64/idma_inst64_events.sv` - Performance event counters

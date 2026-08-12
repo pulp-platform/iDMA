@@ -5,9 +5,9 @@ description: The midend decomposes multi-dimensional and round-trip transfers in
 
 ## Midend Role
 
-The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** — for systems that only need 1D transfers, the frontend can drive the backend directly. **Use the ND midend** when your transfers are 2D or higher (e.g., tiling a matrix, copying framebuffer rows with stride). **Skip the midend** (connect frontend directly to backend) when all your transfers are 1D contiguous copies — the midend adds latency and area for no benefit in this case. See the [System Integration](../guides/system-integration/) guide for wiring examples showing how the midend connects to the frontend and backend.
+The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** - for systems that only need 1D transfers, the frontend can drive the backend directly. **Use the ND midend** when your transfers are 2D or higher (e.g., tiling a matrix, copying framebuffer rows with stride). **Skip the midend** (connect frontend directly to backend) when all your transfers are 1D contiguous copies - the midend adds latency and area for no benefit in this case. See the [System Integration](../guides/system-integration/) guide for wiring examples showing how the midend connects to the frontend and backend.
 
-Four midend variants are available:
+Five midend variants are available:
 
 | Variant | Module | Purpose |
 |---------|--------|---------|
@@ -15,6 +15,7 @@ Four midend variants are available:
 | **RT** | `idma_rt_midend` | Event-driven periodic (round-trip) transfers |
 | **MP_DIST** | `idma_mp_dist_midend` | Distribute transfers across multiple backends by address |
 | **MP_SPLIT** | `idma_mp_split_midend` | Split transfers at region boundaries for a single backend |
+| **Transpose** | `idma_transpose_midend` | Expand a transpose-compute request into a tiled ND walk |
 
 ## ND Midend
 
@@ -25,7 +26,7 @@ The ND midend (`idma_nd_midend`) decomposes an N-dimensional transfer into a seq
 | Parameter | Description |
 |-----------|-------------|
 | `NumDim` | Number of dimensions. Must be >= 2 (dimension 1 is the 1D burst handled by the backend) |
-| `RepWidths` | Per-dimension counter widths — an array specifying the counter width for each dimension. For example, with `NumDim=3` and `RepWidths = '{32, 16, 8}`, dimension 1 supports up to 2³² repetitions, dimension 2 up to 2¹⁶, etc. |
+| `RepWidths` | Per-dimension counter widths - an array specifying the counter width for each dimension. For example, with `NumDim=3` and `RepWidths = '{32, 16, 8}`, dimension 1 supports up to 2³² repetitions, dimension 2 up to 2¹⁶, etc. |
 
 ### Request Types
 
@@ -78,9 +79,24 @@ Show source rows with stride gaps and destination rows packed tightly.
 If all repetition counts for a dimension are zero, that dimension is treated as a no-op ("zero stage"). The midend signals this as an `ND_MIDEND` error in the response.
 :::
 
+## Transpose Midend
+
+The transpose midend (`idma_transpose_midend`) is a combinational geometry expander that pairs with the on-the-fly [transpose compute engine](../compute/). When a request carries `opt.compute.op == COMPUTE_TRANSPOSE`, it rewrites the request into a `NumDim=4` tiled ND walk (feeding the generic `idma_nd_midend`) so the transport-layer transpose engine receives its input tiles in the (col-tile, row-tile, row) order it expects, and writes the transposed tiles back with the correct strides. Non-transpose requests pass through untouched.
+
+The expander derives the tiling from the transpose parameters carried in the request: `mode` (element size `E = 1 << mode`), tensor dimensions `tensor_m` / `tensor_n` (elements), and the write-side tile edge `NE = StrbWidth / E`. It is quasi-static per request; all geometry folds to shifts except the `y_tiles * N` stride product. See the [Compute](../compute/) page for the transpose engine itself.
+
+### Transpose Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `NumDim` | ND dimensions of the emitted walk. Must be >= 4 to express the tiled transpose |
+| `StrbWidth` | Write data-path width in bytes. Tile side `NE = StrbWidth / element bytes` |
+| `addr_t` | Address type |
+| `idma_nd_req_t` | ND request type (input and output) |
+
 ## RT Midend
 
-The RT midend (`idma_rt_midend`) supports event-driven periodic transfers. It is designed for periodic data movement — sensor sampling at fixed intervals, display buffer refresh, or ring-buffer rotation. Each event channel triggers its pre-configured transfer when its countdown reaches zero, without CPU intervention.
+The RT midend (`idma_rt_midend`) supports event-driven periodic transfers. It is designed for periodic data movement - sensor sampling at fixed intervals, display buffer refresh, or ring-buffer rotation. Each event channel triggers its pre-configured transfer when its countdown reaches zero, without CPU intervention.
 
 It contains `NumEvents` countdown counters, each triggering an ND transfer when its counter reaches zero. A round-robin arbiter selects among ready events, and a bypass path allows non-periodic transfers to pass through.
 
@@ -96,7 +112,7 @@ It contains `NumEvents` countdown counters, each triggering an ND transfer when 
 
 ### Operation
 
-1. Software configures each event channel with: source/destination addresses, transfer length, 2D strides/repetitions, and a countdown threshold. Configuration is submitted through the module's `nd_req_i` port — software sends ND requests with an event channel ID. The countdown threshold and enable signals are separate input ports
+1. Software configures each event channel with: source/destination addresses, transfer length, 2D strides/repetitions, and a countdown threshold. Configuration is submitted through the module's `nd_req_i` port - software sends ND requests with an event channel ID. The countdown threshold and enable signals are separate input ports
 2. Each enabled counter decrements every clock cycle
 3. On overflow (reaching zero), the counter's pre-configured ND request is submitted to the arbiter
 4. A round-robin arbiter (`stream_arbiter`) selects among triggered events
@@ -143,7 +159,8 @@ The split midend (`idma_mp_split_midend`) serializes a transfer that spans multi
 
 ## Source Files
 
-- `src/midend/idma_nd_midend.sv` — ND midend + counter submodule
-- `src/midend/idma_rt_midend.sv` — RT midend
-- `src/midend/idma_mp_dist_midend.sv` — Distributed multicore midend
-- `src/midend/idma_mp_split_midend.sv` — Split multicore midend
+- `src/midend/idma_nd_midend.sv` - ND midend + counter submodule
+- `src/midend/idma_rt_midend.sv` - RT midend
+- `src/midend/idma_mp_dist_midend.sv` - Distributed multicore midend
+- `src/midend/idma_mp_split_midend.sv` - Split multicore midend
+- `src/midend/idma_transpose_midend.sv` - Transpose geometry expander
