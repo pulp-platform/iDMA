@@ -431,41 +431,39 @@ idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_b2b -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_b2b -do "run -all; quit"
 
+# Run a self-checking MX sim across data widths. Questa does not propagate
+# $fatal to the exit code, so fail on any Error:/Fatal: in the run log.
+# $(1) = testbench, $(2) = space-separated data widths.
+define idma_run_mx_sim
+	cd $(IDMA_VSIM_DIR); set -e; for dw in $(2); do \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=$$dw $(1) -do "run -all; quit" > $(1)_$$dw.log 2>&1 || true; \
+	  if grep -qE "Error:|Fatal:" $(1)_$$dw.log; then \
+	    echo "$(1) DW=$$dw FAILED (see $(1)_$$dw.log)"; tail -40 $(1)_$$dw.log; exit 1; fi; \
+	done
+endef
+
 .PHONY: idma_sim_tb_idma_mxquant
 idma_sim_tb_idma_mxquant: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxquant -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxquant -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=256 tb_idma_mxquant -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=512 tb_idma_mxquant -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=1024 tb_idma_mxquant -do "run -all; quit"
+	$(call idma_run_mx_sim,tb_idma_mxquant,32 64 256 512 1024)
 
 .PHONY: idma_sim_tb_idma_mxroundtrip
 idma_sim_tb_idma_mxroundtrip: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxroundtrip -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxroundtrip -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=256 tb_idma_mxroundtrip -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=512 tb_idma_mxroundtrip -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=1024 tb_idma_mxroundtrip -do "run -all; quit"
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024)
 
 .PHONY: idma_sim_tb_idma_mxrand
 idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxrand -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxrand -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=256 tb_idma_mxrand -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=512 tb_idma_mxrand -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=1024 tb_idma_mxrand -do "run -all; quit"
+	$(call idma_run_mx_sim,tb_idma_mxrand,32 64 256 512 1024)
 
 .PHONY: idma_sim_tb_idma_mxperf
 idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_mxperf -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_mxperf -do "run -all; quit"
+	$(call idma_run_mx_sim,tb_idma_mxperf,32 64)
 
 .PHONY: idma_sim_tb_idma_mxclear
 idma_sim_tb_idma_mxclear: $(IDMA_VSIM_DIR)/compile.tcl
