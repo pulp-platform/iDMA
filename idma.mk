@@ -137,15 +137,21 @@ $(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT
 	mkdir -p $(IDMA_RTL_DIR)/include/idma
 	$(call idma_gen,tracer,$(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
 
+$(IDMA_RTL_DIR)/include/idma/compute.svh: $(IDMA_UTIL_DIR)/gen_compute_svh.py $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl
+	mkdir -p $(IDMA_RTL_DIR)/include/idma
+	$(PYTHON) $(IDMA_UTIL_DIR)/gen_compute_svh.py $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl > $@
+
 idma_rtl_clean:
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
 	rm -f  $(IDMA_RTL_DIR)/*.sv
 	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
 	rm -f  $(IDMA_RTL_DIR)/include/idma/tracer.svh
+	rm -f  $(IDMA_RTL_DIR)/include/idma/compute.svh
 	rm -rf $(IDMA_RTL_DIR)/include/idma
 
 # assemble the required files
 IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
+IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/compute.svh
 IDMA_RTL_ALL     += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
 IDMA_TB_ALL      += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
 IDMA_WAVE_ALL    += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
