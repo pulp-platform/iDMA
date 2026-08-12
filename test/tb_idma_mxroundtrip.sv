@@ -75,7 +75,7 @@ module tb_idma_mxroundtrip
   function automatic logic [31:0] fp32_gen(input int unsigned e);
     automatic logic [31:0] sgn = 32'((e & 1) << 31);
     automatic logic [31:0] exp = 32'(((64 + (e % 128)) & 8'hFF) << 23);
-    automatic logic [31:0] man = 32'((e * 2654435761) & 23'h7FFFFF);
+    automatic logic [31:0] man = 32'((e * 32'd2654435761) & 23'h7FFFFF);
     return sgn | exp | man;
   endfunction
 

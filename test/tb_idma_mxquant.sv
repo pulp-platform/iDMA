@@ -95,7 +95,7 @@ module tb_idma_mxquant
       endcase
     end
     return 32'((e & 1) << 31) | 32'(((64 + (e % 128)) & 8'hFF) << 23)
-           | 32'((e * 2654435761) & 23'h7FFFFF);
+           | 32'((e * 32'd2654435761) & 23'h7FFFFF);
   endfunction
 
   // one num_blocks FP16->MXFP8 transfer; returns error count
