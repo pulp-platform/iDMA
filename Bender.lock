@@ -16,7 +16,7 @@ packages:
     - common_verification
     - tech_cells_generic
   axi_stream:
-    revision: 9028c32ab980cff29fcc13f1ee35d51dd806d108
+    revision: ce1547861f99ab3d8834d04aa36d2d4184a28df7
     version: null
     source:
       Git: https://github.com/pulp-platform/axi_stream.git

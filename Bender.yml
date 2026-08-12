@@ -15,7 +15,7 @@ package:
 
 dependencies:
   axi:                 { git: "https://github.com/pulp-platform/axi.git",                 rev: 0ccc838fe06aeeb857eb83c6be9a915c4bf99566 }
-  axi_stream:          { git: "https://github.com/pulp-platform/axi_stream.git",          rev: 9028c32ab980cff29fcc13f1ee35d51dd806d108 }
+  axi_stream:          { git: "https://github.com/pulp-platform/axi_stream.git",          rev: ce1547861f99ab3d8834d04aa36d2d4184a28df7 }
   common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",        version: 2.0.0-beta.3 }
   common_verification: { git: "https://github.com/pulp-platform/common_verification.git", version: 0.2.5  }
   apb:                 { git: "https://github.com/pulp-platform/apb.git",                 rev: 6ae8bf8d5eab5dc70d032231c01ab95e1c5774b9 }
