@@ -10,9 +10,9 @@ name: docs
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, devel ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, devel ]
   workflow_dispatch:
 
 jobs:
