@@ -7,6 +7,24 @@ description: Minimal steps to integrate iDMA and run a transfer.
 
 This guide shows the shortest path to an end-to-end iDMA transfer: choose a backend, define types, wire modules, and launch a request. It assumes a single clock domain and a 1D transfer flow.
 
+## Build the Generated RTL
+
+iDMA's SystemVerilog is generated from templates, so the first step in any checkout is to render it.
+
+**Prerequisites:** [`bender >= 0.32.0`](https://github.com/pulp-platform/bender) and [`Python >= 3.11`](https://www.python.org/downloads/) with [`uv`](https://docs.astral.sh/uv/).
+
+```bash
+make idma_hw_all
+```
+
+On first run this provisions a local `uv` environment (`uv sync --locked`) — no manual venv setup or activation needed — and renders the templates into `target/rtl/`, which Bender exposes through its `rtl` and `synth` targets.
+
+When iDMA is pulled as a Bender dependency, regenerate its RTL from the consuming repo the same way:
+
+```bash
+make -C $(bender path idma) idma_hw_all
+```
+
 ## 1. Choose a Backend Variant
 
 Pick the backend variant that matches your read/write protocols. For AXI-to-AXI systems, start with `rw_axi`.
