@@ -61,10 +61,6 @@ module idma_axi_read #(
     /// AXI4+ATOP read manager port response
     input  read_rsp_t read_rsp_i,
 
-    /// Response channel valid and ready
-    output logic r_chan_ready_o,
-    output logic r_chan_valid_o,
-
     /// Data to Buffer
     output byte_t [StrbWidth-1:0] buffer_in_o,
     /// Valid to Buffer
@@ -184,9 +180,6 @@ module idma_axi_read #(
     // r_dp_valid_o is triggered once the last element is here or an error occurs
     assign r_dp_valid_o = read_rsp_i.r_valid & in_ready & (read_rsp_i.r.last
         | (|read_rsp_i.r.resp));
-
-    assign r_chan_ready_o = read_req_o.r_ready;
-    assign r_chan_valid_o = read_rsp_i.r_valid;
 
     //--------------------------------------
     // Unused AXI signals
