@@ -1,0 +1,106 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+name: prune-deploy-branches
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List deletions without deleting'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prune-deploy-branches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.repository == 'pulp-platform/iDMA'
+    runs-on: ubuntu-latest
+    env:
+      # Scheduled runs prune for real; manual runs honour the dry_run input.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      RETENTION_DAYS: '60'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Identify the latest release deploy branch
+        id: keep
+        run: |
+          set -euo pipefail
+          latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -vE -- '-' | sort -V | tail -n1)"
+          if [ -z "$latest_tag" ]; then
+            echo "::error::no vX.Y.Z release tag found; refusing to prune"; exit 1
+          fi
+          # The vX.Y.Z tag sits on the deploy commit; its parent is the -src commit,
+          # whose first 7 hex chars name __deploy__<src7>__master (deploy.py uses [0:7]).
+          src7="$(git rev-parse "${latest_tag}^" | cut -c1-7)"
+          keep_branch="__deploy__${src7}__master"
+          echo "keep_branch=${keep_branch}" >> "$GITHUB_OUTPUT"
+          echo "latest release: ${latest_tag} | protected deploy branch: ${keep_branch}"
+
+      - name: Prune deploy branches
+        env:
+          KEEP_BRANCH: ${{ steps.keep.outputs.keep_branch }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          now="$(date -u +%s)"
+          cutoff=$(( now - RETENTION_DAYS * 86400 ))
+          kept=0; deleted=0; total=0
+          echo "mode: $([ "$DRY_RUN" = 'true' ] && echo DRY-RUN || echo DELETE) | cutoff: $(date -u -d "@${cutoff}" '+%Y-%m-%d')"
+
+          gh api --paginate "/repos/${repo}/branches?per_page=100" --jq '.[].name' > branches.txt
+
+          while IFS= read -r br; do
+            # Hard allow-list: only __deploy__ refs are ever touchable.
+            case "$br" in __deploy__*) : ;; *) continue ;; esac
+            total=$((total+1))
+
+            # Keep the latest release's deploy branch unconditionally.
+            if [ -n "$KEEP_BRANCH" ] && [ "$br" = "$KEEP_BRANCH" ]; then
+              echo "KEEP  (latest release)  $br"; kept=$((kept+1)); continue
+            fi
+
+            target="${br#__deploy__*__}"
+            # Skip (do not delete) on any transient API/parse failure for this branch.
+            sha="$(gh api "/repos/${repo}/branches/${br}" --jq '.commit.sha')" \
+              || { echo "SKIP  (api error)        $br"; continue; }
+            cdate="$(gh api "/repos/${repo}/commits/${sha}" --jq '.commit.committer.date')" \
+              || { echo "SKIP  (api error)        $br"; continue; }
+            cepoch="$(date -u -d "$cdate" +%s)" \
+              || { echo "SKIP  (bad date)         $br"; continue; }
+            age=$(( (now - cepoch) / 86400 ))
+
+            # Feature-branch deploys are pure CI cruft: always prune. Mainline deploys
+            # follow the retention window.
+            if [ "$target" = "master" ] || [ "$target" = "devel" ]; then
+              if [ "$cepoch" -ge "$cutoff" ]; then
+                echo "KEEP  (${age}d, mainline) $br"; kept=$((kept+1)); continue
+              fi
+            fi
+
+            if [ "$DRY_RUN" = 'true' ]; then
+              echo "WOULD-DELETE (${age}d) $br"
+            else
+              gh api -X DELETE "/repos/${repo}/git/refs/heads/${br}" || echo "  (already gone) $br"
+              echo "DELETED (${age}d) $br"
+            fi
+            deleted=$((deleted+1))
+          done < branches.txt
+
+          echo "scanned __deploy__: $total | kept: $kept | pruned: $deleted"
