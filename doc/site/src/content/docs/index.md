@@ -11,7 +11,7 @@ iDMA moves data between memories and peripherals across different bus protocols 
 - **Midend**: optional ND/RT decomposition and multicore split.
 - **Backend**: protocol execution on the bus, with optional on-the-fly compute.
 
-![Architecture Overview](/fig/architecture_overview.svg)
+![Architecture Overview](/iDMA/fig/architecture_overview.svg)
 
 :::note[Figure placeholder]
 Diagram: end-to-end request lifecycle (frontend request, optional midend split, backend legalizer + transport, response).

@@ -16,12 +16,12 @@ the latest repository state.
 
 ## Backend - `rw_axi`
 
-![idma_backend_synth_rw_axi](/fig/graph/idma_backend_synth_rw_axi.png)
+![idma_backend_synth_rw_axi](/iDMA/fig/graph/idma_backend_synth_rw_axi.png)
 
 ## ND Midend
 
-![idma_nd_midend_synth](/fig/graph/idma_nd_midend_synth.png)
+![idma_nd_midend_synth](/iDMA/fig/graph/idma_nd_midend_synth.png)
 
 ## Descriptor Frontend
 
-![idma_desc64_synth](/fig/graph/idma_desc64_synth.png)
+![idma_desc64_synth](/iDMA/fig/graph/idma_desc64_synth.png)
