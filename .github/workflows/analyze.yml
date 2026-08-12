@@ -19,7 +19,7 @@ jobs:
     steps:
     -
       name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     -
       name: Install uv
       uses: astral-sh/setup-uv@v7
@@ -30,7 +30,7 @@ jobs:
       run: uv run --locked scripts/list-contributors | tee contributions.txt
     -
       name: Upload contributions.txt
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: contributions
         path: contributions.txt
@@ -42,7 +42,7 @@ jobs:
     steps:
     -
       name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     -
       name: Install uv
       uses: astral-sh/setup-uv@v7
@@ -53,7 +53,7 @@ jobs:
       run: uv run --locked scripts/list-todos | tee open_todos.txt
     -
       name: Upload todos.txt
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: open_todos
         path: open_todos.txt

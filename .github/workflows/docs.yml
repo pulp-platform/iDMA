@@ -22,7 +22,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Cache Bender database
         uses: ./.github/actions/bender-db-cache
@@ -51,7 +51,7 @@ jobs:
         run: uv run --locked make idma_doc_all
       -
         name: Create publish docs
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: target/doc/html
 
@@ -69,4 +69,4 @@ jobs:
       -
         name: Deploy to Github Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
