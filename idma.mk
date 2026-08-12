@@ -605,6 +605,36 @@ $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
 
+# inst64 frontend elaboration gate: bind the snitch_cluster-gated idma_inst64_top
+# to concrete types (test/idma_inst64_lint.sv) and verilator --lint-only it, so
+# public CI catches frontend port/param/elaboration errors. Run after idma_hw_all.
+.PHONY: idma_lint_inst64
+idma_lint_inst64:
+	mkdir -p $(IDMA_VLT_DIR)
+	$(BENDER) script verilator -t rtl -t snitch_cluster -t lint > $(IDMA_VLT_DIR)/idma_inst64_lint.f
+	$(VERILATOR) --lint-only -Wno-fatal --timing -f $(IDMA_VLT_DIR)/idma_inst64_lint.f --top-module idma_inst64_lint
+
+# Synthesis-wrapper elaboration gate: verilator elaborates every synth top so a
+# port, parameter or connectivity break is caught without the proprietary EDA
+# sims (which fork PRs never run). Run after idma_hw_all.
+IDMA_LINT_TOPS ?= $(addprefix idma_backend_synth_,$(IDMA_BACKEND_IDS)) \
+                  idma_desc64_synth \
+                  idma_nd_midend_synth \
+                  idma_mp_midend_synth \
+                  idma_rt_midend_synth
+
+.PHONY: idma_lint_elab
+idma_lint_elab:
+	mkdir -p $(IDMA_VLT_DIR)
+	$(BENDER) script verilator -t rtl -t synth > $(IDMA_VLT_DIR)/idma_elab.f
+	@rc=0; for top in $(IDMA_LINT_TOPS); do \
+	  echo "--- elaborating $$top ---"; \
+	  $(VERILATOR) --lint-only -Wno-fatal --timing -f $(IDMA_VLT_DIR)/idma_elab.f --top-module $$top || rc=1; \
+	done; exit $$rc
+
+.PHONY: idma_lint_all
+idma_lint_all: idma_lint_elab idma_lint_inst64
+
 
 # ---------------
 # Trace
