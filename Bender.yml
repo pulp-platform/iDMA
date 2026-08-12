@@ -150,3 +150,9 @@ sources:
     files:
       - test/tb_idma_backend_multihead.sv
       - test/tb_idma_backend_multihead_rw.sv
+
+  # inst64 frontend lint/elaboration wrapper: a public concrete-typed top so CI
+  # can verilator --lint-only the snitch_cluster-gated idma_inst64_top
+  - target: all(snitch_cluster, lint)
+    files:
+      - test/idma_inst64_lint.sv

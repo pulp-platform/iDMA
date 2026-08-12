@@ -37,6 +37,11 @@ jobs:
     uses: ./.github/workflows/analyze.yml
     secrets: inherit
 
+  elaborate:
+    needs: lint
+    uses: ./.github/workflows/elaborate.yml
+    secrets: inherit
+
   gitlab-ci:
     needs: build
     uses: ./.github/workflows/gitlab-ci.yml
