@@ -67,7 +67,7 @@ module idma_obi2axi_bridge #(
         .axi_master_aw_qos_o    ( axi_req_o.aw.qos    ),
         .axi_master_aw_id_o     ( axi_req_o.aw.id     ),
         .axi_master_aw_user_o   ( axi_req_o.aw.user   ),
-        .axi_master_aw_ready_i  ( axi_rsp_i.aw_ready  ), 
+        .axi_master_aw_ready_i  ( axi_rsp_i.aw_ready  ),
 
         .axi_master_ar_valid_o  ( axi_req_o.ar_valid  ),
         .axi_master_ar_addr_o   ( axi_req_o.ar.addr   ),
@@ -81,7 +81,7 @@ module idma_obi2axi_bridge #(
         .axi_master_ar_qos_o    ( axi_req_o.ar.qos    ),
         .axi_master_ar_id_o     ( axi_req_o.ar.id     ),
         .axi_master_ar_user_o   ( axi_req_o.ar.user   ),
-        .axi_master_ar_ready_i  ( axi_rsp_i.ar_ready  ), 
+        .axi_master_ar_ready_i  ( axi_rsp_i.ar_ready  ),
 
         .axi_master_w_valid_o   ( axi_req_o.w_valid   ),
         .axi_master_w_data_o    ( axi_req_o.w.data    ),

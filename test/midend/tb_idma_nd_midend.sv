@@ -332,22 +332,34 @@ module tb_idma_nd_midend import idma_pkg::*; #(
     // TB Monitors
     //--------------------------------------
     // AXI
-    signal_highlighter #(.T(axi_aw_chan_t)) i_aw_hl (.ready_i(axi_rsp.aw_ready), .valid_i(axi_req.aw_valid), .data_i(axi_req.aw));
-    signal_highlighter #(.T(axi_ar_chan_t)) i_ar_hl (.ready_i(axi_rsp.ar_ready), .valid_i(axi_req.ar_valid), .data_i(axi_req.ar));
-    signal_highlighter #(.T(axi_w_chan_t))  i_w_hl  (.ready_i(axi_rsp.w_ready),  .valid_i(axi_req.w_valid),  .data_i(axi_req.w));
-    signal_highlighter #(.T(axi_r_chan_t))  i_r_hl  (.ready_i(axi_req.r_ready),  .valid_i(axi_rsp.r_valid),  .data_i(axi_rsp.r));
-    signal_highlighter #(.T(axi_b_chan_t))  i_b_hl  (.ready_i(axi_req.b_ready),  .valid_i(axi_rsp.b_valid),  .data_i(axi_rsp.b));
+    signal_highlighter #(.T(axi_aw_chan_t)) i_aw_hl (
+      .ready_i(axi_rsp.aw_ready), .valid_i(axi_req.aw_valid), .data_i(axi_req.aw));
+    signal_highlighter #(.T(axi_ar_chan_t)) i_ar_hl (
+      .ready_i(axi_rsp.ar_ready), .valid_i(axi_req.ar_valid), .data_i(axi_req.ar));
+    signal_highlighter #(.T(axi_w_chan_t))  i_w_hl (
+      .ready_i(axi_rsp.w_ready),  .valid_i(axi_req.w_valid),  .data_i(axi_req.w));
+    signal_highlighter #(.T(axi_r_chan_t))  i_r_hl (
+      .ready_i(axi_req.r_ready),  .valid_i(axi_rsp.r_valid),  .data_i(axi_rsp.r));
+    signal_highlighter #(.T(axi_b_chan_t))  i_b_hl (
+      .ready_i(axi_req.b_ready),  .valid_i(axi_rsp.b_valid),  .data_i(axi_rsp.b));
 
     // DMA backend types
-    signal_highlighter #(.T(idma_nd_req_t)) i_nd_req_hl (.ready_i(nd_req_ready),    .valid_i(nd_req_valid),     .data_i(nd_req));
-    signal_highlighter #(.T(idma_rsp_t))    i_nd_rsp_hl (.ready_i(nd_rsp_ready),    .valid_i(nd_rsp_valid),     .data_i(nd_rsp));
-    signal_highlighter #(.T(idma_req_t))    i_req_hl    (.ready_i(burst_req_ready), .valid_i(burst_req_valid),  .data_i(burst_req));
-    signal_highlighter #(.T(idma_rsp_t))    i_rsp_hl    (.ready_i(burst_rsp_ready), .valid_i(burst_rsp_valid),  .data_i(burst_rsp));
-    signal_highlighter #(.T(idma_eh_req_t)) i_eh_hl     (.ready_i(eh_req_ready),    .valid_i(eh_req_valid),     .data_i(idma_eh_req));
+    signal_highlighter #(.T(idma_nd_req_t)) i_nd_req_hl (
+      .ready_i(nd_req_ready),    .valid_i(nd_req_valid),     .data_i(nd_req));
+    signal_highlighter #(.T(idma_rsp_t))    i_nd_rsp_hl (
+      .ready_i(nd_rsp_ready),    .valid_i(nd_rsp_valid),     .data_i(nd_rsp));
+    signal_highlighter #(.T(idma_req_t))    i_req_hl (
+      .ready_i(burst_req_ready), .valid_i(burst_req_valid),  .data_i(burst_req));
+    signal_highlighter #(.T(idma_rsp_t))    i_rsp_hl (
+      .ready_i(burst_rsp_ready), .valid_i(burst_rsp_valid),  .data_i(burst_rsp));
+    signal_highlighter #(.T(idma_eh_req_t)) i_eh_hl (
+      .ready_i(eh_req_ready),    .valid_i(eh_req_valid),     .data_i(idma_eh_req));
 
     // Watchdogs
-    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_w_watchdog (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
-    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_r_watchdog (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
+    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_w_watchdog (
+      .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+    stream_watchdog #(.NumCycles(WatchDogNumCycles)) i_axi_r_watchdog (
+      .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
 
 
     //--------------------------------------
@@ -428,7 +440,7 @@ module tb_idma_nd_midend import idma_pkg::*; #(
     // DMA Tracer
     //--------------------------------------
     // only activate tracer if requested
-    if (DmaTracing) begin
+    if (DmaTracing) begin : gen_dma_tracer
         // fetch the name of the trace file from CMD line
         string trace_file;
         initial begin

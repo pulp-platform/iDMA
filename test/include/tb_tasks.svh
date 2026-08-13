@@ -8,7 +8,7 @@
 
     // write a byte to the AXI-attached memory
 `ifdef PROT_AXI4
-    task write_byte_axi_mem (
+    task automatic write_byte_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -16,7 +16,7 @@
     endtask
 
     // read a byte from the AXI-attached memory
-    task read_byte_axi_mem (
+    task automatic read_byte_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -26,7 +26,7 @@
             byte_o = '1;
     endtask
 `else
-    task write_byte_axi_mem (
+    task automatic write_byte_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -34,7 +34,7 @@
     endtask
 
     // read a byte from the AXI-attached memory
-    task read_byte_axi_mem (
+    task automatic read_byte_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -45,7 +45,7 @@
 
 `ifdef PROT_AXI4_LITE
     // write a byte to the AXI-Lite AXI-attached memory
-    task write_byte_axi_lite_axi_mem (
+    task automatic write_byte_axi_lite_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -53,7 +53,7 @@
     endtask
 
     // read a byte from the AXI-Lite AXI-attached memory
-    task read_byte_axi_lite_axi_mem (
+    task automatic read_byte_axi_lite_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -64,7 +64,7 @@
     endtask
 `else
     // write a byte to the AXI-Lite AXI-attached memory
-    task write_byte_axi_lite_axi_mem (
+    task automatic write_byte_axi_lite_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -72,7 +72,7 @@
     endtask
 
     // read a byte from the AXI-Lite AXI-attached memory
-    task read_byte_axi_lite_axi_mem (
+    task automatic read_byte_axi_lite_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -83,7 +83,7 @@
 
 `ifdef PROT_OBI
     // seed a byte into the OBI source (read) memory
-    task write_byte_obi_axi_mem (
+    task automatic write_byte_obi_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -91,7 +91,7 @@
     endtask
 
     // read a byte back from the OBI destination (write) memory
-    task read_byte_obi_axi_mem (
+    task automatic read_byte_obi_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -102,7 +102,7 @@
     endtask
 `else
     // write a byte to the OBI AXI-attached memory
-    task write_byte_obi_axi_mem (
+    task automatic write_byte_obi_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -110,7 +110,7 @@
     endtask
 
     // read a byte from the OBI AXI-attached memory
-    task read_byte_obi_axi_mem (
+    task automatic read_byte_obi_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -121,7 +121,7 @@
 
 `ifdef PROT_TILELINK
     // write a byte to the TileLink AXI-attached memory
-    task write_byte_tilelink_axi_mem (
+    task automatic write_byte_tilelink_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -129,7 +129,7 @@
     endtask
 
     // read a byte from the TileLink AXI-attached memory
-    task read_byte_tilelink_axi_mem (
+    task automatic read_byte_tilelink_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -140,7 +140,7 @@
     endtask
 `else
     // write a byte to the TileLink AXI-attached memory
-    task write_byte_tilelink_axi_mem (
+    task automatic write_byte_tilelink_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -148,7 +148,7 @@
     endtask
 
     // read a byte from the TileLink AXI-attached memory
-    task read_byte_tilelink_axi_mem (
+    task automatic read_byte_tilelink_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -159,7 +159,7 @@
 
 `ifdef PROT_AXI4_STREAM
     // write a byte to the AXI Stream AXI-attached memory
-    task write_byte_axis_axi_mem (
+    task automatic write_byte_axis_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -167,7 +167,7 @@
     endtask
 
     // read a byte from the AXI Stream AXI-attached memory
-    task read_byte_axis_axi_mem (
+    task automatic read_byte_axis_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -178,7 +178,7 @@
     endtask
 `else
     // write a byte to the AXI Stream AXI-attached memory
-    task write_byte_axis_axi_mem (
+    task automatic write_byte_axis_axi_mem (
         input byte_t byte_i,
         input addr_t addr_i
     );
@@ -186,7 +186,7 @@
     endtask
 
     // read a byte from the AXI Stream AXI-attached memory
-    task read_byte_axis_axi_mem (
+    task automatic read_byte_axis_axi_mem (
         output byte_t byte_o,
         input  addr_t addr_i
     );
@@ -197,7 +197,7 @@
 
 `ifdef PROT_AXI4
     // set error flag in the AXI-attached memory
-    task set_error_mem (
+    task automatic set_error_mem (
         input addr_t          addr_i,
         input logic           is_read_i,
         input axi_pkg::resp_t resp_i
@@ -209,7 +209,7 @@
     endtask
 `else
      // set error flag in the AXI-attached memory
-    task set_error_mem (
+    task automatic set_error_mem (
         input addr_t          addr_i,
         input logic           is_read_i,
         input axi_pkg::resp_t resp_i
@@ -219,7 +219,7 @@
 `endif
 
     // compare if a range of bytes matches
-    task compare_mem (
+    task automatic compare_mem (
         input  addr_t               length_i,
         input  addr_t               addr_i,
         input  idma_pkg::protocol_e protocol,
@@ -235,7 +235,7 @@
         while (now < length_i) begin
             case(protocol)
             idma_pkg::AXI: read_byte_axi_mem (data, addr_i + now);
-            idma_pkg::AXILITE: read_byte_axi_lite_axi_mem (data, addr_i + now); 
+            idma_pkg::AXILITE: read_byte_axi_lite_axi_mem (data, addr_i + now);
             idma_pkg::OBI: read_byte_obi_axi_mem (data, addr_i + now);
             idma_pkg::TILELINK: read_byte_tilelink_axi_mem (data, addr_i + now);
             idma_pkg::AXI_STREAM: read_byte_axis_axi_mem(data, addr_i + now);
@@ -262,11 +262,15 @@
             // global match flag for the burst
             match_o = match_o & local_match & !local_x;
             if (Debug)
-                $display("[tb  ] compare:    %h - %h @0x%h - (idma - model - addr) - match: %b", data, model_byte, addr_i + now, local_match);
+                $display("[tb  ] compare:    %h - %h @0x%h - (idma - model - addr) - match: %b",
+                         data, model_byte, addr_i + now, local_match);
             if (!local_match)
-                $display("[tb  ] mismatch:   %h - %h @0x%h - (idma - model - addr) - match: %b", data, model_byte, addr_i + now, local_match);
+                $display("[tb  ] mismatch:   %h - %h @0x%h - (idma - model - addr) - match: %b",
+                         data, model_byte, addr_i + now, local_match);
             if (local_x)
-                $display("[tb  ] idma has x: %h (%b) - %h @0x%h - (idma - model - addr) - match: %b", data, data, model_byte, addr_i + now, local_match);
+                $display(
+                    "[tb  ] idma has x: %h (%b) - %h @0x%h - (idma - model - addr) - match: %b",
+                    data, data, model_byte, addr_i + now, local_match);
             now++;
         end
     endtask
@@ -287,7 +291,8 @@
         while (1) begin
             drv.wait_tf(cause, err_type, burst_addr, error, last);
             // if bus error occurs
-            if (error & (err_type == idma_pkg::BUS_READ | err_type == idma_pkg::BUS_WRITE) & ErrorCap == idma_pkg::ERROR_HANDLING) begin
+            if (error & (err_type == idma_pkg::BUS_READ | err_type == idma_pkg::BUS_WRITE)
+                      & ErrorCap == idma_pkg::ERROR_HANDLING) begin
                 err_idx = now_r.err_addr.find_first_index with (item == burst_addr);
                 // handle it
                 drv.handle_error(now_r.err_action[err_idx[0]]);
@@ -318,7 +323,8 @@
                     write_byte_axi_mem ( to_write, now_r.src_addr + now);
                 end
                 idma_pkg::AXILITE: begin
-                    model.write_byte            ( -to_write, now_r.src_addr + now, idma_pkg::AXILITE);
+                    model.write_byte            ( -to_write, now_r.src_addr + now,
+                                                  idma_pkg::AXILITE);
                     write_byte_axi_lite_axi_mem ( -to_write, now_r.src_addr + now);
                 end
                 idma_pkg::OBI: begin
@@ -326,15 +332,19 @@
                     write_byte_obi_axi_mem ( ~to_write, now_r.src_addr + now);
                 end
                 idma_pkg::TILELINK: begin
-                    model.write_byte            ( {to_write[3:0], to_write[7:4]}, now_r.src_addr + now, idma_pkg::TILELINK );
-                    write_byte_tilelink_axi_mem ( {to_write[3:0], to_write[7:4]}, now_r.src_addr + now );
+                    model.write_byte            ( {to_write[3:0], to_write[7:4]},
+                                                  now_r.src_addr + now, idma_pkg::TILELINK );
+                    write_byte_tilelink_axi_mem ( {to_write[3:0], to_write[7:4]},
+                                                  now_r.src_addr + now );
                 end
                 idma_pkg::INIT: begin
                     model.write_byte ( 8'h42, now_r.src_addr + now, idma_pkg::INIT );
                 end
                 idma_pkg::AXI_STREAM: begin
-                    model.write_byte              ( ~{to_write[3:0], to_write[7:4]}, now_r.src_addr + now, idma_pkg::AXI_STREAM );
-                    write_byte_axis_axi_mem ( ~{to_write[3:0], to_write[7:4]}, now_r.src_addr + now );
+                    model.write_byte        ( ~{to_write[3:0], to_write[7:4]},
+                                              now_r.src_addr + now, idma_pkg::AXI_STREAM );
+                    write_byte_axis_axi_mem ( ~{to_write[3:0], to_write[7:4]},
+                                              now_r.src_addr + now );
                 end
                 default: $fatal(1, "init_mem not implemented for used protocol!");
                 endcase

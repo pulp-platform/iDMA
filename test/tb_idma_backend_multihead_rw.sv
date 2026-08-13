@@ -146,7 +146,8 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
         .clk_i (clk), .rst_ni (rst_n),
         .idma_req_i (idma_req), .req_valid_i (req_valid), .req_ready_o (req_ready),
         .idma_rsp_o (idma_rsp), .rsp_valid_o (rsp_valid), .rsp_ready_i (rsp_ready),
-        .idma_eh_req_i (idma_eh_req), .eh_req_valid_i (eh_req_valid), .eh_req_ready_o (eh_req_ready),
+        .idma_eh_req_i (idma_eh_req), .eh_req_valid_i (eh_req_valid),
+        .eh_req_ready_o (eh_req_ready),
         .axi_read_req_o (axi_read_req), .axi_read_rsp_i (axi_read_rsp),
         .axi_write_req_o (axi_write_req), .axi_write_rsp_i (axi_write_rsp),
         .busy_o (busy)
@@ -168,8 +169,10 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
 
     function automatic byte_t mem_get (input int unsigned head, input addr_t a);
         case (head)
-            0: return gen_head[0].i_axi_sim_mem.mem.exists(a) ? gen_head[0].i_axi_sim_mem.mem[a] : 8'hxx;
-            1: return gen_head[1].i_axi_sim_mem.mem.exists(a) ? gen_head[1].i_axi_sim_mem.mem[a] : 8'hxx;
+            0: return gen_head[0].i_axi_sim_mem.mem.exists(a)
+                      ? gen_head[0].i_axi_sim_mem.mem[a] : 8'hxx;
+            1: return gen_head[1].i_axi_sim_mem.mem.exists(a)
+                      ? gen_head[1].i_axi_sim_mem.mem[a] : 8'hxx;
             default: return 8'hxx;
         endcase
     endfunction

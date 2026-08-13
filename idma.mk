@@ -403,10 +403,10 @@ idma_sim_tb_idma_otf_transpose:
 	cd $(IDMA_OTF_TP_DIR); $(VLOG) -sv $(IDMA_OTF_TP_DPI)
 	cd $(IDMA_OTF_TP_DIR); $(VLOG) -sv -svinputport=compat -timescale "1ns/1fs" $(IDMA_OTF_TP_RTL) $(IDMA_OTF_TP_TB)
 	# the TB sweeps the geometry list internally; one run per StrbWidth x FullDuplex
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=1 tb_idma_otf_transpose +BP -do "run -all; quit"
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=0 tb_idma_otf_transpose +BP -do "run -all; quit"
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=1 tb_idma_otf_transpose +BP -do "run -all; quit"
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=0 tb_idma_otf_transpose +BP -do "run -all; quit"
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=1 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=0 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=1 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
+	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=0 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
 
 # Multi-tile transpose via the ND midend -> rw_axi backend -> axi_sim_mem.
 # Run with the Questa SEPP wrapper: make idma_sim_tb_idma_transpose_nd VSIM="questa-2023.4 vsim"
@@ -624,13 +624,24 @@ IDMA_LINT_TOPS ?= $(addprefix idma_backend_synth_,$(IDMA_BACKEND_IDS)) \
                   idma_mp_midend_synth \
                   idma_rt_midend_synth
 
-# lint-sv is -diff scoped; this checks all of src/
+# lint-sv is -diff scoped; this checks all of src/ and test/
 VERIBLE ?= verible-verilog-lint
+
+IDMA_LINT_SV_DIRS := $(IDMA_ROOT)/src $(IDMA_ROOT)/test
+
+# The only sources exempt from the style gate; both are third-party code kept
+# verbatim so it can be re-imported, and both are already excluded from the author
+# lint in .github/authors-cfg.yaml for that same reason. Nothing else is exempt: a
+# first-party violation has to be fixed, not listed here.
+#   test/future/TLToAXI4.v        - Chisel-emitted TileLink monitor, no ETH header
+#   test/future/idma_tb_per2axi.sv - morty pickle of upstream commit 892fcad6
+IDMA_LINT_SV_VENDORED := test/future/TLToAXI4.v test/future/idma_tb_per2axi.sv
 
 .PHONY: idma_lint_sv
 idma_lint_sv:
 	$(VERIBLE) --waiver_files $(IDMA_ROOT)/.github/verible.waiver \
-	  $$(find $(IDMA_ROOT)/src -name '*.sv' -o -name '*.svh' | sort)
+	  $$(find $(IDMA_LINT_SV_DIRS) \( -name '*.sv' -o -name '*.svh' \) \
+	       $(foreach f,$(IDMA_LINT_SV_VENDORED),! -path '*/$(f)') | sort)
 
 .PHONY: idma_lint_elab
 idma_lint_elab:

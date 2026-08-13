@@ -40,10 +40,10 @@ module tb_idma_desc64_top
     parameter int unsigned Seed                  = 1337
 ) ();
     localparam time PERIOD     = 10ns;
-    localparam time APPL_DELAY = PERIOD / 4;
-    localparam time ACQ_DELAY  = PERIOD * 3 / 4;
+    localparam time ApplDelay = PERIOD / 4;
+    localparam time AcqDelay  = PERIOD * 3 / 4;
 
-    localparam integer RESET_CYCLES              = 10;
+    localparam integer ResetCycles              = 10;
 
     typedef logic [63:0] addr_t;
     typedef logic [ 2:0] axi_id_t;
@@ -53,7 +53,8 @@ module tb_idma_desc64_top
     typedef axi_test::axi_b_beat  #(.IW(3),  .UW(1))         b_beat_t;
 
     `APB_TYPEDEF_ALL(apb, /* addr */ addr_t, /* data */ logic [63:0], /* strobe */ logic [7:0])
-    `AXI_TYPEDEF_ALL(axi, /* addr */ addr_t, /* id */ axi_id_t, /* data */ logic [63:0], /* strb */ logic [7:0], /* user */ logic [0:0])
+    `AXI_TYPEDEF_ALL(axi, /* addr */ addr_t, /* id */ axi_id_t, /* data */ logic [63:0],
+                     /* strb */ logic [7:0], /* user */ logic [0:0])
 
     // iDMA struct definitions
     localparam int unsigned TFLenWidth  = 32;
@@ -75,27 +76,47 @@ module tb_idma_desc64_top
         addr_t next = 64'hffff_ffff_ffff_ffff;
 
         // an entire descriptor of 4 words must fit before the end of memory
-        constraint descriptor_fits_in_memory { (64'hffff_ffff_ffff_ffff - base) > 64'd32; }
-        constraint descriptor_is_in_descriptor_area { base > 64'h0000_ffff_ffff_ffff; }
-        constraint descriptor_is_aligned { (base & 64'hf) == 0; }
-        constraint no_empty_transfers { burst.length > '0; }
-        constraint src_fits_in_memory { 64'hffff_ffff_ffff_ffff - burst.src_addr > burst.length; }
-        constraint dst_fits_in_memory { 64'hffff_ffff_ffff_ffff - burst.dst_addr > burst.length; }
-        constraint src_burst_valid { burst.opt.src.burst inside { BURST_INCR, BURST_WRAP, BURST_FIXED }; }
-        constraint dst_burst_valid { burst.opt.dst.burst inside { BURST_INCR, BURST_WRAP, BURST_FIXED }; }
-        constraint src_is_not_in_descriptor_area { 64'h0000_ffff_ffff_ffff > (burst.src_addr + burst.length); }
-        constraint dst_is_not_in_descriptor_area { 64'h0000_ffff_ffff_ffff > (burst.dst_addr + burst.length); }
-        constraint src_aligned { (burst.src_addr & AlignmentMask) == 64'b0; }
-        constraint dst_aligned { (burst.dst_addr & AlignmentMask) == 64'b0; }
-        constraint reduce_len_equal { burst.opt.beo.src_reduce_len == burst.opt.beo.dst_reduce_len; }
-        constraint reduce_len_zero { burst.opt.beo.src_reduce_len == 1'b0; }
-        constraint beo_zero { burst.opt.beo.decouple_aw == '0 && burst.opt.beo.src_max_llen == '0 && burst.opt.beo.dst_max_llen == '0 && burst.opt.last == '0 && burst.opt.beo.decouple_rw == '0; }
-        constraint axi_params_zero_src { burst.opt.src.lock == '0 && burst.opt.src.prot == '0 && burst.opt.src.qos == '0 && burst.opt.src.region == '0; }
-        constraint axi_params_zero_dst { burst.opt.dst.lock == '0 && burst.opt.dst.prot == '0 && burst.opt.dst.qos == '0 && burst.opt.dst.region == '0; }
-        constraint axi_src_cache_zero { burst.opt.src.cache == '0; }
-        constraint axi_dst_cache_zero { burst.opt.dst.cache == '0; }
-        constraint compute_zero { burst.opt.compute == '0; }
-        constraint transfer_length { burst.length == TransferLength; }
+        constraint descriptor_fits_in_memory_c { (64'hffff_ffff_ffff_ffff - base) > 64'd32; }
+        constraint descriptor_is_in_descriptor_area_c { base > 64'h0000_ffff_ffff_ffff; }
+        constraint descriptor_is_aligned_c { (base & 64'hf) == 0; }
+        constraint no_empty_transfers_c { burst.length > '0; }
+        constraint src_fits_in_memory_c { 64'hffff_ffff_ffff_ffff - burst.src_addr > burst.length; }
+        constraint dst_fits_in_memory_c { 64'hffff_ffff_ffff_ffff - burst.dst_addr > burst.length; }
+        constraint src_burst_valid_c {
+            burst.opt.src.burst inside { BURST_INCR, BURST_WRAP, BURST_FIXED };
+        }
+        constraint dst_burst_valid_c {
+            burst.opt.dst.burst inside { BURST_INCR, BURST_WRAP, BURST_FIXED };
+        }
+        constraint src_is_not_in_descriptor_area_c {
+            64'h0000_ffff_ffff_ffff > (burst.src_addr + burst.length);
+        }
+        constraint dst_is_not_in_descriptor_area_c {
+            64'h0000_ffff_ffff_ffff > (burst.dst_addr + burst.length);
+        }
+        constraint src_aligned_c { (burst.src_addr & AlignmentMask) == 64'b0; }
+        constraint dst_aligned_c { (burst.dst_addr & AlignmentMask) == 64'b0; }
+        constraint reduce_len_equal_c {
+            burst.opt.beo.src_reduce_len == burst.opt.beo.dst_reduce_len;
+        }
+        constraint reduce_len_zero_c { burst.opt.beo.src_reduce_len == 1'b0; }
+        constraint beo_zero_c {
+            burst.opt.beo.decouple_aw   == '0 && burst.opt.beo.src_max_llen == '0 &&
+            burst.opt.beo.dst_max_llen == '0 && burst.opt.last           == '0 &&
+            burst.opt.beo.decouple_rw  == '0;
+        }
+        constraint axi_params_zero_src_c {
+            burst.opt.src.lock == '0 && burst.opt.src.prot   == '0 &&
+            burst.opt.src.qos  == '0 && burst.opt.src.region == '0;
+        }
+        constraint axi_params_zero_dst_c {
+            burst.opt.dst.lock == '0 && burst.opt.dst.prot   == '0 &&
+            burst.opt.dst.qos  == '0 && burst.opt.dst.region == '0;
+        }
+        constraint axi_src_cache_zero_c { burst.opt.src.cache == '0; }
+        constraint axi_dst_cache_zero_c { burst.opt.dst.cache == '0; }
+        constraint compute_zero_c { burst.opt.compute == '0; }
+        constraint transfer_length_c { burst.length == TransferLength; }
     endclass
 
     typedef struct {
@@ -117,7 +138,7 @@ module tb_idma_desc64_top
 
     clk_rst_gen #(
         .ClkPeriod(PERIOD),
-        .RstClkCycles(RESET_CYCLES)
+        .RstClkCycles(ResetCycles)
     ) i_clock_reset_generator (
         .clk_o (clk)  ,
         .rst_no(rst_n)
@@ -132,8 +153,8 @@ module tb_idma_desc64_top
     apb_driver #(
         .ADDR_WIDTH(64),
         .DATA_WIDTH(64),
-        .TA(APPL_DELAY),
-        .TT(ACQ_DELAY)
+        .TA(ApplDelay),
+        .TT(AcqDelay)
     ) i_apb_driver = new (i_apb_iface_bus);
 
     axi_resp_t dma_master_response;
@@ -151,8 +172,8 @@ module tb_idma_desc64_top
         .DW(64),
         .IW(3),
         .UW(1),
-        .TA(APPL_DELAY),
-        .TT(ACQ_DELAY)
+        .TA(ApplDelay),
+        .TT(AcqDelay)
     ) i_axi_iface_driver = new (i_axi_iface_bus);
 
     apb_resp_t dma_slave_response;
@@ -212,8 +233,8 @@ module tb_idma_desc64_top
         .axi_rsp_t         (axi_resp_t),
         .WarnUninitialized (1'b0      ),
         .ClearErrOnAccess  (1'b1      ),
-        .ApplDelay         (APPL_DELAY),
-        .AcqDelay          (ACQ_DELAY )
+        .ApplDelay         (ApplDelay),
+        .AcqDelay          (AcqDelay )
     ) i_axi_sim_mem (
         .clk_i      ( clk          ),
         .rst_ni     ( rst_n        ),
@@ -272,10 +293,12 @@ module tb_idma_desc64_top
             automatic int        number_of_descriptors_in_test;
 
             if (ChainedDescriptors < 0) begin
-                void'(std::randomize(number_of_descriptors_in_test) with {
+                if (!std::randomize(number_of_descriptors_in_test) with {
                     number_of_descriptors_in_test >= MinChainedDescriptors;
                     number_of_descriptors_in_test <= MaxChainedDescriptors;
-                });
+                }) begin
+                    $error("Couldn't randomize the descriptor count");
+                end
             end else begin
                 number_of_descriptors_in_test = ChainedDescriptors;
             end
@@ -387,7 +410,7 @@ module tb_idma_desc64_top
         end
     endfunction : load_descriptors_into_memory
 
-    task apply_stimuli();
+    task automatic apply_stimuli();
         fork
             apb_slave_interaction();
             backend_tx_done_notifier();
@@ -395,7 +418,7 @@ module tb_idma_desc64_top
         join
     endtask
 
-    task collect_responses();
+    task automatic collect_responses();
         fork
             axi_master_acquire_ars();
             axi_master_acquire_rs();
@@ -405,7 +428,7 @@ module tb_idma_desc64_top
     endtask
 
     // apb slave interaction (we're acting as master)
-    task apb_slave_interaction();
+    task automatic apb_slave_interaction();
         automatic stimulus_t current_stimulus_group[$];
         i_apb_driver.reset_master();
         @(posedge rst_n);
@@ -467,7 +490,7 @@ module tb_idma_desc64_top
         return result;
     endfunction
 
-    task axi_master_acquire_ars();
+    task automatic axi_master_acquire_ars();
         @(posedge rst_n);
         forever begin
             automatic ax_beat_t ar_beat;
@@ -482,7 +505,7 @@ module tb_idma_desc64_top
         end
     endtask : axi_master_acquire_ars
 
-    task axi_master_acquire_rs();
+    task automatic axi_master_acquire_rs();
         @(posedge rst_n);
         forever begin
             automatic r_beat_t r_beat;
@@ -506,7 +529,7 @@ module tb_idma_desc64_top
         end
     endtask : axi_master_acquire_rs
 
-    task axi_master_acquire_aw_w_and_irqs();
+    task automatic axi_master_acquire_aw_w_and_irqs();
         fork
             axi_master_acquire_aw();
             axi_master_acquire_w();
@@ -514,7 +537,7 @@ module tb_idma_desc64_top
         join
     endtask : axi_master_acquire_aw_w_and_irqs
 
-    task axi_master_acquire_aw();
+    task automatic axi_master_acquire_aw();
         // set to one to skip first submission of what would be an invalid result
         automatic result_t current_result;
         @(posedge rst_n);
@@ -530,7 +553,7 @@ module tb_idma_desc64_top
             aw_seen_result.push_back(current_result);
         end
     endtask
-    task axi_master_acquire_w();
+    task automatic axi_master_acquire_w();
         automatic result_t current_result;
         @(posedge rst_n);
         forever begin
@@ -542,7 +565,7 @@ module tb_idma_desc64_top
             w_seen_result.push_back(current_result);
         end
     endtask : axi_master_acquire_w
-    task axi_master_acquire_irqs();
+    task automatic axi_master_acquire_irqs();
         automatic result_t current_result;
         @(posedge rst_n);
         forever begin
@@ -559,7 +582,7 @@ module tb_idma_desc64_top
         end
     endtask : axi_master_acquire_irqs
 
-    task backend_tx_done_notifier();
+    task automatic backend_tx_done_notifier();
         automatic int unsigned rand_success, cycles;
         @(posedge rst_n);
         forever begin
@@ -574,25 +597,25 @@ module tb_idma_desc64_top
             repeat (cycles) @(posedge clk);
             /* END EXPAND RAND_WAIT FROM COMMON_VERIF_PKG */
 
-            #(APPL_DELAY);
+            #(ApplDelay);
             dma_be_rsp_valid = 1'b1;
             wait (dma_be_rsp_ready);
 
             @(posedge clk);
-            #(APPL_DELAY);
+            #(ApplDelay);
             dma_be_rsp_valid = 1'b0;
             backend_busy = 1'b0;
         end
     endtask
 
-    task acquire_bursts();
+    task automatic acquire_bursts();
         automatic result_t current_result;
         automatic idma_req_t current_burst;
         @(posedge rst_n);
         forever begin
             forever begin
                 @(posedge clk);
-                #(ACQ_DELAY);
+                #(AcqDelay);
                 if (dma_be_req_valid && dma_be_req_ready) break;
             end
             current_burst = dma_be_req;
@@ -603,23 +626,23 @@ module tb_idma_desc64_top
         end
     endtask
 
-    task backend_acceptor();
+    task automatic backend_acceptor();
         @(posedge rst_n);
         forever begin
             wait (!backend_busy);
             @(posedge clk);
-            #(APPL_DELAY)
+            #(ApplDelay)
             dma_be_req_ready = 1'b1;
-            #(ACQ_DELAY - APPL_DELAY);
+            #(AcqDelay - ApplDelay);
             forever begin
                 if (dma_be_req_valid) begin
                     break;
                 end
                 @(posedge clk);
-                #(ACQ_DELAY);
+                #(AcqDelay);
             end
             @(posedge clk);
-            #(APPL_DELAY)
+            #(ApplDelay)
             dma_be_req_ready = 1'b0;
             backend_busy = 1'b1;
         end
@@ -641,7 +664,7 @@ module tb_idma_desc64_top
         static int irq_errors            = 0;
 
         generate_stimuli();
-	load_descriptors_into_memory();
+        load_descriptors_into_memory();
 
         fork
             apply_stimuli();

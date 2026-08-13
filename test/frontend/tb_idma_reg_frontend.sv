@@ -49,19 +49,19 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam int unsigned DeadlockCycles = 32'd2000;
 
   // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4
-  localparam logic [31:0] REG_CONF       = 32'h0000_0000;
-  localparam logic [31:0] REG_STATUS0    = 32'h0000_0004;
-  localparam logic [31:0] REG_NEXT_ID0   = 32'h0000_0044;
-  localparam logic [31:0] REG_DONE_ID0   = 32'h0000_0084;
-  localparam logic [31:0] REG_DST_ADDR   = 32'h0000_00D0;
-  localparam logic [31:0] REG_SRC_ADDR   = 32'h0000_00D4;
-  localparam logic [31:0] REG_LENGTH     = 32'h0000_00D8;
+  localparam logic [31:0] RegConf     = 32'h0000_0000;
+  localparam logic [31:0] RegStatus0  = 32'h0000_0004;
+  localparam logic [31:0] RegNextId0  = 32'h0000_0044;
+  localparam logic [31:0] RegDoneId0  = 32'h0000_0084;
+  localparam logic [31:0] RegDstAddr  = 32'h0000_00D0;
+  localparam logic [31:0] RegSrcAddr  = 32'h0000_00D4;
+  localparam logic [31:0] RegLength   = 32'h0000_00D8;
 
   function automatic logic [31:0] reg_next_id(input int unsigned s);
-    return REG_NEXT_ID0 + 32'(s) * 32'h4;
+    return RegNextId0 + 32'(s) * 32'h4;
   endfunction
   function automatic logic [31:0] reg_done_id(input int unsigned s);
-    return REG_DONE_ID0 + 32'(s) * 32'h4;
+    return RegDoneId0 + 32'(s) * 32'h4;
   endfunction
 
   // --------------------------------------------------------------------------
@@ -401,10 +401,10 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
                                    input logic [31:0] len,
                                    input int unsigned port = 0);
     // conf: plain 1D incremental copy, ND disabled
-    apb_write(REG_CONF,     32'h0, port);
-    apb_write(REG_SRC_ADDR, src,   port);
-    apb_write(REG_DST_ADDR, dst,   port);
-    apb_write(REG_LENGTH,   len,   port);
+    apb_write(RegConf,     32'h0, port);
+    apb_write(RegSrcAddr, src,   port);
+    apb_write(RegDstAddr, dst,   port);
+    apb_write(RegLength,   len,   port);
   endtask
 
   // launch: read next_id (the transfer trigger, non-blocking); returns id and the

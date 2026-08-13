@@ -72,8 +72,9 @@ interface idma_inst64_drv_if #(
         // built in a variable first: verilator rejects an assignment pattern as an argument
         automatic acc_rsp_item_t rsp_item;
         if (rst_n && acc_res_valid && acc_res_ready) begin
-            rsp_item = '{id: acc_res.id, data: acc_res.data, error: acc_res.error};
-            rsp_queue.push_back(rsp_item);
+            // typed pattern: verilator rejects a bare assignment pattern as a call argument
+            rsp_queue.push_back(
+                acc_rsp_item_t'{id: acc_res.id, data: acc_res.data, error: acc_res.error});
         end
     end
 

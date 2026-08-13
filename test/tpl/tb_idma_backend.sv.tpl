@@ -694,7 +694,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     // DMA Tracer
     //--------------------------------------
     // only activate tracer if requested
-    if (DmaTracing) begin
+    if (DmaTracing) begin : gen_dma_tracer
         // fetch the name of the trace file from CMD line
         string trace_file;
         initial begin

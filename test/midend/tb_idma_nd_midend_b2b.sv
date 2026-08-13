@@ -54,8 +54,10 @@ module tb_idma_nd_midend_b2b;
     .clk_i(clk), .rst_ni(rst_n),
     .nd_req_i(nd_req), .nd_req_valid_i(nd_req_valid), .nd_req_ready_o(nd_req_ready),
     .nd_rsp_o(nd_rsp), .nd_rsp_valid_o(nd_rsp_valid), .nd_rsp_ready_i(nd_rsp_ready),
-    .burst_req_o(burst_req), .burst_req_valid_o(burst_req_valid), .burst_req_ready_i(burst_req_ready),
-    .burst_rsp_i(burst_rsp), .burst_rsp_valid_i(burst_rsp_valid), .burst_rsp_ready_o(burst_rsp_ready),
+    .burst_req_o(burst_req), .burst_req_valid_o(burst_req_valid),
+    .burst_req_ready_i(burst_req_ready),
+    .burst_rsp_i(burst_rsp), .burst_rsp_valid_i(burst_rsp_valid),
+    .burst_rsp_ready_o(burst_rsp_ready),
     .busy_o(busy)
   );
 
@@ -124,19 +126,41 @@ module tb_idma_nd_midend_b2b;
       begin errs++; $display("[B2B] burst count %0d != %0d", cap_src.size(), 3*NB); end
     else begin
       // first burst of each transfer must equal its OWN base (reload happened)
-      if (cap_src[0]     !== S1 || cap_dst[0]     !== D1) begin errs++; $display("[B2B] T1[0]=(%0h,%0h) exp (%0h,%0h)", cap_src[0], cap_dst[0], S1, D1); end
-      if (cap_src[NB]    !== S2 || cap_dst[NB]    !== D2) begin errs++; $display("[B2B] T2[0]=(%0h,%0h) exp (%0h,%0h) -- back-to-back base NOT reloaded", cap_src[NB], cap_dst[NB], S2, D2); end
-      if (cap_src[2*NB]  !== S3 || cap_dst[2*NB]  !== D3) begin errs++; $display("[B2B] T3[0]=(%0h,%0h) exp (%0h,%0h)", cap_src[2*NB], cap_dst[2*NB], S3, D3); end
+      if (cap_src[0]     !== S1 || cap_dst[0]     !== D1) begin
+        errs++;
+        $display("[B2B] T1[0]=(%0h,%0h) exp (%0h,%0h)", cap_src[0], cap_dst[0], S1, D1);
+      end
+      if (cap_src[NB]    !== S2 || cap_dst[NB]    !== D2) begin
+        errs++;
+        $display("[B2B] T2[0]=(%0h,%0h) exp (%0h,%0h) -- back-to-back base NOT reloaded",
+                 cap_src[NB], cap_dst[NB], S2, D2);
+      end
+      if (cap_src[2*NB]  !== S3 || cap_dst[2*NB]  !== D3) begin
+        errs++;
+        $display("[B2B] T3[0]=(%0h,%0h) exp (%0h,%0h)", cap_src[2*NB], cap_dst[2*NB], S3, D3);
+      end
       // full-sequence independence: T2 and T3 must be T1 shifted by their base delta
       for (int unsigned i = 0; i < NB; i++) begin
-        if ((cap_src[NB+i]   - cap_src[i]) !== (S2 - S1) || (cap_dst[NB+i]   - cap_dst[i]) !== (D2 - D1)) begin
-          errs++; if (errs <= 8) $display("[B2B] T2[%0d] not T1+delta: src %0h vs %0h (Δexp %0h)", i, cap_src[NB+i], cap_src[i], S2-S1); end
-        if ((cap_src[2*NB+i] - cap_src[i]) !== (S3 - S1) || (cap_dst[2*NB+i] - cap_dst[i]) !== (D3 - D1)) begin
-          errs++; if (errs <= 8) $display("[B2B] T3[%0d] not T1+delta: src %0h vs %0h (Δexp %0h)", i, cap_src[2*NB+i], cap_src[i], S3-S1); end
+        if ((cap_src[NB+i]   - cap_src[i]) !== (S2 - S1) ||
+            (cap_dst[NB+i]   - cap_dst[i]) !== (D2 - D1)) begin
+          errs++;
+          if (errs <= 8)
+            $display("[B2B] T2[%0d] not T1+delta: src %0h vs %0h (Δexp %0h)",
+                     i, cap_src[NB+i], cap_src[i], S2-S1);
+        end
+        if ((cap_src[2*NB+i] - cap_src[i]) !== (S3 - S1) ||
+            (cap_dst[2*NB+i] - cap_dst[i]) !== (D3 - D1)) begin
+          errs++;
+          if (errs <= 8)
+            $display("[B2B] T3[%0d] not T1+delta: src %0h vs %0h (Δexp %0h)",
+                     i, cap_src[2*NB+i], cap_src[i], S3-S1);
+        end
       end
     end
 
-    if (errs == 0) $display("[B2B] PASS: %0d back-to-back + gapped ND transfers each walked from their own base", 3*NB);
+    if (errs == 0)
+      $display("[B2B] PASS: %0d back-to-back + gapped ND transfers each walked from their own base",
+               3*NB);
     else           $fatal(1, "[B2B] FAIL: %0d errors (back-to-back ND base-address reuse)", errs);
     $finish();
   end

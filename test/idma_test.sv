@@ -52,14 +52,15 @@ package idma_test;
         idma_pkg::idma_eh_req_t err_action  [$];
 
         // format string for pretty printing
-        string format = "\n-----------------------------------------------\
-                        \niDMA %1dD job:\n num_bytes:      %d\
-                        \n src:           %s\n dst:           %s\
-                        \n src_protocol:   %s%d\n dst_protocol:   %s%d\
-                        \n max_src_len:  %s%d\n max_dst_len:  %s%d\
-                        \n aw_decoupled:   %s%b\n rw_decoupled:   %s%b\
-                        \n id:             %s%d \n%s errors:\n%s\
-                        \n-----------------------------------------------";
+        string format = {
+            "\n-----------------------------------------------",
+            "                        \niDMA %1dD job:\n num_bytes:      %d",
+            "                        \n src:           %s\n dst:           %s",
+            "                        \n src_protocol:   %s%d\n dst_protocol:   %s%d",
+            "                        \n max_src_len:  %s%d\n max_dst_len:  %s%d",
+            "                        \n aw_decoupled:   %s%b\n rw_decoupled:   %s%b",
+            "                        \n id:             %s%d \n%s errors:\n%s",
+            "                        \n-----------------------------------------------"};
 
         // constructor: create an empty job
         function new ();
@@ -108,8 +109,10 @@ package idma_test;
             for (int d = 0; d < NumDim-1; d++) begin
                 res = {res, $sformatf(" Dimension %2d: \n", d+2)};
                 res = {res, $sformatf("  reps:          %d", n_dims[d].reps), "\n"};
-                res = {res, $sformatf("  src stride:   %s", format_hex(n_dims[d].src_strides)), "\n"};
-                res = {res, $sformatf("  dst stride:   %s", format_hex(n_dims[d].dst_strides)), "\n"};
+                res = {res, $sformatf("  src stride:   %s",
+                                      format_hex(n_dims[d].src_strides)), "\n"};
+                res = {res, $sformatf("  dst stride:   %s",
+                                      format_hex(n_dims[d].dst_strides)), "\n"};
             end
             return res;
         endfunction
@@ -466,8 +469,9 @@ package idma_test;
                     // abort all further transfers
                     aborted = 1;
                     if (ModelOutput)
-                        $display("Aborting all further elements of this \
-                                  transfer due to write error");
+                        $display({"Aborting all further elements of this ",
+                                  "                                  ",
+                                  "transfer due to write error"});
                 end
 
                 // read abort logic
@@ -476,8 +480,9 @@ package idma_test;
                     // abort all further transfers
                     aborted = 1;
                     if (ModelOutput)
-                        $display("Aborting all further elements of this \
-                                  transfer due to read  error");
+                        $display({"Aborting all further elements of this ",
+                                  "                                  ",
+                                  "transfer due to read  error"});
                 end
 
                 // debug print tail
@@ -710,8 +715,9 @@ package idma_test;
             idma.req.opt.beo.src_reduce_len <= #TA src_reduce_len;
             idma.req.opt.beo.dst_reduce_len <= #TA dst_reduce_len;
             idma.req.opt.compute.enable              <= #TA transpose_en;
-            idma.req.opt.compute.op                  <= #TA transpose_en ? idma_pkg::COMPUTE_TRANSPOSE
-                                                                         : idma_pkg::COMPUTE_NONE;
+            idma.req.opt.compute.op                  <= #TA transpose_en
+                                                           ? idma_pkg::COMPUTE_TRANSPOSE
+                                                           : idma_pkg::COMPUTE_NONE;
             idma.req.opt.compute.params.transpose.mode     <= #TA transp_mode;
             idma.req.opt.compute.params.transpose.tensor_m <= #TA tensor_m;
             idma.req.opt.compute.params.transpose.tensor_n <= #TA tensor_n;

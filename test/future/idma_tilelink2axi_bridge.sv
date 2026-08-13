@@ -7,7 +7,7 @@
 
 `include "idma/guard.svh"
 module idma_tilelink2axi_bridge #(
-    parameter int unsigned DataWidth  = 64, 
+    parameter int unsigned DataWidth  = 64,
     parameter int unsigned AddrWidth  = 32,
     parameter int unsigned IdWidth    = 7,
     parameter type    tilelink_req_t  = logic,

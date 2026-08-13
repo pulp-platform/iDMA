@@ -124,11 +124,13 @@ module tb_idma_transpose_nd
   // ── Backend (rw_axi) with transpose engine ──
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
-    .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(BufferDepth),
+    .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1),
+    .BufferDepth(BufferDepth),
     .EnableCompute(1'b1), .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, default: '0}),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
-    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(AxIF), .MemSysDepth(0),
+    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0),
+    .NumAxInFlight(AxIF), .MemSysDepth(0),
     .idma_req_t(idma_req_t), .idma_rsp_t(idma_rsp_t), .idma_eh_req_t(idma_eh_req_t),
     .idma_busy_t(idma_busy_t), .axi_req_t(axi_req_t), .axi_rsp_t(axi_rsp_t),
     .write_meta_channel_t(write_meta_channel_t), .read_meta_channel_t(read_meta_channel_t)
@@ -142,8 +144,10 @@ module tb_idma_transpose_nd
   );
 
   // watchdogs to surface deadlocks rather than hang forever
-  stream_watchdog #(.NumCycles(2000)) i_r_wd (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
-  stream_watchdog #(.NumCycles(2000)) i_w_wd (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+  stream_watchdog #(.NumCycles(2000)) i_r_wd (
+    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
+  stream_watchdog #(.NumCycles(2000)) i_w_wd (
+    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
 
   // ── Stimulus + check via sim-memory backdoor ──
   addr_t sb = 'h0000_1000;
@@ -153,11 +157,12 @@ module tb_idma_transpose_nd
   // dst allocation [chk_db, chk_aw_hi) — else a strict slave would DECERR
   logic  chk_active = 1'b0;
   addr_t chk_db, chk_aw_hi;
-  always @(posedge clk) if (rst_n && chk_active && axi_write_req.aw_valid && axi_write_rsp.aw_ready) begin
-    if (axi_write_req.aw.addr < chk_db || axi_write_req.aw.addr >= chk_aw_hi)
-      $fatal(1, "[TPN] AW 0x%0h outside dst alloc [0x%0h,0x%0h) — would DECERR on a strict slave",
-             axi_write_req.aw.addr, chk_db, chk_aw_hi);
-  end
+  always @(posedge clk)
+    if (rst_n && chk_active && axi_write_req.aw_valid && axi_write_rsp.aw_ready) begin
+      if (axi_write_req.aw.addr < chk_db || axi_write_req.aw.addr >= chk_aw_hi)
+        $fatal(1, "[TPN] AW 0x%0h outside dst alloc [0x%0h,0x%0h) — would DECERR on a strict slave",
+               axi_write_req.aw.addr, chk_db, chk_aw_hi);
+    end
 
   task automatic wr_mem(input addr_t a, input logic [7:0] d); i_axi_sim_mem.mem[a] = d; endtask
   function automatic logic [7:0] rd_mem(input addr_t a);
@@ -243,7 +248,8 @@ module tb_idma_transpose_nd
           automatic logic [7:0] exp = rd_mem(sb + (r*n + c)*eb + b);
           if (got !== exp) begin
             errs++;
-            if (errs <= 12) $display("[TPN] MISMATCH out_T[%0d][%0d].b%0d=%02h exp %02h", c, r, b, got, exp);
+            if (errs <= 12)
+              $display("[TPN] MISMATCH out_T[%0d][%0d].b%0d=%02h exp %02h", c, r, b, got, exp);
           end
         end
     // check 2: padding cols [m,mp) and padding rows [n,nt*ne) must stay sentinel
@@ -254,7 +260,9 @@ module tb_idma_transpose_nd
             automatic logic [7:0] got = rd_mem(db + (i*mp + j)*eb + b);
             if (got !== 8'hCC) begin
               errs++;
-              if (errs <= 12) $display("[TPN] PADDING CLOBBERED at row=%0d col=%0d b%0d=%02h (exp CC)", i, j, b, got);
+              if (errs <= 12)
+                $display("[TPN] PADDING CLOBBERED at row=%0d col=%0d b%0d=%02h (exp CC)",
+                         i, j, b, got);
             end
           end
   endtask
@@ -270,7 +278,8 @@ module tb_idma_transpose_nd
       if (Cases[k][2] > StrbWidth) continue;   // element must fit the bus
       run_case(Cases[k][0], Cases[k][1], Cases[k][2], ce);
       if (ce == 0) $display("[TPN] PASS: %0dx%0d EB=%0d", Cases[k][0], Cases[k][1], Cases[k][2]);
-      else         $display("[TPN] FAIL: %0dx%0d EB=%0d (%0d mismatches)", Cases[k][0], Cases[k][1], Cases[k][2], ce);
+      else         $display("[TPN] FAIL: %0dx%0d EB=%0d (%0d mismatches)",
+                            Cases[k][0], Cases[k][1], Cases[k][2], ce);
       total += ce;
     end
 

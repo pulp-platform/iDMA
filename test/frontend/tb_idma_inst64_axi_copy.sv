@@ -148,13 +148,13 @@ module tb_idma_inst64_axi_copy;
             if (harness.axi_req[0].aw_valid && harness.axi_res[0].aw_ready) axi_aw_beats++;
             if (ev.ar_done) begin
                 ev_ar_beats++;
-                ev_ar_len_seen  = ev.ar_len;
-                ev_ar_size_seen = ev.ar_size;
+                ev_ar_len_seen  <= ev.ar_len;
+                ev_ar_size_seen <= ev.ar_size;
             end
             if (ev.aw_done) begin
                 ev_aw_beats++;
-                ev_aw_len_seen  = ev.aw_len;
-                ev_aw_size_seen = ev.aw_size;
+                ev_aw_len_seen  <= ev.aw_len;
+                ev_aw_size_seen <= ev.aw_size;
             end
             if (ev.r_done)   ev_r_beats++;
             if (ev.r_bw)     ev_r_bw_beats++;

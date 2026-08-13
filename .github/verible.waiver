@@ -6,3 +6,9 @@
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 waive --rule=package-filename --location="src/frontend/inst64/idma_inst64_opcode.sv"
+
+# IDMA_DV / IDMA_ND_DV are the exported verification API (Bender target idma_test).
+# They follow the PULP AXI_BUS_DV convention and are instantiated by name by
+# downstream verification this repo's CI cannot see or update, so a rename here
+# would break it silently. Revisit together with a lockstep rename there.
+waive --rule=interface-name-style --location="test/idma_intf.sv"
