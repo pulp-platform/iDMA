@@ -591,6 +591,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
  && !(axi_req.w_valid && axi_rsp.w_ready)\
                 % elif p2 == 'obi':
  && !(obi_write_req.req && obi_write_rsp.gnt)\
+                % elif p2 == 'init':
+ && !(init_write_req.req_valid && init_write_rsp.req_ready)\
                 % else:
  && !(${p2}_axi_req.w_valid && ${p2}_axi_rsp.w_ready)\
                 % endif
@@ -601,6 +603,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
         % elif protocol == 'obi':
         .valid_i(obi_write_req.req), .ready_i(obi_write_rsp.gnt));
+        % elif protocol == 'init':
+        .valid_i(init_write_req.req_valid), .ready_i(init_write_rsp.req_ready));
         % else:
         .valid_i(${protocol}_axi_req.w_valid), .ready_i(${protocol}_axi_rsp.w_ready));
         % endif
