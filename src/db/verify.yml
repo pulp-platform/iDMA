@@ -19,6 +19,20 @@ elab_compute:
   - {width: 64,  ops: 8,  tuning: 0, why: transpose only, single bank}
   - {width: 64,  ops: 6,  tuning: 1, why: mx only, Fp16En=0, the no-transpose branch}
 
+# Non-backend synthesis tops, elaborated with their own jobs.json parameters
+elab_shared_tops: [idma_desc64_synth, idma_nd_midend_synth, idma_mp_midend_synth,
+                   idma_rt_midend_synth]
+
+# Out-of-tree multi-head variants; license-free but generated only on request
+multihead_ids: [2r_axi_w_axi, 2rw_axi]
+
+# The generated register frontends share a parameter and port list, so the one
+# public concrete binding elaborates each. Without this, 2d and 1d have no leg.
+reg_variants:
+  - {variant: 3, module: idma_reg32_3d}
+  - {variant: 2, module: idma_reg64_2d}
+  - {variant: 1, module: idma_reg64_1d}
+
 # Elaborated by a dedicated leg, so the shared sweep skips them
 elab_covered_elsewhere: [tb_idma_reg_frontend]
 

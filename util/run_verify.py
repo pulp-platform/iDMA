@@ -16,6 +16,7 @@ the workflow, and needed a drift checker to notice when they disagreed.
   run_verify.py --list                  print every leg, one per line
   run_verify.py --tb-tops               print the testbench tops bender knows of
   run_verify.py --prereqs mxneg         print the files that suite needs built
+  run_verify.py --emit reg_variants     print a list the make recipes loop over
 
 Testbench tops are asked of bender rather than listed by hand: it already owns
 the file set, so a testbench added to Bender.yml is elaborated without touching
@@ -144,6 +145,9 @@ def main():
     par.add_argument('--suite')
     par.add_argument('--emit-matrix', choices=['suites'])
     par.add_argument('--list', action='store_true')
+    par.add_argument('--emit', metavar='KEY',
+                     choices=['elab_shared_tops', 'multihead_ids', 'reg_variants'],
+                     help='print a database list for a make recipe to loop over')
     par.add_argument('--prereqs', metavar='SUITE',
                      help='files the suite needs built, so make needs no per-suite rule')
     par.add_argument('--tb-tops', action='store_true',
@@ -159,6 +163,17 @@ def main():
 
     if args.emit_matrix == 'suites':
         print(json.dumps({'suite': sorted(db['suites'])}))
+        return 0
+    if args.emit:
+        entries = db.get(args.emit) or []
+        if not entries:
+            print('error: {} is empty'.format(args.emit), file=sys.stderr)
+            return 1
+        if args.emit == 'reg_variants':
+            for entry in entries:
+                print('{} {}'.format(entry['variant'], entry['module']))
+        else:
+            print(' '.join(str(e) for e in entries))
         return 0
     if args.prereqs:
         if args.prereqs not in db['suites']:

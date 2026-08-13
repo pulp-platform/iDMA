@@ -39,18 +39,14 @@ IDMA_SLANG_SYNTH_T := -t rtl -t synth
 IDMA_SLANG_TB_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                       -t snitch_cluster -t asic
 
-# Non-backend synthesis tops, elaborated with their own jobs.json parameters
-IDMA_SHARED_TOPS   := idma_desc64_synth idma_nd_midend_synth idma_mp_midend_synth \
-                      idma_rt_midend_synth
-
-# Out-of-tree multi-head variants; license-free but generated only on request
-IDMA_MULTIHEAD_IDS ?= 2r_axi_w_axi 2rw_axi
-
-# RegVariant:module; without this reg64_2d and reg64_1d are elaborated by nothing
-IDMA_REG_VARIANTS  ?= 3:idma_reg32_3d 2:idma_reg64_2d 1:idma_reg64_1d
-
 # Testbench tops from bender. A file target, not $(shell): make discards a
 # $(shell) exit status, so a failure would empty the list and the leg pass.
+$(IDMA_VERIFY_DIR)/%.list: $(IDMA_VERIFY_DB)
+	mkdir -p $(@D)
+	$(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --emit $* > $@.tmp
+	test -s $@.tmp
+	mv $@.tmp $@
+
 $(IDMA_VERIFY_DIR)/tb_tops.txt: $(IDMA_ROOT)/Bender.yml $(IDMA_VERIFY_DB)
 	mkdir -p $(@D)
 	BENDER=$(BENDER) $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --tb-tops \
@@ -126,16 +122,19 @@ idma_verify_backend:
 
 # The four non-backend synthesis tops with their jobs.json parameters, plus the
 # default-parameter elaboration of every top from idma_lint_all
-idma_verify_shared: idma_lint_all
-	set -e; for top in $(IDMA_SHARED_TOPS); do \
+idma_verify_shared: idma_lint_all $(IDMA_VERIFY_DIR)/elab_shared_tops.list
+	@test -s $(IDMA_VERIFY_DIR)/elab_shared_tops.list || \
+	  { echo "error: no shared tops listed"; exit 1; }
+	set -e; for top in $$(cat $(IDMA_VERIFY_DIR)/elab_shared_tops.list); do \
 	  $(MAKE) idma_lint_params IDMA_TOP=$$top; \
 	  $(MAKE) idma_slang_elab  IDMA_TOP=$$top; \
 	done
 
-idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt
+idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt \
+                       $(IDMA_VERIFY_DIR)/reg_variants.list
 	@set -e; for id in $(IDMA_FE_IDS); do \
-	  case " $(IDMA_REG_VARIANTS) " in *":idma_$$id "*) ;; \
-	    *) echo "error: no IDMA_REG_VARIANTS entry elaborates idma_$$id"; exit 1;; esac; \
+	  grep -q " idma_$$id$$" $(IDMA_VERIFY_DIR)/reg_variants.list || \
+	    { echo "error: no reg_variants entry elaborates idma_$$id"; exit 1; }; \
 	done
 	@test -s $(IDMA_VERIFY_DIR)/tb_tops.txt || \
 	  { echo "error: no testbench tops; bender returned nothing"; exit 1; }
@@ -144,23 +143,26 @@ idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $$top \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done
-	set -e; for entry in $(IDMA_REG_VARIANTS); do \
-	  IFS=: read -r v mod <<< "$$entry"; \
+	@test -s $(IDMA_VERIFY_DIR)/reg_variants.list || \
+	  { echo "error: no register variants listed"; exit 1; }
+	set -e; while read -r v mod; do \
 	  echo "--- slang tb_idma_reg_frontend [$$mod] ---"; \
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top tb_idma_reg_frontend -GRegVariant=$$v \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
-	done
+	done < $(IDMA_VERIFY_DIR)/reg_variants.list
 
 # Out-of-tree multi-head build: regenerate with the extra ids, then elaborate the
 # two extra synthesis tops and the two multi-head testbenches
-idma_verify_multihead:
-	$(MAKE) idma_hw_all idma_add_all IDMA_ADD_IDS="$(IDMA_MULTIHEAD_IDS)"
+idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
+	@test -s $(IDMA_VERIFY_DIR)/multihead_ids.list || \
+	  { echo "error: no multi-head ids listed"; exit 1; }
+	$(MAKE) idma_hw_all idma_add_all IDMA_ADD_IDS="$$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list)"
 	mkdir -p $(IDMA_VLT_DIR) $(IDMA_SLANG_DIR)
 	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) -t add_ids > $(IDMA_VLT_DIR)/idma_multihead.f
 	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) -t add_ids > $(IDMA_SLANG_DIR)/mh_synth.f
 	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) -t multihead -t add_ids \
 	  > $(IDMA_SLANG_DIR)/mh_tb.f
-	set -e; for id in $(IDMA_MULTIHEAD_IDS); do \
+	set -e; for id in $$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list); do \
 	  echo "--- verilator idma_backend_synth_$$id ---"; \
 	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_multihead.f \
 	    --top-module idma_backend_synth_$$id; \
