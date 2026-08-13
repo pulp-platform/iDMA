@@ -5,33 +5,24 @@
 # Authors:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-# The public verification matrix, in one place. util/run_verify.py runs a suite
-# from this file and emits the CI matrix from the same entries, so a leg cannot
-# exist in the workflow and not locally, or the reverse.
-#
-# Every excluded leg is an `exclude:` entry with a reason. A leg that is simply
-# absent is a bug: util/check_jobs.py fails when a negative-test case or a
-# legalizer guard is neither exercised here nor excluded here.
+# The public verification matrix. util/run_verify.py runs a suite from here and
+# emits the CI matrix from the same entries. Excluded legs are `exclude:` entries
+# with a reason; check_jobs.py fails on anything neither run nor excluded.
 
-# DataWidth points elaborated on top of the jobs.json parameter sets; every
-# jobs.json entry pins DataWidth=32, so nothing wider is elaborated otherwise
+# Every jobs.json entry pins DataWidth=32, so nothing wider is elaborated otherwise
 elab_widths: [32, 64, 512, 1024]
 
-# No jobs.json entry enables the compute datapath, so its generate branches are
-# unreachable without these. ComputeOps is {transpose, mxquant, mxdequant, mxfp16}
+# No jobs.json entry enables compute, so its branches are unreachable without these
 elab_compute:
   - {width: 64,  ops: 15, tuning: 1, why: every sub-unit, ping-pong transpose banks}
   - {width: 512, ops: 15, tuning: 1, why: the wide bus, where pack/unpack is stressed}
   - {width: 64,  ops: 8,  tuning: 0, why: transpose only, single bank}
   - {width: 64,  ops: 6,  tuning: 1, why: mx only, Fp16En=0, the no-transpose branch}
 
-# Elaborated by a dedicated leg, so the shared testbench sweep skips them:
-# tb_idma_backend_* by the matching per-backend leg (handled by prefix), and the
-# register frontend once per RegVariant.
+# Elaborated by a dedicated leg, so the shared sweep skips them
 elab_covered_elsewhere: [tb_idma_reg_frontend]
 
-# Simulation suites. Each is one CI job and one make target; each run is one leg.
-# `expect: fail` inverts the polarity: the run must exit non-zero AND print token.
+# One CI leg per run. `expect: fail` inverts the polarity: non-zero AND the token.
 suites:
 
   mxquant:
@@ -70,8 +61,7 @@ suites:
     defines: [INC_ASSERT]
     sweep: {param: Quant, values: [1, 0]}
 
-  # Negative tests against the legalizer compute guards. token is the guard name,
-  # so a case that fires the wrong guard fails instead of passing quietly.
+  # token is the guard name, so a case firing the wrong guard fails
   mxneg:
     top: tb_idma_mxneg
     dpi: idma_mxquant_dpi
@@ -92,15 +82,13 @@ suites:
       - {case: 11, why: "the request is never accepted, so the guard is never sampled"}
       - {case: 12, why: "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046"}
 
-# Legalizer compute guards with no firing negative test. check_jobs.py fails if a
-# guard is neither claimed by a mxneg run above nor named here.
+# Guards with no firing negative test; check_jobs.py fails on any not named here
 guards_untested:
   - {guard: ComputeMxFp16Width,          why: "only reachable from the excluded 1024 cases"}
   - {guard: ComputeMxdequantLengthFits,  why: "case 11 is never accepted"}
   - {guard: ComputeDstTilelink,          why: "no TileLink backend variant exists"}
 
-# Testbench tops excluded from the simulation tier entirely. Dropped coverage,
-# not silent skips; all need triage and none may be waived to make a leg green.
+# Excluded from the simulation tier. Dropped coverage, not silent skips; needs triage.
 tops_untested:
   - {top: tb_idma_nd_midend_b2b, why: "hangs ([B2B] timeout); latent reset/LFSR race"}
   - {top: tb_idma_transpose_nd,  why: "AW outside the destination allocation at 80 ns"}

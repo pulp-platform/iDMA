@@ -5,41 +5,7 @@
 # Author:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-# License-free verification matrix: elaboration gates the simulation tier.
-#
-# House rules, enforced in review:
-#   - no `|| true` and no `continue-on-error` on any step of a gating job;
-#   - no negated grep as a pass criterion; every simulation leg checks exit status
-#     AND a non-empty log AND a positive token (util/run_vlt_sim.py);
-#   - no numeric warning-count thresholds;
-#   - every excluded top or configuration is named below with its reason;
-#   - `needs:` orders jobs, it does not share workspaces; every job regenerates.
-#
-# NAMED EXCLUSIONS - dropped coverage, not silent skips. All need triage; none may
-# be flagged away to make a leg green.
-#   tb_idma_nd_midend_b2b   hangs ([B2B] timeout); latent reset/LFSR race
-#   tb_idma_transpose_nd    AW outside the destination allocation at 80 ns
-#   tb_idma_transpose_b2b   stream_watchdog trip after 4000 idle cycles
-#   tb_idma_mxrand          testbench timeout at 400 ms of simulated time
-#   tb_idma_mxperf          hangs on the first compute transfer
-#   tb_idma_rt_midend       fails under --assert on cc_rr_arb_tree lock
-#   mxneg case 11           the request is never accepted, so
-#                           ComputeMxdequantLengthFits is never sampled
-#   ComputeDstTilelink      no TileLink backend variant exists to test it
-#   mxneg cases 4 and 12    DataWidth 1024 SIGSEGVs on verilator 5.020; both pass
-#                           on 5.046, so this is a toolchain limit, not a gap
-#   mxroundtrip above 256   glibc heap abort, and 5.046 moves it to 256 instead of
-#                           fixing it; a live bug, not a width limit
-#   the 88 directed job files
-#                           verilator cannot simulate the idma_test class-based
-#                           driver (virtual interface, input combinational region
-#                           does not converge)
-# Both are named in idma.mk next to the table that drives them, and
-# util/check_jobs.py fails if either list drifts from the design.
-#
-# mxquant at DataWidth 512 and 1024 was on this list as a verilator crash. It was
-# not: the C++ compiler was, and both widths run once idma.mk pins it. Never waive
-# a leg on a toolchain symptom without testing another toolchain.
+# License-free verification matrix; the run set is src/db/verify.yml
 
 name: verify
 
@@ -49,8 +15,7 @@ on:
 
 jobs:
 
-  # Codegen hygiene, not verification: jobs.json and the generated tree must still
-  # describe the same design, and a second generation must be identical
+  # jobs.json and the generated tree must still describe the same design
   codegen-consistency:
     runs-on: ubuntu-24.04
     steps:
@@ -64,8 +29,7 @@ jobs:
         name: Check jobs.json, the CI matrix and codegen determinism
         run: uv run --locked make idma_verify_codegen
 
-  # One backend variant under both front ends, with its real jobs.json parameters,
-  # a DataWidth sweep and slang elaboration of that variant's testbench
+  # One backend variant: its jobs.json parameters, a width sweep, its testbench
   elab-backend:
     strategy:
       fail-fast: false
@@ -96,8 +60,7 @@ jobs:
         name: Elaborate ${{ matrix.id }}
         run: uv run --locked make idma_verify_backend IDMA_VERIFY_ID=${{ matrix.id }}
 
-  # The four non-backend synthesis tops with their own jobs.json parameters, plus the
-  # default-parameter elaboration of all 12 tops and of the inst64 testbench
+  # The non-backend synthesis tops, plus the inst64 testbench
   elab-shared-tops:
     runs-on: ubuntu-24.04
     steps:
@@ -116,8 +79,7 @@ jobs:
         name: Elaborate the shared synthesis tops
         run: uv run --locked make idma_verify_shared
 
-  # Testbench tops that are not per-backend, including the three generated register
-  # frontends; verilator cannot parse the verification stack, so slang is the only tool
+  # Testbench tops; verilator cannot parse the verification stack, so slang only
   elab-tb-shared:
     runs-on: ubuntu-24.04
     steps:
@@ -150,8 +112,7 @@ jobs:
         name: Elaborate the multi-head variants and testbenches
         run: uv run --locked make idma_verify_multihead
 
-  # The suite list comes from src/db/verify.yml, so a suite added there gets a CI
-  # leg with no edit here; the workflow cannot fan out over a stale set.
+  # The suite list comes from the database, so a new suite needs no edit here
   sim-matrix:
     needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     runs-on: ubuntu-24.04
@@ -171,8 +132,7 @@ jobs:
           echo "suites=$(uv run --locked python util/run_verify.py \
             --emit-matrix suites)" >> "$GITHUB_OUTPUT"
 
-  # Real simulation, byte-exact against the DPI-C goldens for the datapath suites
-  # and inverted-polarity for the negative ones; run_verify.py knows which is which
+  # Real simulation; run_verify.py knows which suites are negative tests
   simulate:
     needs: sim-matrix
     strategy:
@@ -194,27 +154,3 @@ jobs:
       -
         name: Simulate ${{ matrix.suite }}
         run: uv run --locked make idma_verify_sim_${{ matrix.suite }} IDMA_VLT_MAKEFLAGS=-j4
-
-  # A report, not a gate: -Wextra without -Werror, so findings do not fail the job and
-  # a real compile error still does. Never add it to the required checks
-  report-slang-extra:
-    runs-on: ubuntu-24.04
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
-        name: Set up toolchain
-        uses: ./.github/actions/verify-setup
-      -
-        name: Generate RTL
-        run: uv run --locked make idma_hw_all
-      -
-        name: Collect slang -Wextra findings
-        run: uv run --locked make idma_slang_report
-      -
-        name: Upload the report
-        uses: actions/upload-artifact@v4
-        with:
-          name: slang-extra
-          path: target/verify/slang_extra.txt

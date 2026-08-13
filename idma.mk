@@ -629,17 +629,7 @@ idma_vcs_clean:
 .PHONY: idma_verilator_clean
 
 IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
-IDMA_VLT_ARGS  := --cc \
-				  --Wall \
-				  --Wno-fatal \
-				  +1800-2017ext+ \
-				  --assert \
-				  --error-limit 1000 \
-				  --hierarchical \
-				  --no-skip-identical
 
-IDMA_VLT_TOP     ?=
-IDMA_VLT_PARAMS  ?=
 
 # Warning classes measured at 0 occurrences over all 12 synth tops, so they gate.
 # Not promoted, with the measurement: UNOPTFLAT (31, includes the known
@@ -651,13 +641,6 @@ IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT
 IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
                       --unroll-count 4096 --unroll-stmts 200000
 
-.PRECIOUS: $(IDMA_VLT_DIR)/%_elab.log
-
-$(IDMA_VLT_DIR)/%_elab.log: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
-	mkdir -p $(IDMA_VLT_DIR)
-	# We need a dedicated pickle here to set the defines
-	$(BENDER) pickle $(IDMA_PICKLE_TARGETS) --top $(IDMA_VLT_TOP) -D VERILATOR --expand-macros -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv
-	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
@@ -704,7 +687,8 @@ idma_lint_elab:
 	$(BENDER) script verilator -t rtl -t synth > $(IDMA_VLT_DIR)/idma_elab.f
 	@rc=0; for top in $(IDMA_LINT_TOPS); do \
 	  echo "--- elaborating $$top ---"; \
-	  $(VERILATOR) --lint-only -Wno-fatal --timing -f $(IDMA_VLT_DIR)/idma_elab.f --top-module $$top || rc=1; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_elab.f \
+	    --top-module $$top || rc=1; \
 	done; exit $$rc
 
 .PHONY: idma_lint_all

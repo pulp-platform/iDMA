@@ -45,6 +45,7 @@ jobs:
         uses: chipsalliance/verible-actions-common/install-verible@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          verible_version: "v0.0-3318-g8d254167"
       -
         name: Lint all of src
         run: make idma_lint_sv

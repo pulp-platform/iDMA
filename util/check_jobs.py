@@ -36,9 +36,7 @@ import sys
 
 import yaml
 
-# Directed job files that exist on disk and are deliberately not wired into
-# jobs.json: the r_axi_w_obi and r_obi_w_axi backends elaborate with
-# ErrorHandling=0, so the error tests do not apply to them.
+# On disk but deliberately unwired: these backends elaborate with ErrorHandling=0
 UNWIRED_JOBS = {
     'backend_r_axi_w_obi/error_simple.txt',
     'backend_r_axi_w_obi/error_mixed.txt',
@@ -115,9 +113,7 @@ def main():
                 errors.append('{}: {} "{}" is not defined in the sources'.format(
                     name, field, module))
 
-    # (d) no negative-test case and no compute guard may go silently unexercised.
-    # Both sides come from src/db/verify.yml, the same file that drives the runs,
-    # so this compares the matrix against the design rather than against a copy.
+    # (d) compares the run set against the design, not against a copy of itself
     db = {}
     if args.verify_db:
         with open(args.verify_db, 'r') as handle:
@@ -143,6 +139,17 @@ def main():
                               'it'.format(case))
             for case in sorted(run_cases - defined, key=int):
                 errors.append('case {} is run but the testbench does not define it'.format(case))
+
+    # An exclude entry must name a value the sweep does not run
+    for name, suite in sorted(db.get('suites', {}).items()):
+        sweep = suite.get('sweep')
+        for entry in suite.get('exclude', []):
+            for value in entry.get('values', []):
+                if sweep and value in sweep.get('values', []):
+                    errors.append('suite {}: {} is both run and excluded'.format(name, value))
+            if not entry.get('values') and not entry.get('case'):
+                errors.append('suite {}: an exclude entry names neither values nor a '
+                              'case'.format(name))
 
     if args.mxneg_guard_src and db:
         with open(args.mxneg_guard_src, 'r', errors='replace') as handle:

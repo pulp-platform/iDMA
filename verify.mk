@@ -13,14 +13,10 @@
 # Public verification
 # ---------------
 
-# License-free elaboration and simulation gates, run on verilator and slang only,
-# so fork PRs (which skip the proprietary EDA sims) still get a real signal.
-# Every top-level target below is one CI leg and reproduces a red check locally.
+# One CI leg per top-level target; each reproduces a red check locally.
 
 .PHONY: idma_verify_codegen idma_verify_backend idma_verify_shared idma_verify_multihead
-.PHONY: idma_verify_tb_shared idma_verify_sim_mxquant idma_verify_sim_mxroundtrip
-.PHONY: idma_verify_sim_transpose idma_verify_sim_transpose_midend
-.PHONY: idma_verify_sim_mxclear idma_verify_sim_mxneg
+.PHONY: idma_verify_tb_shared
 .PHONY: idma_verify_all idma_lint_params idma_slang_elab idma_slang_tb idma_slang_report
 .PHONY: idma_verify_clean
 
@@ -28,24 +24,11 @@
 IDMA_TOP           ?=
 # Backend variant a leg covers
 IDMA_VERIFY_ID     ?= rw_axi
-# DataWidth points elaborated on top of the jobs.json parameter sets. Every
-# jobs.json entry pins DataWidth=32, so nothing wider is elaborated otherwise.
-IDMA_ELAB_WIDTHS   ?= 32 64 512 1024
-
-# Compute-enabled configurations, as DataWidth:ComputeOps:ComputeTuning. No
-# jobs.json entry enables the compute datapath, so its generate branches are
-# unreachable otherwise. ComputeOps is {transpose, mxquant, mxdequant, mxfp16}.
-#   64:15:1   every sub-unit, ping-pong transpose banks
-#   512:15:1  the wide bus, where the pack/unpack loops are stressed
-#   64:8:0    transpose only, single bank; also the no-mxquant/no-mxdequant branches
-#   64:6:1    mx only, Fp16En=0; also the no-transpose branch
-IDMA_ELAB_COMPUTE  ?= 64:15:1 512:15:1 64:8:0 64:6:1
-
+IDMA_VERIFY_DB     := $(IDMA_ROOT)/src/db/verify.yml
 IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
 IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang
 IDMA_SLANG_VERSION ?= 11.0.0
-# pyslang ships the slang driver itself. Never call a site `slang` wrapper: one
-# turns a SIGSEGV into rc=0 with no output, which makes the gate vacuous.
+# pyslang ships the driver; a site `slang` wrapper can turn a SIGSEGV into rc=0
 SLANG              ?= $(UV) run --with pyslang==$(IDMA_SLANG_VERSION) python \
                       $(IDMA_UTIL_DIR)/slang_elab.py
 IDMA_SLANG_ARGS    := -Werror --error-limit 0
@@ -63,17 +46,17 @@ IDMA_SHARED_TOPS   := idma_desc64_synth idma_nd_midend_synth idma_mp_midend_synt
 # Out-of-tree multi-head variants; license-free but generated only on request
 IDMA_MULTIHEAD_IDS ?= 2r_axi_w_axi 2rw_axi
 
-# Generated register frontends, as RegVariant:module. They share a parameter and
-# port list, so tb_idma_reg_frontend - the only public concrete binding - elaborates
-# each of them; without this reg64_2d and reg64_1d are elaborated by nothing. Only
-# variant 0 is simulated; the testbench refuses to run on the other two.
+# RegVariant:module; without this reg64_2d and reg64_1d are elaborated by nothing
 IDMA_REG_VARIANTS  ?= 3:idma_reg32_3d 2:idma_reg64_2d 1:idma_reg64_1d
 
-# Testbench tops, asked of bender rather than listed here: it already owns the
-# file set, so a testbench added to Bender.yml is elaborated without editing this
-# file. Deferred (=), so bender only runs when a leg actually needs the list.
-IDMA_TB_SHARED_TOPS = $(shell BENDER=$(BENDER) $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py \
-                        --tb-tops $(patsubst -t%,--target %,$(IDMA_SLANG_TB_T)))
+# Testbench tops from bender. A file target, not $(shell): make discards a
+# $(shell) exit status, so a failure would empty the list and the leg pass.
+$(IDMA_VERIFY_DIR)/tb_tops.txt: $(IDMA_ROOT)/Bender.yml $(IDMA_VERIFY_DB)
+	mkdir -p $(@D)
+	BENDER=$(BENDER) $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --tb-tops \
+	  $(patsubst -t%,--target %,$(IDMA_SLANG_TB_T)) > $@.tmp
+	test -s $@.tmp
+	mv $@.tmp $@
 
 IDMA_SOURCE_GLOBS  := --source '$(IDMA_RTL_DIR)/*.sv' --source '$(IDMA_ROOT)/src/**/*.sv' \
                       --source '$(IDMA_ROOT)/test/**/*.sv'
@@ -82,8 +65,7 @@ IDMA_SOURCE_GLOBS  := --source '$(IDMA_RTL_DIR)/*.sv' --source '$(IDMA_ROOT)/src
 define idma_elab_cfg
 	mkdir -p $(IDMA_VERIFY_DIR)
 	$(PYTHON) $(IDMA_UTIL_DIR)/idma_params.py --top $1 \
-	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --widths "$(IDMA_ELAB_WIDTHS)" \
-	  --compute "$(IDMA_ELAB_COMPUTE)" \
+	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --verify-db $(IDMA_VERIFY_DB) \
 	  $(IDMA_SOURCE_GLOBS) > $(IDMA_VERIFY_DIR)/$1.cfg
 endef
 
@@ -101,9 +83,7 @@ $(IDMA_SLANG_DIR)/tb.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(
 	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) > $@
 
 
-# Verilator elaboration of IDMA_TOP over every jobs.json configuration and width
-# point. verilator rejects an unknown -G name; slang ignores it, which is why
-# idma_params.py checks the names against the module header itself.
+# slang ignores an unknown -G, so idma_params.py checks names against the header
 idma_lint_params: $(IDMA_VLT_DIR)/idma_verify.f
 	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
 	$(call idma_elab_cfg,$(IDMA_TOP))
@@ -152,12 +132,14 @@ idma_verify_shared: idma_lint_all
 	  $(MAKE) idma_slang_elab  IDMA_TOP=$$top; \
 	done
 
-idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f
+idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt
 	@set -e; for id in $(IDMA_FE_IDS); do \
 	  case " $(IDMA_REG_VARIANTS) " in *":idma_$$id "*) ;; \
 	    *) echo "error: no IDMA_REG_VARIANTS entry elaborates idma_$$id"; exit 1;; esac; \
 	done
-	set -e; for top in $(IDMA_TB_SHARED_TOPS); do \
+	@test -s $(IDMA_VERIFY_DIR)/tb_tops.txt || \
+	  { echo "error: no testbench tops; bender returned nothing"; exit 1; }
+	set -e; for top in $$(cat $(IDMA_VERIFY_DIR)/tb_tops.txt); do \
 	  echo "--- slang $$top ---"; \
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $$top \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
@@ -202,20 +184,13 @@ idma_verify_multihead:
 IDMA_VLT_SIM_T     := -t rtl -t idma_test -t simulation -t synth
 IDMA_VLT_MAKEFLAGS ?=
 
-# verilator --timing compiles to C++20 coroutines, which g++ 11 miscompiles: the
-# wide compute testbenches then SIGSEGV before time 0. Pick the newest available
-# g++ rather than whatever `g++` happens to be; ubuntu-24.04 defaults to 13.
-IDMA_VLT_CXX       ?= $(firstword $(foreach C,g++-14 g++-13 g++-13.2.0 g++-12 g++, \
-                        $(if $(shell command -v $C 2>/dev/null),$C)))
-IDMA_VLT_CXX_MAJOR := $(shell $(IDMA_VLT_CXX) -dumpfullversion -dumpversion 2>/dev/null | cut -d. -f1)
+# verilator --timing lowers to C++20 coroutines; g++ 11 miscompiles them.
+# Recursive on purpose: every reference is in a recipe, so a plain build never probes.
+IDMA_VLT_CXX        = $(shell for c in g++-14 g++-13 g++-13.2.0 g++-12 g++; do \
+                        command -v $$c >/dev/null 2>&1 && { echo $$c; break; }; done)
+IDMA_VLT_CXX_MAJOR  = $(shell $(IDMA_VLT_CXX) -dumpversion 2>/dev/null | cut -d. -f1)
 
-# Prepended, so a caller passing IDMA_VLT_MAKEFLAGS=-j4 adds to the toolchain
-# rather than silently replacing it
-IDMA_VLT_SIM       := VERILATOR="$(VERILATOR)" \
-                      IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) $(IDMA_VLT_MAKEFLAGS)" \
-                      $(PYTHON) $(IDMA_UTIL_DIR)/run_vlt_sim.py --dir $(IDMA_VLT_DIR)
-
-# Fail loudly here; the symptom otherwise is a SIGSEGV with an empty log
+# Fail here; the symptom otherwise is a SIGSEGV with an empty log
 .PHONY: idma_verify_toolchain
 idma_verify_toolchain:
 	@test -n "$(IDMA_VLT_CXX)" || { echo "error: no g++ found"; exit 1; }
@@ -224,8 +199,7 @@ idma_verify_toolchain:
 	  echo "       lowering needs g++ 12 or newer. Set IDMA_VLT_CXX=<g++-13 or newer>."; \
 	  exit 1; }
 
-IDMA_VERIFY_DB     := $(IDMA_ROOT)/src/db/verify.yml
-IDMA_VERIFY_RUN    := VERILATOR="$(VERILATOR)" \
+IDMA_VERIFY_RUN     = VERILATOR="$(VERILATOR)" \
                       IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) $(IDMA_VLT_MAKEFLAGS)" \
                       $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --vlt-dir $(IDMA_VLT_DIR)
 
@@ -233,38 +207,16 @@ $(IDMA_VLT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDM
 	mkdir -p $(IDMA_VLT_DIR)
 	$(BENDER) script verilator $(IDMA_VLT_SIM_T) --top $* > $@
 
-# verilator hands a .c file to the C++ driver, so the DPI goldens are compiled
-# here and linked in. idma_mxquant_dpi and idma_transpose_dpi both export
-# gm_load/gm_get and must never end up in the same binary.
+# idma_mxquant_dpi and idma_transpose_dpi both export gm_load/gm_get; never link both
 $(IDMA_VLT_DIR)/%_dpi.o: $(IDMA_ROOT)/test/%_dpi.c
 	mkdir -p $(IDMA_VLT_DIR)
 	$(CC) -c -O2 -fPIC $< -o $@
 
-idma_verify_sim_mxquant: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxquant.f \
-                         $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	$(IDMA_VERIFY_RUN) --suite mxquant
-
-idma_verify_sim_mxroundtrip: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxroundtrip.f \
-                             $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	$(IDMA_VERIFY_RUN) --suite mxroundtrip
-
-idma_verify_sim_transpose: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_otf_transpose.f \
-                           $(IDMA_VLT_DIR)/idma_transpose_dpi.o
-	$(IDMA_VERIFY_RUN) --suite transpose
-
-idma_verify_sim_transpose_midend: idma_verify_toolchain \
-                                  $(IDMA_VLT_DIR)/tb_idma_transpose_midend.f \
-                                  $(IDMA_VLT_DIR)/idma_transpose_dpi.o
-	$(IDMA_VERIFY_RUN) --suite transpose_midend
-
-# Negative tests: the run must exit non-zero AND name its guard. --assert is
-# load-bearing; without it both testbenches exit 0 and the leg cannot fail.
-idma_verify_sim_mxclear: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxclear.f
-	$(IDMA_VERIFY_RUN) --suite mxclear
-
-idma_verify_sim_mxneg: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxneg.f \
-                       $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	$(IDMA_VERIFY_RUN) --suite mxneg
+# One rule for every suite; the database names the top and the DPI object
+idma_verify_sim_%: idma_verify_toolchain
+	@p=$$($(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --prereqs $* --vlt-dir $(IDMA_VLT_DIR)) && \
+	  test -n "$$p" && $(MAKE) $$p
+	$(IDMA_VERIFY_RUN) --suite $*
 
 
 # ---------------
@@ -274,10 +226,8 @@ idma_verify_sim_mxneg: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxneg.f \
 IDMA_GEN_FILES := $(IDMA_RTL_ALL) $(IDMA_TB_ALL) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) \
                   $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
 
-# Not verification: jobs.json and the generated tree must still describe the same
-# design, and a second generation must be byte-identical. The zero-git-diff form
-# is deliberately not used; target/rtl is gitignored on source branches, so it
-# would pass unconditionally.
+# Not verification. No zero-git-diff form: target/rtl is gitignored on source
+# branches, so it would pass unconditionally.
 idma_verify_codegen:
 	$(MAKE) idma_hw_all
 	$(PYTHON) $(IDMA_UTIL_DIR)/check_jobs.py --ids "$(IDMA_BACKEND_IDS)" \
@@ -293,8 +243,7 @@ idma_verify_codegen:
 	md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen2.md5
 	diff -u $(IDMA_VERIFY_DIR)/gen1.md5 $(IDMA_VERIFY_DIR)/gen2.md5
 
-# Advisory only: -Wextra without -Werror, so findings do not fail the target and
-# a real compile error still does. Never add this to the required checks.
+# Advisory only; never add to the required checks
 idma_slang_report: $(IDMA_SLANG_DIR)/synth.f
 	mkdir -p $(IDMA_VERIFY_DIR)
 	: > $(IDMA_VERIFY_DIR)/slang_extra.log

@@ -15,6 +15,7 @@ the workflow, and needed a drift checker to notice when they disagreed.
   run_verify.py --emit-matrix suites    print the suite names as a CI matrix
   run_verify.py --list                  print every leg, one per line
   run_verify.py --tb-tops               print the testbench tops bender knows of
+  run_verify.py --prereqs mxneg         print the files that suite needs built
 
 Testbench tops are asked of bender rather than listed by hand: it already owns
 the file set, so a testbench added to Bender.yml is elaborated without touching
@@ -143,6 +144,8 @@ def main():
     par.add_argument('--suite')
     par.add_argument('--emit-matrix', choices=['suites'])
     par.add_argument('--list', action='store_true')
+    par.add_argument('--prereqs', metavar='SUITE',
+                     help='files the suite needs built, so make needs no per-suite rule')
     par.add_argument('--tb-tops', action='store_true',
                      help='testbench tops, from bender rather than a hand-kept list')
     par.add_argument('--bender', default=os.environ.get('BENDER', 'bender'))
@@ -156,6 +159,16 @@ def main():
 
     if args.emit_matrix == 'suites':
         print(json.dumps({'suite': sorted(db['suites'])}))
+        return 0
+    if args.prereqs:
+        if args.prereqs not in db['suites']:
+            print('error: no suite named {}'.format(args.prereqs), file=sys.stderr)
+            return 1
+        suite = db['suites'][args.prereqs]
+        needed = [os.path.join(args.vlt_dir, suite['top'] + '.f')]
+        if suite.get('dpi'):
+            needed.append(os.path.join(args.vlt_dir, suite['dpi'] + '.o'))
+        print(' '.join(needed))
         return 0
     if args.tb_tops:
         targets = []
