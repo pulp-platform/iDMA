@@ -7,7 +7,8 @@
 
 /// Single-channel AXI-to-AXI copy through the tightly-coupled `inst64` frontend.
 /// Proves the accelerator-bus programming sequence, that exactly one transfer is
-/// launched, and that the payload lands byte-exact without overrunning the destination.
+/// launched, that the payload lands byte-exact without overrunning the destination, and
+/// that the exported `dma_events_t` performance counters agree with the bus traffic.
 module tb_idma_inst64_axi_copy;
     import idma_inst64_tb_pkg::*;
 
@@ -24,6 +25,12 @@ module tb_idma_inst64_axi_copy;
     localparam logic [7:0]  Sentinel       = 8'h5A;
     localparam logic [7:0]  PatternStart   = 8'hA0;
 
+    // One burst per direction: the copy is 64 B aligned on both ends and a multiple of a
+    // full beat, so every data beat carries a full strobe.
+    localparam int unsigned    ExpDataBeats = CopyPadBytes / BytesPerBeat;
+    localparam axi_pkg::len_t  ExpAxLen     = axi_pkg::len_t'(ExpDataBeats - 1);
+    localparam axi_pkg::size_t ExpAxSize    = axi_pkg::size_t'($clog2(BytesPerBeat));
+
     localparam addr_t SrcAddr = 64'h8000_0000;
     localparam addr_t DstAddr = 64'h9000_0000;
 
@@ -32,12 +39,142 @@ module tb_idma_inst64_axi_copy;
     int unsigned axi_ar_beats = 0;
     int unsigned axi_aw_beats = 0;
 
+    //--------------------------------------
+    // DUT event cross-check
+    //--------------------------------------
+    // `events_o` is exported for downstream performance counters but nothing verified it.
+    // Every field is a zero-latency recode of the DUT's own top-level pins, so the TB
+    // rebuilds the expected value from those pins and compares it per cycle. This checks
+    // the recode (mapping, polarity, gating, width), not the bus traffic; the geometry
+    // anchors below are what keep it from passing on a run where nothing happened. The
+    // hand-counted AR/AW sniff stays the independent source of truth and is untouched.
+    //
+    // Deliberately not checked here: obi_wr_req/obi_rd_req (a_no_obi_traffic pins both
+    // sides to 0, so an equality proves nothing; needs a TCDM-window TB with an OBI
+    // read/write mix) and the per-channel index in gen_events (NumChannels == 1).
+    //
+    // Polarity note: aw_stall/ar_stall are valid && !ready, but idma_inst64_events
+    // overrides its own w_stall/r_stall at lines 95/96, so w_stall is a W-side bubble
+    // (w_ready && !w_valid) and r_stall is !r_ready && r_valid; the earlier assignments
+    // are dead code. Measured gap: none of the four stall fields ever asserts here, since
+    // the sim memories neither backpressure nor bubble. Their equality still catches a
+    // polarity flip or a spurious assert, but a stuck-at-0 stall would pass; that needs a
+    // ready-throttling harness, not a weaker check.
+    typedef enum int unsigned {
+        EvAwValid, EvAwReady, EvAwDone, EvAwStall, EvAwLen, EvAwSize,
+        EvArValid, EvArReady, EvArDone, EvArStall, EvArLen, EvArSize,
+        EvRValid,  EvRReady,  EvRDone,  EvRBw,     EvRStall,
+        EvWValid,  EvWReady,  EvWDone,  EvWStall,  EvBytes,
+        EvBValid,  EvBReady,  EvBDone,  EvBusy,
+        EvNumFields
+    } ev_field_e;
+
+    localparam int unsigned NumEvFields = EvNumFields;
+
+    // Aliases of the very nets the sniff above reads; they only keep the table readable.
+    dma_events_t ev;
+    axi_req_t    bus_req;
+    axi_resp_t   bus_res;
+    assign ev      = harness.events[0];
+    assign bus_req = harness.axi_req[0];
+    assign bus_res = harness.axi_res[0];
+
+    logic [NumEvFields-1:0] ev_field_ok;
+
+    // len/size are compared in their full `handshake ? pin : '0` form every cycle, so a
+    // stale value leaking between bursts fails instead of hiding in the idle half.
+    always_comb begin : proc_ev_field_ok
+        automatic logic aw_hs = bus_req.aw_valid && bus_res.aw_ready;
+        automatic logic ar_hs = bus_req.ar_valid && bus_res.ar_ready;
+        automatic logic w_hs  = bus_req.w_valid  && bus_res.w_ready;
+
+        ev_field_ok[EvAwValid] = ev.aw_valid === bus_req.aw_valid;
+        ev_field_ok[EvAwReady] = ev.aw_ready === bus_res.aw_ready;
+        ev_field_ok[EvAwDone ] = ev.aw_done  === aw_hs;
+        ev_field_ok[EvAwStall] = ev.aw_stall === (bus_req.aw_valid && !bus_res.aw_ready);
+        ev_field_ok[EvAwLen  ] = ev.aw_len   === (aw_hs ? bus_req.aw.len  : 8'd0);
+        ev_field_ok[EvAwSize ] = ev.aw_size  === (aw_hs ? bus_req.aw.size : 3'd0);
+
+        ev_field_ok[EvArValid] = ev.ar_valid === bus_req.ar_valid;
+        ev_field_ok[EvArReady] = ev.ar_ready === bus_res.ar_ready;
+        ev_field_ok[EvArDone ] = ev.ar_done  === ar_hs;
+        ev_field_ok[EvArStall] = ev.ar_stall === (bus_req.ar_valid && !bus_res.ar_ready);
+        ev_field_ok[EvArLen  ] = ev.ar_len   === (ar_hs ? bus_req.ar.len  : 8'd0);
+        ev_field_ok[EvArSize ] = ev.ar_size  === (ar_hs ? bus_req.ar.size : 3'd0);
+
+        ev_field_ok[EvRValid ] = ev.r_valid  === bus_res.r_valid;
+        ev_field_ok[EvRReady ] = ev.r_ready  === bus_req.r_ready;
+        ev_field_ok[EvRDone  ] = ev.r_done   === (bus_req.r_ready && bus_res.r_valid);
+        // r_bw duplicates r_done in the RTL; compare it to the pins, never to ev.r_done.
+        ev_field_ok[EvRBw    ] = ev.r_bw     === (bus_req.r_ready && bus_res.r_valid);
+        ev_field_ok[EvRStall ] = ev.r_stall  === (!bus_req.r_ready && bus_res.r_valid);
+
+        ev_field_ok[EvWValid ] = ev.w_valid  === bus_req.w_valid;
+        ev_field_ok[EvWReady ] = ev.w_ready  === bus_res.w_ready;
+        ev_field_ok[EvWDone  ] = ev.w_done   === w_hs;
+        ev_field_ok[EvWStall ] = ev.w_stall  === (bus_res.w_ready && !bus_req.w_valid);
+        ev_field_ok[EvBytes  ] = ev.num_bytes_written ===
+                                 (w_hs ? 32'($countones(bus_req.w.strb)) : 32'd0);
+
+        ev_field_ok[EvBValid ] = ev.b_valid  === bus_res.b_valid;
+        ev_field_ok[EvBReady ] = ev.b_ready  === bus_req.b_ready;
+        ev_field_ok[EvBDone  ] = ev.b_done   === (bus_req.b_ready && bus_res.b_valid);
+
+        ev_field_ok[EvBusy   ] = ev.dma_busy === harness.busy[0];
+    end
+
+    // One assertion per field so a failure names it. Both operands are combinational from
+    // the same pins and are sampled in the same preponed region, so the offset is zero.
+    for (genvar f = 0; f < NumEvFields; f++) begin : gen_ev_field_check
+        localparam ev_field_e Field = ev_field_e'(f);
+        a_ev_field : assert property (
+            @(posedge harness.clk) disable iff (!harness.rst_n) ev_field_ok[f]
+        ) else $fatal(1, "events.%s disagrees with the AXI pins", Field.name());
+    end
+
+    // events_o has no reset, so an X on both sides would make `===` match vacuously.
+    // This is a separate failure, never a reason to skip the comparison.
+    a_ev_pins_known : assert property (
+        @(posedge harness.clk) disable iff (!harness.rst_n)
+        !$isunknown({bus_req.aw_valid, bus_req.ar_valid, bus_req.w_valid, bus_req.r_ready,
+                     bus_req.b_ready,  bus_res.aw_ready, bus_res.ar_ready, bus_res.w_ready,
+                     bus_res.r_valid,  bus_res.b_valid,  harness.busy[0]})
+    ) else $fatal(1, "AXI handshake pin is X: the events comparison would match vacuously");
+
+    int unsigned ev_ar_beats      = 0;
+    int unsigned ev_aw_beats      = 0;
+    int unsigned ev_r_beats       = 0;
+    int unsigned ev_r_bw_beats    = 0;
+    int unsigned ev_w_beats       = 0;
+    int unsigned ev_b_beats       = 0;
+    int unsigned ev_busy_cycles   = 0;
+    int unsigned ev_bytes_written = 0;
+    axi_pkg::len_t  ev_ar_len_seen,  ev_aw_len_seen;
+    axi_pkg::size_t ev_ar_size_seen, ev_aw_size_seen;
+
     // Count AXI address handshakes; a green OBI-never-asserted check is only meaningful
-    // if the transfer actually went somewhere.
+    // if the transfer actually went somewhere. The DUT-side event totals accumulate in the
+    // same process so both views are read in the same region of the same tick.
     always_ff @(posedge harness.clk) begin : proc_count_axi
         if (harness.rst_n) begin
             if (harness.axi_req[0].ar_valid && harness.axi_res[0].ar_ready) axi_ar_beats++;
             if (harness.axi_req[0].aw_valid && harness.axi_res[0].aw_ready) axi_aw_beats++;
+            if (ev.ar_done) begin
+                ev_ar_beats++;
+                ev_ar_len_seen  = ev.ar_len;
+                ev_ar_size_seen = ev.ar_size;
+            end
+            if (ev.aw_done) begin
+                ev_aw_beats++;
+                ev_aw_len_seen  = ev.aw_len;
+                ev_aw_size_seen = ev.aw_size;
+            end
+            if (ev.r_done)   ev_r_beats++;
+            if (ev.r_bw)     ev_r_bw_beats++;
+            if (ev.w_done)   ev_w_beats++;
+            if (ev.b_done)   ev_b_beats++;
+            if (ev.dma_busy) ev_busy_cycles++;
+            ev_bytes_written += ev.num_bytes_written;
         end
     end
 
@@ -151,9 +288,43 @@ module tb_idma_inst64_axi_copy;
                    harness.drv_if.rsp_pending());
         end
 
+        // Event totals: first against the independent sniff, then against the transfer
+        // geometry. The geometry anchors are what make the per-cycle equality above
+        // non-vacuous; without them a run that moved nothing would pass on 0 == 0.
+        if (ev_ar_beats != axi_ar_beats || ev_aw_beats != axi_aw_beats) begin
+            $fatal(1, "events ar/aw done (%0d/%0d) disagree with the bus sniff (%0d/%0d)",
+                   ev_ar_beats, ev_aw_beats, axi_ar_beats, axi_aw_beats);
+        end
+        if (ev_b_beats != axi_aw_beats) begin
+            $fatal(1, "events counted %0d B responses for %0d AW bursts",
+                   ev_b_beats, axi_aw_beats);
+        end
+        if (ev_r_beats != ExpDataBeats || ev_r_bw_beats != ExpDataBeats ||
+            ev_w_beats != ExpDataBeats) begin
+            $fatal(1, "events data beats r=%0d r_bw=%0d w=%0d, expected %0d each",
+                   ev_r_beats, ev_r_bw_beats, ev_w_beats, ExpDataBeats);
+        end
+        if (ev_bytes_written != bytes_checked) begin
+            $fatal(1, "events reported %0d B written, TB verified %0d B",
+                   ev_bytes_written, bytes_checked);
+        end
+        if (ev_ar_len_seen !== ExpAxLen || ev_aw_len_seen !== ExpAxLen ||
+            ev_ar_size_seen !== ExpAxSize || ev_aw_size_seen !== ExpAxSize) begin
+            $fatal(1, "events ax len/size ar=%0d/%0d aw=%0d/%0d, expected %0d/%0d",
+                   ev_ar_len_seen, ev_ar_size_seen, ev_aw_len_seen, ev_aw_size_seen,
+                   ExpAxLen, ExpAxSize);
+        end
+        if (ev_busy_cycles == 0) $fatal(1, "events never reported the DMA busy");
+
         if (errors != 0) $fatal(1, "TEST FAILED: %0d errors", errors);
-        $display("[TB] TEST PASSED: %0d B copied, ar=%0d aw=%0d beats",
-                 bytes_checked, axi_ar_beats, axi_aw_beats);
+        $display("[TB] TEST PASSED: %0d B copied, ar=%0d aw=%0d beats", bytes_checked,
+                 axi_ar_beats, axi_aw_beats);
+        $display({"[TB] events cross-checked vs bus pins: %0d fields every cycle; totals ",
+                  "ar=%0d aw=%0d b=%0d r=%0d r_bw=%0d w=%0d beats, len=%0d size=%0d, ",
+                  "%0d B written, busy %0d cycles"},
+                 NumEvFields, ev_ar_beats, ev_aw_beats, ev_b_beats, ev_r_beats,
+                 ev_r_bw_beats, ev_w_beats, ev_aw_len_seen, ev_aw_size_seen,
+                 ev_bytes_written, ev_busy_cycles);
         $finish;
     end
 
