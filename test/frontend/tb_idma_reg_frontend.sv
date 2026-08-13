@@ -6,6 +6,8 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 // Self-checking testbench for the iDMA register frontend (idma_reg32_3d, apb4-flat).
+// `RegVariant` also binds idma_reg64_2d and idma_reg64_1d for elaboration only; they
+// have no stimulus here, and are covered by nothing else.
 // Drives the APB config slave with the standard apb_test::apb_driver against a
 // controllable backend stub and checks the non-blocking next_id launch contract:
 // the config read completes promptly (even under backend backpressure) and the
@@ -20,7 +22,11 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // number of streams the elaborated DUT exposes (checked at instantiation)
   parameter int unsigned NumStreams = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
-  parameter int unsigned NumRegs    = 32'd1
+  parameter int unsigned NumRegs    = 32'd1,
+  // generated frontend under test: 0 = idma_reg32_3d, 1 = idma_reg64_2d, 2 = idma_reg64_1d.
+  // Only variant 0 is simulated; 1 and 2 are elaboration-only (their register maps differ
+  // and reg64_1d emits a flat 1D request), and the stimulus refuses to run on them.
+  parameter int unsigned RegVariant = 32'd0
 );
 
   // --------------------------------------------------------------------------
@@ -33,11 +39,13 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam int unsigned CfgDataWidth   = 32'd32;
   localparam int unsigned CfgStrbWidth   = CfgDataWidth / 32'd8;
   localparam int unsigned IdCounterWidth = 32'd32;
-  // idma data-path (reg32_3d: 32-bit data, 3 ND dims)
-  localparam int unsigned AddrWidth      = 32'd32;
-  localparam int unsigned DataWidth      = 32'd32;
-  localparam int unsigned NumDim         = 32'd3;
-  localparam int unsigned RepWidth       = 32'd32;
+  // idma data-path: reg32_3d is 32-bit over 3 ND dims, both reg64 variants are 64-bit.
+  // NumDim shapes the ND request type; reg64_1d takes the flat idma_req_t instead, so
+  // its ND type is unused and the 2-dim shape is kept only to keep the macro legal.
+  localparam int unsigned AddrWidth      = (RegVariant == 32'd0) ? 32'd32 : 32'd64;
+  localparam int unsigned DataWidth      = AddrWidth;
+  localparam int unsigned NumDim         = (RegVariant == 32'd0) ? 32'd3 : 32'd2;
+  localparam int unsigned RepWidth       = AddrWidth;
   // apb_driver framing: the blocking driver.read() spans SETUP + first-ACCESS-check +
   // trailing edge before returning, so a same-cycle (non-blocking) read takes this many
   // config clocks end-to-end; each extra ACCESS wait state adds one more clock.
@@ -50,7 +58,8 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // config-clock cycles is a hang (the non-blocking read completes immediately).
   localparam int unsigned DeadlockCycles = 32'd2000;
 
-  // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4
+  // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4; the reg64
+  // variants have their own map and are elaboration-only, so it is not modelled here
   localparam logic [31:0] REG_CONF       = 32'h0000_0000;
   localparam logic [31:0] REG_STATUS0    = 32'h0000_0004;
   localparam logic [31:0] REG_NEXT_ID0   = 32'h0000_0044;
@@ -179,27 +188,86 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // --------------------------------------------------------------------------
   // DUT
   // --------------------------------------------------------------------------
-  idma_reg32_3d #(
-    .NumRegs        ( NumRegs        ),
-    .NumStreams     ( NumStreams     ),
-    .IdCounterWidth ( IdCounterWidth ),
-    .apb_req_t      ( cfg_apb_req_t  ),
-    .apb_rsp_t      ( cfg_apb_rsp_t  ),
-    .dma_req_t      ( idma_nd_req_t  )
-  ) i_dut (
-    .clk_i          ( clk         ),
-    .rst_ni         ( rst_n       ),
-    .dma_ctrl_req_i ( apb_req     ),
-    .dma_ctrl_rsp_o ( apb_rsp     ),
-    .dma_req_o      ( dma_req     ),
-    .req_valid_o    ( req_valid   ),
-    .req_ready_i    ( req_ready   ),
-    .next_id_i      ( next_id     ),
-    .stream_idx_o   ( stream_idx  ),
-    .done_id_i      ( done_id     ),
-    .busy_i         ( busy        ),
-    .midend_busy_i  ( midend_busy )
-  );
+  // All three generated frontends share the parameter and port list; only the module
+  // name and the emitted request type differ. reg64_1d (NumDim=1) emits a flat
+  // idma_req_t, which is widened back to the ND shape the stimulus works on.
+  if (RegVariant == 32'd0) begin : gen_reg32_3d
+    idma_reg32_3d #(
+      .NumRegs        ( NumRegs        ),
+      .NumStreams     ( NumStreams     ),
+      .IdCounterWidth ( IdCounterWidth ),
+      .apb_req_t      ( cfg_apb_req_t  ),
+      .apb_rsp_t      ( cfg_apb_rsp_t  ),
+      .dma_req_t      ( idma_nd_req_t  )
+    ) i_dut (
+      .clk_i          ( clk         ),
+      .rst_ni         ( rst_n       ),
+      .dma_ctrl_req_i ( apb_req     ),
+      .dma_ctrl_rsp_o ( apb_rsp     ),
+      .dma_req_o      ( dma_req     ),
+      .req_valid_o    ( req_valid   ),
+      .req_ready_i    ( req_ready   ),
+      .next_id_i      ( next_id     ),
+      .stream_idx_o   ( stream_idx  ),
+      .done_id_i      ( done_id     ),
+      .busy_i         ( busy        ),
+      .midend_busy_i  ( midend_busy )
+    );
+  end else if (RegVariant == 32'd1) begin : gen_reg64_2d
+    idma_reg64_2d #(
+      .NumRegs        ( NumRegs        ),
+      .NumStreams     ( NumStreams     ),
+      .IdCounterWidth ( IdCounterWidth ),
+      .apb_req_t      ( cfg_apb_req_t  ),
+      .apb_rsp_t      ( cfg_apb_rsp_t  ),
+      .dma_req_t      ( idma_nd_req_t  )
+    ) i_dut (
+      .clk_i          ( clk         ),
+      .rst_ni         ( rst_n       ),
+      .dma_ctrl_req_i ( apb_req     ),
+      .dma_ctrl_rsp_o ( apb_rsp     ),
+      .dma_req_o      ( dma_req     ),
+      .req_valid_o    ( req_valid   ),
+      .req_ready_i    ( req_ready   ),
+      .next_id_i      ( next_id     ),
+      .stream_idx_o   ( stream_idx  ),
+      .done_id_i      ( done_id     ),
+      .busy_i         ( busy        ),
+      .midend_busy_i  ( midend_busy )
+    );
+  end else if (RegVariant == 32'd2) begin : gen_reg64_1d
+    idma_req_t dut_req_1d;
+
+    idma_reg64_1d #(
+      .NumRegs        ( NumRegs        ),
+      .NumStreams     ( NumStreams     ),
+      .IdCounterWidth ( IdCounterWidth ),
+      .apb_req_t      ( cfg_apb_req_t  ),
+      .apb_rsp_t      ( cfg_apb_rsp_t  ),
+      .dma_req_t      ( idma_req_t     )
+    ) i_dut (
+      .clk_i          ( clk         ),
+      .rst_ni         ( rst_n       ),
+      .dma_ctrl_req_i ( apb_req     ),
+      .dma_ctrl_rsp_o ( apb_rsp     ),
+      .dma_req_o      ( dut_req_1d  ),
+      .req_valid_o    ( req_valid   ),
+      .req_ready_i    ( req_ready   ),
+      .next_id_i      ( next_id     ),
+      .stream_idx_o   ( stream_idx  ),
+      .done_id_i      ( done_id     ),
+      .busy_i         ( busy        ),
+      .midend_busy_i  ( midend_busy )
+    );
+
+    always_comb begin : proc_widen_1d_req
+      dma_req           = '0;
+      dma_req.burst_req = dut_req_1d;
+    end
+  end else begin : gen_bad_variant
+    // an out-of-range RegVariant must not silently re-elaborate the last variant
+    $error("RegVariant %0d is not a generated register frontend", RegVariant);
+  end
 
   // --------------------------------------------------------------------------
   // Backend stub. `req_ready` is directly controllable by the tests. On each
@@ -418,6 +486,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   int unsigned rcyc;                     // last read's ACCESS-phase cycle count
 
   initial begin : test
+    // the register map and request layout below model reg32_3d only
+    if (RegVariant != 32'd0)
+      $fatal(1, "[TB] RegVariant %0d is elaboration-only, it has no stimulus", RegVariant);
     errors = 0;
     checks = 0;
     req_ready = 1'b1;

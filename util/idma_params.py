@@ -29,6 +29,36 @@ import sys
 # the directed matrix.
 DEFAULT_WIDTHS = [32, 64, 512, 1024]
 
+# Parameters a compute-enabled configuration sets. jobs.json never enables the
+# compute datapath, so its generate branches are unreachable without this sweep.
+COMPUTE_PARAMS = ('EnableCompute', 'ComputeOps', 'ComputeTuning')
+
+
+def packed_struct_fields(typename, sources):
+    """Return the field names of packed struct *typename*, MSB field first."""
+    decl = re.compile(r'typedef\s+struct\s+packed\s*\{([^{}]*)\}\s*' +
+                      re.escape(typename) + r'\s*;', re.S)
+    for path in sources:
+        try:
+            with open(path, 'r', errors='replace') as handle:
+                text = handle.read()
+        except OSError:
+            continue
+        match = decl.search(text)
+        if not match:
+            continue
+        fields = []
+        for line in match.group(1).splitlines():
+            line = re.sub(r'//.*', '', line).strip()
+            if not line.startswith('logic'):
+                continue
+            for name in line[len('logic'):].rstrip(';').split(','):
+                name = name.strip()
+                if name:
+                    fields.append(name)
+        return fields
+    return []
+
 
 def module_parameters(top, sources):
     """Return the parameter names declared in the header of module *top*."""
@@ -75,6 +105,9 @@ def main():
                      help='glob of SystemVerilog sources to search for the module header')
     par.add_argument('--widths', default=' '.join(str(w) for w in DEFAULT_WIDTHS),
                      help='space-separated DataWidth sweep; empty disables the sweep')
+    par.add_argument('--compute', default='', metavar='WIDTH:OPS:TUNING',
+                     help='space-separated compute-enabled configurations; empty '
+                          'disables the sweep. Skipped for tops without the parameters')
     args = par.parse_args()
 
     patterns = args.source or ['target/rtl/*.sv', 'src/**/*.sv', 'test/**/*.sv']
@@ -122,6 +155,69 @@ def main():
                     continue
                 seen.add(flags)
                 lines.append('dw{} {}'.format(width, flags))
+
+    computes = [c for c in args.compute.split() if c]
+    if computes:
+        have = [p for p in COMPUTE_PARAMS if p in declared]
+        if have and len(have) != len(COMPUTE_PARAMS):
+            raise SystemExit('error: module {} declares {} but not {}; the compute sweep '
+                             'would silently not apply'.format(
+                                 args.top, ', '.join(have),
+                                 ', '.join(p for p in COMPUTE_PARAMS if p not in declared)))
+        if not have:
+            print('note: {} has no compute parameters; compute sweep not applicable'.format(
+                args.top), file=sys.stderr)
+        else:
+            ops_fields = packed_struct_fields('compute_enable_t', sources)
+            tuning_fields = packed_struct_fields('compute_tuning_t', sources)
+            if not ops_fields or not tuning_fields:
+                raise SystemExit('error: cannot read compute_enable_t/compute_tuning_t; '
+                                 'the compute sweep cannot be validated')
+            # Fields are declared MSB first, and mxfp16 only gates the FP16 paths of
+            # the MX ops, so it enables no datapath on its own.
+            real_ops = [f for f in ops_fields if f != 'mxfp16']
+            real_mask = 0
+            for pos, name in enumerate(reversed(ops_fields)):
+                if name in real_ops:
+                    real_mask |= 1 << pos
+            for spec in computes:
+                fields = spec.split(':')
+                if len(fields) != 3:
+                    raise SystemExit('error: --compute entry {} is not '
+                                     'WIDTH:OPS:TUNING'.format(spec))
+                width, ops, tuning = fields
+                for name, value in (('WIDTH', width), ('OPS', ops), ('TUNING', tuning)):
+                    if not value.isdigit():
+                        raise SystemExit('error: --compute entry {}: {} is not a '
+                                         'non-negative integer'.format(spec, name))
+                if int(width) <= 0:
+                    raise SystemExit('error: --compute entry {}: WIDTH must be '
+                                     'positive'.format(spec))
+                if int(ops) >= 1 << len(ops_fields):
+                    raise SystemExit('error: --compute entry {}: OPS {} does not fit '
+                                     'compute_enable_t ({} bits: {})'.format(
+                                         spec, ops, len(ops_fields), ', '.join(ops_fields)))
+                if int(tuning) >= 1 << len(tuning_fields):
+                    raise SystemExit('error: --compute entry {}: TUNING {} does not fit '
+                                     'compute_tuning_t ({} bits: {})'.format(
+                                         spec, tuning, len(tuning_fields),
+                                         ', '.join(tuning_fields)))
+                if not int(ops) & real_mask:
+                    raise SystemExit('error: --compute entry {}: OPS {} enables no compute '
+                                     'op ({}), so the datapath is never instantiated and '
+                                     'the configuration elaborates nothing'.format(
+                                         spec, ops, ', '.join(real_ops)))
+                cfg = dict(base)
+                if 'DataWidth' in declared:
+                    cfg['DataWidth'] = width
+                cfg['EnableCompute'] = 1
+                cfg['ComputeOps'] = ops
+                cfg['ComputeTuning'] = tuning
+                flags = ' '.join('-G{}={}'.format(k, v) for k, v in cfg.items())
+                if flags in seen:
+                    continue
+                seen.add(flags)
+                lines.append('compute{}_ops{}_t{} {}'.format(width, ops, tuning, flags))
 
     print('\n'.join(lines))
     return 0

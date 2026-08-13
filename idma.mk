@@ -611,6 +611,16 @@ IDMA_VLT_ARGS  := --cc \
 IDMA_VLT_TOP     ?=
 IDMA_VLT_PARAMS  ?=
 
+# Warning classes measured at 0 occurrences over all 12 synth tops, so they gate.
+# Not promoted, with the measurement: UNOPTFLAT (31, includes the known
+# idma_nd_midend stage_done loop) and PINMISSING (12, all in axi_stream and
+# common_cells, none iDMA-owned).
+IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT
+# The unroll budget matches util/run_vlt_sim.py; without it verilator 5.020 reports
+# BLKLOOPINIT on the compute pack/unpack loops at DataWidth >= 256.
+IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
+                      --unroll-count 4096 --unroll-stmts 200000
+
 .PRECIOUS: $(IDMA_VLT_DIR)/%_elab.log
 
 $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
@@ -622,14 +632,22 @@ $(IDMA_VLT_DIR)/%_elab.log: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
 
-# inst64 frontend elaboration gate: bind the snitch_cluster-gated idma_inst64_top
-# to concrete types (test/idma_inst64_lint.sv) and verilator --lint-only it, so
-# public CI catches frontend port/param/elaboration errors. Run after idma_hw_all.
+# inst64 frontend elaboration gate: verilator --lint-only over tb_idma_inst64_axi_copy,
+# the only public concrete binding of the snitch_cluster-gated idma_inst64_top. -t test
+# adds obi_sim_mem; --top-module is load-bearing, it trims the flat filelist to the
+# reachable cone. Run after idma_hw_all. slang covers the same top via
+# IDMA_TB_SHARED_TOPS.
+IDMA_INST64_TB   := tb_idma_inst64_axi_copy
+IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
+                    -t snitch_cluster
+
 .PHONY: idma_lint_inst64
 idma_lint_inst64:
 	mkdir -p $(IDMA_VLT_DIR)
-	$(BENDER) script verilator -t rtl -t snitch_cluster -t lint > $(IDMA_VLT_DIR)/idma_inst64_lint.f
-	$(VERILATOR) --lint-only -Wno-fatal --timing -f $(IDMA_VLT_DIR)/idma_inst64_lint.f --top-module idma_inst64_lint
+	$(BENDER) script verilator $(IDMA_INST64_T) --top $(IDMA_INST64_TB) \
+	  > $(IDMA_VLT_DIR)/idma_inst64_tb.f
+	$(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_inst64_tb.f \
+	  --top-module $(IDMA_INST64_TB)
 
 # Synthesis-wrapper elaboration gate: verilator elaborates every synth top so a
 # port, parameter or connectivity break is caught without the proprietary EDA
@@ -685,6 +703,15 @@ IDMA_VERIFY_ID     ?= rw_axi
 # jobs.json entry pins DataWidth=32, so nothing wider is elaborated otherwise.
 IDMA_ELAB_WIDTHS   ?= 32 64 512 1024
 
+# Compute-enabled configurations, as DataWidth:ComputeOps:ComputeTuning. No
+# jobs.json entry enables the compute datapath, so its generate branches are
+# unreachable otherwise. ComputeOps is {transpose, mxquant, mxdequant, mxfp16}.
+#   64:15:1   every sub-unit, ping-pong transpose banks
+#   512:15:1  the wide bus, where the pack/unpack loops are stressed
+#   64:8:0    transpose only, single bank; also the no-mxquant/no-mxdequant branches
+#   64:6:1    mx only, Fp16En=0; also the no-transpose branch
+IDMA_ELAB_COMPUTE  ?= 64:15:1 512:15:1 64:8:0 64:6:1
+
 IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
 IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang
 IDMA_SLANG_VERSION ?= 11.0.0
@@ -700,13 +727,6 @@ IDMA_SLANG_SYNTH_T := -t rtl -t synth
 IDMA_SLANG_TB_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                       -t snitch_cluster -t asic
 
-# Warning classes measured at 0 occurrences over all 12 synth tops, so they gate.
-# Not promoted, with the measurement: UNOPTFLAT (31, includes the known
-# idma_nd_midend stage_done loop) and PINMISSING (12, all in axi_stream and
-# common_cells, none iDMA-owned).
-IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT
-IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR)
-
 # Non-backend synthesis tops, elaborated with their own jobs.json parameters
 IDMA_SHARED_TOPS   := idma_desc64_synth idma_nd_midend_synth idma_mp_midend_synth \
                       idma_rt_midend_synth
@@ -714,14 +734,20 @@ IDMA_SHARED_TOPS   := idma_desc64_synth idma_nd_midend_synth idma_mp_midend_synt
 # Out-of-tree multi-head variants; license-free but generated only on request
 IDMA_MULTIHEAD_IDS ?= 2r_axi_w_axi 2rw_axi
 
+# Generated register frontends, as RegVariant:module. They share a parameter and
+# port list, so tb_idma_reg_frontend - the only public concrete binding - elaborates
+# each of them; without this reg64_2d and reg64_1d are elaborated by nothing. Only
+# variant 0 is simulated; the testbench refuses to run on the other two.
+IDMA_REG_VARIANTS  ?= 0:idma_reg32_3d 1:idma_reg64_2d 2:idma_reg64_1d
+
 # Testbench tops that are not per-backend. tb_idma_backend_* are covered by the
-# matching idma_verify_backend leg.
-IDMA_TB_SHARED_TOPS := tb_idma_desc64_top tb_idma_desc64_bench tb_idma_reg_frontend \
+# matching idma_verify_backend leg; tb_idma_reg_frontend by IDMA_REG_VARIANTS.
+IDMA_TB_SHARED_TOPS := tb_idma_desc64_top tb_idma_desc64_bench \
                        tb_idma_nd_midend tb_idma_nd_midend_b2b tb_idma_rt_midend \
                        tb_idma_transpose_midend tb_idma_otf_transpose \
                        tb_idma_transpose_nd tb_idma_transpose_b2b tb_idma_mxquant \
                        tb_idma_mxroundtrip tb_idma_mxrand tb_idma_mxneg \
-                       tb_idma_mxperf tb_idma_mxclear
+                       tb_idma_mxperf tb_idma_mxclear $(IDMA_INST64_TB)
 
 IDMA_SOURCE_GLOBS  := --source '$(IDMA_RTL_DIR)/*.sv' --source '$(IDMA_ROOT)/src/**/*.sv' \
                       --source '$(IDMA_ROOT)/test/**/*.sv'
@@ -735,6 +761,7 @@ define idma_elab_cfg
 	mkdir -p $(IDMA_VERIFY_DIR)
 	$(PYTHON) $(IDMA_UTIL_DIR)/idma_params.py --top $1 \
 	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --widths "$(IDMA_ELAB_WIDTHS)" \
+	  --compute "$(IDMA_ELAB_COMPUTE)" \
 	  $(IDMA_SOURCE_GLOBS) > $(IDMA_VERIFY_DIR)/$1.cfg
 endef
 
@@ -804,9 +831,19 @@ idma_verify_shared: idma_lint_all
 	done
 
 idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f
+	@set -e; for id in $(IDMA_FE_IDS); do \
+	  case " $(IDMA_REG_VARIANTS) " in *":idma_$$id "*) ;; \
+	    *) echo "error: no IDMA_REG_VARIANTS entry elaborates idma_$$id"; exit 1;; esac; \
+	done
 	set -e; for top in $(IDMA_TB_SHARED_TOPS); do \
 	  echo "--- slang $$top ---"; \
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $$top \
+	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
+	done
+	set -e; for entry in $(IDMA_REG_VARIANTS); do \
+	  IFS=: read -r v mod <<< "$$entry"; \
+	  echo "--- slang tb_idma_reg_frontend [$$mod] ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top tb_idma_reg_frontend -GRegVariant=$$v \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done
 

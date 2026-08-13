@@ -10,12 +10,21 @@
 # sims on the GitLab mirror - get a real gate, and the licensed run becomes a
 # confirmation rather than the only signal.
 #
+# Two tiers: elaboration first, simulation behind it. elab-backend, elab-shared-tops
+# and elab-tb-shared run in parallel and every simulation job `needs:` all three, so a
+# port, parameter or connectivity break fails in seconds instead of burning every
+# simulation runner. `fail-fast: false` stays on the matrices, so the elaboration tier
+# still reports every leg. elab-multihead, codegen-consistency and report-slang-extra
+# are parallel peers, not part of the barrier: they gate nothing the simulations use.
+#
 # House rules for this file, enforced in review:
 #   - no `|| true`, no `continue-on-error` on any step of a gating job;
 #   - no negated grep as a pass criterion; every simulation leg checks exit
 #     status AND a non-empty log AND a positive token (util/run_vlt_sim.py);
 #   - no numeric warning-count thresholds;
-#   - every excluded top or configuration is named below with its reason.
+#   - every excluded top or configuration is named below with its reason;
+#   - `needs:` orders jobs, it does not share workspaces; every job keeps its own
+#     `Generate RTL` step.
 #
 # NAMED EXCLUSIONS - dropped coverage, not silent skips:
 #   tb_idma_nd_midend_b2b   hangs ([B2B] timeout); latent reset/LFSR race
@@ -92,8 +101,9 @@ jobs:
         name: Elaborate ${{ matrix.id }}
         run: uv run --locked make idma_verify_backend IDMA_VERIFY_ID=${{ matrix.id }}
 
-  # The four non-backend synthesis tops with their own jobs.json parameters,
-  # plus PR #184's default-parameter elaboration of all 12 tops and inst64.
+  # The four non-backend synthesis tops with their own jobs.json parameters, plus
+  # the default-parameter elaboration of all 12 tops and of the inst64 testbench,
+  # the only public concrete binding of idma_inst64_top.
   elab-shared-tops:
     runs-on: ubuntu-24.04
     steps:
@@ -112,9 +122,9 @@ jobs:
         name: Elaborate the shared synthesis tops
         run: uv run --locked make idma_verify_shared
 
-  # Testbench tops that are not per-backend. Verilator cannot parse the
-  # verification stack at all, so slang is the only public tool for this half
-  # of the repository.
+  # Testbench tops that are not per-backend, including the three generated register
+  # frontends through tb_idma_reg_frontend. Verilator cannot parse the verification
+  # stack at all, so slang is the only public tool for this half of the repository.
   elab-tb-shared:
     runs-on: ubuntu-24.04
     steps:
@@ -150,6 +160,7 @@ jobs:
   # Real simulation, byte-exact against the DPI-C goldens. The destination is
   # pre-poisoned, so a backend that writes nothing fails.
   sim-datapath-mxquant:
+    needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     runs-on: ubuntu-24.04
     steps:
       -
@@ -168,6 +179,7 @@ jobs:
         run: uv run --locked make idma_verify_sim_mxquant IDMA_VLT_MAKEFLAGS=-j4
 
   sim-datapath-mxroundtrip:
+    needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     runs-on: ubuntu-24.04
     steps:
       -
@@ -186,6 +198,7 @@ jobs:
         run: uv run --locked make idma_verify_sim_mxroundtrip IDMA_VLT_MAKEFLAGS=-j4
 
   sim-datapath-transpose:
+    needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     runs-on: ubuntu-24.04
     steps:
       -
@@ -207,6 +220,7 @@ jobs:
   # guard. --assert is load-bearing; without it both testbenches exit 0 and the
   # leg could not fail.
   sim-negative:
+    needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     strategy:
       fail-fast: false
       matrix:
