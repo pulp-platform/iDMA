@@ -94,12 +94,12 @@ module tb_idma_inst64_axi_copy;
         ev_field_ok[EvRDone  ] = ev.r_done   === (bus_req.r_ready && bus_res.r_valid);
         // r_bw duplicates r_done in the RTL; compare it to the pins, never to ev.r_done.
         ev_field_ok[EvRBw    ] = ev.r_bw     === (bus_req.r_ready && bus_res.r_valid);
-        ev_field_ok[EvRStall ] = ev.r_stall  === (bus_req.r_ready && !bus_res.r_valid);
+        ev_field_ok[EvRStall ] = ev.r_stall  === (!bus_req.r_ready && bus_res.r_valid);
 
         ev_field_ok[EvWValid ] = ev.w_valid  === bus_req.w_valid;
         ev_field_ok[EvWReady ] = ev.w_ready  === bus_res.w_ready;
         ev_field_ok[EvWDone  ] = ev.w_done   === w_hs;
-        ev_field_ok[EvWStall ] = ev.w_stall  === (!bus_res.w_ready && bus_req.w_valid);
+        ev_field_ok[EvWStall ] = ev.w_stall  === (bus_res.w_ready && !bus_req.w_valid);
         ev_field_ok[EvBytes  ] = ev.num_bytes_written ===
                                  (w_hs ? 32'($countones(bus_req.w.strb)) : 32'd0);
 
