@@ -62,6 +62,11 @@ sources:
     files:
       - target/rtl/idma_generated.sv
 
+  # Out-of-tree IDMA_ADD_IDS variants; empty unless the tree was generated with them
+  - target: all(rtl,add_ids)
+    files:
+      - target/rtl/idma_generated_add.sv
+
   # Midends
   - target: rtl
     files:
@@ -145,6 +150,10 @@ sources:
       - test/tb_idma_mxneg.sv
       - test/tb_idma_mxperf.sv
       - test/tb_idma_mxclear.sv
+
+  - target: all(idma_test,add_ids)
+    files:
+      - target/rtl/tb_idma_generated_add.sv
 
   # Tightly-coupled inst64 frontend testbenches (needs the snitch_cluster-gated RTL)
   - target: all(idma_test, snitch_cluster)

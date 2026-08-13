@@ -5,7 +5,8 @@
 // Authors:
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
-// Macro holding all the resources for the iDMA backend tracer
+// Shared resources of the iDMA backend tracer; the per-id macros live in
+// idma/tracer_<id>.svh and include this file themselves
 `ifndef IDMA_TRACER_SVH_
 `define IDMA_TRACER_SVH_
 
@@ -26,5 +27,5 @@
     if(__cond) begin <%text>\</%text>
         __cond = ~__cond; <%text>\</%text>
     end
-${body}
+
 `endif

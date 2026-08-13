@@ -8,7 +8,10 @@
 `include "common_cells/registers.svh"
 `include "common_cells/assertions.svh"
 `include "idma/typedef.svh"
-`include "idma/tracer.svh"
+// the tracer macro is only expanded below the `ifndef SYNTHESIS guard
+`ifndef SYNTHESIS
+`include "idma/tracer_rw_axi.svh"
+`endif
 
 /// Implements the tightly-coupled frontend. This module can directly be connected
 /// to an accelerator bus in the snitch system

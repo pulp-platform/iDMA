@@ -42,8 +42,13 @@ IDMA_OCCAMY_IDS  := \
 					r_obi_rw_init_w_axi \
 					r_axi_rw_init_rw_obi \
 					rw_axi_rw_init_rw_obi
+# The ids the tracked aggregates cover. Literal on purpose: growing or shrinking the
+# tracked set is an edit to this file, which every aggregate depends on, so make sees
+# it. Overriding it - or IDMA_BACKEND_IDS - from the command line is not supported
+# without a preceding idma_rtl_clean; IDMA_ADD_IDS is the supported extension knob.
+IDMA_TREE_IDS    := $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS)
 IDMA_ADD_IDS     ?=
-IDMA_BACKEND_IDS ?= $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
+IDMA_BACKEND_IDS ?= $(IDMA_TREE_IDS) $(IDMA_ADD_IDS)
 
 # generated frontends
 IDMA_BASE_FE_IDS := reg32_3d reg64_2d reg64_1d
@@ -87,6 +92,8 @@ IDMA_RTL_DOC_ALL :=
 # Generated cumulative RTL files
 IDMA_FULL_RTL   := $(IDMA_RTL_DIR)/idma_generated.sv
 IDMA_FULL_TB    := $(IDMA_RTL_DIR)/tb_idma_generated.sv
+IDMA_ADD_RTL    := $(IDMA_RTL_DIR)/idma_generated_add.sv
+IDMA_ADD_TB     := $(IDMA_RTL_DIR)/tb_idma_generated_add.sv
 
 IDMA_GEN        := $(IDMA_UTIL_DIR)/gen_idma.py
 IDMA_GEN_SRC    := $(IDMA_UTIL_DIR)/mario/backend.py \
@@ -134,43 +141,44 @@ $(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR
 $(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/tb_idma_backend_%.sv $(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl
 	$(call idma_gen,vsim_wave,$(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-# Stamp holding the id lists the tree was last generated with. The tracer covers
-# every id in one file, so a change to IDMA_ADD_IDS must rebuild it; without the
-# stamp an out-of-tree id list silently keeps the previous tracer.
-IDMA_IDS_STAMP := $(IDMA_RTL_DIR)/.idma_ids
+IDMA_INC_DIR    := $(IDMA_RTL_DIR)/include/idma
+IDMA_INC_TPL    := $(IDMA_ROOT)/src/include/idma/tpl
 
-.PHONY: IDMA_FORCE
-IDMA_FORCE:
+# The id-independent tracer helpers; a pure function of their own template
+$(IDMA_INC_DIR)/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/tracer.svh.tpl
+	mkdir -p $(@D)
+	$(call idma_gen,tracer_common,$(IDMA_INC_TPL)/tracer.svh.tpl,,,,$@)
 
-$(IDMA_IDS_STAMP): IDMA_FORCE
-	@mkdir -p $(IDMA_RTL_DIR)
-	@echo "$(IDMA_BACKEND_IDS)|$(IDMA_FE_IDS)" | cmp -s - $@ || \
-	  echo "$(IDMA_BACKEND_IDS)|$(IDMA_FE_IDS)" > $@
+# One tracer macro per backend id. The content is a function of the id in the target
+# name, the databases and the template only, so "up to date" implies "correct" and no
+# id-list state has to be recorded anywhere.
+$(IDMA_INC_DIR)/tracer_%.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/tracer_id.svh.tpl $(IDMA_DB_FILES)
+	mkdir -p $(@D)
+	$(call idma_gen,tracer,$(IDMA_INC_TPL)/tracer_id.svh.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk $(IDMA_IDS_STAMP)
-	mkdir -p $(IDMA_RTL_DIR)/include/idma
-	$(call idma_gen,tracer,$(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
-
-$(IDMA_RTL_DIR)/include/idma/compute.svh: $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl
-	mkdir -p $(IDMA_RTL_DIR)/include/idma
+$(IDMA_INC_DIR)/compute.svh: $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl
+	mkdir -p $(IDMA_INC_DIR)
 	$(PEAKRDL) raw-header $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl \
 	  --template $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl -o $@
 
 idma_rtl_clean:
-	rm -f  $(IDMA_IDS_STAMP)
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
 	rm -f  $(IDMA_RTL_DIR)/*.sv
 	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
-	rm -f  $(IDMA_RTL_DIR)/include/idma/tracer.svh
-	rm -f  $(IDMA_RTL_DIR)/include/idma/compute.svh
-	rm -rf $(IDMA_RTL_DIR)/include/idma
+	rm -rf $(IDMA_INC_DIR)
 
 # assemble the required files
-IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
-IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/compute.svh
-IDMA_RTL_ALL     += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
-IDMA_TB_ALL      += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
-IDMA_WAVE_ALL    += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
+IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/tracer.svh
+IDMA_INCLUDE_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_INC_DIR)/tracer_$Y.svh)
+IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/compute.svh
+
+# The tracked aggregates below concatenate the tree ids only; out-of-tree ids are
+# collected separately so no command-line variable can change what they contain.
+IDMA_TREE_RTL_ALL := $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_TREE_IDS),$X_$Y.sv))
+IDMA_ADD_RTL_ALL  := $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_ADD_IDS),$X_$Y.sv))
+IDMA_TREE_TB_ALL  := $(foreach Y,$(IDMA_TREE_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
+IDMA_ADD_TB_ALL   := $(foreach Y,$(IDMA_ADD_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
+IDMA_WAVE_ALL     += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
 
 
 # --------------
@@ -183,8 +191,9 @@ IDMA_DOC_FIG_DIR := $(IDMA_ROOT)/doc/fig
 IDMA_DOC_OUT_DIR := $(IDMA_ROOT)/target/doc
 IDMA_HTML_DIR    := $(IDMA_DOC_OUT_DIR)/html
 IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontend
-IDMA_FE_REGS     := desc64
-IDMA_FE_REGS     += $(IDMA_FE_IDS)
+IDMA_FE_REGS      := desc64
+IDMA_FE_REGS      += $(IDMA_FE_IDS)
+IDMA_TREE_FE_REGS := desc64 $(IDMA_BASE_FE_IDS)
 
 # Config-bus CPUIF for the register frontend: PeakRDL regblock --cpuif + matching wrapper
 # packing. apb4-flat (default, industry standard); also obi-flat / passthrough / axi4-lite-flat.
@@ -283,11 +292,15 @@ idma_reg_clean:
 	rm -f  $(IDMA_REG_CUST_ALL)
 
 # assemble the required files
-IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.sv)
-IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
-IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_pkg.sv)
-IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
-IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
+IDMA_TREE_RTL_ALL += $(foreach Y,$(IDMA_TREE_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.sv)
+IDMA_TREE_RTL_ALL += $(foreach Y,$(IDMA_TREE_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
+IDMA_TREE_RTL_ALL += $(foreach Y,$(IDMA_TREE_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_pkg.sv)
+IDMA_TREE_RTL_ALL += $(foreach Y,$(IDMA_TREE_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
+IDMA_ADD_RTL_ALL  += $(foreach Y,$(IDMA_ADD_FE_IDS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.sv)
+IDMA_ADD_RTL_ALL  += $(foreach Y,$(IDMA_ADD_FE_IDS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
+IDMA_ADD_RTL_ALL  += $(foreach Y,$(IDMA_ADD_FE_IDS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_pkg.sv)
+IDMA_ADD_RTL_ALL  += $(foreach Y,$(IDMA_ADD_FE_IDS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
+IDMA_RTL_DOC_ALL  += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
 
 # C headers
 IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_regs.h)
@@ -300,13 +313,30 @@ IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_raw_regs.
 # RTL assembly
 # ---------------
 
-# The stamp catches an id-list change: both files concatenate a per-id set, so a
-# shorter list leaves the previous variants in place without it.
-$(IDMA_FULL_RTL): $(IDMA_RTL_ALL) $(IDMA_IDS_STAMP)
-	$(CAT) $(IDMA_RTL_ALL) > $@
+IDMA_RTL_ALL += $(IDMA_TREE_RTL_ALL) $(IDMA_ADD_RTL_ALL)
+IDMA_TB_ALL  += $(IDMA_TREE_TB_ALL) $(IDMA_ADD_TB_ALL)
 
-$(IDMA_FULL_TB): $(IDMA_TB_ALL) $(IDMA_IDS_STAMP)
-	$(CAT) $(IDMA_TB_ALL) > $@
+# Bender hardcodes the two names below, so both files stay a cat of a per-id set. A
+# set that shrinks is invisible to make - every remaining part is older than the
+# target - hence the tracked aggregates take their id list from the literal
+# IDMA_TREE_IDS and depend on the file that spells it out.
+$(IDMA_FULL_RTL): $(IDMA_TREE_RTL_ALL) $(IDMA_ROOT)/idma.mk
+	$(CAT) $(IDMA_TREE_RTL_ALL) > $@
+
+$(IDMA_FULL_TB): $(IDMA_TREE_TB_ALL) $(IDMA_ROOT)/idma.mk
+	$(CAT) $(IDMA_TREE_TB_ALL) > $@
+
+# Out-of-tree IDMA_ADD_IDS variants, reached through the add_ids bender target only.
+# Not part of idma_hw_all: IDMA_ADD_IDS is a command-line knob, so make cannot see
+# its set shrink and this pair carries the one staleness make cannot express. Ask for
+# it explicitly (idma_add_all) and it is exact; a set that shrinks between two such
+# builds leaves the dropped variant behind until idma_rtl_clean. Nothing a tracked
+# build parses can reach these files.
+$(IDMA_ADD_RTL): $(IDMA_ADD_RTL_ALL) $(IDMA_ROOT)/idma.mk
+	$(CAT) /dev/null $(IDMA_ADD_RTL_ALL) > $@
+
+$(IDMA_ADD_TB): $(IDMA_ADD_TB_ALL) $(IDMA_ROOT)/idma.mk
+	$(CAT) /dev/null $(IDMA_ADD_TB_ALL) > $@
 
 
 # ---------------
@@ -850,11 +880,12 @@ idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f
 # Out-of-tree multi-head build: regenerate with the extra ids, then elaborate the
 # two extra synthesis tops and the two multi-head testbenches
 idma_verify_multihead:
-	$(MAKE) idma_hw_all IDMA_ADD_IDS="$(IDMA_MULTIHEAD_IDS)"
+	$(MAKE) idma_hw_all idma_add_all IDMA_ADD_IDS="$(IDMA_MULTIHEAD_IDS)"
 	mkdir -p $(IDMA_VLT_DIR) $(IDMA_SLANG_DIR)
-	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) > $(IDMA_VLT_DIR)/idma_multihead.f
-	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) > $(IDMA_SLANG_DIR)/mh_synth.f
-	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) -t multihead > $(IDMA_SLANG_DIR)/mh_tb.f
+	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) -t add_ids > $(IDMA_VLT_DIR)/idma_multihead.f
+	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) -t add_ids > $(IDMA_SLANG_DIR)/mh_synth.f
+	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) -t multihead -t add_ids \
+	  > $(IDMA_SLANG_DIR)/mh_tb.f
 	set -e; for id in $(IDMA_MULTIHEAD_IDS); do \
 	  echo "--- verilator idma_backend_synth_$$id ---"; \
 	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_multihead.f \
@@ -868,7 +899,7 @@ idma_verify_multihead:
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_tb.f --top $$tb \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done
-	# leave the tree on the default id list so a following target is not surprised
+	# the tracked aggregates never saw the extra ids, so this is a no-op assertion
 	$(MAKE) idma_hw_all
 
 
@@ -1101,7 +1132,7 @@ idma_sw_clean:
 # Phony Targets
 # --------------
 
-.PHONY: idma_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
+.PHONY: idma_all idma_add_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
 
 # Build the Starlight/Astro site (output in doc/site/dist) after staging the graphs
 idma_doc_all: idma_doc_site
@@ -1109,7 +1140,11 @@ idma_doc_all: idma_doc_site
 
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
-idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) $(IDMA_WAVE_ALL)
+idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) \
+             $(IDMA_WAVE_ALL)
+
+# The IDMA_ADD_IDS aggregates; ask for it next to idma_hw_all on an add-id build
+idma_add_all: $(IDMA_ADD_RTL) $(IDMA_ADD_TB)
 
 idma_sw_all: $(IDMA_SW_ALL)
 

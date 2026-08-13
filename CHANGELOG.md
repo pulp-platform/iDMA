@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Changed
+- **Breaking**: the tracer is generated one header per backend id. `idma/tracer.svh` now only holds the id-independent helpers; the `IDMA_TRACER_<ID>` macro of a variant lives in `idma/tracer_<id>.svh`, which includes `idma/tracer.svh` itself. Downstream users replace `` `include "idma/tracer.svh" `` with the per-id header of the variant they trace.
+- **Breaking**: out-of-tree `IDMA_ADD_IDS` / `IDMA_ADD_FE_IDS` variants no longer land in `target/rtl/idma_generated.sv`. They are built by the new `idma_add_all` target into `target/rtl/idma_generated_add.sv` and `target/rtl/tb_idma_generated_add.sv`, and reach Bender through the new `add_ids` target; a build using `IDMA_ADD_IDS` has to select `-t add_ids`. The tracked aggregates now cover the literal `IDMA_TREE_IDS`, which is what lets make see an id-list change without a recorded stamp.
+- **Breaking**: overriding `IDMA_BACKEND_IDS` or `IDMA_TREE_IDS` from the command line is no longer supported without a preceding `make idma_rtl_clean`; make cannot see a command-line id set shrink. `IDMA_ADD_IDS` is the supported extension knob.
+
+
 ## 0.6.5 - 2025-07-15
 
 ### Added

@@ -107,14 +107,23 @@ ${signals}
 '''
 
 
+def render_tracer_common(tpl_file: str) -> str:
+    """Generate the id-independent tracer helpers"""
+    with open(tpl_file, 'r', encoding='utf-8') as templ_file:
+        return Template(templ_file.read()).render()
+
+
 def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
-    """Generate racer"""
+    """Generate the tracer of one backend id"""
     tracer_body = ''
+
+    # one header per id: the header name carries the id, so a list is meaningless here
+    if len(prot_ids) != 1:
+        raise ValueError(f'the tracer renders exactly one id, got {len(prot_ids)}')
 
     with open(tpl_file, 'r', encoding='utf-8') as templ_file:
         tracer_tpl = templ_file.read()
 
-    # render for every is
     for prot_id in prot_ids:
 
         # signals
@@ -149,6 +158,8 @@ def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
 
     # render tracer context
     context = {
+        'identifier': prot_id,
+        'identifier_cap': prot_id.upper(),
         'body': tracer_body
     }
 
