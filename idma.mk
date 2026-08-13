@@ -640,6 +640,16 @@ IDMA_LINT_TOPS ?= $(addprefix idma_backend_synth_,$(IDMA_BACKEND_IDS)) \
                   idma_mp_midend_synth \
                   idma_rt_midend_synth
 
+# Tree-scoped SystemVerilog style lint. The PR-annotating CI job reports through
+# reviewdog with -diff, so it only ever sees lines a PR touched; this target
+# checks all of src/ so pre-existing violations cannot accumulate unseen.
+VERIBLE ?= verible-verilog-lint
+
+.PHONY: idma_lint_sv
+idma_lint_sv:
+	$(VERIBLE) --waiver_files $(IDMA_ROOT)/.github/verible.waiver \
+	  $$(find $(IDMA_ROOT)/src -name '*.sv' -o -name '*.svh' | sort)
+
 .PHONY: idma_lint_elab
 idma_lint_elab:
 	mkdir -p $(IDMA_VLT_DIR)

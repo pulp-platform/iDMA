@@ -72,7 +72,8 @@ module idma_inst64_top #(
     localparam int unsigned NumDim       = 32'd2;
     localparam int unsigned BufferDepth  = 32'd3;
     localparam int unsigned NumRules     = 32'd5;
-    localparam int unsigned AwInFlightCntWidth = (NumAxInFlight < 2) ? 32'd1 : $clog2(NumAxInFlight + 1);
+    localparam int unsigned AwInFlightCntWidth =
+        (NumAxInFlight < 2) ? 32'd1 : $clog2(NumAxInFlight + 1);
 
     // derived constants and types
     localparam int unsigned StrbWidth    = AxiDataWidth / 32'd8;

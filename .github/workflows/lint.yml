@@ -32,6 +32,24 @@ jobs:
         exclude_paths: |
           target/sim/vsim/wave/tpl/*.do.tpl
 
+  # Tree-scoped counterpart to lint-sv: that job reports through reviewdog with
+  # -diff, so it only sees lines a PR touched and pre-existing violations never
+  # fail it. This one checks all of src/ so the backlog stays at zero.
+  lint-sv-tree:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v5
+      -
+        name: Install Verible
+        uses: chipsalliance/verible-actions-common/install-verible@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: Lint all of src
+        run: make idma_lint_sv
+
   lint-sv:
     runs-on: ubuntu-latest
     steps:
