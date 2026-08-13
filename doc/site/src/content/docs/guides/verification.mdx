@@ -142,7 +142,11 @@ Each backend variant has its own set of job files under `jobs/backend_<variant>/
 | `linear.txt` | Sequential address patterns |
 | `mixed.txt` | Varied source/destination alignments |
 | `same_dst.txt` | Multiple transfers to the same destination |
-| `zero_transfer.txt` | Zero-length transfer (tests `RejectZeroTransfers`) |
+| `zero_transfer.txt` | Zero-length transfer; run at both settings of `RejectZeroTransfers` |
+| `zero_transfer_busy.txt` | Zero-length transfer issued while other transfers are in flight |
+| `zero_then_real.txt` | Zero-length transfer followed by a real one; catches a zero-length job corrupting its successor |
+| `zero_unaligned_src.txt` | Zero-length transfer with a misaligned source address |
+| `zero_unaligned_dst.txt` | Zero-length transfer with a misaligned destination address |
 
 **Error** - error injection and handling:
 

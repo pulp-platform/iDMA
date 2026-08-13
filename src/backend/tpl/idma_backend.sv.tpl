@@ -401,73 +401,76 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic w_chan_first;
 
     //--------------------------------------
-    // Reject Zero Length Transfers
+    // Handle Zero Length Transfers
     //--------------------------------------
-    if (RejectZeroTransfers) begin : gen_reject_zero_transfers
-        /// number of accepted transfers that still owe a response
-        typedef logic [$clog2(MetaFifoDepth + 32'd2)-1:0] num_outst_t;
+    // A zero length transfer moves no bytes and never reaches the legalizer: zero bytes have
+    // no encoding downstream; AxLEN = beats - 1 underflows to a full burst and the datapath
+    // mask aliases tailer = 0 to full width. Both settings therefore suppress the request and
+    // synthesize the one response it owes; RejectZeroTransfers only picks the payload.
+    /// number of accepted transfers that still owe a response
+    typedef logic [$clog2(MetaFifoDepth + 32'd2)-1:0] num_outst_t;
 
-        num_outst_t num_outst_q;
-        logic       tf_accept, tf_complete;
-        logic       zero_len_accept, zero_rsp_pending_q;
+    num_outst_t num_outst_q;
+    logic       tf_accept, tf_complete;
+    logic       zero_len_accept, zero_rsp_pending_q, zero_rsp_last_q;
 
-        // is the current transfer length 0?
-        assign is_length_zero = idma_req_i.length == '0;
+    // is the current transfer length 0?
+    assign is_length_zero = idma_req_i.length == '0;
 
-        // bypass valid as long as length is not zero, otherwise suppress it
-        assign req_valid = is_length_zero ? 1'b0 : req_valid_i;
+    // bypass valid as long as length is not zero, otherwise suppress it
+    assign req_valid = is_length_zero ? 1'b0 : req_valid_i;
 
-        // hold a zero length request back while a transfer still owes a response or an older
-        // rejection is unaccepted; the injected rejection must not overtake either
-        assign zero_len_stall = is_length_zero & (zero_rsp_pending_q | (num_outst_q != '0));
+    // hold a zero length request back while a transfer still owes a response or an older
+    // synthesized response is unaccepted; the injected response must not overtake either
+    assign zero_len_stall = is_length_zero & (zero_rsp_pending_q | (num_outst_q != '0));
 
-        // outstanding transfer counter; mirrors the one in the error handler
-        assign tf_accept   = req_valid & req_ready_o;
-        assign tf_complete = rsp_valid & rsp_ready & ~idma_rsp.error;
+    // outstanding transfer counter; mirrors the one in the error handler
+    assign tf_accept   = req_valid & req_ready_o;
+    assign tf_complete = rsp_valid & rsp_ready & ~idma_rsp.error;
 
-        always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
-            if (!rst_ni)                        num_outst_q <= '0;
-            else if (tf_accept & ~tf_complete)  num_outst_q <= num_outst_q + 'd1;
-            else if (tf_complete & ~tf_accept)  num_outst_q <= num_outst_q - 'd1;
+    always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
+        if (!rst_ni)                        num_outst_q <= '0;
+        else if (tf_accept & ~tf_complete)  num_outst_q <= num_outst_q + 'd1;
+        else if (tf_complete & ~tf_accept)  num_outst_q <= num_outst_q - 'd1;
+    end
+
+    // the synthesized response is a proper stream: it is held until the consumer accepts it
+    assign zero_len_accept = is_length_zero & req_valid_i & req_ready_o;
+
+    // last is captured at accept time; the request is long gone when the response is emitted
+    always_ff @(posedge clk_i or negedge rst_ni) begin : proc_zero_rsp_pending
+        if (!rst_ni) begin
+            zero_rsp_pending_q <= 1'b0;
+            zero_rsp_last_q    <= 1'b0;
+        end else if (zero_len_accept) begin
+            zero_rsp_pending_q <= 1'b1;
+            zero_rsp_last_q    <= idma_req_i.opt.last;
+        end else if (zero_rsp_pending_q & rsp_ready_i) begin
+            zero_rsp_pending_q <= 1'b0;
         end
+    end
 
-        // the rejection is a proper stream: it is held until the consumer accepts it
-        assign zero_len_accept = is_length_zero & req_valid_i & req_ready_o;
+    // modify response
+    always_comb begin : proc_modify_response_zero_length
+        // default: bypass
+        idma_rsp_o  = idma_rsp;
+        rsp_ready   = rsp_ready_i;
+        rsp_valid_o = rsp_valid;
 
-        always_ff @(posedge clk_i or negedge rst_ni) begin : proc_zero_rsp_pending
-            if (!rst_ni)                               zero_rsp_pending_q <= 1'b0;
-            else if (zero_len_accept)                  zero_rsp_pending_q <= 1'b1;
-            else if (zero_rsp_pending_q & rsp_ready_i) zero_rsp_pending_q <= 1'b0;
-        end
-
-        // modify response
-        always_comb begin : proc_modify_response_zero_length
-            // default: bypass
-            idma_rsp_o  = idma_rsp;
-            rsp_ready   = rsp_ready_i;
-            rsp_valid_o = rsp_valid;
-
-            // a zero transfer is pending
-            if (zero_rsp_pending_q) begin
-                // block backend
-                rsp_ready = 1'b0;
-                // generate new response
-                rsp_valid_o             = 1'b1;
-                idma_rsp_o              =  '0;
-                idma_rsp_o.last         = 1'b1;
+        // a zero transfer is pending
+        if (zero_rsp_pending_q) begin
+            // block backend
+            rsp_ready = 1'b0;
+            // generate new response
+            rsp_valid_o             = 1'b1;
+            idma_rsp_o              =  '0;
+            idma_rsp_o.last         = zero_rsp_last_q;
+            // reject: the request was illegal; accept: it completed with nothing to do
+            if (RejectZeroTransfers) begin
                 idma_rsp_o.error        = 1'b1;
                 idma_rsp_o.pld.err_type = idma_pkg::BACKEND;
             end
         end
-
-    // just bypass signals
-    end else begin : gen_bypass_zero_transfers
-        // bypass
-        assign req_valid      = req_valid_i;
-        assign zero_len_stall = 1'b0;
-        assign idma_rsp_o     = idma_rsp;
-        assign rsp_ready      = rsp_ready_i;
-        assign rsp_valid_o    = rsp_valid;
     end
 
 
