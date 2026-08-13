@@ -33,8 +33,6 @@ jobs:
           target/sim/vsim/wave/tpl/*.do.tpl
 
   # Tree-scoped counterpart to lint-sv: that job reports through reviewdog with
-  # -diff, so it only sees lines a PR touched and pre-existing violations never
-  # fail it. This one checks all of src/ so the backlog stays at zero.
   lint-sv-tree:
     runs-on: ubuntu-latest
     steps:
@@ -66,28 +64,7 @@ jobs:
         fail_on_error: true
         reviewdog_reporter: github-check
 
-#  lint-cxx:
-#    runs-on: ubuntu-latest
-#    steps:
-#    -
-#      name: Checkout
-#      uses: actions/checkout@v3
-#    -
-#      name: Run Clang-format
-#      uses: DoozyX/clang-format-lint-action@v0.14
-#      with:
-#        extensions: 'c,h,cpp'
-#        clangFormatVersion: 14
-#        style: >
-#          {
-#          IndentWidth: 4,
-#          ColumnLimit: 100,
-#          AlignEscapedNewlines: DontAlign,
-#          SortIncludes: false,
-#          AllowShortFunctionsOnASingleLine: None,
-#          AllowShortIfStatementsOnASingleLine: true,
-#          AllowShortLoopsOnASingleLine: true
-#          }
+# lint-cxx
 
   lint-python:
     runs-on: ubuntu-latest

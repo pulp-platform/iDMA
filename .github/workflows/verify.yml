@@ -5,45 +5,7 @@
 # Author:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-# License-free verification matrix. It runs on Verilator 5.020 (apt, ubuntu-24.04)
-# and slang 11 (pyslang) only, so fork PRs - which never reach the proprietary EDA
-# sims on the GitLab mirror - get a real gate, and the licensed run becomes a
-# confirmation rather than the only signal.
-#
-# Two tiers: elaboration first, simulation behind it. elab-backend, elab-shared-tops
-# and elab-tb-shared run in parallel and every simulation job `needs:` all three, so a
-# port, parameter or connectivity break fails in seconds instead of burning every
-# simulation runner. `fail-fast: false` stays on the matrices, so the elaboration tier
-# still reports every leg. elab-multihead, codegen-consistency and report-slang-extra
-# are parallel peers, not part of the barrier: they gate nothing the simulations use.
-#
-# House rules for this file, enforced in review:
-#   - no `|| true`, no `continue-on-error` on any step of a gating job;
-#   - no negated grep as a pass criterion; every simulation leg checks exit
-#     status AND a non-empty log AND a positive token (util/run_vlt_sim.py);
-#   - no numeric warning-count thresholds;
-#   - every excluded top or configuration is named below with its reason;
-#   - `needs:` orders jobs, it does not share workspaces; every job keeps its own
-#     `Generate RTL` step.
-#
-# NAMED EXCLUSIONS - dropped coverage, not silent skips:
-#   tb_idma_nd_midend_b2b   hangs ([B2B] timeout); latent reset/LFSR race
-#   tb_idma_transpose_nd    AW outside the destination allocation at 80 ns
-#   tb_idma_transpose_b2b   stream_watchdog trip after 4000 idle cycles
-#   tb_idma_mxrand          testbench timeout at 400 ms of simulated time
-#   tb_idma_mxperf          hangs on the first compute transfer
-#   tb_idma_rt_midend       fails under --assert on cc_rr_arb_tree lock
-#   mxquant/mxroundtrip at DataWidth 512 and 1024, and mxneg cases 4 and 12
-#                           Verilator 5.020 SIGSEGVs before time 0 (512 in the
-#                           initial-block coroutine, 1024 in the model
-#                           constructor); elaboration-only for now
-#   mxneg case 11           the request is never accepted under Verilator, so
-#                           ComputeMxdequantLengthFits is never sampled
-#   the 88 directed job files
-#                           Verilator cannot simulate the idma_test class-based
-#                           driver (virtual interface, input combinational
-#                           region does not converge)
-# All of these need triage; none may be flagged away to make a leg green.
+# License-free verification matrix: elaboration gates the simulation tier.
 
 name: verify
 
@@ -54,7 +16,6 @@ on:
 jobs:
 
   # Codegen hygiene, not verification: jobs.json and the generated tree must
-  # still describe the same design, and a second generation must be identical.
   codegen-consistency:
     runs-on: ubuntu-24.04
     steps:
@@ -69,8 +30,6 @@ jobs:
         run: uv run --locked make idma_verify_codegen
 
   # Elaboration of one backend variant under both front ends, with the real
-  # per-variant jobs.json parameters plus a DataWidth sweep, and slang
-  # elaboration of that variant's testbench.
   elab-backend:
     strategy:
       fail-fast: false
@@ -102,8 +61,6 @@ jobs:
         run: uv run --locked make idma_verify_backend IDMA_VERIFY_ID=${{ matrix.id }}
 
   # The four non-backend synthesis tops with their own jobs.json parameters, plus
-  # the default-parameter elaboration of all 12 tops and of the inst64 testbench,
-  # the only public concrete binding of idma_inst64_top.
   elab-shared-tops:
     runs-on: ubuntu-24.04
     steps:
@@ -123,8 +80,6 @@ jobs:
         run: uv run --locked make idma_verify_shared
 
   # Testbench tops that are not per-backend, including the three generated register
-  # frontends through tb_idma_reg_frontend. Verilator cannot parse the verification
-  # stack at all, so slang is the only public tool for this half of the repository.
   elab-tb-shared:
     runs-on: ubuntu-24.04
     steps:
@@ -158,7 +113,6 @@ jobs:
         run: uv run --locked make idma_verify_multihead
 
   # Real simulation, byte-exact against the DPI-C goldens. The destination is
-  # pre-poisoned, so a backend that writes nothing fails.
   sim-datapath-mxquant:
     needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     runs-on: ubuntu-24.04
@@ -217,8 +171,6 @@ jobs:
         run: uv run --locked make idma_verify_sim_transpose IDMA_VLT_MAKEFLAGS=-j4
 
   # Negative tests, inverted polarity: the run must exit non-zero AND name its
-  # guard. --assert is load-bearing; without it both testbenches exit 0 and the
-  # leg could not fail.
   sim-negative:
     needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     strategy:
@@ -258,7 +210,6 @@ jobs:
             IDMA_MXNEG_CASES="${{ matrix.cases }}"
 
   # A report, not a gate: -Wextra without -Werror, so findings do not fail the
-  # job and a real compile error still does. Never add it to the required checks.
   report-slang-extra:
     runs-on: ubuntu-24.04
     steps:

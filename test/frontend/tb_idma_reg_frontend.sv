@@ -7,7 +7,6 @@
 
 // Self-checking testbench for the iDMA register frontend (idma_reg32_3d, apb4-flat).
 // `RegVariant` also binds idma_reg64_2d and idma_reg64_1d for elaboration only; they
-// have no stimulus here, and are covered by nothing else.
 // Drives the APB config slave with the standard apb_test::apb_driver against a
 // controllable backend stub and checks the non-blocking next_id launch contract:
 // the config read completes promptly (even under backend backpressure) and the
@@ -23,9 +22,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   parameter int unsigned NumStreams = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
   parameter int unsigned NumRegs    = 32'd1,
-  // generated frontend under test: 0 = idma_reg32_3d, 1 = idma_reg64_2d, 2 = idma_reg64_1d.
-  // Only variant 0 is simulated; 1 and 2 are elaboration-only (their register maps differ
-  // and reg64_1d emits a flat 1D request), and the stimulus refuses to run on them.
+  // generated frontend under test: 0 = idma_reg32_3d, 1 = idma_reg64_2d, 2 = idma_reg64_1d
   parameter int unsigned RegVariant = 32'd0
 );
 
@@ -39,9 +36,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam int unsigned CfgDataWidth   = 32'd32;
   localparam int unsigned CfgStrbWidth   = CfgDataWidth / 32'd8;
   localparam int unsigned IdCounterWidth = 32'd32;
-  // idma data-path: reg32_3d is 32-bit over 3 ND dims, both reg64 variants are 64-bit.
-  // NumDim shapes the ND request type; reg64_1d takes the flat idma_req_t instead, so
-  // its ND type is unused and the 2-dim shape is kept only to keep the macro legal.
+  // idma data-path: reg32_3d is 32-bit over 3 ND dims, both reg64 variants are 64-bit
   localparam int unsigned AddrWidth      = (RegVariant == 32'd0) ? 32'd32 : 32'd64;
   localparam int unsigned DataWidth      = AddrWidth;
   localparam int unsigned NumDim         = (RegVariant == 32'd0) ? 32'd3 : 32'd2;
@@ -59,7 +54,6 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam int unsigned DeadlockCycles = 32'd2000;
 
   // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4; the reg64
-  // variants have their own map and are elaboration-only, so it is not modelled here
   localparam logic [31:0] REG_CONF       = 32'h0000_0000;
   localparam logic [31:0] REG_STATUS0    = 32'h0000_0004;
   localparam logic [31:0] REG_NEXT_ID0   = 32'h0000_0044;
@@ -189,8 +183,6 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // DUT
   // --------------------------------------------------------------------------
   // All three generated frontends share the parameter and port list; only the module
-  // name and the emitted request type differ. reg64_1d (NumDim=1) emits a flat
-  // idma_req_t, which is widened back to the ND shape the stimulus works on.
   if (RegVariant == 32'd0) begin : gen_reg32_3d
     idma_reg32_3d #(
       .NumRegs        ( NumRegs        ),
