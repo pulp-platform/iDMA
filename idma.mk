@@ -424,9 +424,6 @@ idma_sim_tb_idma_reg_frontend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 tb_idma_reg_frontend -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 -gNumRegs=2 tb_idma_reg_frontend -do "run -all; quit"
 
-# Tightly-coupled inst64 frontend driven over the snitch accelerator bus.
-# Run with the Questa SEPP wrapper:
-#   make idma_sim_tb_idma_inst64_axi_copy VSIM="questa-2023.4 vsim"
 .PHONY: idma_sim_tb_idma_inst64_axi_copy
 idma_sim_tb_idma_inst64_axi_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_axi_copy.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_axi_copy.tcl; quit"

@@ -8,8 +8,6 @@
 `include "axi/typedef.svh"
 `include "obi/typedef.svh"
 
-/// Concrete type binding for the `idma_inst64_top` testbenches. The types mirror
-/// `test/idma_inst64_lint.sv`, the elaboration-proven binding of the frontend.
 package idma_inst64_tb_pkg;
 
     localparam int unsigned AxiDataWidth    = 32'd512;

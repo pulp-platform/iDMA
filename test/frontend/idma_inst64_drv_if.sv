@@ -5,10 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// Snitch accelerator-bus driver for `idma_inst64_top`. Exposes the public inst64 ISA
-/// only (DMSRC/DMDST/DMSTR/DMREP/DMCPY/DMCPYI/DMSTAT). The vidma-only DMOPC/ALU/MX
-/// opcodes are deliberately absent: DMOPC's encoding aliases public DMINIT and would
-/// silently launch a real zero-fill transfer.
+/// Snitch accelerator-bus driver for `idma_inst64_top`, covering the inst64 ISA
+/// (DMSRC/DMDST/DMSTR/DMREP/DMCPY/DMCPYI/DMSTAT).
 interface idma_inst64_drv_if #(
     /// Poll budget for `dma_wait`/`dma_wait_idle` before the wait is declared a deadlock
     parameter int unsigned MaxPolls = 32'd10000,

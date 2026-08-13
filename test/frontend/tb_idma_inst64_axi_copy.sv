@@ -42,24 +42,11 @@ module tb_idma_inst64_axi_copy;
     //--------------------------------------
     // DUT event cross-check
     //--------------------------------------
-    // `events_o` is exported for downstream performance counters but nothing verified it.
-    // Every field is a zero-latency recode of the DUT's own top-level pins, so the TB
-    // rebuilds the expected value from those pins and compares it per cycle. This checks
-    // the recode (mapping, polarity, gating, width), not the bus traffic; the geometry
-    // anchors below are what keep it from passing on a run where nothing happened. The
-    // hand-counted AR/AW sniff stays the independent source of truth and is untouched.
-    //
-    // Deliberately not checked here: obi_wr_req/obi_rd_req (a_no_obi_traffic pins both
-    // sides to 0, so an equality proves nothing; needs a TCDM-window TB with an OBI
-    // read/write mix) and the per-channel index in gen_events (NumChannels == 1).
-    //
-    // Polarity note: aw_stall/ar_stall are valid && !ready, but idma_inst64_events
-    // overrides its own w_stall/r_stall at lines 95/96, so w_stall is a W-side bubble
-    // (w_ready && !w_valid) and r_stall is !r_ready && r_valid; the earlier assignments
-    // are dead code. Measured gap: none of the four stall fields ever asserts here, since
-    // the sim memories neither backpressure nor bubble. Their equality still catches a
-    // polarity flip or a spurious assert, but a stuck-at-0 stall would pass; that needs a
-    // ready-throttling harness, not a weaker check.
+    // Every field recodes the DUT's own top-level pins, so the TB rebuilds the expected
+    // value from those pins and compares per cycle; the hand-counted AR/AW sniff stays
+    // the independent reference. Not covered: obi_wr_req/obi_rd_req (no OBI traffic
+    // here) and the stall fields, which never assert since the sim memories neither
+    // backpressure nor bubble.
     typedef enum int unsigned {
         EvAwValid, EvAwReady, EvAwDone, EvAwStall, EvAwLen, EvAwSize,
         EvArValid, EvArReady, EvArDone, EvArStall, EvArLen, EvArSize,
@@ -188,10 +175,8 @@ module tb_idma_inst64_axi_copy;
         for (int i = 0; i < CopyPadBytes; i++) begin
             harness.mem_write_byte(SrcAddr + i, (i < CopySize) ? (PatternStart + i) : 8'h00);
         end
-        // Sentinel over the destination and its guard bands: an unwritten byte must fail
-        // the compare rather than accidentally match, and an overrun must be visible.
-        // Offsets stay non-negative; a signed offset added to a 64-bit unsigned address is
-        // zero-extended, not sign-extended.
+        // Sentinel the destination and its guard bands so an unwritten byte or an
+        // overrun fails the compare rather than accidentally matching.
         for (int unsigned i = 0; i < CopySize + 2*GuardBytes; i++) begin
             harness.mem_write_byte(DstAddr - GuardBytes + i, Sentinel);
         end
