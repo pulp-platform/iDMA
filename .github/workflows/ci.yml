@@ -42,8 +42,16 @@ jobs:
     uses: ./.github/workflows/elaborate.yml
     secrets: inherit
 
+  verify:
+    needs: lint
+    uses: ./.github/workflows/verify.yml
+    secrets: inherit
+
+  # The licensed EDA pipeline runs only once the license-free matrix is green,
+  # so it confirms rather than being the only signal, and no licences are spent
+  # on a PR that already fails structurally.
   gitlab-ci:
-    needs: build
+    needs: [build, verify]
     uses: ./.github/workflows/gitlab-ci.yml
     secrets: inherit
 
