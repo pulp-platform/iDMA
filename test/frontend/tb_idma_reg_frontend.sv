@@ -18,12 +18,12 @@
 `include "idma/typedef.svh"
 
 module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
+  // generated frontend under test, by ND dimensions: 3 = reg32_3d, 2 = reg64_2d, 1 = reg64_1d
+  parameter int unsigned RegVariant = 32'd3,
   // number of streams the elaborated DUT exposes (checked at instantiation)
   parameter int unsigned NumStreams = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
-  parameter int unsigned NumRegs    = 32'd1,
-  // generated frontend under test: 0 = idma_reg32_3d, 1 = idma_reg64_2d, 2 = idma_reg64_1d
-  parameter int unsigned RegVariant = 32'd0
+  parameter int unsigned NumRegs    = 32'd1
 );
 
   // --------------------------------------------------------------------------
@@ -37,9 +37,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam int unsigned CfgStrbWidth   = CfgDataWidth / 32'd8;
   localparam int unsigned IdCounterWidth = 32'd32;
   // idma data-path: reg32_3d is 32-bit over 3 ND dims, both reg64 variants are 64-bit
-  localparam int unsigned AddrWidth      = (RegVariant == 32'd0) ? 32'd32 : 32'd64;
+  localparam int unsigned AddrWidth      = (RegVariant == 32'd3) ? 32'd32 : 32'd64;
   localparam int unsigned DataWidth      = AddrWidth;
-  localparam int unsigned NumDim         = (RegVariant == 32'd0) ? 32'd3 : 32'd2;
+  localparam int unsigned NumDim         = (RegVariant == 32'd3) ? 32'd3 : 32'd2;
   localparam int unsigned RepWidth       = AddrWidth;
   // apb_driver framing: the blocking driver.read() spans SETUP + first-ACCESS-check +
   // trailing edge before returning, so a same-cycle (non-blocking) read takes this many
@@ -183,7 +183,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // DUT
   // --------------------------------------------------------------------------
   // All three generated frontends share the parameter and port list; only the module
-  if (RegVariant == 32'd0) begin : gen_reg32_3d
+  if (RegVariant == 32'd3) begin : gen_reg32_3d
     idma_reg32_3d #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
@@ -205,7 +205,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .busy_i         ( busy        ),
       .midend_busy_i  ( midend_busy )
     );
-  end else if (RegVariant == 32'd1) begin : gen_reg64_2d
+  end else if (RegVariant == 32'd2) begin : gen_reg64_2d
     idma_reg64_2d #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
@@ -227,7 +227,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .busy_i         ( busy        ),
       .midend_busy_i  ( midend_busy )
     );
-  end else if (RegVariant == 32'd2) begin : gen_reg64_1d
+  end else if (RegVariant == 32'd1) begin : gen_reg64_1d
     idma_req_t dut_req_1d;
 
     idma_reg64_1d #(
@@ -479,7 +479,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
 
   initial begin : test
     // the register map and request layout below model reg32_3d only
-    if (RegVariant != 32'd0)
+    if (RegVariant != 32'd3)
       $fatal(1, "[TB] RegVariant %0d is elaboration-only, it has no stimulus", RegVariant);
     errors = 0;
     checks = 0;

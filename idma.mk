@@ -738,7 +738,7 @@ IDMA_MULTIHEAD_IDS ?= 2r_axi_w_axi 2rw_axi
 # port list, so tb_idma_reg_frontend - the only public concrete binding - elaborates
 # each of them; without this reg64_2d and reg64_1d are elaborated by nothing. Only
 # variant 0 is simulated; the testbench refuses to run on the other two.
-IDMA_REG_VARIANTS  ?= 0:idma_reg32_3d 1:idma_reg64_2d 2:idma_reg64_1d
+IDMA_REG_VARIANTS  ?= 3:idma_reg32_3d 2:idma_reg64_2d 1:idma_reg64_1d
 
 # Testbench tops that are not per-backend. tb_idma_backend_* are covered by the
 # matching idma_verify_backend leg; tb_idma_reg_frontend by IDMA_REG_VARIANTS.
