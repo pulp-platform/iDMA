@@ -19,7 +19,8 @@
 
 .PHONY: idma_verify_codegen idma_verify_backend idma_verify_shared idma_verify_multihead
 .PHONY: idma_verify_tb_shared idma_verify_sim_mxquant idma_verify_sim_mxroundtrip
-.PHONY: idma_verify_sim_transpose idma_verify_sim_mxclear idma_verify_sim_mxneg
+.PHONY: idma_verify_sim_transpose idma_verify_sim_transpose_midend
+.PHONY: idma_verify_sim_mxclear idma_verify_sim_mxneg
 .PHONY: idma_verify_all idma_lint_params idma_slang_elab idma_slang_tb idma_slang_report
 .PHONY: idma_verify_clean
 
@@ -68,21 +69,14 @@ IDMA_MULTIHEAD_IDS ?= 2r_axi_w_axi 2rw_axi
 # variant 0 is simulated; the testbench refuses to run on the other two.
 IDMA_REG_VARIANTS  ?= 3:idma_reg32_3d 2:idma_reg64_2d 1:idma_reg64_1d
 
-# Testbench tops that are not per-backend. tb_idma_backend_* are covered by the
-# matching idma_verify_backend leg; tb_idma_reg_frontend by IDMA_REG_VARIANTS.
-IDMA_TB_SHARED_TOPS := tb_idma_desc64_top tb_idma_desc64_bench \
-                       tb_idma_nd_midend tb_idma_nd_midend_b2b tb_idma_rt_midend \
-                       tb_idma_transpose_midend tb_idma_otf_transpose \
-                       tb_idma_transpose_nd tb_idma_transpose_b2b tb_idma_mxquant \
-                       tb_idma_mxroundtrip tb_idma_mxrand tb_idma_mxneg \
-                       tb_idma_mxperf tb_idma_mxclear $(IDMA_INST64_TB)
+# Testbench tops, asked of bender rather than listed here: it already owns the
+# file set, so a testbench added to Bender.yml is elaborated without editing this
+# file. Deferred (=), so bender only runs when a leg actually needs the list.
+IDMA_TB_SHARED_TOPS = $(shell BENDER=$(BENDER) $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py \
+                        --tb-tops $(patsubst -t%,--target %,$(IDMA_SLANG_TB_T)))
 
 IDMA_SOURCE_GLOBS  := --source '$(IDMA_RTL_DIR)/*.sv' --source '$(IDMA_ROOT)/src/**/*.sv' \
                       --source '$(IDMA_ROOT)/test/**/*.sv'
-
-# CI workflow that has to fan out over every backend id and negative-test case;
-# a matrix leg that silently does not exist is worse than no leg
-IDMA_MATRIX_FILE   ?= $(IDMA_ROOT)/.github/workflows/verify.yml
 
 # Emit the elaboration configurations of $1 (jobs.json parameter sets + width sweep)
 define idma_elab_cfg
@@ -230,34 +224,10 @@ idma_verify_toolchain:
 	  echo "       lowering needs g++ 12 or newer. Set IDMA_VLT_CXX=<g++-13 or newer>."; \
 	  exit 1; }
 
-# mxquant runs every width. mxroundtrip stops at 256: at 512 the run dies with a
-# glibc heap abort that is not in the DPI golden (static, bounds-checked) and is
-# invisible to ASAN; verilator 5.046 moves it to 256 rather than fixing it, so it
-# is a live bug, not a width limit. Do not widen this without a fix.
-IDMA_MXQUANT_WIDTHS ?= 32 64 256 512 1024
-IDMA_MXRT_WIDTHS    ?= 32 64 256
-
-# case:guard:DataWidth:EnDequant:EnFp16
-IDMA_MXNEG_TABLE   := 1:ComputeSizeAligned:64:1:1 \
-                      2:ComputeSrcAligned:64:1:1 \
-                      3:ComputeDstAligned:64:1:1 \
-                      5:ComputeMxdequantBeatAligned:64:1:1 \
-                      6:ComputeOpUnsupported:64:0:1 \
-                      7:ComputeMxSrcProtocol:64:1:1 \
-                      8:ComputeMxDstProtocol:64:1:1 \
-                      10:ComputeTransposeSingleBeat:64:1:1 \
-                      13:ComputeOpUnsupported:64:1:0
-IDMA_MXNEG_CASES   ?= 1 2 3 5 6 7 8 10 13
-
-# Named rather than skipped, and checked by check_jobs.py: a case the testbench
-# defines must be here or in the table, and a legalizer guard must be proven to
-# fire by some case or be named here. case:reason, no spaces in the reason.
-IDMA_MXNEG_SKIP    := 4:DataWidth-1024-SIGSEGVs-on-verilator-5.020-passes-on-5.046 \
-                      11:request-never-accepted-guard-never-sampled \
-                      12:DataWidth-1024-SIGSEGVs-on-verilator-5.020-passes-on-5.046
-IDMA_MXNEG_GUARD_SKIP := ComputeMxFp16Width:only-reachable-from-the-skipped-1024-cases \
-                         ComputeMxdequantLengthFits:case-11-never-accepted \
-                         ComputeDstTilelink:no-tilelink-backend-variant-exists
+IDMA_VERIFY_DB     := $(IDMA_ROOT)/src/db/verify.yml
+IDMA_VERIFY_RUN    := VERILATOR="$(VERILATOR)" \
+                      IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) $(IDMA_VLT_MAKEFLAGS)" \
+                      $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --vlt-dir $(IDMA_VLT_DIR)
 
 $(IDMA_VLT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_INCLUDE_ALL)
 	mkdir -p $(IDMA_VLT_DIR)
@@ -270,64 +240,31 @@ $(IDMA_VLT_DIR)/%_dpi.o: $(IDMA_ROOT)/test/%_dpi.c
 	mkdir -p $(IDMA_VLT_DIR)
 	$(CC) -c -O2 -fPIC $< -o $@
 
-idma_verify_sim_mxquant: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxquant.f $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	set -e; for dw in $(IDMA_MXQUANT_WIDTHS); do \
-	  $(IDMA_VLT_SIM) --top tb_idma_mxquant --flist $(IDMA_VLT_DIR)/tb_idma_mxquant.f \
-	    --tag mxquant_$$dw --param DataWidth=$$dw \
-	    --dpi $(IDMA_VLT_DIR)/idma_mxquant_dpi.o --token "[MXQ] ALL PASS"; \
-	done
+idma_verify_sim_mxquant: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxquant.f \
+                         $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
+	$(IDMA_VERIFY_RUN) --suite mxquant
 
 idma_verify_sim_mxroundtrip: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxroundtrip.f \
                              $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	set -e; for dw in $(IDMA_MXRT_WIDTHS); do \
-	  $(IDMA_VLT_SIM) --top tb_idma_mxroundtrip \
-	    --flist $(IDMA_VLT_DIR)/tb_idma_mxroundtrip.f \
-	    --tag mxroundtrip_$$dw --param DataWidth=$$dw \
-	    --dpi $(IDMA_VLT_DIR)/idma_mxquant_dpi.o --token "[MXRT] ALL PASS"; \
-	done
+	$(IDMA_VERIFY_RUN) --suite mxroundtrip
 
-# +BP is a second stimulus (backpressured transpose), not a rerun
 idma_verify_sim_transpose: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_otf_transpose.f \
-                           $(IDMA_VLT_DIR)/tb_idma_transpose_midend.f \
                            $(IDMA_VLT_DIR)/idma_transpose_dpi.o
-	$(IDMA_VLT_SIM) --top tb_idma_otf_transpose \
-	  --flist $(IDMA_VLT_DIR)/tb_idma_otf_transpose.f --tag otf_transpose \
-	  --param StrbWidth=8 --param FullDuplex=1 \
-	  --dpi $(IDMA_VLT_DIR)/idma_transpose_dpi.o --token "[TB] ALL PASS"
-	$(IDMA_VLT_SIM) --top tb_idma_otf_transpose \
-	  --flist $(IDMA_VLT_DIR)/tb_idma_otf_transpose.f --tag otf_transpose_bp \
-	  --param StrbWidth=8 --param FullDuplex=1 --plusarg +BP \
-	  --dpi $(IDMA_VLT_DIR)/idma_transpose_dpi.o --token "[TB] ALL PASS"
-	set -e; for dw in 64 512; do \
-	  $(IDMA_VLT_SIM) --top tb_idma_transpose_midend \
-	    --flist $(IDMA_VLT_DIR)/tb_idma_transpose_midend.f --tag transpose_midend_$$dw \
-	    --param DataWidth=$$dw --dpi $(IDMA_VLT_DIR)/idma_transpose_dpi.o \
-	    --token "[MID] ALL PASS"; \
-	done
+	$(IDMA_VERIFY_RUN) --suite transpose
+
+idma_verify_sim_transpose_midend: idma_verify_toolchain \
+                                  $(IDMA_VLT_DIR)/tb_idma_transpose_midend.f \
+                                  $(IDMA_VLT_DIR)/idma_transpose_dpi.o
+	$(IDMA_VERIFY_RUN) --suite transpose_midend
 
 # Negative tests: the run must exit non-zero AND name its guard. --assert is
 # load-bearing; without it both testbenches exit 0 and the leg cannot fail.
 idma_verify_sim_mxclear: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxclear.f
-	set -e; for q in 1 0; do \
-	  $(IDMA_VLT_SIM) --top tb_idma_mxclear --flist $(IDMA_VLT_DIR)/tb_idma_mxclear.f \
-	    --tag mxclear_$$q --param Quant=$$q --define INC_ASSERT --expect fail \
-	    --token "clear with in-flight state"; \
-	done
+	$(IDMA_VERIFY_RUN) --suite mxclear
 
-idma_verify_sim_mxneg: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxneg.f $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	set -e; ran=0; \
-	for entry in $(IDMA_MXNEG_TABLE); do \
-	  IFS=: read -r c guard dw deq fp <<< "$$entry"; \
-	  case " $(IDMA_MXNEG_CASES) " in *" $$c "*) ;; *) continue;; esac; \
-	  $(IDMA_VLT_SIM) --top tb_idma_mxneg --flist $(IDMA_VLT_DIR)/tb_idma_mxneg.f \
-	    --tag mxneg_$$c --param NegCase=$$c --param DataWidth=$$dw \
-	    --param EnDequant=$$deq --param EnFp16=$$fp \
-	    --dpi $(IDMA_VLT_DIR)/idma_mxquant_dpi.o --define INC_ASSERT --expect fail \
-	    --token "$$guard"; \
-	  ran=$$((ran+1)); \
-	done; \
-	want=$$(echo $(IDMA_MXNEG_CASES) | wc -w); \
-	test $$ran -eq $$want || { echo "error: ran $$ran of $$want requested cases"; exit 1; }
+idma_verify_sim_mxneg: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxneg.f \
+                       $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
+	$(IDMA_VERIFY_RUN) --suite mxneg
 
 
 # ---------------
@@ -345,12 +282,9 @@ idma_verify_codegen:
 	$(MAKE) idma_hw_all
 	$(PYTHON) $(IDMA_UTIL_DIR)/check_jobs.py --ids "$(IDMA_BACKEND_IDS)" \
 	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --jobs-dir $(IDMA_ROOT)/jobs \
-	  --matrix-file $(IDMA_MATRIX_FILE) --mxneg-cases "$(IDMA_MXNEG_CASES)" \
+	  --verify-db $(IDMA_VERIFY_DB) \
 	  --mxneg-tb $(IDMA_ROOT)/test/tb_idma_mxneg.sv \
-	  --mxneg-skip "$(IDMA_MXNEG_SKIP)" \
 	  --mxneg-guard-src $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl \
-	  --mxneg-guard-tested "$(IDMA_MXNEG_TABLE)" \
-	  --mxneg-guard-skip "$(IDMA_MXNEG_GUARD_SKIP)" \
 	  $(IDMA_SOURCE_GLOBS)
 	mkdir -p $(IDMA_VERIFY_DIR)
 	md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen1.md5
@@ -375,6 +309,7 @@ idma_slang_report: $(IDMA_SLANG_DIR)/synth.f
 idma_verify_all: idma_verify_codegen idma_verify_shared idma_verify_tb_shared \
                  idma_verify_multihead idma_verify_sim_mxquant \
                  idma_verify_sim_mxroundtrip idma_verify_sim_transpose \
+                 idma_verify_sim_transpose_midend \
                  idma_verify_sim_mxclear idma_verify_sim_mxneg
 	set -e; for id in $(IDMA_BACKEND_IDS); do \
 	  $(MAKE) idma_verify_backend IDMA_VERIFY_ID=$$id; \

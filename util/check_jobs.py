@@ -13,11 +13,13 @@ still describe the same design:
   a) every backend id has a jobs.json entry,
   b) every job path referenced by jobs.json exists,
   c) every testbench and synth_top named by jobs.json exists in the sources,
-  d) the CI matrix fans out over every backend id and negative-test case,
-  e) every negative-test case the testbench defines is either run or named as
+  d) every negative-test case the testbench defines is either run or named as
      skipped, and every legalizer compute guard is either proven to fire by some
-     case or named as untested. Without (e) a new case or a new guard is added to
+     case or named as untested. Without (d) a new case or a new guard is added to
      the design and silently exercised by nothing.
+
+The CI matrix is not checked here any more: it fans out over src/db/verify.yml,
+the same file that drives the local runs, so the two cannot disagree.
 
 The run list is always taken from jobs.json, never from `ls jobs/*`: four
 error_*.txt files exist on disk for variants built with ErrorHandling=0 and
@@ -31,6 +33,8 @@ import json
 import os
 import re
 import sys
+
+import yaml
 
 # Directed job files that exist on disk and are deliberately not wired into
 # jobs.json: the r_axi_w_obi and r_obi_w_axi backends elaborate with
@@ -58,20 +62,12 @@ def main():
     par.add_argument('--jobs-dir', default='jobs')
     par.add_argument('--ids', required=True, help='space-separated IDMA_BACKEND_IDS')
     par.add_argument('--source', action='append', default=[], metavar='GLOB')
-    par.add_argument('--matrix-file', required=True,
-                     help='CI workflow that must fan out over every backend id')
-    par.add_argument('--mxneg-cases', default='',
-                     help='negative-test cases the workflow legs must request between them')
+    par.add_argument('--verify-db', default=None,
+                     help='src/db/verify.yml; the run set and its named exclusions')
     par.add_argument('--mxneg-tb', default=None,
                      help='negative-test testbench; its case labels must all be accounted for')
-    par.add_argument('--mxneg-skip', default='',
-                     help='cases deliberately not run, as case:reason')
     par.add_argument('--mxneg-guard-src', default=None,
                      help='source declaring the compute guards, e.g. the legalizer template')
-    par.add_argument('--mxneg-guard-tested', default='',
-                     help='IDMA_MXNEG_TABLE entries, as case:guard:...')
-    par.add_argument('--mxneg-guard-skip', default='',
-                     help='guards with no firing test, as guard:reason')
     args = par.parse_args()
 
     patterns = args.source or ['target/rtl/*.sv', 'src/**/*.sv', 'test/**/*.sv']
@@ -119,33 +115,19 @@ def main():
                 errors.append('{}: {} "{}" is not defined in the sources'.format(
                     name, field, module))
 
-    # (d) the CI matrix must name every backend id and request every negative
-    # test case; a leg that silently does not exist is worse than no leg
-    with open(args.matrix_file, 'r') as handle:
-        matrix = handle.read()
-    for backend_id in args.ids.split():
-        if not re.search(r'^\s*-\s*' + re.escape(backend_id) + r'\s*$', matrix, re.M):
-            errors.append('{} has no matrix leg for backend id {}'.format(
-                args.matrix_file, backend_id))
-    if args.mxneg_cases:
-        requested = set()
-        for line in re.findall(r'^\s*cases:\s*(.+?)\s*$', matrix, re.M):
-            requested.update(line.split())
-        for case in args.mxneg_cases.split():
-            if case not in requested:
-                errors.append('{} requests no negative-test case {}'.format(
-                    args.matrix_file, case))
+    # (d) no negative-test case and no compute guard may go silently unexercised.
+    # Both sides come from src/db/verify.yml, the same file that drives the runs,
+    # so this compares the matrix against the design rather than against a copy.
+    db = {}
+    if args.verify_db:
+        with open(args.verify_db, 'r') as handle:
+            db = yaml.safe_load(handle) or {}
 
-    # (e) no negative-test case and no compute guard may go silently unexercised
-    def tagged(spec):
-        """Parse a 'key:reason' or 'case:guard:...' list into {key: rest}."""
-        out = {}
-        for entry in spec.split():
-            key, _, rest = entry.partition(':')
-            out[key] = rest
-        return out
+    mxneg = db.get('suites', {}).get('mxneg', {})
+    run_cases = {str(r['params']['NegCase']) for r in mxneg.get('runs', [])}
+    skipped = {str(e['case']): e['why'] for e in mxneg.get('exclude', [])}
 
-    if args.mxneg_tb:
+    if args.mxneg_tb and db:
         with open(args.mxneg_tb, 'r', errors='replace') as handle:
             tb_text = handle.read()
         body = re.search(r'\bcase\s*\(\s*NegCase\s*\)(.*?)\bendcase', tb_text, re.S)
@@ -153,32 +135,29 @@ def main():
             errors.append('{}: no case (NegCase) block found'.format(args.mxneg_tb))
         else:
             defined = set(re.findall(r'^\s*(\d+)\s*:', body.group(1), re.M))
-            run_cases = set(args.mxneg_cases.split())
-            skipped = tagged(args.mxneg_skip)
             for case in sorted(defined - run_cases - set(skipped), key=int):
-                errors.append('{}: case {} is defined but neither run nor named as '
-                              'skipped'.format(args.mxneg_tb, case))
+                errors.append('{}: case {} is defined but neither run nor excluded in '
+                              '{}'.format(args.mxneg_tb, case, os.path.basename(args.verify_db)))
             for case in sorted(set(skipped) - defined, key=int):
-                errors.append('case {} is named as skipped but the testbench does not '
-                              'define it'.format(case))
+                errors.append('case {} is excluded but the testbench does not define '
+                              'it'.format(case))
             for case in sorted(run_cases - defined, key=int):
                 errors.append('case {} is run but the testbench does not define it'.format(case))
 
-    if args.mxneg_guard_src:
+    if args.mxneg_guard_src and db:
         with open(args.mxneg_guard_src, 'r', errors='replace') as handle:
             guard_text = handle.read()
         declared = set(re.findall(r'`ASSERT_NEVER\(\s*(Compute\w+)', guard_text))
-        tested = {entry.split(':')[1] for entry in args.mxneg_guard_tested.split()
-                  if len(entry.split(':')) > 1}
-        guard_skip = tagged(args.mxneg_guard_skip)
-        for guard in sorted(declared - tested - set(guard_skip)):
-            errors.append('{}: guard {} has no negative test and is not named as '
-                          'untested'.format(args.mxneg_guard_src, guard))
-        for guard in sorted(set(guard_skip) - declared):
-            errors.append('guard {} is named as untested but is not declared in {}'.format(
-                guard, args.mxneg_guard_src))
+        tested = {r['token'] for r in mxneg.get('runs', []) if r.get('token')}
+        waived = {e['guard'] for e in db.get('guards_untested', [])}
+        for guard in sorted(declared - tested - waived):
+            errors.append('{}: guard {} has no negative test and is not named in '
+                          'guards_untested'.format(args.mxneg_guard_src, guard))
+        for guard in sorted(waived - declared):
+            errors.append('guard {} is named in guards_untested but is not declared in '
+                          '{}'.format(guard, args.mxneg_guard_src))
         for guard in sorted(tested - declared):
-            errors.append('guard {} is claimed by the case table but is not declared in '
+            errors.append('guard {} is claimed by a mxneg run but is not declared in '
                           '{}'.format(guard, args.mxneg_guard_src))
 
     for message in errors:
