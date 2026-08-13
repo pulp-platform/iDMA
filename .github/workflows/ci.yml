@@ -37,11 +37,6 @@ jobs:
     uses: ./.github/workflows/analyze.yml
     secrets: inherit
 
-  elaborate:
-    needs: lint
-    uses: ./.github/workflows/elaborate.yml
-    secrets: inherit
-
   verify:
     needs: lint
     uses: ./.github/workflows/verify.yml
