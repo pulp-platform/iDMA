@@ -909,12 +909,35 @@ idma_verify_multihead:
 
 IDMA_VLT_SIM_T     := -t rtl -t idma_test -t simulation -t synth
 IDMA_VLT_MAKEFLAGS ?=
-IDMA_VLT_SIM       := VERILATOR="$(VERILATOR)" IDMA_VLT_MAKEFLAGS="$(IDMA_VLT_MAKEFLAGS)" \
+
+# verilator --timing compiles to C++20 coroutines, which g++ 11 miscompiles: the
+# wide compute testbenches then SIGSEGV before time 0. Pick the newest available
+# g++ rather than whatever `g++` happens to be; ubuntu-24.04 defaults to 13.
+IDMA_VLT_CXX       ?= $(firstword $(foreach C,g++-14 g++-13 g++-13.2.0 g++-12 g++, \
+                        $(if $(shell command -v $C 2>/dev/null),$C)))
+IDMA_VLT_CXX_MAJOR := $(shell $(IDMA_VLT_CXX) -dumpfullversion -dumpversion 2>/dev/null | cut -d. -f1)
+
+# Prepended, so a caller passing IDMA_VLT_MAKEFLAGS=-j4 adds to the toolchain
+# rather than silently replacing it
+IDMA_VLT_SIM       := VERILATOR="$(VERILATOR)" \
+                      IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) $(IDMA_VLT_MAKEFLAGS)" \
                       $(PYTHON) $(IDMA_UTIL_DIR)/run_vlt_sim.py --dir $(IDMA_VLT_DIR)
 
-# DataWidth 512 and 1024 are elaboration-only: verilator 5.020 SIGSEGVs before
-# time 0 (512 in the initial-block coroutine, 1024 in the model constructor).
-IDMA_MX_WIDTHS     ?= 32 64 256
+# Fail loudly here; the symptom otherwise is a SIGSEGV with an empty log
+.PHONY: idma_verify_toolchain
+idma_verify_toolchain:
+	@test -n "$(IDMA_VLT_CXX)" || { echo "error: no g++ found"; exit 1; }
+	@test "$(IDMA_VLT_CXX_MAJOR)" -ge 12 2>/dev/null || { \
+	  echo "error: $(IDMA_VLT_CXX) is g++ $(IDMA_VLT_CXX_MAJOR); the coroutine"; \
+	  echo "       lowering needs g++ 12 or newer. Set IDMA_VLT_CXX=<g++-13 or newer>."; \
+	  exit 1; }
+
+# mxquant runs every width. mxroundtrip stops at 256: at 512 the run dies with a
+# glibc heap abort that is not in the DPI golden (static, bounds-checked) and is
+# invisible to ASAN; verilator 5.046 moves it to 256 rather than fixing it, so it
+# is a live bug, not a width limit. Do not widen this without a fix.
+IDMA_MXQUANT_WIDTHS ?= 32 64 256 512 1024
+IDMA_MXRT_WIDTHS    ?= 32 64 256
 
 # case:guard:DataWidth:EnDequant:EnFp16
 IDMA_MXNEG_TABLE   := 1:ComputeSizeAligned:64:1:1 \
@@ -931,10 +954,10 @@ IDMA_MXNEG_CASES   ?= 1 2 3 5 6 7 8 10 13
 # Named rather than skipped, and checked by check_jobs.py: a case the testbench
 # defines must be here or in the table, and a legalizer guard must be proven to
 # fire by some case or be named here. case:reason, no spaces in the reason.
-IDMA_MXNEG_SKIP    := 4:needs-DataWidth-1024-verilator-SIGSEGV \
+IDMA_MXNEG_SKIP    := 4:DataWidth-1024-SIGSEGVs-on-verilator-5.020-passes-on-5.046 \
                       11:request-never-accepted-guard-never-sampled \
-                      12:needs-DataWidth-1024-verilator-SIGSEGV
-IDMA_MXNEG_GUARD_SKIP := ComputeMxFp16Width:only-reachable-from-the-DataWidth-1024-cases \
+                      12:DataWidth-1024-SIGSEGVs-on-verilator-5.020-passes-on-5.046
+IDMA_MXNEG_GUARD_SKIP := ComputeMxFp16Width:only-reachable-from-the-skipped-1024-cases \
                          ComputeMxdequantLengthFits:case-11-never-accepted \
                          ComputeDstTilelink:no-tilelink-backend-variant-exists
 
@@ -949,16 +972,16 @@ $(IDMA_VLT_DIR)/%_dpi.o: $(IDMA_ROOT)/test/%_dpi.c
 	mkdir -p $(IDMA_VLT_DIR)
 	$(CC) -c -O2 -fPIC $< -o $@
 
-idma_verify_sim_mxquant: $(IDMA_VLT_DIR)/tb_idma_mxquant.f $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	set -e; for dw in $(IDMA_MX_WIDTHS); do \
+idma_verify_sim_mxquant: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxquant.f $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
+	set -e; for dw in $(IDMA_MXQUANT_WIDTHS); do \
 	  $(IDMA_VLT_SIM) --top tb_idma_mxquant --flist $(IDMA_VLT_DIR)/tb_idma_mxquant.f \
 	    --tag mxquant_$$dw --param DataWidth=$$dw \
 	    --dpi $(IDMA_VLT_DIR)/idma_mxquant_dpi.o --token "[MXQ] ALL PASS"; \
 	done
 
-idma_verify_sim_mxroundtrip: $(IDMA_VLT_DIR)/tb_idma_mxroundtrip.f \
+idma_verify_sim_mxroundtrip: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxroundtrip.f \
                              $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
-	set -e; for dw in $(IDMA_MX_WIDTHS); do \
+	set -e; for dw in $(IDMA_MXRT_WIDTHS); do \
 	  $(IDMA_VLT_SIM) --top tb_idma_mxroundtrip \
 	    --flist $(IDMA_VLT_DIR)/tb_idma_mxroundtrip.f \
 	    --tag mxroundtrip_$$dw --param DataWidth=$$dw \
@@ -966,7 +989,7 @@ idma_verify_sim_mxroundtrip: $(IDMA_VLT_DIR)/tb_idma_mxroundtrip.f \
 	done
 
 # +BP is a second stimulus (backpressured transpose), not a rerun
-idma_verify_sim_transpose: $(IDMA_VLT_DIR)/tb_idma_otf_transpose.f \
+idma_verify_sim_transpose: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_otf_transpose.f \
                            $(IDMA_VLT_DIR)/tb_idma_transpose_midend.f \
                            $(IDMA_VLT_DIR)/idma_transpose_dpi.o
 	$(IDMA_VLT_SIM) --top tb_idma_otf_transpose \
@@ -986,14 +1009,14 @@ idma_verify_sim_transpose: $(IDMA_VLT_DIR)/tb_idma_otf_transpose.f \
 
 # Negative tests: the run must exit non-zero AND name its guard. --assert is
 # load-bearing; without it both testbenches exit 0 and the leg cannot fail.
-idma_verify_sim_mxclear: $(IDMA_VLT_DIR)/tb_idma_mxclear.f
+idma_verify_sim_mxclear: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxclear.f
 	set -e; for q in 1 0; do \
 	  $(IDMA_VLT_SIM) --top tb_idma_mxclear --flist $(IDMA_VLT_DIR)/tb_idma_mxclear.f \
 	    --tag mxclear_$$q --param Quant=$$q --define INC_ASSERT --expect fail \
 	    --token "clear with in-flight state"; \
 	done
 
-idma_verify_sim_mxneg: $(IDMA_VLT_DIR)/tb_idma_mxneg.f $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
+idma_verify_sim_mxneg: idma_verify_toolchain $(IDMA_VLT_DIR)/tb_idma_mxneg.f $(IDMA_VLT_DIR)/idma_mxquant_dpi.o
 	set -e; ran=0; \
 	for entry in $(IDMA_MXNEG_TABLE); do \
 	  IFS=: read -r c guard dw deq fp <<< "$$entry"; \

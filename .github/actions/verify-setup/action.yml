@@ -32,3 +32,9 @@ runs:
         verilator --version
         verilator --version | grep -qE '^Verilator 5\.' || {
           echo "expected Verilator 5.x from apt"; exit 1; }
+    # The C++ compiler decides whether the wide compute simulations run at all:
+    # verilator --timing lowers to C++20 coroutines and g++ 11 miscompiles them.
+    # ubuntu-24.04 defaults to g++ 13, so this asserts rather than installs.
+    - if: inputs.verilator == 'true'
+      shell: bash
+      run: uv run --locked make idma_verify_toolchain

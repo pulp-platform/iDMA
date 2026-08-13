@@ -23,16 +23,23 @@
 #   tb_idma_mxrand          testbench timeout at 400 ms of simulated time
 #   tb_idma_mxperf          hangs on the first compute transfer
 #   tb_idma_rt_midend       fails under --assert on cc_rr_arb_tree lock
-#   mxquant/mxroundtrip at DataWidth 512 and 1024
-#                           verilator 5.020 SIGSEGVs before time 0 (512 in the
-#                           initial-block coroutine, 1024 in the model
-#                           constructor); elaboration-only for now
+#   mxneg case 11           the request is never accepted, so
+#                           ComputeMxdequantLengthFits is never sampled
+#   ComputeDstTilelink      no TileLink backend variant exists to test it
+#   mxneg cases 4 and 12    DataWidth 1024 SIGSEGVs on verilator 5.020; both pass
+#                           on 5.046, so this is a toolchain limit, not a gap
+#   mxroundtrip above 256   glibc heap abort, and 5.046 moves it to 256 instead of
+#                           fixing it; a live bug, not a width limit
 #   the 88 directed job files
 #                           verilator cannot simulate the idma_test class-based
 #                           driver (virtual interface, input combinational region
 #                           does not converge)
-# The excluded mxneg cases and legalizer guards are named in idma.mk, next to the
-# table that drives them, and util/check_jobs.py fails if that list drifts.
+# Both are named in idma.mk next to the table that drives them, and
+# util/check_jobs.py fails if either list drifts from the design.
+#
+# mxquant at DataWidth 512 and 1024 was on this list as a verilator crash. It was
+# not: the C++ compiler was, and both widths run once idma.mk pins it. Never waive
+# a leg on a toolchain symptom without testing another toolchain.
 
 name: verify
 
@@ -161,7 +168,7 @@ jobs:
         name: Generate RTL
         run: uv run --locked make idma_hw_all
       -
-        name: Simulate tb_idma_mxquant at DataWidth 32, 64 and 256
+        name: Simulate tb_idma_mxquant at DataWidth 32 to 1024
         run: uv run --locked make idma_verify_sim_mxquant IDMA_VLT_MAKEFLAGS=-j4
 
   sim-datapath-mxroundtrip:
