@@ -145,6 +145,18 @@ sources:
       - test/tb_idma_mxperf.sv
       - test/tb_idma_mxclear.sv
 
+  # Tightly-coupled inst64 frontend testbenches (needs the snitch_cluster-gated RTL)
+  - target: all(idma_test, snitch_cluster)
+    files:
+      # Level 0
+      - test/frontend/idma_inst64_tb_pkg.sv
+      # Level 1
+      - test/frontend/idma_inst64_drv_if.sv
+      # Level 2
+      - test/frontend/idma_inst64_base.sv
+      # Level 3
+      - test/frontend/tb_idma_inst64_axi_copy.sv
+
   # Multi-head directed backend testbenches
   - target: multihead
     files:
