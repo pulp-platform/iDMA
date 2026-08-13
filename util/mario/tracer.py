@@ -120,19 +120,20 @@ def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         # signals
         signals = ''
 
-        # handle read ports
+        # Keys are direction-qualified: a protocol present on both sides (INIT) otherwise
+        # emits the same key twice and the write leg silently drops the read channel.
         for read_prot in prot_ids[prot_id]['ar']:
             sig_dict = _flatten_dict(db[read_prot]['trace_signals']['read'])
             for signal in sig_dict:
                 signals += '                    '
-                signals += f'"{read_prot}_{signal}": __backend_inst``.{sig_dict[signal]}'
+                signals += f'"{read_prot}_read_{signal}": __backend_inst``.{sig_dict[signal]}'
                 signals += ', \\\n'
 
         for write_prot in prot_ids[prot_id]['aw']:
             sig_dict = _flatten_dict(db[write_prot]['trace_signals']['write'])
             for signal in sig_dict:
                 signals += '                    '
-                signals += f'"{write_prot}_{signal}": __backend_inst``.{sig_dict[signal]}'
+                signals += f'"{write_prot}_write_{signal}": __backend_inst``.{sig_dict[signal]}'
                 signals += ', \\\n'
 
         # post-processing

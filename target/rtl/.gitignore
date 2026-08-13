@@ -4,3 +4,4 @@ include/*
 *.sv
 *.hjson
 .vidma_ids
+.idma_ids

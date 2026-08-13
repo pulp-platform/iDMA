@@ -60,13 +60,15 @@ def get_global_utilization(trace: list, params: dict, be_info: dict) -> list:
     for ele in trace:
         # add read contribution
         for read_prot in be_info['read_prots']:
-            if ele['bus'][f'{read_prot}_rsp_ready'] and ele['bus'][f'{read_prot}_rsp_valid']:
+            if (ele['bus'][f'{read_prot}_read_rsp_ready']
+                    and ele['bus'][f'{read_prot}_read_rsp_valid']):
                 read_data += params['data_width'] // 8
 
         # add write contribution
         for write_prot in be_info['write_prots']:
-            if ele['bus'][f'{write_prot}_req_ready'] and ele['bus'][f'{write_prot}_req_valid']:
-                write_data += strb_to_bytes(ele['bus'][f'{write_prot}_req_strobe'])
+            if (ele['bus'][f'{write_prot}_write_req_ready']
+                    and ele['bus'][f'{write_prot}_write_req_valid']):
+                write_data += strb_to_bytes(ele['bus'][f'{write_prot}_write_req_strobe'])
 
     # calculate maximum possible amount of data
     max_data = len(trace) * params['data_width'] // 8
