@@ -16,29 +16,52 @@ A simulation leg only passes when all three hold:
 A negated grep for "Error:" is deliberately not used: it passes when the log is
 missing, when the simulator died before writing anything, and when the token
 was never printed. Every condition here is stated positively.
+
+A hang is a failure in its own right, including for a negative test: several
+testbenches in this repository hang rather than fail, so both stages run under a
+timeout and a timed-out leg can never be reported as a guard that fired.
 """
 
 import argparse
 import os
 import shlex
+import signal
 import subprocess
 import sys
+import threading
 import time
 
 
-def run(cmd, log_path, cwd):
-    """Run cmd, tee to log_path, return (rc, wall_seconds)."""
+def run(cmd, log_path, cwd, timeout=None):
+    """Run cmd, tee to log_path, return (rc, wall_seconds, timed_out)."""
     start = time.monotonic()
+    timed_out = []
     with open(log_path, 'wb') as log:
+        # own process group: verilator and the simulation binary spawn children
         proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT)
-        for chunk in iter(lambda: proc.stdout.read(4096), b''):
-            log.write(chunk)
-            sys.stdout.buffer.write(chunk)
-            sys.stdout.flush()
-        proc.stdout.close()
-        rc = proc.wait()
-    return rc, time.monotonic() - start
+                                stderr=subprocess.STDOUT, start_new_session=True)
+
+        def expire():
+            timed_out.append(True)
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except OSError:
+                pass
+
+        timer = threading.Timer(timeout, expire) if timeout else None
+        if timer:
+            timer.start()
+        try:
+            for chunk in iter(lambda: proc.stdout.read(4096), b''):
+                log.write(chunk)
+                sys.stdout.buffer.write(chunk)
+                sys.stdout.flush()
+            proc.stdout.close()
+            rc = proc.wait()
+        finally:
+            if timer:
+                timer.cancel()
+    return rc, time.monotonic() - start, bool(timed_out)
 
 
 def parse_args():
@@ -61,6 +84,10 @@ def parse_args():
                      help='preprocessor define passed to verilator (-D)')
     par.add_argument('--vlt-arg', action='append', default=[], metavar='ARG',
                      help='extra verilator argument; use --vlt-arg=-X for dashed values')
+    par.add_argument('--timeout', type=int, default=900, metavar='S',
+                     help='wall-clock budget for the simulation run; 0 disables')
+    par.add_argument('--build-timeout', type=int, default=3600, metavar='S',
+                     help='wall-clock budget for the verilator build; 0 disables')
     return par.parse_args()
 
 
@@ -90,8 +117,12 @@ def main():
     build += args.vlt_arg
 
     print('--- building {} [{}] ---'.format(args.top, tag), flush=True)
-    rc, secs = run(build, build_log, workdir)
+    rc, secs, expired = run(build, build_log, workdir, args.build_timeout or None)
     print('--- build {} rc={} ({:.1f} s) ---'.format(tag, rc, secs), flush=True)
+    if expired:
+        print('FAIL {}: build exceeded {} s (see {})'.format(
+            tag, args.build_timeout, build_log))
+        return 1
     if rc != 0:
         print('FAIL {}: verilator build failed (see {})'.format(tag, build_log))
         return 1
@@ -100,9 +131,14 @@ def main():
         return 1
 
     print('--- running {} [{}] ---'.format(args.top, tag), flush=True)
-    rc, secs = run([binary] + args.plusarg, run_log, workdir)
+    rc, secs, expired = run([binary] + args.plusarg, run_log, workdir, args.timeout or None)
     print('--- run {} rc={} ({:.2f} s) ---'.format(tag, rc, secs), flush=True)
 
+    # 0. a hang is a failure, including for a negative test: it is not a guard firing
+    if expired:
+        print('FAIL {}: run exceeded {} s and was killed (see {})'.format(
+            tag, args.timeout, run_log))
+        return 1
     # 1. exit status
     if args.expect == 'pass' and rc != 0:
         print('FAIL {}: expected exit 0, got {}'.format(tag, rc))

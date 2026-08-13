@@ -37,7 +37,7 @@ TRACER_BODY = '''
         automatic `IDMA_TRACER_MAX_TYPE bus [string]; <%text>\\</%text>
         automatic string trace; <%text>\\</%text>
 `ifndef VERILATOR <%text>\\</%text>
-        # 0; <%text>\\</%text>
+        #0; <%text>\\</%text>
 `endif <%text>\\</%text>
         tf = $fopen(__out_f, "w"); <%text>\\</%text>
         $display("[iDMA Tracer] Logging %s to %s", `"__backend_inst`", __out_f); <%text>\\</%text>
@@ -129,7 +129,8 @@ def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         # signals
         signals = ''
 
-        # Keys are direction-qualified: a protocol present on both sides (INIT) otherwise
+        # Keys are direction-qualified: a protocol present on both sides (INIT) would
+        # otherwise emit the same key twice and the write leg drop the read channel
         for read_prot in prot_ids[prot_id]['ar']:
             sig_dict = _flatten_dict(db[read_prot]['trace_signals']['read'])
             for signal in sig_dict:

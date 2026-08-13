@@ -32,7 +32,8 @@ jobs:
         exclude_paths: |
           target/sim/vsim/wave/tpl/*.do.tpl
 
-  # Tree-scoped counterpart to lint-sv: that job reports through reviewdog with
+  # Tree-scoped counterpart to lint-sv: that job reports through reviewdog with -diff, so
+  # it only sees lines a PR touched. This one checks all of src/ so the backlog stays at 0
   lint-sv-tree:
     runs-on: ubuntu-latest
     steps:
@@ -63,8 +64,6 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         fail_on_error: true
         reviewdog_reporter: github-check
-
-# lint-cxx
 
   lint-python:
     runs-on: ubuntu-latest

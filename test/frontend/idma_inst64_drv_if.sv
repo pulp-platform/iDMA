@@ -67,10 +67,10 @@ interface idma_inst64_drv_if #(
     // it pops on the posedge, so sample it in a clocked process instead of reading it
     // combinationally from a task.
     acc_rsp_item_t rsp_queue [$];
-    // built in a variable first: verilator rejects an assignment pattern as a call argument
-    acc_rsp_item_t rsp_item;
 
     always_ff @(posedge clk) begin : proc_capture_rsp
+        // built in a variable first: verilator rejects an assignment pattern as an argument
+        automatic acc_rsp_item_t rsp_item;
         if (rst_n && acc_res_valid && acc_res_ready) begin
             rsp_item = '{id: acc_res.id, data: acc_res.data, error: acc_res.error};
             rsp_queue.push_back(rsp_item);

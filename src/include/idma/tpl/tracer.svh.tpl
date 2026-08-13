@@ -27,5 +27,4 @@
     if(__cond) begin <%text>\</%text>
         __cond = ~__cond; <%text>\</%text>
     end
-
 `endif

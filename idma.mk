@@ -917,9 +917,6 @@ IDMA_VLT_SIM       := VERILATOR="$(VERILATOR)" IDMA_VLT_MAKEFLAGS="$(IDMA_VLT_MA
 IDMA_MX_WIDTHS     ?= 32 64 256
 
 # case:guard:DataWidth:EnDequant:EnFp16
-# Not gated, named rather than skipped: cases 4 and 12 need DataWidth=1024, where
-# verilator 5.020 SIGSEGVs in the model constructor; case 11's request is never
-# accepted under verilator, so ComputeMxdequantLengthFits is never sampled.
 IDMA_MXNEG_TABLE   := 1:ComputeSizeAligned:64:1:1 \
                       2:ComputeSrcAligned:64:1:1 \
                       3:ComputeDstAligned:64:1:1 \
@@ -930,6 +927,16 @@ IDMA_MXNEG_TABLE   := 1:ComputeSizeAligned:64:1:1 \
                       10:ComputeTransposeSingleBeat:64:1:1 \
                       13:ComputeOpUnsupported:64:1:0
 IDMA_MXNEG_CASES   ?= 1 2 3 5 6 7 8 10 13
+
+# Named rather than skipped, and checked by check_jobs.py: a case the testbench
+# defines must be here or in the table, and a legalizer guard must be proven to
+# fire by some case or be named here. case:reason, no spaces in the reason.
+IDMA_MXNEG_SKIP    := 4:needs-DataWidth-1024-verilator-SIGSEGV \
+                      11:request-never-accepted-guard-never-sampled \
+                      12:needs-DataWidth-1024-verilator-SIGSEGV
+IDMA_MXNEG_GUARD_SKIP := ComputeMxFp16Width:only-reachable-from-the-DataWidth-1024-cases \
+                         ComputeMxdequantLengthFits:case-11-never-accepted \
+                         ComputeDstTilelink:no-tilelink-backend-variant-exists
 
 $(IDMA_VLT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_INCLUDE_ALL)
 	mkdir -p $(IDMA_VLT_DIR)
@@ -1018,6 +1025,11 @@ idma_verify_codegen:
 	$(PYTHON) $(IDMA_UTIL_DIR)/check_jobs.py --ids "$(IDMA_BACKEND_IDS)" \
 	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --jobs-dir $(IDMA_ROOT)/jobs \
 	  --matrix-file $(IDMA_MATRIX_FILE) --mxneg-cases "$(IDMA_MXNEG_CASES)" \
+	  --mxneg-tb $(IDMA_ROOT)/test/tb_idma_mxneg.sv \
+	  --mxneg-skip "$(IDMA_MXNEG_SKIP)" \
+	  --mxneg-guard-src $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl \
+	  --mxneg-guard-tested "$(IDMA_MXNEG_TABLE)" \
+	  --mxneg-guard-skip "$(IDMA_MXNEG_GUARD_SKIP)" \
 	  $(IDMA_SOURCE_GLOBS)
 	mkdir -p $(IDMA_VERIFY_DIR)
 	md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen1.md5

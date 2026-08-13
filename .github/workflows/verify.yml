@@ -6,6 +6,33 @@
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 # License-free verification matrix: elaboration gates the simulation tier.
+#
+# House rules, enforced in review:
+#   - no `|| true` and no `continue-on-error` on any step of a gating job;
+#   - no negated grep as a pass criterion; every simulation leg checks exit status
+#     AND a non-empty log AND a positive token (util/run_vlt_sim.py);
+#   - no numeric warning-count thresholds;
+#   - every excluded top or configuration is named below with its reason;
+#   - `needs:` orders jobs, it does not share workspaces; every job regenerates.
+#
+# NAMED EXCLUSIONS - dropped coverage, not silent skips. All need triage; none may
+# be flagged away to make a leg green.
+#   tb_idma_nd_midend_b2b   hangs ([B2B] timeout); latent reset/LFSR race
+#   tb_idma_transpose_nd    AW outside the destination allocation at 80 ns
+#   tb_idma_transpose_b2b   stream_watchdog trip after 4000 idle cycles
+#   tb_idma_mxrand          testbench timeout at 400 ms of simulated time
+#   tb_idma_mxperf          hangs on the first compute transfer
+#   tb_idma_rt_midend       fails under --assert on cc_rr_arb_tree lock
+#   mxquant/mxroundtrip at DataWidth 512 and 1024
+#                           verilator 5.020 SIGSEGVs before time 0 (512 in the
+#                           initial-block coroutine, 1024 in the model
+#                           constructor); elaboration-only for now
+#   the 88 directed job files
+#                           verilator cannot simulate the idma_test class-based
+#                           driver (virtual interface, input combinational region
+#                           does not converge)
+# The excluded mxneg cases and legalizer guards are named in idma.mk, next to the
+# table that drives them, and util/check_jobs.py fails if that list drifts.
 
 name: verify
 
@@ -15,7 +42,8 @@ on:
 
 jobs:
 
-  # Codegen hygiene, not verification: jobs.json and the generated tree must
+  # Codegen hygiene, not verification: jobs.json and the generated tree must still
+  # describe the same design, and a second generation must be identical
   codegen-consistency:
     runs-on: ubuntu-24.04
     steps:
@@ -29,7 +57,8 @@ jobs:
         name: Check jobs.json, the CI matrix and codegen determinism
         run: uv run --locked make idma_verify_codegen
 
-  # Elaboration of one backend variant under both front ends, with the real
+  # One backend variant under both front ends, with its real jobs.json parameters,
+  # a DataWidth sweep and slang elaboration of that variant's testbench
   elab-backend:
     strategy:
       fail-fast: false
@@ -60,7 +89,8 @@ jobs:
         name: Elaborate ${{ matrix.id }}
         run: uv run --locked make idma_verify_backend IDMA_VERIFY_ID=${{ matrix.id }}
 
-  # The four non-backend synthesis tops with their own jobs.json parameters, plus
+  # The four non-backend synthesis tops with their own jobs.json parameters, plus the
+  # default-parameter elaboration of all 12 tops and of the inst64 testbench
   elab-shared-tops:
     runs-on: ubuntu-24.04
     steps:
@@ -80,6 +110,7 @@ jobs:
         run: uv run --locked make idma_verify_shared
 
   # Testbench tops that are not per-backend, including the three generated register
+  # frontends; verilator cannot parse the verification stack, so slang is the only tool
   elab-tb-shared:
     runs-on: ubuntu-24.04
     steps:
@@ -96,7 +127,7 @@ jobs:
         name: Elaborate the shared testbenches
         run: uv run --locked make idma_verify_tb_shared
 
-  # Out-of-tree multi-head build; license-free but generated only on request.
+  # Out-of-tree multi-head build; license-free but generated only on request
   elab-multihead:
     runs-on: ubuntu-24.04
     steps:
@@ -112,7 +143,8 @@ jobs:
         name: Elaborate the multi-head variants and testbenches
         run: uv run --locked make idma_verify_multihead
 
-  # Real simulation, byte-exact against the DPI-C goldens. The destination is
+  # Real simulation, byte-exact against the DPI-C goldens; the destination is
+  # pre-poisoned, so a backend that writes nothing fails
   sim-datapath-mxquant:
     needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     runs-on: ubuntu-24.04
@@ -170,7 +202,8 @@ jobs:
         name: Simulate the transpose datapath, plain and backpressured
         run: uv run --locked make idma_verify_sim_transpose IDMA_VLT_MAKEFLAGS=-j4
 
-  # Negative tests, inverted polarity: the run must exit non-zero AND name its
+  # Negative tests, inverted polarity: the run must exit non-zero AND name its guard.
+  # --assert is load-bearing; without it both testbenches exit 0 and cannot fail
   sim-negative:
     needs: [elab-backend, elab-shared-tops, elab-tb-shared]
     strategy:
@@ -209,7 +242,8 @@ jobs:
           uv run --locked make idma_verify_sim_mxneg IDMA_VLT_MAKEFLAGS=-j4 \
             IDMA_MXNEG_CASES="${{ matrix.cases }}"
 
-  # A report, not a gate: -Wextra without -Werror, so findings do not fail the
+  # A report, not a gate: -Wextra without -Werror, so findings do not fail the job and
+  # a real compile error still does. Never add it to the required checks
   report-slang-extra:
     runs-on: ubuntu-24.04
     steps:
