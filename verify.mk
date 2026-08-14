@@ -257,11 +257,15 @@ idma_slang_report: $(IDMA_SLANG_DIR)/synth.f
 	  awk '!/^\.bender\//' | sort -u > $(IDMA_VERIFY_DIR)/slang_extra.txt
 	@echo "slang -Wextra: $$(wc -l < $(IDMA_VERIFY_DIR)/slang_extra.txt) unique iDMA findings"
 
+# The suite list comes from the database, like the CI fan-out, so the local entry
+# point cannot run a different set from the one CI runs
 idma_verify_all: idma_verify_codegen idma_verify_shared idma_verify_tb_shared \
-                 idma_verify_multihead idma_verify_sim_mxquant \
-                 idma_verify_sim_mxroundtrip idma_verify_sim_transpose \
-                 idma_verify_sim_transpose_midend \
-                 idma_verify_sim_mxclear idma_verify_sim_mxneg
+                 idma_verify_multihead $(IDMA_VERIFY_DIR)/suites.list
+	@test -s $(IDMA_VERIFY_DIR)/suites.list || \
+	  { echo "error: no suites listed"; exit 1; }
+	set -e; for s in $$(cat $(IDMA_VERIFY_DIR)/suites.list); do \
+	  $(MAKE) idma_verify_sim_$$s; \
+	done
 	set -e; for id in $(IDMA_BACKEND_IDS); do \
 	  $(MAKE) idma_verify_backend IDMA_VERIFY_ID=$$id; \
 	done

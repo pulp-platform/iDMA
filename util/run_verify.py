@@ -146,7 +146,7 @@ def main():
     par.add_argument('--emit-matrix', choices=['suites'])
     par.add_argument('--list', action='store_true')
     par.add_argument('--emit', metavar='KEY',
-                     choices=['elab_shared_tops', 'multihead_ids', 'reg_variants'],
+                     choices=['elab_shared_tops', 'multihead_ids', 'reg_variants', 'suites'],
                      help='print a database list for a make recipe to loop over')
     par.add_argument('--prereqs', metavar='SUITE',
                      help='files the suite needs built, so make needs no per-suite rule')
@@ -165,7 +165,7 @@ def main():
         print(json.dumps({'suite': sorted(db['suites'])}))
         return 0
     if args.emit:
-        entries = db.get(args.emit) or []
+        entries = sorted(db['suites']) if args.emit == 'suites' else (db.get(args.emit) or [])
         if not entries:
             print('error: {} is empty'.format(args.emit), file=sys.stderr)
             return 1
