@@ -129,12 +129,13 @@ jobs:
         name: Read the suites from the verification database
         id: legs
         run: |
-          echo "suites=$(uv run --locked python util/run_verify.py \
-            --emit-matrix suites)" >> "$GITHUB_OUTPUT"
+          suites=$(uv run --locked python util/run_verify.py --emit-matrix suites)
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
 
   # Real simulation; run_verify.py knows which suites are negative tests
   simulate:
     needs: sim-matrix
+    if: needs.sim-matrix.outputs.suites != ''
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.sim-matrix.outputs.suites) }}

@@ -8,10 +8,7 @@
 `include "common_cells/registers.svh"
 `include "common_cells/assertions.svh"
 `include "idma/typedef.svh"
-// the tracer macro is only expanded below the `ifndef SYNTHESIS guard
-`ifndef SYNTHESIS
-`include "idma/tracer_rw_axi.svh"
-`endif
+`include "idma/tracer_rw_axi_rw_init_rw_obi.svh"
 
 /// Implements the tightly-coupled frontend. This module can directly be connected
 /// to an accelerator bus in the snitch system
@@ -801,7 +798,7 @@ module idma_inst64_top #(
                 $sformat(trace_file, "dma_trace_%05x_%05x.log", hart_id_i, c);
             end
             // attach the tracer
-            `IDMA_TRACER_RW_AXI(gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
+            `IDMA_TRACER_RW_AXI_RW_INIT_RW_OBI(gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
         end
     end
 `endif

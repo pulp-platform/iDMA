@@ -26,8 +26,7 @@ elab_shared_tops: [idma_desc64_synth, idma_nd_midend_synth, idma_mp_midend_synth
 # Out-of-tree multi-head variants; license-free but generated only on request
 multihead_ids: [2r_axi_w_axi, 2rw_axi]
 
-# The generated register frontends share a parameter and port list, so the one
-# public concrete binding elaborates each. Without this, 2d and 1d have no leg.
+# The one public concrete binding; without this, 2d and 1d have no leg
 reg_variants:
   - {variant: 3, module: idma_reg32_3d}
   - {variant: 2, module: idma_reg64_2d}
@@ -58,9 +57,12 @@ suites:
     dpi: idma_transpose_dpi
     token: "[TB] ALL PASS"
     runs:
-      - {tag: otf_transpose,    params: {StrbWidth: 8, FullDuplex: 1}}
-      # a second stimulus, backpressured, not a rerun
-      - {tag: otf_transpose_bp, params: {StrbWidth: 8, FullDuplex: 1}, plusargs: ["+BP"]}
+      - {tag: otf_transpose,       params: {StrbWidth: 8,  FullDuplex: 1}}
+      # +BP is a second stimulus, backpressured, not a rerun
+      - {tag: otf_transpose_bp,    params: {StrbWidth: 8,  FullDuplex: 1}, plusargs: ["+BP"]}
+      - {tag: otf_transpose_8_0,   params: {StrbWidth: 8,  FullDuplex: 0}, plusargs: ["+BP"]}
+      - {tag: otf_transpose_64_1,  params: {StrbWidth: 64, FullDuplex: 1}, plusargs: ["+BP"]}
+      - {tag: otf_transpose_64_0,  params: {StrbWidth: 64, FullDuplex: 0}, plusargs: ["+BP"]}
 
   transpose_midend:
     top: tb_idma_transpose_midend

@@ -24,13 +24,7 @@ import os
 import re
 import sys
 
-# Configurations that sweep the bus width on top of the jobs.json parameters.
-# Every jobs.json entry pins DataWidth=32, so nothing wider is elaborated by
-# the directed matrix.
-DEFAULT_WIDTHS = [32, 64, 512, 1024]
-
-# Parameters a compute-enabled configuration sets. jobs.json never enables the
-# compute datapath, so its generate branches are unreachable without this sweep.
+# Parameters a compute-enabled configuration sets
 COMPUTE_PARAMS = ('EnableCompute', 'ComputeOps', 'ComputeTuning')
 
 
@@ -105,7 +99,7 @@ def main():
     par.add_argument('--jobs', default='jobs/jobs.json')
     par.add_argument('--source', action='append', default=[], metavar='GLOB',
                      help='glob of SystemVerilog sources to search for the module header')
-    par.add_argument('--widths', default=' '.join(str(w) for w in DEFAULT_WIDTHS),
+    par.add_argument('--widths', default='',
                      help='space-separated DataWidth sweep; empty disables the sweep')
     par.add_argument('--compute', default='', metavar='WIDTH:OPS:TUNING',
                      help='space-separated compute-enabled configurations; empty '

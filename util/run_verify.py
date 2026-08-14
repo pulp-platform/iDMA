@@ -53,6 +53,8 @@ def legs(suite_name, suite):
                 'plusargs': run.get('plusargs', []),
             }
         return
+    if 'sweep' not in suite:
+        raise KeyError('suite {} has neither runs nor sweep'.format(suite_name))
     sweep = suite['sweep']
     for value in sweep['values']:
         yield {
@@ -88,8 +90,10 @@ def tb_tops(db, bender, targets):
     found = []
     decl = re.compile(r'^\s*module\s+(tb_\w+)', re.M)
     for path in bender_sources(bender, targets):
-        # only iDMA's own testbenches; dependencies bring their own tb_* modules
-        if '.bender/' in path or '/deps/' in path:
+        # only iDMA's own testbenches; relative, so a checkout under a path
+        # containing deps/ does not filter out the whole repository
+        rel = os.path.relpath(path, ROOT)
+        if rel.startswith('..') or rel.startswith(('.bender/', 'deps/')):
             continue
         try:
             with open(path, 'r', errors='replace') as handle:
@@ -115,6 +119,9 @@ def run_suite(name, db, args):
         print('error: suite {} has no legs'.format(name))
         return 1
     for leg in planned:
+        if not leg['token']:
+            print('error: leg {} has no token'.format(leg['tag']), file=sys.stderr)
+            return 1
         cmd = [sys.executable, os.path.join(HERE, 'run_vlt_sim.py'),
                '--dir', vlt_dir, '--top', suite['top'], '--flist', flist,
                '--tag', leg['tag'], '--token', leg['token']]
@@ -162,6 +169,9 @@ def main():
     db = load(args.db)
 
     if args.emit_matrix == 'suites':
+        if not db.get('suites'):
+            print('error: the database lists no suites', file=sys.stderr)
+            return 1
         print(json.dumps({'suite': sorted(db['suites'])}))
         return 0
     if args.emit:
@@ -189,7 +199,11 @@ def main():
         targets = []
         for target in args.target:
             targets += ['-t', target]
-        print(' '.join(tb_tops(db, args.bender, targets)))
+        tops = tb_tops(db, args.bender, targets)
+        if not tops:
+            print('error: bender returned no testbench tops', file=sys.stderr)
+            return 1
+        print(' '.join(tops))
         return 0
     if args.list:
         for name in sorted(db['suites']):

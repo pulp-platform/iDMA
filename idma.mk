@@ -289,7 +289,6 @@ idma_reg_clean:
 	rm -f  $(IDMA_RTL_DIR)/*_reg_top.sv
 	rm -f  $(IDMA_RTL_DIR)/*_reg_pkg.sv
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
-	rm -f  $(IDMA_REG_CUST_ALL)
 
 # assemble the required files
 IDMA_TREE_RTL_ALL += $(foreach Y,$(IDMA_TREE_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.sv)
@@ -631,7 +630,7 @@ idma_vcs_clean:
 IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
 
 
-# Warning classes measured at 0 occurrences over all 12 synth tops, so they gate.
+# Warning classes measured at 0 occurrences over the synth tops, so they gate.
 # Not promoted, with the measurement: UNOPTFLAT (31, includes the known
 # idma_nd_midend stage_done loop) and PINMISSING (12, all in axi_stream and
 # common_cells, none iDMA-owned).
@@ -649,7 +648,7 @@ idma_verilator_clean:
 # the only public concrete binding of the snitch_cluster-gated idma_inst64_top. -t test
 # adds obi_sim_mem; --top-module is load-bearing, it trims the flat filelist to the
 # reachable cone. Run after idma_hw_all. slang covers the same top via
-# IDMA_TB_SHARED_TOPS.
+# the shared testbench leg.
 IDMA_INST64_TB   := tb_idma_inst64_axi_copy
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
@@ -778,7 +777,8 @@ idma_sw_clean:
 # Phony Targets
 # --------------
 
-.PHONY: idma_all idma_add_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
+.PHONY: idma_all idma_add_all idma_doc_all idma_pickle_all idma_sim_all
+.PHONY: idma_hw_all idma_sw_all idma_nuke
 
 # Build the Starlight/Astro site (output in doc/site/dist) after staging the graphs
 idma_doc_all: idma_doc_site
@@ -786,7 +786,7 @@ idma_doc_all: idma_doc_site
 
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
-idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) \
+idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) \
              $(IDMA_WAVE_ALL)
 
 # The IDMA_ADD_IDS aggregates; ask for it next to idma_hw_all on an add-id build

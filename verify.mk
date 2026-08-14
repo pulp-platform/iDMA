@@ -5,9 +5,7 @@
 # Authors:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-# License-free verification: elaboration and simulation on verilator and slang
-# only. Included by idma.mk, whose variables it uses; it adds no build rules, so
-# building iDMA never reads it.
+# License-free verification (verilator + slang); no build target depends on it
 
 # ---------------
 # Public verification
@@ -28,8 +26,8 @@ IDMA_VERIFY_DB     := $(IDMA_ROOT)/src/db/verify.yml
 IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
 IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang
 IDMA_SLANG_VERSION ?= 11.0.0
-# pyslang ships the driver; a site `slang` wrapper can turn a SIGSEGV into rc=0
-SLANG              ?= $(UV) run --with pyslang==$(IDMA_SLANG_VERSION) python \
+SLANG              ?= $(UV) run --locked --project $(IDMA_ROOT) \
+                      --with pyslang==$(IDMA_SLANG_VERSION) python \
                       $(IDMA_UTIL_DIR)/slang_elab.py
 IDMA_SLANG_ARGS    := -Werror --error-limit 0
 # -Wno-finish-num covers 9 $fatal("<string>") calls in common_verification; no
@@ -39,15 +37,15 @@ IDMA_SLANG_SYNTH_T := -t rtl -t synth
 IDMA_SLANG_TB_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                       -t snitch_cluster -t asic
 
-# Testbench tops from bender. A file target, not $(shell): make discards a
-# $(shell) exit status, so a failure would empty the list and the leg pass.
-$(IDMA_VERIFY_DIR)/%.list: $(IDMA_VERIFY_DB)
+# A file target, not $(shell): make discards a $(shell) exit status
+$(IDMA_VERIFY_DIR)/%.list: $(IDMA_VERIFY_DB) $(IDMA_UTIL_DIR)/run_verify.py
 	mkdir -p $(@D)
 	$(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --emit $* > $@.tmp
 	test -s $@.tmp
 	mv $@.tmp $@
 
-$(IDMA_VERIFY_DIR)/tb_tops.txt: $(IDMA_ROOT)/Bender.yml $(IDMA_VERIFY_DB)
+$(IDMA_VERIFY_DIR)/tb_tops.txt: $(IDMA_ROOT)/Bender.yml $(IDMA_VERIFY_DB) \
+                                $(IDMA_UTIL_DIR)/run_verify.py
 	mkdir -p $(@D)
 	BENDER=$(BENDER) $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --tb-tops \
 	  $(patsubst -t%,--target %,$(IDMA_SLANG_TB_T)) > $@.tmp
@@ -79,7 +77,6 @@ $(IDMA_SLANG_DIR)/tb.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(
 	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) > $@
 
 
-# slang ignores an unknown -G, so idma_params.py checks names against the header
 idma_lint_params: $(IDMA_VLT_DIR)/idma_verify.f
 	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
 	$(call idma_elab_cfg,$(IDMA_TOP))
@@ -120,8 +117,7 @@ idma_verify_backend:
 	$(MAKE) idma_slang_elab  IDMA_TOP=idma_backend_synth_$(IDMA_VERIFY_ID)
 	$(MAKE) idma_slang_tb    IDMA_TOP=tb_idma_backend_$(IDMA_VERIFY_ID)
 
-# The four non-backend synthesis tops with their jobs.json parameters, plus the
-# default-parameter elaboration of every top from idma_lint_all
+# Non-backend synthesis tops, plus every top from idma_lint_all
 idma_verify_shared: idma_lint_all $(IDMA_VERIFY_DIR)/elab_shared_tops.list
 	@test -s $(IDMA_VERIFY_DIR)/elab_shared_tops.list || \
 	  { echo "error: no shared tops listed"; exit 1; }
@@ -151,8 +147,7 @@ idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done < $(IDMA_VERIFY_DIR)/reg_variants.list
 
-# Out-of-tree multi-head build: regenerate with the extra ids, then elaborate the
-# two extra synthesis tops and the two multi-head testbenches
+# Out-of-tree multi-head build
 idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 	@test -s $(IDMA_VERIFY_DIR)/multihead_ids.list || \
 	  { echo "error: no multi-head ids listed"; exit 1; }
@@ -175,8 +170,11 @@ idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_tb.f --top $$tb \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done
-	# the tracked aggregates never saw the extra ids, so this is a no-op assertion
 	$(MAKE) idma_hw_all
+	@for id in $$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list); do \
+	  grep -q "$$id" $(IDMA_FULL_RTL) && \
+	    { echo "error: $$id leaked into $(IDMA_FULL_RTL)"; exit 1; }; \
+	done; echo "add-ids stayed out of the tracked aggregate"
 
 
 # ---------------
@@ -228,21 +226,21 @@ idma_verify_sim_%: idma_verify_toolchain
 IDMA_GEN_FILES := $(IDMA_RTL_ALL) $(IDMA_TB_ALL) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) \
                   $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
 
-# Not verification. No zero-git-diff form: target/rtl is gitignored on source
-# branches, so it would pass unconditionally.
+# Not verification; no zero-git-diff form, target/rtl is gitignored here
 idma_verify_codegen:
 	$(MAKE) idma_hw_all
 	$(PYTHON) $(IDMA_UTIL_DIR)/check_jobs.py --ids "$(IDMA_BACKEND_IDS)" \
 	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --jobs-dir $(IDMA_ROOT)/jobs \
 	  --verify-db $(IDMA_VERIFY_DB) \
+	  --matrix-file $(IDMA_ROOT)/.github/workflows/verify.yml \
 	  --mxneg-tb $(IDMA_ROOT)/test/tb_idma_mxneg.sv \
 	  --mxneg-guard-src $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl \
 	  $(IDMA_SOURCE_GLOBS)
 	mkdir -p $(IDMA_VERIFY_DIR)
-	md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen1.md5
+	set -o pipefail; md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen1.md5
 	$(MAKE) idma_rtl_clean idma_reg_clean
 	$(MAKE) idma_hw_all
-	md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen2.md5
+	set -o pipefail; md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen2.md5
 	diff -u $(IDMA_VERIFY_DIR)/gen1.md5 $(IDMA_VERIFY_DIR)/gen2.md5
 
 # Advisory only; never add to the required checks

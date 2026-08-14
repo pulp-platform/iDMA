@@ -54,8 +54,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // config-clock cycles is a hang (the non-blocking read completes immediately).
   localparam int unsigned DeadlockCycles = 32'd2000;
 
-  // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4; the reg64
-  // variants have their own map and are elaboration-only, so it is not modelled here
+  // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4
   localparam logic [31:0] REG_CONF       = 32'h0000_0000;
   localparam logic [31:0] REG_STATUS0    = 32'h0000_0004;
   localparam logic [31:0] REG_NEXT_ID0   = 32'h0000_0044;
@@ -184,9 +183,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // --------------------------------------------------------------------------
   // DUT
   // --------------------------------------------------------------------------
-  // All three generated frontends share the parameter and port list; only the module name
-  // and the request type differ. reg64_1d (NumDim=1) emits a flat idma_req_t, widened
-  // back to the ND shape the stimulus works on
+  // All three share the parameter and port list; reg64_1d emits a flat idma_req_t
   if (RegVariant == 32'd3) begin : gen_reg32_3d
     idma_reg32_3d #(
       .NumRegs        ( NumRegs        ),

@@ -13,13 +13,15 @@ still describe the same design:
   a) every backend id has a jobs.json entry,
   b) every job path referenced by jobs.json exists,
   c) every testbench and synth_top named by jobs.json exists in the sources,
-  d) every negative-test case the testbench defines is either run or named as
+  d) the workflow fans out over every backend id,
+  e) every negative-test case the testbench defines is either run or named as
      skipped, and every legalizer compute guard is either proven to fire by some
-     case or named as untested. Without (d) a new case or a new guard is added to
+     case or named as untested. Without (e) a new case or a new guard is added to
      the design and silently exercised by nothing.
 
-The CI matrix is not checked here any more: it fans out over src/db/verify.yml,
-the same file that drives the local runs, so the two cannot disagree.
+The simulation matrix is not checked: CI fans it out over src/db/verify.yml, the
+same file that drives the local runs. The backend-id matrix is a literal list in
+the workflow, so (e) still compares it against the ids.
 
 The run list is always taken from jobs.json, never from `ls jobs/*`: four
 error_*.txt files exist on disk for variants built with ErrorHandling=0 and
@@ -60,6 +62,8 @@ def main():
     par.add_argument('--jobs-dir', default='jobs')
     par.add_argument('--ids', required=True, help='space-separated IDMA_BACKEND_IDS')
     par.add_argument('--source', action='append', default=[], metavar='GLOB')
+    par.add_argument('--matrix-file', default=None,
+                     help='CI workflow that must fan out over every backend id')
     par.add_argument('--verify-db', default=None,
                      help='src/db/verify.yml; the run set and its named exclusions')
     par.add_argument('--mxneg-tb', default=None,
@@ -91,8 +95,7 @@ def main():
                 errors.append('{}: job "{}" references missing file {}/{}'.format(
                     name, job, args.jobs_dir, rel))
 
-    # (b, inverse) a job file on disk that nothing references, and is not a
-    # known-unwired file, is either dead or a forgotten entry
+    # (b, inverse) an unreferenced job file on disk is dead or a forgotten entry
     on_disk = set()
     for path in glob.glob(os.path.join(args.jobs_dir, '**', '*.txt'), recursive=True):
         on_disk.add(os.path.relpath(path, args.jobs_dir))
@@ -113,7 +116,16 @@ def main():
                 errors.append('{}: {} "{}" is not defined in the sources'.format(
                     name, field, module))
 
-    # (d) compares the run set against the design, not against a copy of itself
+    # (d) the backend-id matrix is a literal list in the workflow, so it can drift
+    if args.matrix_file:
+        with open(args.matrix_file, 'r') as handle:
+            matrix = handle.read()
+        for backend_id in args.ids.split():
+            if not re.search(r'^\s*-\s*' + re.escape(backend_id) + r'\s*$', matrix, re.M):
+                errors.append('{} has no matrix leg for backend id {}'.format(
+                    args.matrix_file, backend_id))
+
+    # (e) compares the run set against the design, not against a copy of itself
     db = {}
     if args.verify_db:
         with open(args.verify_db, 'r') as handle:
