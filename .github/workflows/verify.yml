@@ -154,7 +154,8 @@ jobs:
         run: uv run --locked make idma_hw_all
       -
         name: Simulate ${{ matrix.suite }}
-        run: uv run --locked make idma_verify_sim_${{ matrix.suite }} IDMA_VLT_MAKEFLAGS=-j4
+        run: uv run --locked make idma_verify_sim_${{ matrix.suite }} \
+          IDMA_VLT_MAKEFLAGS="-j4 OBJCACHE=ccache"
       -
         name: ccache statistics
         if: always()
