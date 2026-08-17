@@ -5,11 +5,92 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## 0.7.0 - 2026-08-17
+
+### Added
+- Add multi-head capabilities to the backend and front-ends [#85](https://github.com/pulp-platform/iDMA/pull/85),
+  with datapath fixes and verification testbenches [#123](https://github.com/pulp-platform/iDMA/pull/123).
+- Add on-the-fly compute at the write seam: a transpose engine
+  [#112](https://github.com/pulp-platform/iDMA/pull/112), OCP microscaling quantise and
+  dequantise [#170](https://github.com/pulp-platform/iDMA/pull/170), engine instantiation as a
+  SystemVerilog parameter [#159](https://github.com/pulp-platform/iDMA/pull/159), and transpose
+  parameters in the register map [#160](https://github.com/pulp-platform/iDMA/pull/160).
+- Add OBI events to the event struct [#145](https://github.com/pulp-platform/iDMA/pull/145).
+- Add C register headers for downstream drivers [#158](https://github.com/pulp-platform/iDMA/pull/158).
+- Add a `BurstLen` parameter to the legalizer page splitter [#109](https://github.com/pulp-platform/iDMA/pull/109).
+- Add a license-free public verification matrix: slang elaborates every variant and verilator
+  simulates the compute datapath against DPI-C goldens
+  [#186](https://github.com/pulp-platform/iDMA/pull/186), with an inst64 frontend testbench
+  [#185](https://github.com/pulp-platform/iDMA/pull/185) and the testbenches under the style gate
+  [#192](https://github.com/pulp-platform/iDMA/pull/192).
+- Harden the compute and transpose testbenches so a failed check aborts the run
+  [#133](https://github.com/pulp-platform/iDMA/pull/133),
+  [#178](https://github.com/pulp-platform/iDMA/pull/178),
+  [#188](https://github.com/pulp-platform/iDMA/pull/188),
+  [#107](https://github.com/pulp-platform/iDMA/pull/107).
+- Add a Starlight documentation site [#103](https://github.com/pulp-platform/iDMA/pull/103),
+  [#181](https://github.com/pulp-platform/iDMA/pull/181).
 
 ### Changed
-- **Breaking**: the tracer is generated one header per backend id. `idma/tracer.svh` now only holds the id-independent helpers; the `IDMA_TRACER_<ID>` macro of a variant lives in `idma/tracer_<id>.svh`, which includes `idma/tracer.svh` itself. Downstream users replace `` `include "idma/tracer.svh" `` with the per-id header of the variant they trace.
+- Generate the register blocks from SystemRDL with PeakRDL
+  [#73](https://github.com/pulp-platform/iDMA/pull/73), and single-source the compute-op encoding
+  there [#176](https://github.com/pulp-platform/iDMA/pull/176).
+- Generate one tracer header per backend id [#186](https://github.com/pulp-platform/iDMA/pull/186),
+  and qualify the trace signal keys by direction.
+- Bump `common_cells` to v2 [#99](https://github.com/pulp-platform/iDMA/pull/99) and align the
+  ecosystem pins [#180](https://github.com/pulp-platform/iDMA/pull/180).
+- Replace morty with the bender slang pickle [#110](https://github.com/pulp-platform/iDMA/pull/110)
+  and rename its output directory to `target/pickle`
+  [#114](https://github.com/pulp-platform/iDMA/pull/114).
+- Manage the Python environment with `pyproject.toml` and uv
+  [#121](https://github.com/pulp-platform/iDMA/pull/121),
+  [#111](https://github.com/pulp-platform/iDMA/pull/111),
+  [#128](https://github.com/pulp-platform/iDMA/pull/128).
+- Update the `inst64` front-end for streamlined Snitch integration
+  [#88](https://github.com/pulp-platform/iDMA/pull/88), and prioritise OBI writes
+  [#138](https://github.com/pulp-platform/iDMA/pull/138).
+- Retire compute on `w_dp_req_ready` and drop the dead `w_beat_done`
+  [#163](https://github.com/pulp-platform/iDMA/pull/163).
+- Render `compute.svh` with the PeakRDL raw-header template
+  [#179](https://github.com/pulp-platform/iDMA/pull/179).
+- Bump all bender dependencies [#130](https://github.com/pulp-platform/iDMA/pull/130).
+- Various CI and build modernisation: consolidated workflows and pre-commit hooks
+  [#90](https://github.com/pulp-platform/iDMA/pull/90), bender and object caching
+  [#120](https://github.com/pulp-platform/iDMA/pull/120),
+  [#198](https://github.com/pulp-platform/iDMA/pull/198),
+  [#199](https://github.com/pulp-platform/iDMA/pull/199),
+  [#200](https://github.com/pulp-platform/iDMA/pull/200), author lint by domain
+  [#169](https://github.com/pulp-platform/iDMA/pull/169), per-top trimmed compile scripts
+  [#116](https://github.com/pulp-platform/iDMA/pull/116), and pipeline hygiene
+  [#117](https://github.com/pulp-platform/iDMA/pull/117),
+  [#118](https://github.com/pulp-platform/iDMA/pull/118),
+  [#122](https://github.com/pulp-platform/iDMA/pull/122),
+  [#124](https://github.com/pulp-platform/iDMA/pull/124),
+  [#125](https://github.com/pulp-platform/iDMA/pull/125),
+  [#127](https://github.com/pulp-platform/iDMA/pull/127),
+  [#175](https://github.com/pulp-platform/iDMA/pull/175).
 
+### Fixed
+- Send `AW` when `W` is ready, fixing AW starvation with `decouple_rw` and without `decouple_aw`
+  [#80](https://github.com/pulp-platform/iDMA/pull/80).
+- Break a combinational loop in the desc64 speculation FIFO
+  [#91](https://github.com/pulp-platform/iDMA/pull/91).
+- Fix compute synth-wrapper emission and AXI-write eligibility
+  [#162](https://github.com/pulp-platform/iDMA/pull/162).
+- Emit synth-wrapper head ports only for multi-head backends
+  [#136](https://github.com/pulp-platform/iDMA/pull/136).
+- Gate the external register read-ack [#134](https://github.com/pulp-platform/iDMA/pull/134).
+- Sync the `rt_midend` choice FIFO [#108](https://github.com/pulp-platform/iDMA/pull/108).
+- Align the desc64 addrmap symbol references with the generated package
+  [#182](https://github.com/pulp-platform/iDMA/pull/182).
+- Fix the documentation site base path [#183](https://github.com/pulp-platform/iDMA/pull/183).
+
+Four changes are not backwards compatible. The tracer is generated one header per backend id, so
+`` `include "idma/tracer.svh" `` becomes `` `include "idma/tracer_<id>.svh" `` for the variant being
+traced. The trace signal keys are qualified by direction, so a consumer reading `axi_rsp_ready` now
+reads `axi_read_rsp_ready`; without this a protocol present on both sides emitted the same key twice
+and the read channel was lost. `common_cells` v2 is required, which is an ecosystem-wide bump. The
+pickle moves from `target/morty` to `target/pickle`.
 
 ## 0.6.5 - 2025-07-15
 
