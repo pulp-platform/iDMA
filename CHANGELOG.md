@@ -83,6 +83,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Sync the `rt_midend` choice FIFO [#108](https://github.com/pulp-platform/iDMA/pull/108).
 - Align the desc64 addrmap symbol references with the generated package
   [#182](https://github.com/pulp-platform/iDMA/pull/182).
+- Report the documented stall polarity in the `inst64` events
+  [#187](https://github.com/pulp-platform/iDMA/pull/187). `r_stall` and `w_stall` were carrying
+  the definitions of the buffer-pressure metrics, which overrode the correct assignments.
 - Fix the documentation site base path [#183](https://github.com/pulp-platform/iDMA/pull/183).
 
 Four changes are not backwards compatible. The tracer is generated one header per backend id, so
@@ -91,6 +94,11 @@ traced. The trace signal keys are qualified by direction, so a consumer reading 
 reads `axi_read_rsp_ready`; without this a protocol present on both sides emitted the same key twice
 and the read channel was lost. `common_cells` v2 is required, which is an ecosystem-wide bump. The
 pickle moves from `target/morty` to `target/pickle`.
+
+The `inst64` stall counters change meaning without a version marker
+[#187](https://github.com/pulp-platform/iDMA/pull/187). `dma_r_stall` and `dma_w_stall` now report
+what the Snitch cluster documents them to report, so a profile captured before this release is not
+comparable with one captured after.
 
 ## 0.6.5 - 2025-07-15
 
