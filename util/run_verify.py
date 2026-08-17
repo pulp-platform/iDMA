@@ -46,7 +46,10 @@ def load(path=None):
             continue
         suite = dict(entry['verify'])
         suite['top'] = entry['testbench']
-        suite['runs'] = suite.pop('legs')
+        # entry params are common to every leg; a leg may override one
+        common = entry.get('params', {})
+        suite['runs'] = [dict(r, params={**common, **r.get('params', {})})
+                         for r in suite.pop('legs')]
         db['suites'][name] = suite
     return db
 
