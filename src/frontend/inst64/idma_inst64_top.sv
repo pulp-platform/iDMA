@@ -798,7 +798,8 @@ module idma_inst64_top #(
                 $sformat(trace_file, "dma_trace_%05x_%05x.log", hart_id_i, c);
             end
             // attach the tracer
-            `IDMA_TRACER_RW_AXI_RW_INIT_RW_OBI(gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
+            `IDMA_TRACER_RW_AXI_RW_INIT_RW_OBI(
+                gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
         end
     end
 `endif
