@@ -93,8 +93,7 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
 
     assign idma_req         = idma_dv.req;
     assign req_valid        = idma_dv.req_valid;
-    // TB only inspects the written memory; keep rsp_ready asserted so the read
-    // datapath can drain R into the buffer.
+    // rsp_ready stays high so the read datapath can drain
     assign rsp_ready        = 1'b1;
     assign idma_eh_req      = idma_dv.eh_req;
     assign eh_req_valid     = idma_dv.eh_req_valid;
@@ -146,7 +145,8 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
         .clk_i (clk), .rst_ni (rst_n),
         .idma_req_i (idma_req), .req_valid_i (req_valid), .req_ready_o (req_ready),
         .idma_rsp_o (idma_rsp), .rsp_valid_o (rsp_valid), .rsp_ready_i (rsp_ready),
-        .idma_eh_req_i (idma_eh_req), .eh_req_valid_i (eh_req_valid), .eh_req_ready_o (eh_req_ready),
+        .idma_eh_req_i (idma_eh_req), .eh_req_valid_i (eh_req_valid),
+        .eh_req_ready_o (eh_req_ready),
         .axi_read_req_o (axi_read_req), .axi_read_rsp_i (axi_read_rsp),
         .axi_write_req_o (axi_write_req), .axi_write_rsp_i (axi_write_rsp),
         .busy_o (busy)
@@ -168,8 +168,10 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
 
     function automatic byte_t mem_get (input int unsigned head, input addr_t a);
         case (head)
-            0: return gen_head[0].i_axi_sim_mem.mem.exists(a) ? gen_head[0].i_axi_sim_mem.mem[a] : 8'hxx;
-            1: return gen_head[1].i_axi_sim_mem.mem.exists(a) ? gen_head[1].i_axi_sim_mem.mem[a] : 8'hxx;
+            0: return gen_head[0].i_axi_sim_mem.mem.exists(a)
+                      ? gen_head[0].i_axi_sim_mem.mem[a] : 8'hxx;
+            1: return gen_head[1].i_axi_sim_mem.mem.exists(a)
+                      ? gen_head[1].i_axi_sim_mem.mem[a] : 8'hxx;
             default: return 8'hxx;
         endcase
     endfunction
@@ -224,8 +226,7 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
         do_copy(LEN, 32'h0000_1000, 32'h0000_2000, 1, 1, 'd2);
         check("same1", 1, 32'h0000_2000, LEN, s1);
 
-        // cross-head: read head 0, write head 1 -> data must land in head 1's memory.
-        // With the dst_head<-src_head bug it lands in head 0 instead, so this fails.
+        // cross-head: the dst_head<-src_head bug lands the data in head 0
         do_copy(LEN, 32'h0000_1000, 32'h0000_3000, 0, 1, 'd3);
         check("cross0to1", 1, 32'h0000_3000, LEN, s0);
 

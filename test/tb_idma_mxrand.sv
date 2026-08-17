@@ -134,7 +134,7 @@ module tb_idma_mxrand
 
   initial begin
     automatic int unsigned errs = 0;
-    automatic logic [7:0]  golden [0:1023];
+    automatic logic [7:0]  golden [1024];
     automatic logic [15:0] h;
     automatic logic [31:0] w;
     automatic addr_t src, dst;

@@ -17,16 +17,14 @@ module tb_idma_inst64_axi_copy;
     localparam int unsigned TimeoutCycles  = 32'd200000;
     localparam int unsigned CopySize       = 32'd4096;
     localparam int unsigned BytesPerBeat   = AxiDataWidth / 32'd8;
-    // Keep the beat rounding: MaskInvalidData is 0 in the inst64 backend, so the full
-    // beat-rounded source range must be initialized once CopySize stops being a multiple.
+    // MaskInvalidData is 0 here, so the full beat-rounded range is read
     localparam int unsigned CopyPadBytes   =
         ((CopySize + BytesPerBeat - 1) / BytesPerBeat) * BytesPerBeat;
     localparam int unsigned GuardBytes     = 32'd64;
     localparam logic [7:0]  Sentinel       = 8'h5A;
     localparam logic [7:0]  PatternStart   = 8'hA0;
 
-    // One burst per direction: the copy is 64 B aligned on both ends and a multiple of a
-    // full beat, so every data beat carries a full strobe.
+    // One burst per direction: the copy is 64 B aligned and a whole beat
     localparam int unsigned    ExpDataBeats = CopyPadBytes / BytesPerBeat;
     localparam axi_pkg::len_t  ExpAxLen     = axi_pkg::len_t'(ExpDataBeats - 1);
     localparam axi_pkg::size_t ExpAxSize    = axi_pkg::size_t'($clog2(BytesPerBeat));
@@ -42,11 +40,7 @@ module tb_idma_inst64_axi_copy;
     //--------------------------------------
     // DUT event cross-check
     //--------------------------------------
-    // Every field recodes the DUT's own top-level pins, so the TB rebuilds the expected
-    // value from those pins and compares per cycle; the hand-counted AR/AW sniff stays
-    // the independent reference. Not covered: obi_wr_req/obi_rd_req (no OBI traffic
-    // here) and the stall fields, which never assert since the sim memories neither
-    // backpressure nor bubble.
+    // Each field recodes a DUT pin, so the TB rebuilds it from those pins
     typedef enum int unsigned {
         EvAwValid, EvAwReady, EvAwDone, EvAwStall, EvAwLen, EvAwSize,
         EvArValid, EvArReady, EvArDone, EvArStall, EvArLen, EvArSize,
@@ -68,8 +62,7 @@ module tb_idma_inst64_axi_copy;
 
     logic [NumEvFields-1:0] ev_field_ok;
 
-    // len/size are compared in their full `handshake ? pin : '0` form every cycle, so a
-    // stale value leaking between bursts fails instead of hiding in the idle half.
+    // len/size compared every cycle, so a stale value fails immediately
     always_comb begin : proc_ev_field_ok
         automatic logic aw_hs = bus_req.aw_valid && bus_res.aw_ready;
         automatic logic ar_hs = bus_req.ar_valid && bus_res.ar_ready;
@@ -110,8 +103,7 @@ module tb_idma_inst64_axi_copy;
         ev_field_ok[EvBusy   ] = ev.dma_busy === harness.busy[0];
     end
 
-    // One assertion per field so a failure names it. Both operands are combinational from
-    // the same pins and are sampled in the same preponed region, so the offset is zero.
+    // One assertion per field so a failure names it
     for (genvar f = 0; f < NumEvFields; f++) begin : gen_ev_field_check
         localparam ev_field_e Field = ev_field_e'(f);
         a_ev_field : assert property (
@@ -119,8 +111,7 @@ module tb_idma_inst64_axi_copy;
         ) else $fatal(1, "events.%s disagrees with the AXI pins", Field.name());
     end
 
-    // events_o has no reset, so an X on both sides would make `===` match vacuously.
-    // This is a separate failure, never a reason to skip the comparison.
+    // events_o has no reset, so an X on both sides would match vacuously
     a_ev_pins_known : assert property (
         @(posedge harness.clk) disable iff (!harness.rst_n)
         !$isunknown({bus_req.aw_valid, bus_req.ar_valid, bus_req.w_valid, bus_req.r_ready,
@@ -139,22 +130,20 @@ module tb_idma_inst64_axi_copy;
     axi_pkg::len_t  ev_ar_len_seen,  ev_aw_len_seen;
     axi_pkg::size_t ev_ar_size_seen, ev_aw_size_seen;
 
-    // Count AXI address handshakes; a green OBI-never-asserted check is only meaningful
-    // if the transfer actually went somewhere. The DUT-side event totals accumulate in the
-    // same process so both views are read in the same region of the same tick.
+    // Count AXI handshakes; the OBI-never-asserted check needs real traffic
     always_ff @(posedge harness.clk) begin : proc_count_axi
         if (harness.rst_n) begin
             if (harness.axi_req[0].ar_valid && harness.axi_res[0].ar_ready) axi_ar_beats++;
             if (harness.axi_req[0].aw_valid && harness.axi_res[0].aw_ready) axi_aw_beats++;
             if (ev.ar_done) begin
                 ev_ar_beats++;
-                ev_ar_len_seen  = ev.ar_len;
-                ev_ar_size_seen = ev.ar_size;
+                ev_ar_len_seen  <= ev.ar_len;
+                ev_ar_size_seen <= ev.ar_size;
             end
             if (ev.aw_done) begin
                 ev_aw_beats++;
-                ev_aw_len_seen  = ev.aw_len;
-                ev_aw_size_seen = ev.aw_size;
+                ev_aw_len_seen  <= ev.aw_len;
+                ev_aw_size_seen <= ev.aw_size;
             end
             if (ev.r_done)   ev_r_beats++;
             if (ev.r_bw)     ev_r_bw_beats++;
@@ -165,8 +154,7 @@ module tb_idma_inst64_axi_copy;
         end
     end
 
-    // Both endpoints sit outside the harness TCDM window, so the decoder must fall back to
-    // ToSoC/AXI. A rising OBI request means the protocol decode is wrong.
+    // Both endpoints sit outside the TCDM window, so the decoder picks AXI
     a_no_obi_traffic : assert property (
         @(posedge harness.clk) disable iff (!harness.rst_n) !harness.obi_req[0].req
     ) else $fatal(1, "OBI leg requested during an AXI-to-AXI transfer: bad protocol decode");
@@ -175,8 +163,7 @@ module tb_idma_inst64_axi_copy;
         for (int i = 0; i < CopyPadBytes; i++) begin
             harness.mem_write_byte(SrcAddr + i, (i < CopySize) ? (PatternStart + i) : 8'h00);
         end
-        // Sentinel the destination and its guard bands so an unwritten byte or an
-        // overrun fails the compare rather than accidentally matching.
+        // Sentinel the destination and guard bands so an overrun fails the compare
         for (int unsigned i = 0; i < CopySize + 2*GuardBytes; i++) begin
             harness.mem_write_byte(DstAddr - GuardBytes + i, Sentinel);
         end
@@ -235,8 +222,7 @@ module tb_idma_inst64_axi_copy;
         harness.drv_if.dma_start_copy(CopySize, 2'b00, 3'd0, tid);
         issued_req_id = harness.drv_if.last_req_id;
 
-        // The driver already fails hard on a bad response; re-check here so the TB states
-        // the contract it relies on.
+        // Re-checked here so the TB states the contract it relies on
         if (harness.drv_if.last_rsp_error !== 1'b0) begin
             $fatal(1, "DMCPY response flagged an error");
         end
@@ -256,8 +242,7 @@ module tb_idma_inst64_axi_copy;
         end
         if (CopySize == 0) $fatal(1, "zero-byte golden compare");
 
-        // Exactly one transfer must have been launched. A driver that holds acc_req_valid
-        // one cycle too long issues the DMCPY twice; the memory image would look identical.
+        // Exactly one launch; a stuck acc_req_valid would issue two
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_after);
         if (next_id_after !== next_id_before + 1) begin
             $fatal(1, "next_id moved %0d -> %0d, expected exactly one transfer",
@@ -273,9 +258,7 @@ module tb_idma_inst64_axi_copy;
                    harness.drv_if.rsp_pending());
         end
 
-        // Event totals: first against the independent sniff, then against the transfer
-        // geometry. The geometry anchors are what make the per-cycle equality above
-        // non-vacuous; without them a run that moved nothing would pass on 0 == 0.
+        // Event totals against the independent sniff, then the transfer geometry
         if (ev_ar_beats != axi_ar_beats || ev_aw_beats != axi_aw_beats) begin
             $fatal(1, "events ar/aw done (%0d/%0d) disagree with the bus sniff (%0d/%0d)",
                    ev_ar_beats, ev_aw_beats, axi_ar_beats, axi_aw_beats);

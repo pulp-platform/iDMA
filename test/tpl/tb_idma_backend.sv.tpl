@@ -27,8 +27,7 @@ module tb_idma_backend_${name_uniqueifier} import idma_pkg::*; #(
 %endif
     parameter int unsigned AddrWidth             = 32,
     parameter int unsigned UserWidth             = 1,
-    // ID is currently used to differentiate transfers in testbench. We need to fix this
-    // eventually.
+    // ID is currently used to differentiate transfers in testbench. We need to fix this eventually.
     parameter int unsigned AxiIdWidth            = \
 % if 'tilelink' in used_protocols:
 12,
@@ -72,8 +71,7 @@ module tb_idma_backend_${name_uniqueifier} import idma_pkg::*; #(
     localparam bit ModelOutput   = 1'b0;
     localparam bit PrintFifoInfo = 1'b1;
 
-    // TB parameters
-    // dependent parameters
+    // TB parameters dependent parameters
     localparam int unsigned StrbWidth       = DataWidth / 8;
     localparam int unsigned OffsetWidth     = $clog2(StrbWidth);
 
@@ -694,7 +692,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
     // DMA Tracer
     //--------------------------------------
     // only activate tracer if requested
-    if (DmaTracing) begin
+    if (DmaTracing) begin : gen_dma_tracer
         // fetch the name of the trace file from CMD line
         string trace_file;
         initial begin
@@ -1094,8 +1092,6 @@ axi_rsp_mem       )
                 else
                     writes_in_flight[proto][id] = 1;
 
-                //if (writes_in_flight[proto][id] == 1)
-                    //$display("Started transfer %d id @%d ns", id, $time);
             end
             if ( axi_rsp_mem.b_valid && axi_req_mem.b_ready ) begin
                 id = axi_rsp_mem.b.id;
@@ -1106,8 +1102,6 @@ axi_rsp_mem       )
                 if ( writes_in_flight[proto][id] == 0 )
                     $fatal(1, "Tried to decrement 0");
                 writes_in_flight[proto][id]--;
-                //if (writes_in_flight[proto][id] == 0)
-                    //$display("Stopped transfer %d id @%d ns", id, $time);
             end
     % elif protocol == 'obi':
             // obi_sim_mem commits writes on grant; mem current at rsp_valid, no write tracking
@@ -1127,8 +1121,6 @@ axi_rsp_mem       )
                 else
                     writes_in_flight[proto][id] = 1;
 
-                //if (writes_in_flight[proto][id] == 1)
-                    //$display("Started transfer %d id @%d ns", id, $time);
             end
             if ( ${protocol}_axi_rsp_mem.b_valid && ${protocol}_axi_req_mem.b_ready ) begin
         % if protocol == 'axi_lite':
@@ -1145,8 +1137,6 @@ axi_rsp_mem       )
                 if ( writes_in_flight[proto][id] == 0 )
                     $fatal(1, "Tried to decrement 0");
                 writes_in_flight[proto][id]--;
-                //if (writes_in_flight[proto][id] == 0)
-                    //$display("Stopped transfer %d id @%d ns", id, $time);
             end
     % endif
 % endfor
@@ -1209,8 +1199,6 @@ axi_rsp_mem       )
                     @(posedge clk);
                 end
             end
-            // finished job
-            // $display("vvv Finished: vvv%s\n^^^ Finished: ^^^", now.pprint());
             // launch model
             model.transfer(
                            now.length,

@@ -111,7 +111,8 @@ module tb_idma_transpose_b2b
     .EnableCompute(1'b1), .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, default: '0}),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
-    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth), .MemSysDepth(0),
+    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0),
+    .NumAxInFlight(StrbWidth), .MemSysDepth(0),
     .idma_req_t(idma_req_t), .idma_rsp_t(idma_rsp_t), .idma_eh_req_t(idma_eh_req_t),
     .idma_busy_t(idma_busy_t), .axi_req_t(axi_req_t), .axi_rsp_t(axi_rsp_t),
     .write_meta_channel_t(write_meta_channel_t), .read_meta_channel_t(read_meta_channel_t)
@@ -124,8 +125,10 @@ module tb_idma_transpose_b2b
     .axi_write_req_o(axi_write_req), .axi_write_rsp_i(axi_write_rsp), .busy_o(busy)
   );
 
-  stream_watchdog #(.NumCycles(4000)) i_r_wd (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
-  stream_watchdog #(.NumCycles(4000)) i_w_wd (.clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+  stream_watchdog #(.NumCycles(4000)) i_r_wd (
+    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
+  stream_watchdog #(.NumCycles(4000)) i_w_wd (
+    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
 
   addr_t sb = 'h0000_1000;
 
@@ -164,9 +167,15 @@ module tb_idma_transpose_b2b
     nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
     nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
     nd_req.burst_req.opt.last         = 1'b1;
-    nd_req.d_req[0].reps = reps_t'(ne); nd_req.d_req[0].src_strides = addr_t'(int'(n*eb));                          nd_req.d_req[0].dst_strides = addr_t'(int'(mp*eb));
-    nd_req.d_req[1].reps = reps_t'(yt); nd_req.d_req[1].src_strides = addr_t'(int'(n*eb));                          nd_req.d_req[1].dst_strides = addr_t'(int'(ne*eb) - int'((ne-1)*mp*eb));
-    nd_req.d_req[2].reps = reps_t'(nt); nd_req.d_req[2].src_strides = addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb));  nd_req.d_req[2].dst_strides = addr_t'(int'(mp*eb) - int'((yt-1)*ne*eb));
+    nd_req.d_req[0].reps        = reps_t'(ne);
+    nd_req.d_req[0].src_strides = addr_t'(int'(n*eb));
+    nd_req.d_req[0].dst_strides = addr_t'(int'(mp*eb));
+    nd_req.d_req[1].reps        = reps_t'(yt);
+    nd_req.d_req[1].src_strides = addr_t'(int'(n*eb));
+    nd_req.d_req[1].dst_strides = addr_t'(int'(ne*eb) - int'((ne-1)*mp*eb));
+    nd_req.d_req[2].reps        = reps_t'(nt);
+    nd_req.d_req[2].src_strides = addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb));
+    nd_req.d_req[2].dst_strides = addr_t'(int'(mp*eb) - int'((yt-1)*ne*eb));
     nd_req_valid = 1'b1;
     do @(posedge clk); while (!nd_req_ready);   // drop valid the cycle accept is seen (compliant)
     nd_req_valid = 1'b0;
@@ -178,14 +187,18 @@ module tb_idma_transpose_b2b
       for (int unsigned r = 0; r < m; r++)
         for (int unsigned b = 0; b < eb; b++)
           if (rd_mem(db + (c*mp + r)*eb + b) !== rd_mem(sb + (r*n + c)*eb + b)) begin
-            errs++; if (errs <= 8) $display("[B2BT] @db=%0h MISMATCH out_T[%0d][%0d].b%0d", db, c, r, b);
+            errs++;
+            if (errs <= 8)
+              $display("[B2BT] @db=%0h MISMATCH out_T[%0d][%0d].b%0d", db, c, r, b);
           end
     for (int unsigned i = 0; i < nt*ne; i++)
       for (int unsigned j = 0; j < mp; j++)
         if (i >= n || j >= m)
           for (int unsigned b = 0; b < eb; b++)
             if (rd_mem(db + (i*mp + j)*eb + b) !== 8'hCC) begin
-              errs++; if (errs <= 8) $display("[B2BT] @db=%0h PADDING CLOBBERED row=%0d col=%0d", db, i, j);
+              errs++;
+              if (errs <= 8)
+                $display("[B2BT] @db=%0h PADDING CLOBBERED row=%0d col=%0d", db, i, j);
             end
   endtask
 
@@ -209,8 +222,10 @@ module tb_idma_transpose_b2b
       $display("[B2BT] %0dx%0d EB=%0d: xfer1 -> db=%0h, xfer2 -> db=%0h", m, n, eb, db1, db2);
       do_transpose(m, n, eb, db1, e1);
       do_transpose(m, n, eb, db2, e2);   // back-to-back, distinct base
-      if (e1 == 0 && e2 == 0) $display("[B2BT] PASS: %0dx%0d EB=%0d both back-to-back transposes correct", m, n, eb);
-      else                    $display("[B2BT] FAIL: %0dx%0d EB=%0d xfer1=%0d xfer2=%0d", m, n, eb, e1, e2);
+      if (e1 == 0 && e2 == 0)
+        $display("[B2BT] PASS: %0dx%0d EB=%0d both back-to-back transposes correct", m, n, eb);
+      else
+        $display("[B2BT] FAIL: %0dx%0d EB=%0d xfer1=%0d xfer2=%0d", m, n, eb, e1, e2);
       total += e1 + e2;
     end
 

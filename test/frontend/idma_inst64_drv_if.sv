@@ -63,17 +63,16 @@ interface idma_inst64_drv_if #(
     //--------------------------------------
     // Response capture
     //--------------------------------------
-    // acc_res_o comes out of a 2-deep cc_spill_register; with acc_res_ready_i tied high
-    // it pops on the posedge, so sample it in a clocked process instead of reading it
-    // combinationally from a task.
+    // acc_res_o pops on the posedge, so sample it in a clocked process
     acc_rsp_item_t rsp_queue [$];
 
     always_ff @(posedge clk) begin : proc_capture_rsp
         // built in a variable first: verilator rejects an assignment pattern as an argument
         automatic acc_rsp_item_t rsp_item;
         if (rst_n && acc_res_valid && acc_res_ready) begin
-            rsp_item = '{id: acc_res.id, data: acc_res.data, error: acc_res.error};
-            rsp_queue.push_back(rsp_item);
+            // typed pattern: verilator rejects a bare assignment pattern as a call argument
+            rsp_queue.push_back(
+                acc_rsp_item_t'{id: acc_res.id, data: acc_res.data, error: acc_res.error});
         end
     end
 
@@ -84,9 +83,7 @@ interface idma_inst64_drv_if #(
     //--------------------------------------
     // Low-level accelerator request driver
     //--------------------------------------
-    // Drive at ApplDelay, sample ready at AcqDelay of the SAME cycle, then release on the
-    // handshake edge. Sampling ready in the same delta as the drive reads the stale value
-    // and holds valid across two edges, which issues every instruction twice.
+    // Sampling ready in the drive delta issues every instruction twice
     task automatic acc_issue(
         input logic [31:0] data_op,
         input logic [63:0] data_arga,
@@ -113,8 +110,7 @@ interface idma_inst64_drv_if #(
         acc_req_valid = 1'b0;
     endtask
 
-    /// Pop the response the DUT produced for the last issued request; fails on timeout,
-    /// on an id mismatch or on a flagged error.
+    // / Pop the response for the last request; fails on timeout, id mismatch or error
     task automatic acc_get_rsp(output acc_rsp_item_t item);
         int unsigned waited;
         waited = 0;
@@ -203,8 +199,7 @@ interface idma_inst64_drv_if #(
         transfer_id = item.data[31:0];
     endtask
 
-    /// Register-form status read; argb[1:0] = index, argb[4:2] = channel.
-    /// index 0 = completed_id, 1 = next_id, 2 = busy, 3 = fifo full
+    // / Status read; index 0 = completed_id, 1 = next_id, 2 = busy, 3 = fifo full
     task automatic dma_poll_status(
         input  logic [1:0]  status_idx,
         input  logic [2:0]  channel,
@@ -217,8 +212,7 @@ interface idma_inst64_drv_if #(
         status_value = item.data;
     endtask
 
-    /// Wait for `transfer_id` to retire. The id generator resets to next=2/completed=1, so
-    /// the first transfer gets id 2 and the compare below is not vacuous.
+    // / Wait for retire; ids start at 2, so the compare is not vacuous
     task automatic dma_wait(
         input tf_id_t     transfer_id,
         input logic [2:0] channel

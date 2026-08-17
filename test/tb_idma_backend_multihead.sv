@@ -10,8 +10,7 @@
 // its own axi_sim_mem so read-head routing is observable: src_head selects which
 // read memory a transfer sources from, while all writes land in the single write
 // memory. Preloading distinct data per read head and checking the write memory
-// catches a backend that ignores or mis-routes src_head. Uses a per-head
-// memory harness pattern.
+// catches a backend that ignores or mis-routes src_head. Uses a per-head memory harness pattern.
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
@@ -96,8 +95,7 @@ module tb_idma_backend_multihead import idma_pkg::*; #(
 
     assign idma_req         = idma_dv.req;
     assign req_valid        = idma_dv.req_valid;
-    // TB never inspects the completion response, only the written memory; keep
-    // rsp_ready asserted so the AXI read datapath can drain R into the buffer.
+    // rsp_ready stays high so the read datapath can drain
     assign rsp_ready        = 1'b1;
     assign idma_eh_req      = idma_dv.eh_req;
     assign eh_req_valid     = idma_dv.eh_req_valid;
@@ -155,7 +153,8 @@ module tb_idma_backend_multihead import idma_pkg::*; #(
         .clk_i (clk), .rst_ni (rst_n),
         .idma_req_i (idma_req), .req_valid_i (req_valid), .req_ready_o (req_ready),
         .idma_rsp_o (idma_rsp), .rsp_valid_o (rsp_valid), .rsp_ready_i (rsp_ready),
-        .idma_eh_req_i (idma_eh_req), .eh_req_valid_i (eh_req_valid), .eh_req_ready_o (eh_req_ready),
+        .idma_eh_req_i (idma_eh_req), .eh_req_valid_i (eh_req_valid),
+        .eh_req_ready_o (eh_req_ready),
         .axi_read_req_o (axi_read_req), .axi_read_rsp_i (axi_read_rsp),
         .axi_write_req_o (axi_write_req), .axi_write_rsp_i (axi_write_rsp),
         .busy_o (busy)
@@ -225,8 +224,7 @@ module tb_idma_backend_multihead import idma_pkg::*; #(
         do_copy(LEN, 32'h0000_1000, 32'h0000_2000, 0, 'd1);
         check("rhead0", 32'h0000_2000, LEN, s0);
 
-        // read head 1 -> write memory: data must be head-1's pattern.
-        // If src_head routing is broken, this reads head 0 and the check fails.
+        // read head 1: broken src_head routing would read head 0 instead
         do_copy(LEN, 32'h0000_1000, 32'h0000_3000, 1, 'd2);
         check("rhead1", 32'h0000_3000, LEN, s1);
 

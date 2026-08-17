@@ -36,32 +36,27 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam int unsigned DataWidth      = AddrWidth;
   localparam int unsigned NumDim         = (RegVariant == 32'd3) ? 32'd3 : 32'd2;
   localparam int unsigned RepWidth       = AddrWidth;
-  // apb_driver framing: the blocking driver.read() spans SETUP + first-ACCESS-check +
-  // trailing edge before returning, so a same-cycle (non-blocking) read takes this many
-  // config clocks end-to-end; each extra ACCESS wait state adds one more clock.
+  // apb_driver framing: a non-blocking read spans this many config clocks
   localparam int unsigned DrvFraming     = 32'd2;
-  // bounded-latency bound for a non-blocking next_id read: measured ACCESS-phase latency
-  // (raw driver.read span minus DrvFraming) must be 0 config-clock cycles — the read must
-  // complete in its first ACCESS check even while req_ready_i is low.
+  // the non-blocking read must complete in its first ACCESS check
   localparam int unsigned MaxReadLatency = 32'd0;
-  // watchdog bound: any next_id APB read that does not complete within this many
-  // config-clock cycles is a hang (the non-blocking read completes immediately).
+  // watchdog: a next_id read outstanding this long is a hang
   localparam int unsigned DeadlockCycles = 32'd2000;
 
   // register map (idma_reg32_3d_addrmap_pkg): base + per-stream stride 0x4
-  localparam logic [31:0] REG_CONF       = 32'h0000_0000;
-  localparam logic [31:0] REG_STATUS0    = 32'h0000_0004;
-  localparam logic [31:0] REG_NEXT_ID0   = 32'h0000_0044;
-  localparam logic [31:0] REG_DONE_ID0   = 32'h0000_0084;
-  localparam logic [31:0] REG_DST_ADDR   = 32'h0000_00D0;
-  localparam logic [31:0] REG_SRC_ADDR   = 32'h0000_00D4;
-  localparam logic [31:0] REG_LENGTH     = 32'h0000_00D8;
+  localparam logic [31:0] RegConf     = 32'h0000_0000;
+  localparam logic [31:0] RegStatus0  = 32'h0000_0004;
+  localparam logic [31:0] RegNextId0  = 32'h0000_0044;
+  localparam logic [31:0] RegDoneId0  = 32'h0000_0084;
+  localparam logic [31:0] RegDstAddr  = 32'h0000_00D0;
+  localparam logic [31:0] RegSrcAddr  = 32'h0000_00D4;
+  localparam logic [31:0] RegLength   = 32'h0000_00D8;
 
   function automatic logic [31:0] reg_next_id(input int unsigned s);
-    return REG_NEXT_ID0 + 32'(s) * 32'h4;
+    return RegNextId0 + 32'(s) * 32'h4;
   endfunction
   function automatic logic [31:0] reg_done_id(input int unsigned s);
-    return REG_DONE_ID0 + 32'(s) * 32'h4;
+    return RegDoneId0 + 32'(s) * 32'h4;
   endfunction
 
   // --------------------------------------------------------------------------
@@ -125,12 +120,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   logic         [NumStreams-1:0] midend_busy;
 
   // --------------------------------------------------------------------------
-  // APB DV interfaces + drivers: one per config port. Each interface is bridged
-  // to the DUT's packed dma_ctrl_req_i[i]/dma_ctrl_rsp_o[i] via the apb assign
-  // macros; one apb_driver per port lets Test 5 drive two ports concurrently.
+  // One APB DV interface and driver per config port, bridged to the packed DUT ports
   // --------------------------------------------------------------------------
-  // virtual-interface handles (interface arrays can only be indexed by a constant,
-  // so each element is captured into this array from the generate loop below)
+  // interface arrays index only by constant, so each element is captured here
   typedef virtual APB_DV #(.ADDR_WIDTH(CfgAddrWidth), .DATA_WIDTH(CfgDataWidth)) apb_dv_t;
   apb_dv_t     apb_vif[NumRegs];
   apb_driver_t drv[NumRegs];
@@ -149,8 +141,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   end
 
   // --------------------------------------------------------------------------
-  // Transfer-id generator (owns the next/completed counters). Reset next=2.
-  // issue on an accepted launch, retire on a modeled backend completion.
+  // Transfer-id generator: reset next=2, issue on launch, retire on completion
   // --------------------------------------------------------------------------
   logic issue;
   logic retire;
@@ -165,8 +156,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     .next_o      ( next_id   ),
     .completed_o ( done_id[0] )
   );
-  // multi-stream: id gen models stream 0; other streams share the same completed
-  // counter here (the DUT only compares per-stream done_id on read-back).
+  // multi-stream: the id gen models stream 0 and shares the completed counter
   for (genvar s = 1; s < NumStreams; s++) begin : gen_done_other
     assign done_id[s] = done_id[0];
   end
@@ -257,12 +247,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   end
 
   // --------------------------------------------------------------------------
-  // Backend stub. `req_ready` is directly controllable by the tests. On each
-  // accepted launch (req_valid & req_ready) the emitted ND request is captured
-  // and enqueued with a retire-deadline; when its timer expires it is retired in
-  // order via the id gen so `done_id` advances. `busy`/`midend_busy` follow the
-  // outstanding count. A single-entry timer is enough — launches are retired FIFO
-  // and only re-armed once the previous one drains, which keeps ordering exact.
+  // Backend stub; req_ready is controllable so the tests can hold the grant off
   // --------------------------------------------------------------------------
   idma_nd_req_t captured_q[$];          // every accepted launch, for self-check
   int unsigned  outstanding;            // in-flight (not yet retired) launches
@@ -322,9 +307,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   end
 
   // --------------------------------------------------------------------------
-  // Watchdog: fatal if a next_id APB read stays outstanding too long.
-  // `nxt_read_active` is raised by launch() around the blocking driver.read and
-  // cleared when it returns — a driver.read that never returns is caught here.
+  // Watchdog: fatal if a next_id read stays outstanding too long
   // --------------------------------------------------------------------------
   logic        nxt_read_active;
   int unsigned nxt_read_watchdog;
@@ -347,9 +330,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   end
 
   // --------------------------------------------------------------------------
-  // Global "launch accepted" pulse counter: an accepted launch is one arbiter
-  // handshake (issue). Used by the launch-integrity scoreboard and by the
-  // driver to wait for id-advance before re-launching.
+  // Accepted-launch counter: one arbiter handshake per launch
   // --------------------------------------------------------------------------
   int unsigned launch_accept_count;
   int unsigned launch_acc_base;         // accept-count snapshot taken at a launch read
@@ -358,9 +339,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     else if (issue) launch_accept_count <= launch_accept_count + 1;
   end
 
-  // Test 5 (multi-port arbitration) scoreboard state. Each config port programs a
-  // unique src_addr that encodes its target stream, so the arbiter's presented
-  // winner (dma_req_o) can be mapped back to a stream and compared to stream_idx_o.
+  // Test 5 scoreboard: each port programs a src_addr encoding its identity
   logic [31:0] sb_addr_stream0;          // src_addr programmed for stream 0's port
   logic [31:0] sb_addr_stream1;          // src_addr programmed for stream 1's port
   int unsigned sb_mismatch;              // times stream_idx != the winner's stream
@@ -375,10 +354,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     drv[port].write(addr, data, '1, err);
   endtask
 
-  // next_id read via the driver, TIMED to recover the ACCESS-phase latency the
-  // non-blocking contract bounds. driver.read blocks until pready; measure the
-  // elapsed config clocks and subtract the fixed driver framing. The watchdog
-  // flag is held across the (blocking) call so a read that never returns fatals.
+  // next_id read, timed to recover the ACCESS-phase latency the contract bounds
   task automatic apb_read_next(input  logic [31:0] addr,
                                output logic [31:0] data,
                                output int unsigned cyc,
@@ -401,23 +377,20 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
                                    input logic [31:0] len,
                                    input int unsigned port = 0);
     // conf: plain 1D incremental copy, ND disabled
-    apb_write(REG_CONF,     32'h0, port);
-    apb_write(REG_SRC_ADDR, src,   port);
-    apb_write(REG_DST_ADDR, dst,   port);
-    apb_write(REG_LENGTH,   len,   port);
+    apb_write(RegConf,     32'h0, port);
+    apb_write(RegSrcAddr, src,   port);
+    apb_write(RegDstAddr, dst,   port);
+    apb_write(RegLength,   len,   port);
   endtask
 
-  // launch: read next_id (the transfer trigger, non-blocking); returns id and the
-  // measured ACCESS-phase latency in `cyc`. Snapshots the accept count before the
-  // read so an accept coinciding with the (non-blocking) read is still observed.
+  // launch: read next_id and return the id with its measured latency
   task automatic launch(output logic [31:0] id, output int unsigned cyc,
                         input int unsigned s = 0, input int unsigned port = 0);
     launch_acc_base = launch_accept_count;
     apb_read_next(reg_next_id(s), id, cyc, port);
   endtask
 
-  // wait until the launch read since the last launch() has been accepted (the
-  // arbiter grant / id-advance). SW confirms acceptance before re-launching.
+  // wait until the launch since the last launch() has been granted
   task automatic wait_launch_accepted();
     int unsigned tries;
     tries = 0;
@@ -523,9 +496,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $display("[ ok ] Test1 done_id reached %0d", id0);
 
     // ------------------------------------------------------------------
-    // Test 2 — Non-blocking read under backpressure (core gate)
-    // The next_id read MUST complete promptly (bounded latency) even while
-    // req_ready_i is held LOW. On a blocking template this FAILS.
+    // Test 2: the next_id read must complete under backend backpressure
     // ------------------------------------------------------------------
     $display("\n--- Test 2: non-blocking read under backpressure ---");
     backend_auto_retire = 1'b0;       // no auto retire while we hold the stall
@@ -556,9 +527,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $display("[ ok ] Test2 completed after backpressure, block still live");
 
     // ------------------------------------------------------------------
-    // Test 2b — Launch integrity: a launch is never dropped when the grant
-    // is late. Hold req_ready low for several cycles AFTER a next_id read,
-    // then release; the latch must fire the launch EXACTLY ONCE.
+    // Test 2b: a launch is never dropped when the grant is late
     // ------------------------------------------------------------------
     $display("\n--- Test 2b: launch integrity (late grant, no drop) ---");
     backend_auto_retire = 1'b0;
@@ -597,8 +566,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $display("[ ok ] Test2b launch fired exactly once after late grant");
 
     // ------------------------------------------------------------------
-    // Test 3 — Multi-stream (only meaningful when NumStreams > 1)
-    // stream_idx_o must point at the launching stream until the grant lands.
+    // Test 3: stream_idx_o must point at the launching stream
     // ------------------------------------------------------------------
     if (NumStreams > 1) begin
       int unsigned held1_cnt;          // cycles stream_idx==1 while pending
@@ -641,9 +609,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     end
 
     // ------------------------------------------------------------------
-    // Test 4 — Back-to-back launches, monotonic ids, in-order done.
-    // Non-blocking: after each launch the driver waits for the id-advance
-    // (accept) before re-programming and re-launching.
+    // Test 4: back-to-back launches, monotonic ids, in-order done
     // ------------------------------------------------------------------
     $display("\n--- Test 4: back-to-back launches ---");
     backend_auto_retire = 1'b1;
@@ -675,11 +641,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     end
 
     // ------------------------------------------------------------------
-    // Test 5 — Concurrent multi-port launch: stream_idx must ride the
-    // arbitration (only meaningful when NumRegs>1 and NumStreams>1).
-    // Two config ports launch on *different* streams in the same window; on
-    // every grant stream_idx must match the ARBITRATED port's stream, not the
-    // last-pending port. This FAILS on the pre-fix RTL and PASSES after it.
+    // Test 5: stream_idx must ride the arbitration across ports
     // ------------------------------------------------------------------
     if (NumRegs > 1 && NumStreams > 1) begin
       logic [31:0] id_p0, id_p1;
@@ -694,18 +656,12 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       program_transfer(sb_addr_stream0, 32'hCCCC_0000, 32'h0000_0040, 0);
       program_transfer(sb_addr_stream1, 32'hDDDD_0000, 32'h0000_0080, 1);
       sb_mismatch = 0;
-      // launch both ports concurrently on different streams while the grant is held off,
-      // so both launch_pending latches are set at once (the arbiter must pick one).
+      // launch both ports concurrently so both latch before either is granted
       fork
         launch(id_p0, cyc0, 0, 0);       // port 0, stream 0
         launch(id_p1, cyc1, 1, 1);       // port 1, stream 1
       join
-      // Both launches are now pending with req_ready still low. rr_arb_tree (AxiVldRdy=1)
-      // *presents* its chosen winner on dma_req_o / idx_o even while the grant is withheld,
-      // so stream_idx_o must equal the winner's stream. On the pre-fix RTL stream_idx_o is
-      // the last-pending port's stream (held_stream[NumRegs-1]) regardless of the winner,
-      // so it disagrees with dma_req_o whenever the winner is not the last port. Check the
-      // presented (winner, stream_idx) pair across the whole held window.
+      // rr_arb_tree presents its winner before the grant, so sample on the handshake
       begin
         int unsigned held_checks;
         held_checks = 0;
@@ -775,8 +731,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $finish;
   end
 
-  // global safety net: kill a run that hangs entirely (belt-and-braces with the
-  // per-read watchdog, in case a hang happens outside a tracked next_id read).
+  // global safety net: kill a run that hangs outside the per-read watchdog
   initial begin
     #(TCK * 200000);
     $fatal(1, "GLOBAL TIMEOUT: testbench did not finish");

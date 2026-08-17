@@ -6,3 +6,6 @@
 # - Thomas Benz <tbenz@iis.ee.ethz.ch>
 
 waive --rule=package-filename --location="src/frontend/inst64/idma_inst64_opcode.sv"
+
+# IDMA_DV / IDMA_ND_DV are the exported verification API; renaming breaks downstream
+waive --rule=interface-name-style --location="test/idma_intf.sv"
