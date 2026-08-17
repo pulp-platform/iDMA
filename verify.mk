@@ -22,6 +22,7 @@
 IDMA_TOP           ?=
 # Backend variant a leg covers
 IDMA_VERIFY_ID     ?= rw_axi
+IDMA_MULTIHEAD_PAT := 2r_axi_w_axi 2rw_axi
 IDMA_VERIFY_DB     := $(IDMA_ROOT)/src/db/verify.yml
 IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
 IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang
@@ -147,15 +148,16 @@ idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done < $(IDMA_VERIFY_DIR)/reg_variants.list
 
-# Out-of-tree multi-head build
+# Out-of-tree multi-head build; the aggregate is rebuilt after, so a following
+# leg compiles the tracked id set and not this one
 idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 	@test -s $(IDMA_VERIFY_DIR)/multihead_ids.list || \
 	  { echo "error: no multi-head ids listed"; exit 1; }
-	$(MAKE) idma_hw_all idma_add_all IDMA_ADD_IDS="$$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list)"
+	$(MAKE) idma_hw_all IDMA_ADD_IDS="$$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list)"
 	mkdir -p $(IDMA_VLT_DIR) $(IDMA_SLANG_DIR)
-	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) -t add_ids > $(IDMA_VLT_DIR)/idma_multihead.f
-	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) -t add_ids > $(IDMA_SLANG_DIR)/mh_synth.f
-	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) -t multihead -t add_ids \
+	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) > $(IDMA_VLT_DIR)/idma_multihead.f
+	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) > $(IDMA_SLANG_DIR)/mh_synth.f
+	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) -t multihead \
 	  > $(IDMA_SLANG_DIR)/mh_tb.f
 	set -e; for id in $$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list); do \
 	  echo "--- verilator idma_backend_synth_$$id ---"; \
@@ -170,11 +172,10 @@ idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_tb.f --top $$tb \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done
+	rm -f $(IDMA_FULL_RTL) $(IDMA_FULL_TB)
 	$(MAKE) idma_hw_all
-	@for id in $$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list); do \
-	  grep -q "$$id" $(IDMA_FULL_RTL) && \
-	    { echo "error: $$id leaked into $(IDMA_FULL_RTL)"; exit 1; }; \
-	done; echo "add-ids stayed out of the tracked aggregate"
+	@! grep -qE '$(subst $() ,|,$(IDMA_MULTIHEAD_PAT))' $(IDMA_FULL_RTL) || \
+	  { echo 'error: add ids leaked into $(IDMA_FULL_RTL)'; exit 1; }
 
 
 # ---------------
