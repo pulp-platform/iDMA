@@ -1,336 +1,758 @@
 {
-    "rw_axi" : {
-        "jobs" : {
-            "simple"          : "backend_rw_axi/simple.txt",
-            "same_dst"        : "backend_rw_axi/same_dst.txt",
-            "linear"          : "backend_rw_axi/linear.txt",
-            "huge"            : "backend_rw_axi/huge.txt",
-            "large"           : "backend_rw_axi/large.txt",
-            "medium"          : "backend_rw_axi/medium.txt",
-            "mixed"           : "backend_rw_axi/mixed.txt",
-            "small"           : "backend_rw_axi/small.txt",
-            "tiny"            : "backend_rw_axi/tiny.txt",
-            "error_simple"    : "backend_rw_axi/error_simple.txt",
-            "error_mixed"     : "backend_rw_axi/error_mixed.txt",
-            "zero_transfer"   : "backend_rw_axi/zero_transfer.txt"
+    "rw_axi": {
+        "jobs": {
+            "simple": "backend_rw_axi/simple.txt",
+            "same_dst": "backend_rw_axi/same_dst.txt",
+            "linear": "backend_rw_axi/linear.txt",
+            "huge": "backend_rw_axi/huge.txt",
+            "large": "backend_rw_axi/large.txt",
+            "medium": "backend_rw_axi/medium.txt",
+            "mixed": "backend_rw_axi/mixed.txt",
+            "small": "backend_rw_axi/small.txt",
+            "tiny": "backend_rw_axi/tiny.txt",
+            "error_simple": "backend_rw_axi/error_simple.txt",
+            "error_mixed": "backend_rw_axi/error_mixed.txt",
+            "zero_transfer": "backend_rw_axi/zero_transfer.txt"
         },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 1,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 1,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 1
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 1,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 1,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 1
         },
-        "proc_id" : "rw_axi",
+        "proc_id": "rw_axi",
         "testbench": "tb_idma_backend_rw_axi",
         "synth_top": "idma_backend_synth_rw_axi"
     },
-    "r_axi_w_obi" : {
-        "jobs" : {
-            "simple"          : "backend_r_axi_w_obi/simple.txt",
-            "same_dst"        : "backend_r_axi_w_obi/same_dst.txt",
-            "linear"          : "backend_r_axi_w_obi/linear.txt",
-            "huge"            : "backend_r_axi_w_obi/huge.txt",
-            "large"           : "backend_r_axi_w_obi/large.txt",
-            "medium"          : "backend_r_axi_w_obi/medium.txt",
-            "mixed"           : "backend_r_axi_w_obi/mixed.txt",
-            "small"           : "backend_r_axi_w_obi/small.txt",
-            "tiny"            : "backend_r_axi_w_obi/tiny.txt",
-            "zero_transfer"   : "backend_r_axi_w_obi/zero_transfer.txt"
+    "r_axi_w_obi": {
+        "jobs": {
+            "simple": "backend_r_axi_w_obi/simple.txt",
+            "same_dst": "backend_r_axi_w_obi/same_dst.txt",
+            "linear": "backend_r_axi_w_obi/linear.txt",
+            "huge": "backend_r_axi_w_obi/huge.txt",
+            "large": "backend_r_axi_w_obi/large.txt",
+            "medium": "backend_r_axi_w_obi/medium.txt",
+            "mixed": "backend_r_axi_w_obi/mixed.txt",
+            "small": "backend_r_axi_w_obi/small.txt",
+            "tiny": "backend_r_axi_w_obi/tiny.txt",
+            "zero_transfer": "backend_r_axi_w_obi/zero_transfer.txt"
         },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 0,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 0,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 0,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 0,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
         },
-        "proc_id" : "r_axi_w_obi",
+        "proc_id": "r_axi_w_obi",
         "testbench": "tb_idma_backend_r_axi_w_obi",
         "synth_top": "idma_backend_synth_r_axi_w_obi"
     },
-    "r_obi_w_axi" : {
-        "jobs" : {
-            "simple"          : "backend_r_obi_w_axi/simple.txt",
-            "same_dst"        : "backend_r_obi_w_axi/same_dst.txt",
-            "linear"          : "backend_r_obi_w_axi/linear.txt",
-            "huge"            : "backend_r_obi_w_axi/huge.txt",
-            "large"           : "backend_r_obi_w_axi/large.txt",
-            "medium"          : "backend_r_obi_w_axi/medium.txt",
-            "mixed"           : "backend_r_obi_w_axi/mixed.txt",
-            "small"           : "backend_r_obi_w_axi/small.txt",
-            "tiny"            : "backend_r_obi_w_axi/tiny.txt",
-            "zero_transfer"   : "backend_r_obi_w_axi/zero_transfer.txt"
+    "r_obi_w_axi": {
+        "jobs": {
+            "simple": "backend_r_obi_w_axi/simple.txt",
+            "same_dst": "backend_r_obi_w_axi/same_dst.txt",
+            "linear": "backend_r_obi_w_axi/linear.txt",
+            "huge": "backend_r_obi_w_axi/huge.txt",
+            "large": "backend_r_obi_w_axi/large.txt",
+            "medium": "backend_r_obi_w_axi/medium.txt",
+            "mixed": "backend_r_obi_w_axi/mixed.txt",
+            "small": "backend_r_obi_w_axi/small.txt",
+            "tiny": "backend_r_obi_w_axi/tiny.txt",
+            "zero_transfer": "backend_r_obi_w_axi/zero_transfer.txt"
         },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 0,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 0,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 0,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 0,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
         },
-        "proc_id" : "r_obi_w_axi",
+        "proc_id": "r_obi_w_axi",
         "testbench": "tb_idma_backend_r_obi_w_axi",
         "synth_top": "idma_backend_synth_r_obi_w_axi"
     },
-    "snitch_read" : {
-        "jobs" : {
-            "simple"          : "backend_r_axi_rw_init_rw_obi/simple.txt",
-            "same_dst"        : "backend_r_axi_rw_init_rw_obi/same_dst.txt",
-            "linear"          : "backend_r_axi_rw_init_rw_obi/linear.txt",
-            "huge"            : "backend_r_axi_rw_init_rw_obi/huge.txt",
-            "large"           : "backend_r_axi_rw_init_rw_obi/large.txt",
-            "medium"          : "backend_r_axi_rw_init_rw_obi/medium.txt",
-            "mixed"           : "backend_r_axi_rw_init_rw_obi/mixed.txt",
-            "small"           : "backend_r_axi_rw_init_rw_obi/small.txt",
-            "tiny"            : "backend_r_axi_rw_init_rw_obi/tiny.txt",
-            "zero_transfer"   : "backend_r_axi_rw_init_rw_obi/zero_transfer.txt"
+    "snitch_read": {
+        "jobs": {
+            "simple": "backend_r_axi_rw_init_rw_obi/simple.txt",
+            "same_dst": "backend_r_axi_rw_init_rw_obi/same_dst.txt",
+            "linear": "backend_r_axi_rw_init_rw_obi/linear.txt",
+            "huge": "backend_r_axi_rw_init_rw_obi/huge.txt",
+            "large": "backend_r_axi_rw_init_rw_obi/large.txt",
+            "medium": "backend_r_axi_rw_init_rw_obi/medium.txt",
+            "mixed": "backend_r_axi_rw_init_rw_obi/mixed.txt",
+            "small": "backend_r_axi_rw_init_rw_obi/small.txt",
+            "tiny": "backend_r_axi_rw_init_rw_obi/tiny.txt",
+            "zero_transfer": "backend_r_axi_rw_init_rw_obi/zero_transfer.txt"
         },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 1,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 0,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 1,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 0,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
         },
-        "proc_id" : "r_axi_rw_init_rw_obi",
+        "proc_id": "r_axi_rw_init_rw_obi",
         "testbench": "tb_idma_backend_r_axi_rw_init_rw_obi",
         "synth_top": "idma_backend_synth_r_axi_rw_init_rw_obi"
     },
-    "snitch_write" : {
-        "jobs" : {
-            "simple"          : "backend_r_obi_rw_init_w_axi/simple.txt",
-            "same_dst"        : "backend_r_obi_rw_init_w_axi/same_dst.txt",
-            "linear"          : "backend_r_obi_rw_init_w_axi/linear.txt",
-            "huge"            : "backend_r_obi_rw_init_w_axi/huge.txt",
-            "large"           : "backend_r_obi_rw_init_w_axi/large.txt",
-            "medium"          : "backend_r_obi_rw_init_w_axi/medium.txt",
-            "mixed"           : "backend_r_obi_rw_init_w_axi/mixed.txt",
-            "small"           : "backend_r_obi_rw_init_w_axi/small.txt",
-            "tiny"            : "backend_r_obi_rw_init_w_axi/tiny.txt",
-            "zero_transfer"   : "backend_r_obi_rw_init_w_axi/zero_transfer.txt"
+    "snitch_write": {
+        "jobs": {
+            "simple": "backend_r_obi_rw_init_w_axi/simple.txt",
+            "same_dst": "backend_r_obi_rw_init_w_axi/same_dst.txt",
+            "linear": "backend_r_obi_rw_init_w_axi/linear.txt",
+            "huge": "backend_r_obi_rw_init_w_axi/huge.txt",
+            "large": "backend_r_obi_rw_init_w_axi/large.txt",
+            "medium": "backend_r_obi_rw_init_w_axi/medium.txt",
+            "mixed": "backend_r_obi_rw_init_w_axi/mixed.txt",
+            "small": "backend_r_obi_rw_init_w_axi/small.txt",
+            "tiny": "backend_r_obi_rw_init_w_axi/tiny.txt",
+            "zero_transfer": "backend_r_obi_rw_init_w_axi/zero_transfer.txt"
         },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 1,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 0,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 1,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 0,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
         },
-        "proc_id" : "r_obi_rw_init_w_axi",
+        "proc_id": "r_obi_rw_init_w_axi",
         "testbench": "tb_idma_backend_r_obi_rw_init_w_axi",
         "synth_top": "idma_backend_synth_r_obi_rw_init_w_axi"
     },
-    "snitch_read_write" : {
-        "jobs" : {
-            "simple"          : "backend_rw_axi_rw_init_rw_obi/simple.txt",
-            "same_dst"        : "backend_rw_axi_rw_init_rw_obi/same_dst.txt",
-            "linear"          : "backend_rw_axi_rw_init_rw_obi/linear.txt",
-            "huge"            : "backend_rw_axi_rw_init_rw_obi/huge.txt",
-            "large"           : "backend_rw_axi_rw_init_rw_obi/large.txt",
-            "medium"          : "backend_rw_axi_rw_init_rw_obi/medium.txt",
-            "mixed"           : "backend_rw_axi_rw_init_rw_obi/mixed.txt",
-            "small"           : "backend_rw_axi_rw_init_rw_obi/small.txt",
-            "tiny"            : "backend_rw_axi_rw_init_rw_obi/tiny.txt",
-            "zero_transfer"   : "backend_rw_axi_rw_init_rw_obi/zero_transfer.txt"
+    "snitch_read_write": {
+        "jobs": {
+            "simple": "backend_rw_axi_rw_init_rw_obi/simple.txt",
+            "same_dst": "backend_rw_axi_rw_init_rw_obi/same_dst.txt",
+            "linear": "backend_rw_axi_rw_init_rw_obi/linear.txt",
+            "huge": "backend_rw_axi_rw_init_rw_obi/huge.txt",
+            "large": "backend_rw_axi_rw_init_rw_obi/large.txt",
+            "medium": "backend_rw_axi_rw_init_rw_obi/medium.txt",
+            "mixed": "backend_rw_axi_rw_init_rw_obi/mixed.txt",
+            "small": "backend_rw_axi_rw_init_rw_obi/small.txt",
+            "tiny": "backend_rw_axi_rw_init_rw_obi/tiny.txt",
+            "zero_transfer": "backend_rw_axi_rw_init_rw_obi/zero_transfer.txt"
         },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 1,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 0,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 1,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 0,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
         },
-        "proc_id" : "rw_axi_rw_init_rw_obi",
+        "proc_id": "rw_axi_rw_init_rw_obi",
         "testbench": "tb_idma_backend_rw_axi_rw_init_rw_obi",
         "synth_top": "idma_backend_synth_rw_axi_rw_init_rw_obi"
     },
     "rw_axi_rw_axis": {
-        "jobs" : {
-            "simple"          : "backend_rw_axi_rw_axis/simple.txt",
-            "same_dst"        : "backend_rw_axi_rw_axis/same_dst.txt",
-            "linear"          : "backend_rw_axi_rw_axis/linear.txt",
-            "huge"            : "backend_rw_axi_rw_axis/huge.txt",
-            "large"           : "backend_rw_axi_rw_axis/large.txt",
-            "medium"          : "backend_rw_axi_rw_axis/medium.txt",
-            "mixed"           : "backend_rw_axi_rw_axis/mixed.txt",
-            "small"           : "backend_rw_axi_rw_axis/small.txt",
-            "tiny"            : "backend_rw_axi_rw_axis/tiny.txt",
-            "zero_transfer"   : "backend_rw_axi_rw_axis/zero_transfer.txt"
-    },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 0,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 0,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
+        "jobs": {
+            "simple": "backend_rw_axi_rw_axis/simple.txt",
+            "same_dst": "backend_rw_axi_rw_axis/same_dst.txt",
+            "linear": "backend_rw_axi_rw_axis/linear.txt",
+            "huge": "backend_rw_axi_rw_axis/huge.txt",
+            "large": "backend_rw_axi_rw_axis/large.txt",
+            "medium": "backend_rw_axi_rw_axis/medium.txt",
+            "mixed": "backend_rw_axi_rw_axis/mixed.txt",
+            "small": "backend_rw_axi_rw_axis/small.txt",
+            "tiny": "backend_rw_axi_rw_axis/tiny.txt",
+            "zero_transfer": "backend_rw_axi_rw_axis/zero_transfer.txt"
         },
-        "proc_id" : "rw_axi_rw_axis",
-        "testbench" : "tb_idma_backend_rw_axi_rw_axis",
-        "synth_top" : "idma_backend_synth_rw_axi_rw_axis"
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 0,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 0,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
+        },
+        "proc_id": "rw_axi_rw_axis",
+        "testbench": "tb_idma_backend_rw_axi_rw_axis",
+        "synth_top": "idma_backend_synth_rw_axi_rw_axis"
     },
     "rw_obi": {
-        "jobs" : {
-            "simple"          : "backend_rw_obi/simple.txt",
-            "same_dst"        : "backend_rw_obi/same_dst.txt",
-            "linear"          : "backend_rw_obi/linear.txt",
-            "huge"            : "backend_rw_obi/huge.txt",
-            "large"           : "backend_rw_obi/large.txt",
-            "medium"          : "backend_rw_obi/medium.txt",
-            "mixed"           : "backend_rw_obi/mixed.txt",
-            "small"           : "backend_rw_obi/small.txt",
-            "tiny"            : "backend_rw_obi/tiny.txt",
-            "zero_transfer"   : "backend_rw_obi/zero_transfer.txt"
+        "jobs": {
+            "simple": "backend_rw_obi/simple.txt",
+            "same_dst": "backend_rw_obi/same_dst.txt",
+            "linear": "backend_rw_obi/linear.txt",
+            "huge": "backend_rw_obi/huge.txt",
+            "large": "backend_rw_obi/large.txt",
+            "medium": "backend_rw_obi/medium.txt",
+            "mixed": "backend_rw_obi/mixed.txt",
+            "small": "backend_rw_obi/small.txt",
+            "tiny": "backend_rw_obi/tiny.txt",
+            "zero_transfer": "backend_rw_obi/zero_transfer.txt"
+        },
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "CombinedShifter": 0,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 0,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
+        },
+        "proc_id": "rw_obi",
+        "testbench": "tb_idma_backend_rw_obi",
+        "synth_top": "idma_backend_synth_rw_obi"
     },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "CombinedShifter"     : 0,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 0,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
+    "4d_extension": {
+        "jobs": {
+            "simple": "4d_extension/simple.txt",
+            "linear_2d": "4d_extension/linear_2D.txt"
         },
-        "proc_id" : "rw_obi",
-        "testbench" : "tb_idma_backend_rw_obi",
-        "synth_top" : "idma_backend_synth_rw_obi"
-    },
-    "4d_extension" : {
-        "jobs" : {
-            "simple"    : "4d_extension/simple.txt",
-            "linear_2d" : "4d_extension/linear_2D.txt"
+        "params": {
+            "DataWidth": 32,
+            "AddrWidth": 32,
+            "UserWidth": 1,
+            "AxiIdWidth": 12,
+            "NumAxInFlight": 3,
+            "BufferDepth": 3,
+            "TFLenWidth": 32,
+            "MemSysDepth": 0,
+            "NumDim": 4,
+            "RepWidth": 32,
+            "StrideWidth": 32,
+            "CombinedShifter": 0,
+            "MaskInvalidData": 1,
+            "RAWCouplingAvail": 1,
+            "HardwareLegalizer": 1,
+            "RejectZeroTransfers": 1,
+            "ErrorHandling": 0
         },
-        "params" : {
-            "DataWidth"           : 32,
-            "AddrWidth"           : 32,
-            "UserWidth"           : 1,
-            "AxiIdWidth"          : 12,
-            "NumAxInFlight"       : 3,
-            "BufferDepth"         : 3,
-            "TFLenWidth"          : 32,
-            "MemSysDepth"         : 0,
-            "NumDim"              : 4,
-            "RepWidth"            : 32,
-            "StrideWidth"         : 32,
-            "CombinedShifter"     : 0,
-            "MaskInvalidData"     : 1,
-            "RAWCouplingAvail"    : 1,
-            "HardwareLegalizer"   : 1,
-            "RejectZeroTransfers" : 1,
-            "ErrorHandling"       : 0
-        },
-        "proc_id" : "rw_axi",
+        "proc_id": "rw_axi",
         "testbench": "tb_idma_nd_midend",
         "synth_top": "idma_nd_midend_synth"
     },
     "desc64": {
-        "jobs" : {
-            "simple" : "jobs.json"
+        "jobs": {
+            "simple": "jobs.json"
         },
-        "params" : {
-        },
-        "proc_id" : "none",
-        "testbench" : "tb_idma_desc64_top",
-        "synth_top" : "idma_desc64_synth"
+        "params": {},
+        "proc_id": "none",
+        "testbench": "tb_idma_desc64_top",
+        "synth_top": "idma_desc64_synth"
     },
     "desc64_dma": {
-        "jobs" : {
-            "simple" : "jobs.json"
+        "jobs": {
+            "simple": "jobs.json"
         },
-        "params" : {
-        },
-        "proc_id" : "none",
-        "testbench" : "tb_idma_desc64_bench",
-        "synth_top" : "idma_desc64_synth"
+        "params": {},
+        "proc_id": "none",
+        "testbench": "tb_idma_desc64_bench",
+        "synth_top": "idma_desc64_synth"
     },
     "rt_midend": {
-        "jobs" : {
-            "simple" : "jobs.json"
+        "jobs": {
+            "simple": "jobs.json"
         },
-        "params" : {
-        },
-        "proc_id" : "none",
-        "testbench" : "tb_idma_rt_midend",
-        "synth_top" : "idma_rt_midend_synth"
+        "params": {},
+        "proc_id": "none",
+        "testbench": "tb_idma_rt_midend",
+        "synth_top": "idma_rt_midend_synth"
     },
     "mp_midend": {
-        "jobs" : {
-            "simple" : "jobs.json"
+        "jobs": {
+            "simple": "jobs.json"
         },
-        "params" : {
-        },
-        "proc_id" : "none",
-        "testbench" : "idma_mp_midend_synth",
-        "synth_top" : "idma_mp_midend_synth"
+        "params": {},
+        "proc_id": "none",
+        "testbench": "idma_mp_midend_synth",
+        "synth_top": "idma_mp_midend_synth"
+    },
+    "mxquant": {
+        "testbench": "tb_idma_mxquant",
+        "jobs": {},
+        "params": {},
+        "verify": {
+            "dpi": "idma_mxquant_dpi",
+            "legs": [
+                {
+                    "tag": "mxquant_32",
+                    "params": {
+                        "DataWidth": 32
+                    },
+                    "token": "[MXQ] ALL PASS"
+                },
+                {
+                    "tag": "mxquant_64",
+                    "params": {
+                        "DataWidth": 64
+                    },
+                    "token": "[MXQ] ALL PASS"
+                },
+                {
+                    "tag": "mxquant_256",
+                    "params": {
+                        "DataWidth": 256
+                    },
+                    "token": "[MXQ] ALL PASS"
+                },
+                {
+                    "tag": "mxquant_512",
+                    "params": {
+                        "DataWidth": 512
+                    },
+                    "token": "[MXQ] ALL PASS"
+                },
+                {
+                    "tag": "mxquant_1024",
+                    "params": {
+                        "DataWidth": 1024
+                    },
+                    "token": "[MXQ] ALL PASS"
+                }
+            ]
+        }
+    },
+    "mxroundtrip": {
+        "testbench": "tb_idma_mxroundtrip",
+        "jobs": {},
+        "params": {},
+        "verify": {
+            "dpi": "idma_mxquant_dpi",
+            "legs": [
+                {
+                    "tag": "mxroundtrip_32",
+                    "params": {
+                        "DataWidth": 32
+                    },
+                    "token": "[MXRT] ALL PASS"
+                },
+                {
+                    "tag": "mxroundtrip_64",
+                    "params": {
+                        "DataWidth": 64
+                    },
+                    "token": "[MXRT] ALL PASS"
+                },
+                {
+                    "tag": "mxroundtrip_256",
+                    "params": {
+                        "DataWidth": 256
+                    },
+                    "token": "[MXRT] ALL PASS"
+                }
+            ],
+            "exclude": [
+                {
+                    "values": [
+                        512,
+                        1024
+                    ],
+                    "why": "heap abort during model construction, see #196"
+                }
+            ]
+        }
+    },
+    "transpose": {
+        "testbench": "tb_idma_otf_transpose",
+        "jobs": {},
+        "params": {},
+        "verify": {
+            "dpi": "idma_transpose_dpi",
+            "legs": [
+                {
+                    "tag": "otf_transpose",
+                    "params": {
+                        "StrbWidth": 8,
+                        "FullDuplex": 1
+                    },
+                    "token": "[TB] ALL PASS"
+                },
+                {
+                    "tag": "otf_transpose_bp",
+                    "params": {
+                        "StrbWidth": 8,
+                        "FullDuplex": 1
+                    },
+                    "token": "[TB] ALL PASS",
+                    "plusargs": [
+                        "+BP"
+                    ]
+                },
+                {
+                    "tag": "otf_transpose_8_0",
+                    "params": {
+                        "StrbWidth": 8,
+                        "FullDuplex": 0
+                    },
+                    "token": "[TB] ALL PASS",
+                    "plusargs": [
+                        "+BP"
+                    ]
+                },
+                {
+                    "tag": "otf_transpose_64_1",
+                    "params": {
+                        "StrbWidth": 64,
+                        "FullDuplex": 1
+                    },
+                    "token": "[TB] ALL PASS",
+                    "plusargs": [
+                        "+BP"
+                    ]
+                },
+                {
+                    "tag": "otf_transpose_64_0",
+                    "params": {
+                        "StrbWidth": 64,
+                        "FullDuplex": 0
+                    },
+                    "token": "[TB] ALL PASS",
+                    "plusargs": [
+                        "+BP"
+                    ]
+                }
+            ]
+        }
+    },
+    "transpose_midend": {
+        "testbench": "tb_idma_transpose_midend",
+        "jobs": {},
+        "params": {},
+        "verify": {
+            "dpi": "idma_transpose_dpi",
+            "legs": [
+                {
+                    "tag": "transpose_midend_64",
+                    "params": {
+                        "DataWidth": 64
+                    },
+                    "token": "[MID] ALL PASS"
+                },
+                {
+                    "tag": "transpose_midend_512",
+                    "params": {
+                        "DataWidth": 512
+                    },
+                    "token": "[MID] ALL PASS"
+                }
+            ]
+        }
+    },
+    "mxclear": {
+        "testbench": "tb_idma_mxclear",
+        "jobs": {},
+        "params": {},
+        "verify": {
+            "expect": "fail",
+            "defines": [
+                "INC_ASSERT"
+            ],
+            "legs": [
+                {
+                    "tag": "mxclear_1",
+                    "params": {
+                        "Quant": 1
+                    },
+                    "token": "clear with in-flight state"
+                },
+                {
+                    "tag": "mxclear_0",
+                    "params": {
+                        "Quant": 0
+                    },
+                    "token": "clear with in-flight state"
+                }
+            ]
+        }
+    },
+    "mxneg": {
+        "testbench": "tb_idma_mxneg",
+        "jobs": {},
+        "params": {},
+        "verify": {
+            "dpi": "idma_mxquant_dpi",
+            "expect": "fail",
+            "defines": [
+                "INC_ASSERT"
+            ],
+            "legs": [
+                {
+                    "tag": "mxneg_1",
+                    "params": {
+                        "NegCase": 1,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeSizeAligned"
+                },
+                {
+                    "tag": "mxneg_2",
+                    "params": {
+                        "NegCase": 2,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeSrcAligned"
+                },
+                {
+                    "tag": "mxneg_3",
+                    "params": {
+                        "NegCase": 3,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeDstAligned"
+                },
+                {
+                    "tag": "mxneg_5",
+                    "params": {
+                        "NegCase": 5,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeMxdequantBeatAligned"
+                },
+                {
+                    "tag": "mxneg_6",
+                    "params": {
+                        "NegCase": 6,
+                        "DataWidth": 64,
+                        "EnDequant": 0,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeOpUnsupported"
+                },
+                {
+                    "tag": "mxneg_7",
+                    "params": {
+                        "NegCase": 7,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeMxSrcProtocol"
+                },
+                {
+                    "tag": "mxneg_8",
+                    "params": {
+                        "NegCase": 8,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeMxDstProtocol"
+                },
+                {
+                    "tag": "mxneg_10",
+                    "params": {
+                        "NegCase": 10,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 1
+                    },
+                    "token": "ComputeTransposeSingleBeat"
+                },
+                {
+                    "tag": "mxneg_13",
+                    "params": {
+                        "NegCase": 13,
+                        "DataWidth": 64,
+                        "EnDequant": 1,
+                        "EnFp16": 0
+                    },
+                    "token": "ComputeOpUnsupported"
+                }
+            ],
+            "exclude": [
+                {
+                    "case": 4,
+                    "why": "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046"
+                },
+                {
+                    "case": 11,
+                    "why": "the request is never accepted, so the guard is never sampled"
+                },
+                {
+                    "case": 12,
+                    "why": "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046"
+                }
+            ]
+        }
+    },
+    "_verify": {
+        "elab_widths": [
+            32,
+            64,
+            512,
+            1024
+        ],
+        "elab_compute": [
+            {
+                "width": 64,
+                "ops": 15,
+                "tuning": 1,
+                "why": "every sub-unit",
+                "ping-pong transpose banks": null
+            },
+            {
+                "width": 512,
+                "ops": 15,
+                "tuning": 1,
+                "why": "the wide bus",
+                "where pack/unpack is stressed": null
+            },
+            {
+                "width": 64,
+                "ops": 8,
+                "tuning": 0,
+                "why": "transpose only",
+                "single bank": null
+            },
+            {
+                "width": 64,
+                "ops": 6,
+                "tuning": 1,
+                "why": "mx only",
+                "Fp16En=0": null,
+                "the no-transpose branch": null
+            }
+        ],
+        "elab_shared_tops": [
+            "idma_desc64_synth",
+            "idma_nd_midend_synth",
+            "idma_mp_midend_synth",
+            "idma_rt_midend_synth"
+        ],
+        "multihead_ids": [
+            "2r_axi_w_axi",
+            "2rw_axi"
+        ],
+        "reg_variants": [
+            {
+                "variant": 3,
+                "module": "idma_reg32_3d"
+            },
+            {
+                "variant": 2,
+                "module": "idma_reg64_2d"
+            },
+            {
+                "variant": 1,
+                "module": "idma_reg64_1d"
+            }
+        ],
+        "elab_covered_elsewhere": [
+            "tb_idma_reg_frontend"
+        ],
+        "guards_untested": [
+            {
+                "guard": "ComputeMxFp16Width",
+                "why": "only reachable from the excluded 1024 cases"
+            },
+            {
+                "guard": "ComputeMxdequantLengthFits",
+                "why": "case 11 is never accepted"
+            },
+            {
+                "guard": "ComputeDstTilelink",
+                "why": "no TileLink backend variant exists"
+            }
+        ],
+        "tops_untested": [
+            {
+                "top": "tb_idma_nd_midend_b2b",
+                "why": "hangs ([B2B] timeout); latent reset/LFSR race"
+            },
+            {
+                "top": "tb_idma_transpose_nd",
+                "why": "AW outside the destination allocation at 80 ns"
+            },
+            {
+                "top": "tb_idma_transpose_b2b",
+                "why": "stream_watchdog trip after 4000 idle cycles"
+            },
+            {
+                "top": "tb_idma_mxrand",
+                "why": "testbench timeout at 400 ms of simulated time"
+            },
+            {
+                "top": "tb_idma_mxperf",
+                "why": "hangs on the first compute transfer"
+            },
+            {
+                "top": "tb_idma_rt_midend",
+                "why": "fails under --assert on cc_rr_arb_tree lock"
+            },
+            {
+                "top": "the 88 directed job files",
+                "why": "verilator cannot drive the idma_test class-based stimulus"
+            }
+        ]
     }
 }

@@ -5,7 +5,7 @@
 # Authors:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-"""Run a verification suite, or emit the CI matrix, from src/db/verify.yml.
+"""Run a verification suite, or emit the CI matrix, from jobs/jobs.json.
 
 Both come from the same entries, so a leg cannot exist in CI and not locally, or
 the reverse. The old form kept the run set in make variables and the fan-out in
@@ -30,16 +30,25 @@ import re
 import subprocess
 import sys
 
-import yaml
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-DB = os.path.join(ROOT, 'src', 'db', 'verify.yml')
+DB = os.path.join(ROOT, 'jobs', 'jobs.json')
 
 
 def load(path=None):
+    """Return {suites, ...globals}; entries carrying a `verify` key are suites."""
     with open(path or DB, 'r') as handle:
-        return yaml.safe_load(handle)
+        jobs = json.load(handle)
+    db = dict(jobs.pop('_verify', {}))
+    db['suites'] = {}
+    for name, entry in jobs.items():
+        if 'verify' not in entry:
+            continue
+        suite = dict(entry['verify'])
+        suite['top'] = entry['testbench']
+        suite['runs'] = suite.pop('legs')
+        db['suites'][name] = suite
+    return db
 
 
 def legs(suite_name, suite):

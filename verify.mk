@@ -23,7 +23,7 @@ IDMA_TOP           ?=
 # Backend variant a leg covers
 IDMA_VERIFY_ID     ?= rw_axi
 IDMA_MULTIHEAD_PAT := 2r_axi_w_axi 2rw_axi
-IDMA_VERIFY_DB     := $(IDMA_ROOT)/src/db/verify.yml
+IDMA_VERIFY_DB     := $(IDMA_ROOT)/$(IDMA_JOBS_JSON)
 IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
 IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang
 IDMA_SLANG_VERSION ?= 11.0.0

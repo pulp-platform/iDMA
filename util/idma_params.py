@@ -94,7 +94,7 @@ def entries_for(jobs, top):
 def main():
     par = argparse.ArgumentParser(description=__doc__)
     par.add_argument('--verify-db', default=None,
-                     help='src/db/verify.yml; supplies the width and compute sweeps')
+                     help='jobs/jobs.json; supplies the width and compute sweeps')
     par.add_argument('--top', required=True)
     par.add_argument('--jobs', default='jobs/jobs.json')
     par.add_argument('--source', action='append', default=[], metavar='GLOB',
@@ -108,9 +108,9 @@ def main():
 
     # The database is the source when supplied; the flags stay for one-off runs.
     if args.verify_db:
-        import yaml
-        with open(args.verify_db, 'r') as handle:
-            db = yaml.safe_load(handle) or {}
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import run_verify
+        db = run_verify.load(args.verify_db)
         if db.get('elab_widths'):
             args.widths = ' '.join(str(w) for w in db['elab_widths'])
         if db.get('elab_compute'):

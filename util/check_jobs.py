@@ -36,7 +36,6 @@ import os
 import re
 import sys
 
-import yaml
 
 # On disk but deliberately unwired: these backends elaborate with ErrorHandling=0
 UNWIRED_JOBS = {
@@ -65,7 +64,7 @@ def main():
     par.add_argument('--matrix-file', default=None,
                      help='CI workflow that must fan out over every backend id')
     par.add_argument('--verify-db', default=None,
-                     help='src/db/verify.yml; the run set and its named exclusions')
+                     help='jobs/jobs.json; the run set and its named exclusions')
     par.add_argument('--mxneg-tb', default=None,
                      help='negative-test testbench; its case labels must all be accounted for')
     par.add_argument('--mxneg-guard-src', default=None,
@@ -75,6 +74,10 @@ def main():
     patterns = args.source or ['target/rtl/*.sv', 'src/**/*.sv', 'test/**/*.sv']
     with open(args.jobs, 'r') as handle:
         jobs = json.load(handle)
+    # _verify holds the globals; entries with a verify key are simulation suites
+    # rather than backend variants, so they carry no synth_top and no job files
+    suites = {k: v for k, v in jobs.items() if 'verify' in v}
+    jobs = {k: v for k, v in jobs.items() if k != '_verify' and 'verify' not in v}
     sources = load_sources(patterns)
     errors = []
 
@@ -116,6 +119,15 @@ def main():
                 errors.append('{}: {} "{}" is not defined in the sources'.format(
                     name, field, module))
 
+    # a suite entry names no synth_top, but its testbench must still exist
+    for name, body in sorted(suites.items()):
+        module = body.get('testbench')
+        if not module:
+            errors.append('{}: no testbench named'.format(name))
+        elif not re.search(r'\bmodule\s+' + re.escape(module) + r'\b', sources):
+            errors.append('{}: testbench "{}" is not defined in the sources'.format(
+                name, module))
+
     # (d) the backend-id matrix is a literal list in the workflow, so it can drift
     if args.matrix_file:
         with open(args.matrix_file, 'r') as handle:
@@ -128,8 +140,9 @@ def main():
     # (e) compares the run set against the design, not against a copy of itself
     db = {}
     if args.verify_db:
-        with open(args.verify_db, 'r') as handle:
-            db = yaml.safe_load(handle) or {}
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import run_verify
+        db = run_verify.load(args.verify_db)
 
     mxneg = db.get('suites', {}).get('mxneg', {})
     run_cases = {str(r['params']['NegCase']) for r in mxneg.get('runs', [])}
