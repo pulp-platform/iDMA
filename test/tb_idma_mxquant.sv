@@ -92,6 +92,8 @@ module tb_idma_mxquant
         5: return 32'h7FC1_2345;
         6: return 32'h7F7F_FFFF;
         7: return 32'h0080_0000;
+        // unreachable: e % 8 covers 0-7; a sentinel fails the byte-exact compare
+        default: return 32'hDEAD_BEEF;
       endcase
     end
     return 32'((e & 1) << 31) | 32'(((64 + (e % 128)) & 8'hFF) << 23)
