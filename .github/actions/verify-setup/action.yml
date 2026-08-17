@@ -11,19 +11,58 @@ inputs:
   verilator:
     description: Install Verilator from apt; ubuntu-24.04 ships 5.020
     default: 'false'
+  bender-version:
+    description: Bender release to install
+    default: '0.32.0'
 runs:
   using: composite
   steps:
     - uses: ./.github/actions/bender-db-cache
+
     - uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
+
+    # bender-install downloads a release tarball per job, so a GitHub blip fails
+    # a leg; it skips the download when bender is already on PATH
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/bender-bin
+        key: bender-${{ inputs.bender-version }}-${{ runner.os }}
+    - shell: bash
+      run: |
+        if [ -x "$HOME/.cache/bender-bin/bender" ]; then
+          echo "$HOME/.cache/bender-bin" >> "$GITHUB_PATH"
+        fi
     - uses: pulp-platform/pulp-actions/bender-install@v2.5.0
       with:
-        version: 0.32.0
+        version: ${{ inputs.bender-version }}
+    - shell: bash
+      run: |
+        mkdir -p "$HOME/.cache/bender-bin"
+        if [ ! -x "$HOME/.cache/bender-bin/bender" ]; then
+          cp "$(command -v bender)" "$HOME/.cache/bender-bin/bender"
+        fi
+        bender --version
+
+    # ccache: verilator picks it up as OBJCACHE, so the model rebuilds hit it
     - if: inputs.verilator == 'true'
       shell: bash
-      run: sudo apt-get update && sudo apt-get install -y verilator
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y verilator ccache
+        echo "CCACHE_DIR=$HOME/.cache/ccache" >> "$GITHUB_ENV"
+        echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+    - if: inputs.verilator == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ccache
+        key: ccache-${{ github.job }}-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ github.job }}-
+          ccache-
+
+    # Pinning is by apt version, so assert it rather than trusting the runner
     - if: inputs.verilator == 'true'
       shell: bash
       run: |
