@@ -85,7 +85,7 @@ package idma_test;
             string res = "0x";
             int now = 1;
             foreach (num[i]) begin
-                res = {res, num[i]};
+                res = {res, string'(num[i])};
                 if (now % 4 == 0 & now != 0 & now != num.len())
                     res = {res, "_"};
                 now++;

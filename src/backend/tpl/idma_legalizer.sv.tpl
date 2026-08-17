@@ -732,7 +732,7 @@ ${database[protocol]['legalizer_write_data_path']}
                   ($bits(req_i.length) < 64) &
                   (((64'(req_i.length) / 64'(idma_pkg::MxBlockBytes)) *
                     64'(idma_pkg::compute_out_bytes(req_i.opt.compute.op))) >=
-                   (64'd1 << $bits(req_i.length)))), clk_i, !rst_ni)
+                   (65'd1 << $bits(req_i.length)))), clk_i, !rst_ni)
     // compute retires on the per-beat write pulse; TileLink writes retire per burst
     `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.dst_protocol == idma_pkg::TILELINK)), clk_i, !rst_ni)

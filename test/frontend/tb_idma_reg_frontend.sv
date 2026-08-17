@@ -5,18 +5,16 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Self-checking testbench for the iDMA register frontend (idma_reg32_3d, apb4-flat).
-// Drives the APB config slave with the standard apb_test::apb_driver against a
-// controllable backend stub and checks the non-blocking next_id launch contract:
-// the config read completes promptly (even under backend backpressure) and the
-// launch fires exactly once when the arbiter grants. A per-read watchdog guards
-// against any read that hangs.
+// Self-checking testbench for the iDMA register frontend; checks the non-blocking
+// next_id launch contract. RegVariant 2 and 1 are elaboration-only.
 
 `include "apb/typedef.svh"
 `include "apb/assign.svh"
 `include "idma/typedef.svh"
 
 module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
+  // generated frontend under test, by ND dimensions: 3 = reg32_3d, 2 = reg64_2d, 1 = reg64_1d
+  parameter int unsigned RegVariant = 32'd3,
   // number of streams the elaborated DUT exposes (checked at instantiation)
   parameter int unsigned NumStreams = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
@@ -33,11 +31,11 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam int unsigned CfgDataWidth   = 32'd32;
   localparam int unsigned CfgStrbWidth   = CfgDataWidth / 32'd8;
   localparam int unsigned IdCounterWidth = 32'd32;
-  // idma data-path (reg32_3d: 32-bit data, 3 ND dims)
-  localparam int unsigned AddrWidth      = 32'd32;
-  localparam int unsigned DataWidth      = 32'd32;
-  localparam int unsigned NumDim         = 32'd3;
-  localparam int unsigned RepWidth       = 32'd32;
+  // idma data-path: reg32_3d is 32-bit over 3 ND dims, both reg64 variants are 64-bit
+  localparam int unsigned AddrWidth      = (RegVariant == 32'd3) ? 32'd32 : 32'd64;
+  localparam int unsigned DataWidth      = AddrWidth;
+  localparam int unsigned NumDim         = (RegVariant == 32'd3) ? 32'd3 : 32'd2;
+  localparam int unsigned RepWidth       = AddrWidth;
   // apb_driver framing: the blocking driver.read() spans SETUP + first-ACCESS-check +
   // trailing edge before returning, so a same-cycle (non-blocking) read takes this many
   // config clocks end-to-end; each extra ACCESS wait state adds one more clock.
@@ -179,27 +177,84 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // --------------------------------------------------------------------------
   // DUT
   // --------------------------------------------------------------------------
-  idma_reg32_3d #(
-    .NumRegs        ( NumRegs        ),
-    .NumStreams     ( NumStreams     ),
-    .IdCounterWidth ( IdCounterWidth ),
-    .apb_req_t      ( cfg_apb_req_t  ),
-    .apb_rsp_t      ( cfg_apb_rsp_t  ),
-    .dma_req_t      ( idma_nd_req_t  )
-  ) i_dut (
-    .clk_i          ( clk         ),
-    .rst_ni         ( rst_n       ),
-    .dma_ctrl_req_i ( apb_req     ),
-    .dma_ctrl_rsp_o ( apb_rsp     ),
-    .dma_req_o      ( dma_req     ),
-    .req_valid_o    ( req_valid   ),
-    .req_ready_i    ( req_ready   ),
-    .next_id_i      ( next_id     ),
-    .stream_idx_o   ( stream_idx  ),
-    .done_id_i      ( done_id     ),
-    .busy_i         ( busy        ),
-    .midend_busy_i  ( midend_busy )
-  );
+  // All three share the parameter and port list; reg64_1d emits a flat idma_req_t
+  if (RegVariant == 32'd3) begin : gen_reg32_3d
+    idma_reg32_3d #(
+      .NumRegs        ( NumRegs        ),
+      .NumStreams     ( NumStreams     ),
+      .IdCounterWidth ( IdCounterWidth ),
+      .apb_req_t      ( cfg_apb_req_t  ),
+      .apb_rsp_t      ( cfg_apb_rsp_t  ),
+      .dma_req_t      ( idma_nd_req_t  )
+    ) i_dut (
+      .clk_i          ( clk         ),
+      .rst_ni         ( rst_n       ),
+      .dma_ctrl_req_i ( apb_req     ),
+      .dma_ctrl_rsp_o ( apb_rsp     ),
+      .dma_req_o      ( dma_req     ),
+      .req_valid_o    ( req_valid   ),
+      .req_ready_i    ( req_ready   ),
+      .next_id_i      ( next_id     ),
+      .stream_idx_o   ( stream_idx  ),
+      .done_id_i      ( done_id     ),
+      .busy_i         ( busy        ),
+      .midend_busy_i  ( midend_busy )
+    );
+  end else if (RegVariant == 32'd2) begin : gen_reg64_2d
+    idma_reg64_2d #(
+      .NumRegs        ( NumRegs        ),
+      .NumStreams     ( NumStreams     ),
+      .IdCounterWidth ( IdCounterWidth ),
+      .apb_req_t      ( cfg_apb_req_t  ),
+      .apb_rsp_t      ( cfg_apb_rsp_t  ),
+      .dma_req_t      ( idma_nd_req_t  )
+    ) i_dut (
+      .clk_i          ( clk         ),
+      .rst_ni         ( rst_n       ),
+      .dma_ctrl_req_i ( apb_req     ),
+      .dma_ctrl_rsp_o ( apb_rsp     ),
+      .dma_req_o      ( dma_req     ),
+      .req_valid_o    ( req_valid   ),
+      .req_ready_i    ( req_ready   ),
+      .next_id_i      ( next_id     ),
+      .stream_idx_o   ( stream_idx  ),
+      .done_id_i      ( done_id     ),
+      .busy_i         ( busy        ),
+      .midend_busy_i  ( midend_busy )
+    );
+  end else if (RegVariant == 32'd1) begin : gen_reg64_1d
+    idma_req_t dut_req_1d;
+
+    idma_reg64_1d #(
+      .NumRegs        ( NumRegs        ),
+      .NumStreams     ( NumStreams     ),
+      .IdCounterWidth ( IdCounterWidth ),
+      .apb_req_t      ( cfg_apb_req_t  ),
+      .apb_rsp_t      ( cfg_apb_rsp_t  ),
+      .dma_req_t      ( idma_req_t     )
+    ) i_dut (
+      .clk_i          ( clk         ),
+      .rst_ni         ( rst_n       ),
+      .dma_ctrl_req_i ( apb_req     ),
+      .dma_ctrl_rsp_o ( apb_rsp     ),
+      .dma_req_o      ( dut_req_1d  ),
+      .req_valid_o    ( req_valid   ),
+      .req_ready_i    ( req_ready   ),
+      .next_id_i      ( next_id     ),
+      .stream_idx_o   ( stream_idx  ),
+      .done_id_i      ( done_id     ),
+      .busy_i         ( busy        ),
+      .midend_busy_i  ( midend_busy )
+    );
+
+    always_comb begin : proc_widen_1d_req
+      dma_req           = '0;
+      dma_req.burst_req = dut_req_1d;
+    end
+  end else begin : gen_bad_variant
+    // an out-of-range RegVariant must not silently re-elaborate the last variant
+    $error("RegVariant %0d is not a generated register frontend", RegVariant);
+  end
 
   // --------------------------------------------------------------------------
   // Backend stub. `req_ready` is directly controllable by the tests. On each
@@ -418,6 +473,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   int unsigned rcyc;                     // last read's ACCESS-phase cycle count
 
   initial begin : test
+    // the register map and request layout below model reg32_3d only
+    if (RegVariant != 32'd3)
+      $fatal(1, "[TB] RegVariant %0d is elaboration-only, it has no stimulus", RegVariant);
     errors = 0;
     checks = 0;
     req_ready = 1'b1;

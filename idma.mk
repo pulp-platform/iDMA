@@ -7,6 +7,7 @@
 
 BENDER      ?= bender
 CAT         ?= cat
+CC          ?= cc
 GIT         ?= git
 PRINTF      ?= printf
 UV          ?= uv
@@ -133,12 +134,21 @@ $(IDMA_RTL_DIR)/tb_idma_backend_%.sv: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR
 $(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/tb_idma_backend_%.sv $(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl
 	$(call idma_gen,vsim_wave,$(IDMA_VSIM_DIR)/wave/tpl/backend.do.tpl,$(IDMA_DB_FILES),$*,,$@)
 
-$(IDMA_RTL_DIR)/include/idma/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl $(IDMA_DB_FILES) $(IDMA_ROOT)/idma.mk $(IDMA_DB_FILES)
-	mkdir -p $(IDMA_RTL_DIR)/include/idma
-	$(call idma_gen,tracer,$(IDMA_ROOT)/src/include/idma/tpl/tracer.svh.tpl,$(IDMA_DB_FILES),$(IDMA_BACKEND_IDS),$(IDMA_FE_IDS),$@)
+IDMA_INC_DIR    := $(IDMA_RTL_DIR)/include/idma
+IDMA_INC_TPL    := $(IDMA_ROOT)/src/include/idma/tpl
 
-$(IDMA_RTL_DIR)/include/idma/compute.svh: $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl
-	mkdir -p $(IDMA_RTL_DIR)/include/idma
+# The id-independent tracer helpers; a pure function of their own template
+$(IDMA_INC_DIR)/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/tracer.svh.tpl
+	mkdir -p $(@D)
+	$(call idma_gen,tracer_common,$(IDMA_INC_TPL)/tracer.svh.tpl,,,,$@)
+
+# One tracer macro per backend id, a function of the id in the target name
+$(IDMA_INC_DIR)/tracer_%.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/tracer_id.svh.tpl $(IDMA_DB_FILES)
+	mkdir -p $(@D)
+	$(call idma_gen,tracer,$(IDMA_INC_TPL)/tracer_id.svh.tpl,$(IDMA_DB_FILES),$*,,$@)
+
+$(IDMA_INC_DIR)/compute.svh: $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl
+	mkdir -p $(IDMA_INC_DIR)
 	$(PEAKRDL) raw-header $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl \
 	  --template $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl -o $@
 
@@ -146,16 +156,16 @@ idma_rtl_clean:
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
 	rm -f  $(IDMA_RTL_DIR)/*.sv
 	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
-	rm -f  $(IDMA_RTL_DIR)/include/idma/tracer.svh
-	rm -f  $(IDMA_RTL_DIR)/include/idma/compute.svh
-	rm -rf $(IDMA_RTL_DIR)/include/idma
+	rm -rf $(IDMA_INC_DIR)
 
 # assemble the required files
-IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/tracer.svh
-IDMA_INCLUDE_ALL += $(IDMA_RTL_DIR)/include/idma/compute.svh
+IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/tracer.svh
+IDMA_INCLUDE_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_INC_DIR)/tracer_$Y.svh)
+IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/compute.svh
+
 IDMA_RTL_ALL     += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
 IDMA_TB_ALL      += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
-IDMA_WAVE_ALL    += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
+IDMA_WAVE_ALL     += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
 
 
 # --------------
@@ -265,14 +275,13 @@ idma_reg_clean:
 	rm -f  $(IDMA_RTL_DIR)/*_reg_top.sv
 	rm -f  $(IDMA_RTL_DIR)/*_reg_pkg.sv
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
-	rm -f  $(IDMA_REG_CUST_ALL)
 
 # assemble the required files
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_pkg.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_reg_top.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_addrmap_pkg.sv)
 IDMA_RTL_ALL     += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_RTL_DIR)/idma_$Y_top.sv)
-IDMA_RTL_DOC_ALL += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
+IDMA_RTL_DOC_ALL  += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_HTML_DIR)/regs/idma_$Y_reg/index.html)
 
 # C headers
 IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_regs.h)
@@ -285,11 +294,12 @@ IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_raw_regs.
 # RTL assembly
 # ---------------
 
+
 $(IDMA_FULL_RTL): $(IDMA_RTL_ALL)
-	$(CAT) $^ > $@
+	$(CAT) $(IDMA_RTL_ALL) > $@
 
 $(IDMA_FULL_TB): $(IDMA_TB_ALL)
-	$(CAT) $^ > $@
+	$(CAT) $(IDMA_TB_ALL) > $@
 
 
 # ---------------
@@ -582,28 +592,58 @@ idma_vcs_clean:
 .PHONY: idma_verilator_clean
 
 IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
-IDMA_VLT_ARGS  := --cc \
-				  --Wall \
-				  --Wno-fatal \
-				  +1800-2017ext+ \
-				  --assert \
-				  --error-limit 1000 \
-				  --hierarchical \
-				  --no-skip-identical
 
-IDMA_VLT_TOP     ?=
-IDMA_VLT_PARAMS  ?=
 
-.PRECIOUS: $(IDMA_VLT_DIR)/%_elab.log
+# Measured at 0 occurrences over the synth tops, so they gate
+IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT
+# Unroll budget matches util/run_vlt_sim.py; 5.020 reports BLKLOOPINIT without it
+IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
+                      --unroll-count 4096 --unroll-stmts 200000
 
-$(IDMA_VLT_DIR)/%_elab.log: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
-	mkdir -p $(IDMA_VLT_DIR)
-	# We need a dedicated pickle here to set the defines
-	$(BENDER) pickle $(IDMA_PICKLE_TARGETS) --top $(IDMA_VLT_TOP) -D VERILATOR --expand-macros -o $(IDMA_VLT_DIR)/$(IDMA_VLT_TOP).sv
-	cd $(IDMA_VLT_DIR); $(VERILATOR) $(IDMA_VLT_ARGS) $(IDMA_VLT_PARAMS) -Mdir obj_$* $(IDMA_VLT_TOP).sv --top-module $(IDMA_VLT_TOP) 2> $*_elab.log
 
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
+
+# inst64 gate: the only public concrete binding of idma_inst64_top
+IDMA_INST64_TB   := tb_idma_inst64_axi_copy
+IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
+                    -t snitch_cluster
+
+.PHONY: idma_lint_inst64
+idma_lint_inst64:
+	mkdir -p $(IDMA_VLT_DIR)
+	$(BENDER) script verilator $(IDMA_INST64_T) --top $(IDMA_INST64_TB) \
+	  > $(IDMA_VLT_DIR)/idma_inst64_tb.f
+	$(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_inst64_tb.f \
+	  --top-module $(IDMA_INST64_TB)
+
+# verilator elaborates every synth top, so fork PRs catch port and param breaks
+IDMA_LINT_TOPS ?= $(addprefix idma_backend_synth_,$(IDMA_BACKEND_IDS)) \
+                  idma_desc64_synth \
+                  idma_nd_midend_synth \
+                  idma_mp_midend_synth \
+                  idma_rt_midend_synth
+
+# lint-sv is -diff scoped; this checks all of src/
+VERIBLE ?= verible-verilog-lint
+
+.PHONY: idma_lint_sv
+idma_lint_sv:
+	$(VERIBLE) --waiver_files $(IDMA_ROOT)/.github/verible.waiver \
+	  $$(find $(IDMA_ROOT)/src -name '*.sv' -o -name '*.svh' | sort)
+
+.PHONY: idma_lint_elab
+idma_lint_elab:
+	mkdir -p $(IDMA_VLT_DIR)
+	$(BENDER) script verilator -t rtl -t synth > $(IDMA_VLT_DIR)/idma_elab.f
+	@rc=0; for top in $(IDMA_LINT_TOPS); do \
+	  echo "--- elaborating $$top ---"; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_elab.f \
+	    --top-module $$top || rc=1; \
+	done; exit $$rc
+
+.PHONY: idma_lint_all
+idma_lint_all: idma_lint_elab idma_lint_inst64
 
 
 # ---------------
@@ -655,6 +695,9 @@ idma_nonfree_init:
 	git clone $(IDMA_NONFREE_REMOTE) $(IDMA_NONFREE_DIR)
 	cd $(IDMA_NONFREE_DIR) && git checkout $(IDMA_NONFREE_COMMIT)
 
+# The public verification gates; see verify.mk
+include $(IDMA_ROOT)/verify.mk
+
 -include $(IDMA_NONFREE_DIR)/nonfree.mk
 
 idma_nonfree_clean:
@@ -667,7 +710,7 @@ idma_nonfree_clean:
 
 .PHONY: idma_clean_all idma_clean idma_misc_clean idma_sw_clean
 
-idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_doc_clean idma_trace_clean idma_sw_clean
+idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_verify_clean idma_doc_clean idma_trace_clean idma_sw_clean
 
 idma_misc_clean:
 	rm -rf scripts/__pycache__
@@ -686,7 +729,8 @@ idma_sw_clean:
 # Phony Targets
 # --------------
 
-.PHONY: idma_all idma_doc_all idma_pickle_all idma_rtl_all idma_sim_all
+.PHONY: idma_all idma_doc_all idma_pickle_all idma_sim_all
+.PHONY: idma_hw_all idma_sw_all idma_nuke
 
 # Build the Starlight/Astro site (output in doc/site/dist) after staging the graphs
 idma_doc_all: idma_doc_site
@@ -694,7 +738,8 @@ idma_doc_all: idma_doc_site
 
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
-idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) $(IDMA_HJSON_ALL) $(IDMA_WAVE_ALL)
+idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) \
+             $(IDMA_WAVE_ALL)
 
 idma_sw_all: $(IDMA_SW_ALL)
 

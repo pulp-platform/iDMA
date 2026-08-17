@@ -136,6 +136,7 @@ sources:
   - target: idma_test
     files:
       - target/rtl/tb_idma_generated.sv
+      - test/tb_idma_otf_transpose.sv
       - test/tb_idma_transpose_nd.sv
       - test/tb_idma_transpose_b2b.sv
       - test/tb_idma_mxquant.sv

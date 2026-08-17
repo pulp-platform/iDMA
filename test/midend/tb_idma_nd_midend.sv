@@ -8,7 +8,7 @@
 
 `timescale 1ns/1ns
 `include "axi/typedef.svh"
-`include "idma/tracer.svh"
+`include "idma/tracer_rw_axi.svh"
 `include "idma/typedef.svh"
 
 // Protocol testbench defines

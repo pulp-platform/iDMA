@@ -1,0 +1,157 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+# License-free verification matrix; the run set is src/db/verify.yml
+
+name: verify
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+
+  # jobs.json and the generated tree must still describe the same design
+  codegen-consistency:
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+      -
+        name: Check jobs.json, the CI matrix and codegen determinism
+        run: uv run --locked make idma_verify_codegen
+
+  # One backend variant: its jobs.json parameters, a width sweep, its testbench
+  elab-backend:
+    strategy:
+      fail-fast: false
+      matrix:
+        id:
+          - rw_axi
+          - r_obi_w_axi
+          - r_axi_w_obi
+          - rw_axi_rw_axis
+          - rw_obi
+          - r_obi_rw_init_w_axi
+          - r_axi_rw_init_rw_obi
+          - rw_axi_rw_init_rw_obi
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+        with:
+          verilator: 'true'
+      -
+        name: Generate RTL
+        run: uv run --locked make idma_hw_all
+      -
+        name: Elaborate ${{ matrix.id }}
+        run: uv run --locked make idma_verify_backend IDMA_VERIFY_ID=${{ matrix.id }}
+
+  # The non-backend synthesis tops, plus the inst64 testbench
+  elab-shared-tops:
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+        with:
+          verilator: 'true'
+      -
+        name: Generate RTL
+        run: uv run --locked make idma_hw_all
+      -
+        name: Elaborate the shared synthesis tops
+        run: uv run --locked make idma_verify_shared
+
+  # Testbench tops; verilator cannot parse the verification stack, so slang only
+  elab-tb-shared:
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+      -
+        name: Generate RTL
+        run: uv run --locked make idma_hw_all
+      -
+        name: Elaborate the shared testbenches
+        run: uv run --locked make idma_verify_tb_shared
+
+  # Out-of-tree multi-head build; license-free but generated only on request
+  elab-multihead:
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+        with:
+          verilator: 'true'
+      -
+        name: Elaborate the multi-head variants and testbenches
+        run: uv run --locked make idma_verify_multihead
+
+  # The suite list comes from the database, so a new suite needs no edit here
+  sim-matrix:
+    needs: [elab-backend, elab-shared-tops, elab-tb-shared]
+    runs-on: ubuntu-24.04
+    outputs:
+      suites: ${{ steps.legs.outputs.suites }}
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+      -
+        name: Read the suites from the verification database
+        id: legs
+        run: |
+          suites=$(uv run --locked python util/run_verify.py --emit-matrix suites)
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+
+  # Real simulation; run_verify.py knows which suites are negative tests
+  simulate:
+    needs: sim-matrix
+    if: needs.sim-matrix.outputs.suites != ''
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.sim-matrix.outputs.suites) }}
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+        with:
+          verilator: 'true'
+      -
+        name: Generate RTL
+        run: uv run --locked make idma_hw_all
+      -
+        name: Simulate ${{ matrix.suite }}
+        run: uv run --locked make idma_verify_sim_${{ matrix.suite }} IDMA_VLT_MAKEFLAGS=-j4

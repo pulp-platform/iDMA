@@ -8,7 +8,7 @@
 `include "common_cells/registers.svh"
 `include "common_cells/assertions.svh"
 `include "idma/typedef.svh"
-`include "idma/tracer.svh"
+`include "idma/tracer_rw_axi_rw_init_rw_obi.svh"
 
 /// Implements the tightly-coupled frontend. This module can directly be connected
 /// to an accelerator bus in the snitch system
@@ -72,7 +72,8 @@ module idma_inst64_top #(
     localparam int unsigned NumDim       = 32'd2;
     localparam int unsigned BufferDepth  = 32'd3;
     localparam int unsigned NumRules     = 32'd5;
-    localparam int unsigned AwInFlightCntWidth = (NumAxInFlight < 2) ? 32'd1 : $clog2(NumAxInFlight + 1);
+    localparam int unsigned AwInFlightCntWidth =
+        (NumAxInFlight < 2) ? 32'd1 : $clog2(NumAxInFlight + 1);
 
     // derived constants and types
     localparam int unsigned StrbWidth    = AxiDataWidth / 32'd8;
@@ -797,7 +798,8 @@ module idma_inst64_top #(
                 $sformat(trace_file, "dma_trace_%05x_%05x.log", hart_id_i, c);
             end
             // attach the tracer
-            `IDMA_TRACER_RW_AXI(gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
+            `IDMA_TRACER_RW_AXI_RW_INIT_RW_OBI(
+                gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
         end
     end
 `endif

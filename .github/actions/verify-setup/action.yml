@@ -1,0 +1,35 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+name: Set up the public verification toolchain
+description: Bender database cache, uv, Bender and optionally Verilator
+inputs:
+  verilator:
+    description: Install Verilator from apt; ubuntu-24.04 ships 5.020
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/bender-db-cache
+    - uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    - uses: pulp-platform/pulp-actions/bender-install@v2.5.0
+      with:
+        version: 0.32.0
+    - if: inputs.verilator == 'true'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y verilator
+    - if: inputs.verilator == 'true'
+      shell: bash
+      run: |
+        verilator --version
+        verilator --version | grep -qE '^Verilator 5\.' || {
+          echo "expected Verilator 5.x from apt"; exit 1; }
+    - if: inputs.verilator == 'true'
+      shell: bash
+      run: uv run --locked make idma_verify_toolchain

@@ -1,3 +1,5 @@
 doc
 pickle
 sim/verilator
+sim/slang
+verify

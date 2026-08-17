@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Changed
+- **Breaking**: the tracer is generated one header per backend id. `idma/tracer.svh` now only holds the id-independent helpers; the `IDMA_TRACER_<ID>` macro of a variant lives in `idma/tracer_<id>.svh`, which includes `idma/tracer.svh` itself. Downstream users replace `` `include "idma/tracer.svh" `` with the per-id header of the variant they trace.
+
+
 ## 0.6.5 - 2025-07-15
 
 ### Added

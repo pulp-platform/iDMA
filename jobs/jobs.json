@@ -332,5 +332,167 @@
         "proc_id" : "none",
         "testbench" : "idma_mp_midend_synth",
         "synth_top" : "idma_mp_midend_synth"
+    },
+    "mxquant" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 32,
+            "UserWidth"   : 1,
+            "AxiIdWidth"  : 12,
+            "TFLenWidth"  : 32
+        },
+        "testbench" : "tb_idma_mxquant",
+        "verify" : {
+            "dpi" : "idma_mxquant_dpi",
+            "token" : "[MXQ] ALL PASS",
+            "legs" : [
+                { "tag" : "mxquant_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "mxquant_64", "params" : { "DataWidth" : 64 } },
+                { "tag" : "mxquant_256", "params" : { "DataWidth" : 256 } },
+                { "tag" : "mxquant_512", "params" : { "DataWidth" : 512 } },
+                { "tag" : "mxquant_1024", "params" : { "DataWidth" : 1024 } }
+            ]
+        }
+    },
+    "mxroundtrip" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 32,
+            "UserWidth"   : 1,
+            "AxiIdWidth"  : 12,
+            "TFLenWidth"  : 32
+        },
+        "testbench" : "tb_idma_mxroundtrip",
+        "verify" : {
+            "dpi" : "idma_mxquant_dpi",
+            "token" : "[MXRT] ALL PASS",
+            "legs" : [
+                { "tag" : "mxroundtrip_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "mxroundtrip_64", "params" : { "DataWidth" : 64 } },
+                { "tag" : "mxroundtrip_256", "params" : { "DataWidth" : 256 } }
+            ],
+            "exclude" : [
+                { "values" : [512, 1024], "why" : "heap abort during model construction, see #196" }
+            ]
+        }
+    },
+    "transpose" : {
+        "jobs" : {
+        },
+        "params" : {
+        },
+        "testbench" : "tb_idma_otf_transpose",
+        "verify" : {
+            "dpi" : "idma_transpose_dpi",
+            "token" : "[TB] ALL PASS",
+            "legs" : [
+                { "tag" : "otf_transpose", "params" : { "StrbWidth" : 8, "FullDuplex" : 1 } },
+                { "tag" : "otf_transpose_bp", "params" : { "StrbWidth" : 8, "FullDuplex" : 1 }, "plusargs" : ["+BP"] },
+                { "tag" : "otf_transpose_8_0", "params" : { "StrbWidth" : 8, "FullDuplex" : 0 }, "plusargs" : ["+BP"] },
+                { "tag" : "otf_transpose_64_1", "params" : { "StrbWidth" : 64, "FullDuplex" : 1 }, "plusargs" : ["+BP"] },
+                { "tag" : "otf_transpose_64_0", "params" : { "StrbWidth" : 64, "FullDuplex" : 0 }, "plusargs" : ["+BP"] }
+            ]
+        }
+    },
+    "transpose_midend" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 64
+        },
+        "testbench" : "tb_idma_transpose_midend",
+        "verify" : {
+            "dpi" : "idma_transpose_dpi",
+            "token" : "[MID] ALL PASS",
+            "legs" : [
+                { "tag" : "transpose_midend_64", "params" : { "DataWidth" : 64 } },
+                { "tag" : "transpose_midend_512", "params" : { "DataWidth" : 512 } }
+            ]
+        }
+    },
+    "mxclear" : {
+        "jobs" : {
+        },
+        "params" : {
+            "StrbWidth"   : 8
+        },
+        "testbench" : "tb_idma_mxclear",
+        "verify" : {
+            "expect" : "fail",
+            "defines" : ["INC_ASSERT"],
+            "token" : "clear with in-flight state",
+            "legs" : [
+                { "tag" : "mxclear_1", "params" : { "Quant" : 1 } },
+                { "tag" : "mxclear_0", "params" : { "Quant" : 0 } }
+            ]
+        }
+    },
+    "mxneg" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 32,
+            "UserWidth"   : 1,
+            "AxiIdWidth"  : 12,
+            "TFLenWidth"  : 32
+        },
+        "testbench" : "tb_idma_mxneg",
+        "verify" : {
+            "dpi" : "idma_mxquant_dpi",
+            "expect" : "fail",
+            "defines" : ["INC_ASSERT"],
+            "legs" : [
+                { "tag" : "mxneg_1", "params" : { "NegCase" : 1, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeSizeAligned" },
+                { "tag" : "mxneg_2", "params" : { "NegCase" : 2, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeSrcAligned" },
+                { "tag" : "mxneg_3", "params" : { "NegCase" : 3, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeDstAligned" },
+                { "tag" : "mxneg_5", "params" : { "NegCase" : 5, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxdequantBeatAligned" },
+                { "tag" : "mxneg_6", "params" : { "NegCase" : 6, "DataWidth" : 64, "EnDequant" : 0, "EnFp16" : 1 }, "token" : "ComputeOpUnsupported" },
+                { "tag" : "mxneg_7", "params" : { "NegCase" : 7, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxSrcProtocol" },
+                { "tag" : "mxneg_8", "params" : { "NegCase" : 8, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxDstProtocol" },
+                { "tag" : "mxneg_10", "params" : { "NegCase" : 10, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeSingleBeat" },
+                { "tag" : "mxneg_13", "params" : { "NegCase" : 13, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 0 }, "token" : "ComputeOpUnsupported" }
+            ],
+            "exclude" : [
+                { "case" : 4,  "why" : "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046" },
+                { "case" : 11, "why" : "the request is never accepted, so the guard is never sampled" },
+                { "case" : 12, "why" : "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046" }
+            ]
+        }
+    },
+    "_verify" : {
+        "elab_widths" : [32, 64, 512, 1024],
+        "elab_compute" : [
+            { "width" : 64, "ops" : 15, "tuning" : 1 },
+            { "width" : 512, "ops" : 15, "tuning" : 1 },
+            { "width" : 64, "ops" : 8, "tuning" : 0 },
+            { "width" : 64, "ops" : 6, "tuning" : 1 }
+        ],
+        "elab_shared_tops" : [
+            "idma_desc64_synth", "idma_nd_midend_synth",
+            "idma_mp_midend_synth", "idma_rt_midend_synth"
+        ],
+        "multihead_ids" : ["2r_axi_w_axi", "2rw_axi"],
+        "reg_variants" : [
+            { "variant" : 3, "module" : "idma_reg32_3d" },
+            { "variant" : 2, "module" : "idma_reg64_2d" },
+            { "variant" : 1, "module" : "idma_reg64_1d" }
+        ],
+        "elab_covered_elsewhere" : ["tb_idma_reg_frontend"],
+        "guards_untested" : [
+            { "guard" : "ComputeMxFp16Width", "why" : "only reachable from the excluded 1024 cases" },
+            { "guard" : "ComputeMxdequantLengthFits", "why" : "case 11 is never accepted" },
+            { "guard" : "ComputeDstTilelink", "why" : "no TileLink backend variant exists" }
+        ],
+        "tops_untested" : [
+            { "top" : "tb_idma_nd_midend_b2b", "why" : "hangs ([B2B] timeout); latent reset/LFSR race" },
+            { "top" : "tb_idma_transpose_nd", "why" : "AW outside the destination allocation at 80 ns" },
+            { "top" : "tb_idma_transpose_b2b", "why" : "stream_watchdog trip after 4000 idle cycles" },
+            { "top" : "tb_idma_mxrand", "why" : "testbench timeout at 400 ms of simulated time" },
+            { "top" : "tb_idma_mxperf", "why" : "hangs on the first compute transfer" },
+            { "top" : "tb_idma_rt_midend", "why" : "fails under --assert on cc_rr_arb_tree lock" },
+            { "top" : "the 88 directed job files", "why" : "verilator cannot drive the class-based stimulus" }
+        ]
     }
 }

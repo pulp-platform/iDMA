@@ -1,0 +1,269 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+# License-free verification (verilator + slang); no build target depends on it
+
+# ---------------
+# Public verification
+# ---------------
+
+# One CI leg per top-level target; each reproduces a red check locally.
+
+.PHONY: idma_verify_codegen idma_verify_backend idma_verify_shared idma_verify_multihead
+.PHONY: idma_verify_tb_shared
+.PHONY: idma_verify_all idma_lint_params idma_slang_elab idma_slang_tb idma_slang_report
+.PHONY: idma_verify_clean
+
+# Module to elaborate; every per-top target takes it
+IDMA_TOP           ?=
+# Backend variant a leg covers
+IDMA_VERIFY_ID     ?= rw_axi
+IDMA_MULTIHEAD_PAT := 2r_axi_w_axi 2rw_axi
+IDMA_VERIFY_DB     := $(IDMA_ROOT)/$(IDMA_JOBS_JSON)
+IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
+IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang
+IDMA_SLANG_VERSION ?= 11.0.0
+SLANG              ?= $(UV) run --locked --project $(IDMA_ROOT) \
+                      --with pyslang==$(IDMA_SLANG_VERSION) python \
+                      $(IDMA_UTIL_DIR)/slang_elab.py
+IDMA_SLANG_ARGS    := -Werror --error-limit 0
+# -Wno-finish-num covers common_verification; slang cannot scope it to a dependency
+IDMA_SLANG_TB_ARGS := --timescale=1ns/1ps -Wno-finish-num
+IDMA_SLANG_SYNTH_T := -t rtl -t synth
+IDMA_SLANG_TB_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
+                      -t snitch_cluster -t asic
+
+# A file target, not $(shell): make discards a $(shell) exit status
+$(IDMA_VERIFY_DIR)/%.list: $(IDMA_VERIFY_DB) $(IDMA_UTIL_DIR)/run_verify.py
+	mkdir -p $(@D)
+	$(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --emit $* > $@.tmp
+	test -s $@.tmp
+	mv $@.tmp $@
+
+$(IDMA_VERIFY_DIR)/tb_tops.txt: $(IDMA_ROOT)/Bender.yml $(IDMA_VERIFY_DB) \
+                                $(IDMA_UTIL_DIR)/run_verify.py
+	mkdir -p $(@D)
+	BENDER=$(BENDER) $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --tb-tops \
+	  $(patsubst -t%,--target %,$(IDMA_SLANG_TB_T)) > $@.tmp
+	test -s $@.tmp
+	mv $@.tmp $@
+
+IDMA_SOURCE_GLOBS  := --source '$(IDMA_RTL_DIR)/*.sv' --source '$(IDMA_ROOT)/src/**/*.sv' \
+                      --source '$(IDMA_ROOT)/test/**/*.sv'
+
+# Emit the elaboration configurations of $1 (jobs.json parameter sets + width sweep)
+define idma_elab_cfg
+	mkdir -p $(IDMA_VERIFY_DIR)
+	$(PYTHON) $(IDMA_UTIL_DIR)/idma_params.py --top $1 \
+	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --verify-db $(IDMA_VERIFY_DB) \
+	  $(IDMA_SOURCE_GLOBS) > $(IDMA_VERIFY_DIR)/$1.cfg
+endef
+
+# Filelists
+$(IDMA_VLT_DIR)/idma_verify.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_VLT_DIR)
+	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) > $@
+
+$(IDMA_SLANG_DIR)/synth.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_SLANG_DIR)
+	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) > $@
+
+$(IDMA_SLANG_DIR)/tb.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_SLANG_DIR)
+	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) > $@
+
+
+idma_lint_params: $(IDMA_VLT_DIR)/idma_verify.f
+	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
+	$(call idma_elab_cfg,$(IDMA_TOP))
+	@test -s $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg || \
+	  { echo "error: no configurations for $(IDMA_TOP)"; exit 1; }
+	@rc=0; while read -r cfg flags; do \
+	  echo "--- verilator $(IDMA_TOP) [$$cfg] $$flags ---"; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_verify.f \
+	    --top-module $(IDMA_TOP) $$flags || rc=1; \
+	done < $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg; \
+	test $$rc -eq 0 && echo "idma_lint_params: $(IDMA_TOP) OK" || \
+	  echo "idma_lint_params: $(IDMA_TOP) FAILED"; exit $$rc
+
+# slang elaboration of IDMA_TOP over the same configurations
+idma_slang_elab: $(IDMA_SLANG_DIR)/synth.f
+	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
+	$(call idma_elab_cfg,$(IDMA_TOP))
+	@test -s $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg || \
+	  { echo "error: no configurations for $(IDMA_TOP)"; exit 1; }
+	@rc=0; while read -r cfg flags; do \
+	  echo "--- slang $(IDMA_TOP) [$$cfg] $$flags ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/synth.f --top $(IDMA_TOP) $(IDMA_SLANG_ARGS) $$flags \
+	    || rc=1; \
+	done < $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg; \
+	test $$rc -eq 0 && echo "idma_slang_elab: $(IDMA_TOP) OK" || \
+	  echo "idma_slang_elab: $(IDMA_TOP) FAILED"; exit $$rc
+
+# slang only; verilator cannot parse the verification stack
+idma_slang_tb: $(IDMA_SLANG_DIR)/tb.f
+	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
+	$(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $(IDMA_TOP) \
+	  $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS)
+
+# One backend variant: synthesis top under both front ends, plus its testbench
+idma_verify_backend:
+	$(MAKE) idma_lint_params IDMA_TOP=idma_backend_synth_$(IDMA_VERIFY_ID)
+	$(MAKE) idma_slang_elab  IDMA_TOP=idma_backend_synth_$(IDMA_VERIFY_ID)
+	$(MAKE) idma_slang_tb    IDMA_TOP=tb_idma_backend_$(IDMA_VERIFY_ID)
+
+# Non-backend synthesis tops, plus every top from idma_lint_all
+idma_verify_shared: idma_lint_all $(IDMA_VERIFY_DIR)/elab_shared_tops.list
+	@test -s $(IDMA_VERIFY_DIR)/elab_shared_tops.list || \
+	  { echo "error: no shared tops listed"; exit 1; }
+	set -e; for top in $$(cat $(IDMA_VERIFY_DIR)/elab_shared_tops.list); do \
+	  $(MAKE) idma_lint_params IDMA_TOP=$$top; \
+	  $(MAKE) idma_slang_elab  IDMA_TOP=$$top; \
+	done
+
+idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt \
+                       $(IDMA_VERIFY_DIR)/reg_variants.list
+	@set -e; for id in $(IDMA_FE_IDS); do \
+	  grep -q " idma_$$id$$" $(IDMA_VERIFY_DIR)/reg_variants.list || \
+	    { echo "error: no reg_variants entry elaborates idma_$$id"; exit 1; }; \
+	done
+	@test -s $(IDMA_VERIFY_DIR)/tb_tops.txt || \
+	  { echo "error: no testbench tops; bender returned nothing"; exit 1; }
+	set -e; for top in $$(cat $(IDMA_VERIFY_DIR)/tb_tops.txt); do \
+	  echo "--- slang $$top ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $$top \
+	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
+	done
+	@test -s $(IDMA_VERIFY_DIR)/reg_variants.list || \
+	  { echo "error: no register variants listed"; exit 1; }
+	set -e; while read -r v mod; do \
+	  echo "--- slang tb_idma_reg_frontend [$$mod] ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top tb_idma_reg_frontend -GRegVariant=$$v \
+	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
+	done < $(IDMA_VERIFY_DIR)/reg_variants.list
+
+# Out-of-tree multi-head build; the aggregate is rebuilt after
+idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
+	@test -s $(IDMA_VERIFY_DIR)/multihead_ids.list || \
+	  { echo "error: no multi-head ids listed"; exit 1; }
+	$(MAKE) idma_hw_all IDMA_ADD_IDS="$$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list)"
+	mkdir -p $(IDMA_VLT_DIR) $(IDMA_SLANG_DIR)
+	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) > $(IDMA_VLT_DIR)/idma_multihead.f
+	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) > $(IDMA_SLANG_DIR)/mh_synth.f
+	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) -t multihead \
+	  > $(IDMA_SLANG_DIR)/mh_tb.f
+	set -e; for id in $$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list); do \
+	  echo "--- verilator idma_backend_synth_$$id ---"; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_multihead.f \
+	    --top-module idma_backend_synth_$$id; \
+	  echo "--- slang idma_backend_synth_$$id ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_synth.f --top idma_backend_synth_$$id \
+	    $(IDMA_SLANG_ARGS); \
+	done
+	set -e; for tb in tb_idma_backend_multihead tb_idma_backend_multihead_rw; do \
+	  echo "--- slang $$tb ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_tb.f --top $$tb \
+	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
+	done
+	rm -f $(IDMA_FULL_RTL) $(IDMA_FULL_TB)
+	$(MAKE) idma_hw_all
+	@! grep -qE '$(subst $() ,|,$(IDMA_MULTIHEAD_PAT))' $(IDMA_FULL_RTL) || \
+	  { echo 'error: add ids leaked into $(IDMA_FULL_RTL)'; exit 1; }
+
+
+# ---------------
+# Public simulation (verilator)
+# ---------------
+
+IDMA_VLT_SIM_T     := -t rtl -t idma_test -t simulation -t synth
+IDMA_VLT_MAKEFLAGS ?=
+
+# verilator --timing lowers to C++20 coroutines; g++ 11 miscompiles them
+IDMA_VLT_CXX        = $(shell for c in g++-14 g++-13 g++-13.2.0 g++-12 g++; do \
+                        command -v $$c >/dev/null 2>&1 && { echo $$c; break; }; done)
+IDMA_VLT_CXX_MAJOR  = $(shell $(IDMA_VLT_CXX) -dumpversion 2>/dev/null | cut -d. -f1)
+
+# Fail here; the symptom otherwise is a SIGSEGV with an empty log
+.PHONY: idma_verify_toolchain
+idma_verify_toolchain:
+	@test -n "$(IDMA_VLT_CXX)" || { echo "error: no g++ found"; exit 1; }
+	@test "$(IDMA_VLT_CXX_MAJOR)" -ge 12 2>/dev/null || { \
+	  echo "error: $(IDMA_VLT_CXX) is g++ $(IDMA_VLT_CXX_MAJOR); the coroutine"; \
+	  echo "       lowering needs g++ 12 or newer. Set IDMA_VLT_CXX=<g++-13 or newer>."; \
+	  exit 1; }
+
+IDMA_VERIFY_RUN     = VERILATOR="$(VERILATOR)" \
+                      IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) $(IDMA_VLT_MAKEFLAGS)" \
+                      $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --vlt-dir $(IDMA_VLT_DIR)
+
+$(IDMA_VLT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_VLT_DIR)
+	$(BENDER) script verilator $(IDMA_VLT_SIM_T) --top $* > $@
+
+# idma_mxquant_dpi and idma_transpose_dpi both export gm_load/gm_get; never link both
+$(IDMA_VLT_DIR)/%_dpi.o: $(IDMA_ROOT)/test/%_dpi.c
+	mkdir -p $(IDMA_VLT_DIR)
+	$(CC) -c -O2 -fPIC $< -o $@
+
+# One rule for every suite; the database names the top and the DPI object
+idma_verify_sim_%: idma_verify_toolchain
+	@p=$$($(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --prereqs $* --vlt-dir $(IDMA_VLT_DIR)) && \
+	  test -n "$$p" && $(MAKE) $$p
+	$(IDMA_VERIFY_RUN) --suite $*
+
+
+# ---------------
+# Codegen consistency and advisory report
+# ---------------
+
+IDMA_GEN_FILES := $(IDMA_RTL_ALL) $(IDMA_TB_ALL) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) \
+                  $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
+
+# Not verification; no zero-git-diff form, target/rtl is gitignored here
+idma_verify_codegen:
+	$(MAKE) idma_hw_all
+	$(PYTHON) $(IDMA_UTIL_DIR)/check_jobs.py --ids "$(IDMA_BACKEND_IDS)" \
+	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --jobs-dir $(IDMA_ROOT)/jobs \
+	  --verify-db $(IDMA_VERIFY_DB) \
+	  --matrix-file $(IDMA_ROOT)/.github/workflows/verify.yml \
+	  --mxneg-tb $(IDMA_ROOT)/test/tb_idma_mxneg.sv \
+	  --mxneg-guard-src $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl \
+	  $(IDMA_SOURCE_GLOBS)
+	mkdir -p $(IDMA_VERIFY_DIR)
+	set -o pipefail; md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen1.md5
+	$(MAKE) idma_rtl_clean idma_reg_clean
+	$(MAKE) idma_hw_all
+	set -o pipefail; md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen2.md5
+	diff -u $(IDMA_VERIFY_DIR)/gen1.md5 $(IDMA_VERIFY_DIR)/gen2.md5
+
+# Advisory only; never add to the required checks
+idma_slang_report: $(IDMA_SLANG_DIR)/synth.f
+	mkdir -p $(IDMA_VERIFY_DIR)
+	: > $(IDMA_VERIFY_DIR)/slang_extra.log
+	set -e; for top in $(IDMA_LINT_TOPS); do \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/synth.f --top $$top -Wextra --error-limit 0 \
+	    >> $(IDMA_VERIFY_DIR)/slang_extra.log 2>&1; \
+	done
+	awk '/ (warning|error): /' $(IDMA_VERIFY_DIR)/slang_extra.log | \
+	  awk '!/^\.bender\//' | sort -u > $(IDMA_VERIFY_DIR)/slang_extra.txt
+	@echo "slang -Wextra: $$(wc -l < $(IDMA_VERIFY_DIR)/slang_extra.txt) unique iDMA findings"
+
+# The suite list comes from the database, like the CI fan-out
+idma_verify_all: idma_verify_codegen idma_verify_shared idma_verify_tb_shared \
+                 idma_verify_multihead $(IDMA_VERIFY_DIR)/suites.list
+	@test -s $(IDMA_VERIFY_DIR)/suites.list || \
+	  { echo "error: no suites listed"; exit 1; }
+	set -e; for s in $$(cat $(IDMA_VERIFY_DIR)/suites.list); do \
+	  $(MAKE) idma_verify_sim_$$s; \
+	done
+	set -e; for id in $(IDMA_BACKEND_IDS); do \
+	  $(MAKE) idma_verify_backend IDMA_VERIFY_ID=$$id; \
+	done
+
+idma_verify_clean:
+	rm -rf $(IDMA_VERIFY_DIR)
+	rm -rf $(IDMA_SLANG_DIR)

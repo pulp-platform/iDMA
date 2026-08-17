@@ -32,6 +32,23 @@ jobs:
         exclude_paths: |
           target/sim/vsim/wave/tpl/*.do.tpl
 
+  # lint-sv is -diff scoped; this one checks all of src/
+  lint-sv-tree:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v5
+      -
+        name: Install Verible
+        uses: chipsalliance/verible-actions-common/install-verible@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          verible_version: "v0.0-3318-g8d254167"
+      -
+        name: Lint all of src
+        run: make idma_lint_sv
+
   lint-sv:
     runs-on: ubuntu-latest
     steps:
@@ -47,29 +64,6 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         fail_on_error: true
         reviewdog_reporter: github-check
-
-#  lint-cxx:
-#    runs-on: ubuntu-latest
-#    steps:
-#    -
-#      name: Checkout
-#      uses: actions/checkout@v3
-#    -
-#      name: Run Clang-format
-#      uses: DoozyX/clang-format-lint-action@v0.14
-#      with:
-#        extensions: 'c,h,cpp'
-#        clangFormatVersion: 14
-#        style: >
-#          {
-#          IndentWidth: 4,
-#          ColumnLimit: 100,
-#          AlignEscapedNewlines: DontAlign,
-#          SortIncludes: false,
-#          AllowShortFunctionsOnASingleLine: None,
-#          AllowShortIfStatementsOnASingleLine: true,
-#          AllowShortLoopsOnASingleLine: true
-#          }
 
   lint-python:
     runs-on: ubuntu-latest

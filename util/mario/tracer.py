@@ -107,32 +107,41 @@ ${signals}
 '''
 
 
+def render_tracer_common(tpl_file: str) -> str:
+    """Generate the id-independent tracer helpers"""
+    with open(tpl_file, 'r', encoding='utf-8') as templ_file:
+        return Template(templ_file.read()).render()
+
+
 def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
-    """Generate racer"""
+    """Generate the tracer of one backend id"""
     tracer_body = ''
+
+    # one header per id: the header name carries the id, so a list is meaningless here
+    if len(prot_ids) != 1:
+        raise ValueError(f'the tracer renders exactly one id, got {len(prot_ids)}')
 
     with open(tpl_file, 'r', encoding='utf-8') as templ_file:
         tracer_tpl = templ_file.read()
 
-    # render for every is
     for prot_id in prot_ids:
 
         # signals
         signals = ''
 
-        # handle read ports
+        # direction-qualified: INIT is on both sides and would emit the key twice
         for read_prot in prot_ids[prot_id]['ar']:
             sig_dict = _flatten_dict(db[read_prot]['trace_signals']['read'])
             for signal in sig_dict:
                 signals += '                    '
-                signals += f'"{read_prot}_{signal}": __backend_inst``.{sig_dict[signal]}'
+                signals += f'"{read_prot}_read_{signal}": __backend_inst``.{sig_dict[signal]}'
                 signals += ', \\\n'
 
         for write_prot in prot_ids[prot_id]['aw']:
             sig_dict = _flatten_dict(db[write_prot]['trace_signals']['write'])
             for signal in sig_dict:
                 signals += '                    '
-                signals += f'"{write_prot}_{signal}": __backend_inst``.{sig_dict[signal]}'
+                signals += f'"{write_prot}_write_{signal}": __backend_inst``.{sig_dict[signal]}'
                 signals += ', \\\n'
 
         # post-processing
@@ -149,6 +158,8 @@ def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
 
     # render tracer context
     context = {
+        'identifier': prot_id,
+        'identifier_cap': prot_id.upper(),
         'body': tracer_body
     }
 

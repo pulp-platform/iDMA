@@ -7,7 +7,7 @@
 
 `include "apb/typedef.svh"
 `include "apb/assign.svh"
-`include "idma/tracer.svh"
+`include "idma/tracer_rw_axi.svh"
 `include "idma/typedef.svh"
 `include "axi/typedef.svh"
 `include "axi/assign.svh"
