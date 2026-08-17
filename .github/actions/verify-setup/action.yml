@@ -23,8 +23,6 @@ runs:
       with:
         enable-cache: true
 
-    # bender-install downloads a release tarball per job, so a GitHub blip fails
-    # a leg; it skips the download when bender is already on PATH
     - uses: actions/cache@v4
       with:
         path: ~/.cache/bender-bin
@@ -62,7 +60,6 @@ runs:
           ccache-${{ github.job }}-
           ccache-
 
-    # Pinning is by apt version, so assert it rather than trusting the runner
     - if: inputs.verilator == 'true'
       shell: bash
       run: |
