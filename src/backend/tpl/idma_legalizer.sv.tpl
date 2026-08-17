@@ -726,7 +726,6 @@ ${database[protocol]['legalizer_write_data_path']}
                    (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)) &
                   (req_i.length % (idma_pkg::MxBlockBytes*StrbWidth) != 0)), clk_i, !rst_ni)
     // NOT IMPLEMENTED: dequant output length that overflows the length field
-    // 65-bit literal: a 64-bit length shifts by 64, which overflows a 64-bit operand
     `ASSERT_NEVER(ComputeMxdequantLengthFits, (ready_o & valid_i & req_i.opt.compute.enable &
                   ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) |
                    (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)) &

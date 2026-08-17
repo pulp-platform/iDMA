@@ -5,14 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Self-checking testbench for the iDMA register frontend (idma_reg32_3d, apb4-flat).
-// `RegVariant` also binds idma_reg64_2d and idma_reg64_1d, elaboration-only and
-// covered by nothing else.
-// Drives the APB config slave with the standard apb_test::apb_driver against a
-// controllable backend stub and checks the non-blocking next_id launch contract:
-// the config read completes promptly (even under backend backpressure) and the
-// launch fires exactly once when the arbiter grants. A per-read watchdog guards
-// against any read that hangs.
+// Self-checking testbench for the iDMA register frontend; checks the non-blocking
+// next_id launch contract. RegVariant 2 and 1 are elaboration-only.
 
 `include "apb/typedef.svh"
 `include "apb/assign.svh"

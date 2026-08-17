@@ -129,8 +129,7 @@ def render_tracer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         # signals
         signals = ''
 
-        # Keys are direction-qualified: a protocol present on both sides (INIT) would
-        # otherwise emit the same key twice and the write leg drop the read channel
+        # direction-qualified: INIT is on both sides and would emit the key twice
         for read_prot in prot_ids[prot_id]['ar']:
             sig_dict = _flatten_dict(db[read_prot]['trace_signals']['read'])
             for signal in sig_dict:

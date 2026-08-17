@@ -33,8 +33,7 @@ def main(argv):
     if not driver.processOptions():
         return 1
 
-    # Both stages must run; `&` rather than `and` so parse failures are reported
-    # together with the elaboration diagnostics instead of masking them.
+    # `&` not `and`: both stages must run so parse errors are not masked
     ok = driver.parseAllSources()
     ok = driver.runFullCompilation() & ok
     return 0 if ok else 5

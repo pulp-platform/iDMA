@@ -90,8 +90,7 @@ def tb_tops(db, bender, targets):
     found = []
     decl = re.compile(r'^\s*module\s+(tb_\w+)', re.M)
     for path in bender_sources(bender, targets):
-        # only iDMA's own testbenches; relative, so a checkout under a path
-        # containing deps/ does not filter out the whole repository
+        # relative: an absolute match on deps/ would filter out the whole repo
         rel = os.path.relpath(path, ROOT)
         if rel.startswith('..') or rel.startswith(('.bender/', 'deps/')):
             continue

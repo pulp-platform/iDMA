@@ -142,9 +142,7 @@ $(IDMA_INC_DIR)/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/tracer.s
 	mkdir -p $(@D)
 	$(call idma_gen,tracer_common,$(IDMA_INC_TPL)/tracer.svh.tpl,,,,$@)
 
-# One tracer macro per backend id. The content is a function of the id in the target
-# name, the databases and the template only, so "up to date" implies "correct" and no
-# id-list state has to be recorded anywhere.
+# One tracer macro per backend id, a function of the id in the target name
 $(IDMA_INC_DIR)/tracer_%.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/tracer_id.svh.tpl $(IDMA_DB_FILES)
 	mkdir -p $(@D)
 	$(call idma_gen,tracer,$(IDMA_INC_TPL)/tracer_id.svh.tpl,$(IDMA_DB_FILES),$*,,$@)
@@ -165,8 +163,6 @@ IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/tracer.svh
 IDMA_INCLUDE_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_INC_DIR)/tracer_$Y.svh)
 IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/compute.svh
 
-# The tracked aggregates below concatenate the tree ids only; out-of-tree ids are
-# collected separately so no command-line variable can change what they contain.
 IDMA_RTL_ALL     += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
 IDMA_TB_ALL      += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
 IDMA_WAVE_ALL     += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_VSIM_DIR)/wave/backend_$Y.do)
@@ -598,13 +594,9 @@ idma_vcs_clean:
 IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
 
 
-# Warning classes measured at 0 occurrences over the synth tops, so they gate.
-# Not promoted, with the measurement: UNOPTFLAT (31, includes the known
-# idma_nd_midend stage_done loop) and PINMISSING (12, all in axi_stream and
-# common_cells, none iDMA-owned).
+# Measured at 0 occurrences over the synth tops, so they gate
 IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT
-# The unroll budget matches util/run_vlt_sim.py; without it verilator 5.020 reports
-# BLKLOOPINIT on the compute pack/unpack loops at DataWidth >= 256.
+# Unroll budget matches util/run_vlt_sim.py; 5.020 reports BLKLOOPINIT without it
 IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
                       --unroll-count 4096 --unroll-stmts 200000
 
@@ -612,11 +604,7 @@ IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
 
-# inst64 frontend elaboration gate: verilator --lint-only over tb_idma_inst64_axi_copy,
-# the only public concrete binding of the snitch_cluster-gated idma_inst64_top. -t test
-# adds obi_sim_mem; --top-module is load-bearing, it trims the flat filelist to the
-# reachable cone. Run after idma_hw_all. slang covers the same top via
-# the shared testbench leg.
+# inst64 gate: the only public concrete binding of idma_inst64_top
 IDMA_INST64_TB   := tb_idma_inst64_axi_copy
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
@@ -629,18 +617,14 @@ idma_lint_inst64:
 	$(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_inst64_tb.f \
 	  --top-module $(IDMA_INST64_TB)
 
-# Synthesis-wrapper elaboration gate: verilator elaborates every synth top so a
-# port, parameter or connectivity break is caught without the proprietary EDA
-# sims (which fork PRs never run). Run after idma_hw_all.
+# verilator elaborates every synth top, so fork PRs catch port and param breaks
 IDMA_LINT_TOPS ?= $(addprefix idma_backend_synth_,$(IDMA_BACKEND_IDS)) \
                   idma_desc64_synth \
                   idma_nd_midend_synth \
                   idma_mp_midend_synth \
                   idma_rt_midend_synth
 
-# Tree-scoped SystemVerilog style lint. The PR-annotating CI job reports through
-# reviewdog with -diff, so it only ever sees lines a PR touched; this target
-# checks all of src/ so pre-existing violations cannot accumulate unseen.
+# lint-sv is -diff scoped; this checks all of src/
 VERIBLE ?= verible-verilog-lint
 
 .PHONY: idma_lint_sv

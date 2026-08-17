@@ -31,8 +31,7 @@ SLANG              ?= $(UV) run --locked --project $(IDMA_ROOT) \
                       --with pyslang==$(IDMA_SLANG_VERSION) python \
                       $(IDMA_UTIL_DIR)/slang_elab.py
 IDMA_SLANG_ARGS    := -Werror --error-limit 0
-# -Wno-finish-num covers 9 $fatal("<string>") calls in common_verification; no
-# iDMA file has one, and slang cannot scope a waiver to a dependency checkout.
+# -Wno-finish-num covers common_verification; slang cannot scope it to a dependency
 IDMA_SLANG_TB_ARGS := --timescale=1ns/1ps -Wno-finish-num
 IDMA_SLANG_SYNTH_T := -t rtl -t synth
 IDMA_SLANG_TB_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
@@ -105,8 +104,7 @@ idma_slang_elab: $(IDMA_SLANG_DIR)/synth.f
 	test $$rc -eq 0 && echo "idma_slang_elab: $(IDMA_TOP) OK" || \
 	  echo "idma_slang_elab: $(IDMA_TOP) FAILED"; exit $$rc
 
-# slang elaboration of one testbench top; verilator cannot parse the verification
-# stack at all (axi_test/apb_test type-identifier errors, randomize()-with).
+# slang only; verilator cannot parse the verification stack
 idma_slang_tb: $(IDMA_SLANG_DIR)/tb.f
 	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
 	$(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $(IDMA_TOP) \
@@ -148,8 +146,7 @@ idma_verify_tb_shared: $(IDMA_SLANG_DIR)/tb.f $(IDMA_VERIFY_DIR)/tb_tops.txt \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \
 	done < $(IDMA_VERIFY_DIR)/reg_variants.list
 
-# Out-of-tree multi-head build; the aggregate is rebuilt after, so a following
-# leg compiles the tracked id set and not this one
+# Out-of-tree multi-head build; the aggregate is rebuilt after
 idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 	@test -s $(IDMA_VERIFY_DIR)/multihead_ids.list || \
 	  { echo "error: no multi-head ids listed"; exit 1; }
@@ -185,8 +182,7 @@ idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 IDMA_VLT_SIM_T     := -t rtl -t idma_test -t simulation -t synth
 IDMA_VLT_MAKEFLAGS ?=
 
-# verilator --timing lowers to C++20 coroutines; g++ 11 miscompiles them.
-# Recursive on purpose: every reference is in a recipe, so a plain build never probes.
+# verilator --timing lowers to C++20 coroutines; g++ 11 miscompiles them
 IDMA_VLT_CXX        = $(shell for c in g++-14 g++-13 g++-13.2.0 g++-12 g++; do \
                         command -v $$c >/dev/null 2>&1 && { echo $$c; break; }; done)
 IDMA_VLT_CXX_MAJOR  = $(shell $(IDMA_VLT_CXX) -dumpversion 2>/dev/null | cut -d. -f1)
@@ -256,8 +252,7 @@ idma_slang_report: $(IDMA_SLANG_DIR)/synth.f
 	  awk '!/^\.bender\//' | sort -u > $(IDMA_VERIFY_DIR)/slang_extra.txt
 	@echo "slang -Wextra: $$(wc -l < $(IDMA_VERIFY_DIR)/slang_extra.txt) unique iDMA findings"
 
-# The suite list comes from the database, like the CI fan-out, so the local entry
-# point cannot run a different set from the one CI runs
+# The suite list comes from the database, like the CI fan-out
 idma_verify_all: idma_verify_codegen idma_verify_shared idma_verify_tb_shared \
                  idma_verify_multihead $(IDMA_VERIFY_DIR)/suites.list
 	@test -s $(IDMA_VERIFY_DIR)/suites.list || \
