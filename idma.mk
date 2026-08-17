@@ -21,8 +21,7 @@ VLIB        ?= vlib
 # iDMA root, resolved via bender so integrators can host iDMA anywhere
 IDMA_ROOT   ?= $(shell $(BENDER) path idma)
 
-# All generator/doc tooling runs through uv against the locked environment
-# (pyproject.toml + uv.lock are the single source of truth).
+# All tooling runs through uv against the locked environment
 UV_RUN      := $(UV) run --locked --project $(IDMA_ROOT)
 PYTHON      ?= $(UV_RUN) python
 PEAKRDL     ?= $(UV_RUN) peakrdl
@@ -62,8 +61,7 @@ IDMA_JOBS_JSON := jobs/jobs.json
 IDMA_BENDER_FILES := $(IDMA_ROOT)/Bender.yml \
 					 $(IDMA_ROOT)/Bender.lock
 
-# Helper functions
-# Relative paths for VLOGAN
+# Helper functions Relative paths for VLOGAN
 IDMA_VLOGAN_REL_PATHS    := | grep -v "ROOT=" | sed '3 i ROOT="../../.."'
 
 # Ensure half-built targets are purged
@@ -181,8 +179,7 @@ IDMA_FE_DIR      := $(IDMA_ROOT)/src/frontend
 IDMA_FE_REGS     := desc64
 IDMA_FE_REGS     += $(IDMA_FE_IDS)
 
-# Config-bus CPUIF for the register frontend: PeakRDL regblock --cpuif + matching wrapper
-# packing. apb4-flat (default, industry standard); also obi-flat / passthrough / axi4-lite-flat.
+# Config-bus CPUIF: apb4-flat default; also obi-flat, axi4-lite-flat, passthrough
 IDMA_REG_CPUIF   ?= apb4-flat
 
 
@@ -212,8 +209,7 @@ $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(ID
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
 
 $(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv:
-	# desc64 has static, hand-written APB reg wrappers (idma_desc64_reg_wrapper.sv); it is
-	# APB-native and not part of the CPUIF selector — keep its reg_top apb4-flat.
+	# desc64 is APB-native with hand-written wrappers, outside the CPUIF selector
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif apb4-flat \
 	  --module-name idma_desc64_reg_top \
@@ -388,9 +384,7 @@ endef
 $(IDMA_VSIM_DIR)/compile.tcl: $(IDMA_BENDER_FILES) $(IDMA_FULL_TB) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL)
 	$(call idma_generate_vsim, $@, -t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster,../../..)
 
-# Standalone self-checking transpose-engine regression (DPI-C golden, no backend deps).
-# Run with the Questa SEPP wrapper, e.g.:
-#   make idma_sim_tb_idma_otf_transpose VSIM="questa-2023.4 vsim" VLOG="questa-2023.4 vlog" VLIB="questa-2023.4 vlib"
+# Standalone transpose-engine regression against the DPI-C golden
 IDMA_OTF_TP_RTL := $(abspath $(IDMA_ROOT)/src/backend/idma_otf_transpose.sv)
 IDMA_OTF_TP_TB  := $(abspath $(IDMA_ROOT)/test/tb_idma_otf_transpose.sv)
 IDMA_OTF_TP_DPI := $(abspath $(IDMA_ROOT)/test/idma_transpose_dpi.c)
@@ -408,8 +402,7 @@ idma_sim_tb_idma_otf_transpose:
 	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=1 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
 	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=0 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
 
-# Multi-tile transpose via the ND midend -> rw_axi backend -> axi_sim_mem.
-# Run with the Questa SEPP wrapper: make idma_sim_tb_idma_transpose_nd VSIM="questa-2023.4 vsim"
+# Multi-tile transpose: ND midend to rw_axi backend to axi_sim_mem
 .PHONY: idma_sim_tb_idma_transpose_nd
 idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -417,11 +410,7 @@ idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_nd -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_nd -do "run -all; quit"
 
-# Back-to-back regressions: the ND midend must reload each new transfer's base
-# address (it does, for a protocol-compliant producer that drops nd_req_valid on
-# accept). tb_idma_nd_midend_b2b checks the midend's burst-address sequence under
-# backpressure; tb_idma_transpose_b2b checks two end-to-end transposes to distinct
-# destinations.  Run with the Questa SEPP wrapper.
+# Back-to-back: the ND midend must reload each transfer base address
 .PHONY: idma_sim_tb_idma_nd_midend_b2b
 idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -450,9 +439,7 @@ idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_b2b -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_b2b -do "run -all; quit"
 
-# Run a self-checking MX sim across data widths. Questa does not propagate
-# $fatal to the exit code, so fail on any Error:/Fatal: in the run log.
-# $(1) = testbench, $(2) = space-separated data widths.
+# MX sim across data widths; Questa hides $fatal, so grep the transcript
 define idma_run_mx_sim
 	cd $(IDMA_VSIM_DIR); set -e; for dw in $(2); do \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=$$dw $(1) -do "run -all; quit" > $(1)_$$dw.log 2>&1 || true; \
@@ -629,12 +616,7 @@ VERIBLE ?= verible-verilog-lint
 
 IDMA_LINT_SV_DIRS := $(IDMA_ROOT)/src $(IDMA_ROOT)/test
 
-# The only sources exempt from the style gate; both are third-party code kept
-# verbatim so it can be re-imported, and both are already excluded from the author
-# lint in .github/authors-cfg.yaml for that same reason. Nothing else is exempt: a
-# first-party violation has to be fixed, not listed here.
-#   test/future/TLToAXI4.v        - Chisel-emitted TileLink monitor, no ETH header
-#   test/future/idma_tb_per2axi.sv - morty pickle of upstream commit 892fcad6
+# Vendored third-party sources, exempt here and in authors-cfg.yaml
 IDMA_LINT_SV_VENDORED := test/future/TLToAXI4.v test/future/idma_tb_per2axi.sv
 
 .PHONY: idma_lint_sv

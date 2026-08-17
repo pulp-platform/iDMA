@@ -49,8 +49,7 @@ module tb_idma_nd_midend import idma_pkg::*; #(
     localparam bit ModelOutput   = 1'b0;
     localparam bit PrintFifoInfo = 1'b1;
 
-    // TB parameters
-    // dependent parameters
+    // TB parameters dependent parameters
     localparam int unsigned StrbWidth       = DataWidth / 8;
     localparam int unsigned OffsetWidth     = $clog2(StrbWidth);
 

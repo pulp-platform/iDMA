@@ -286,8 +286,7 @@
         axi_pkg::resp_t      cause;
         addr_t               burst_addr;
         int                  err_idx [$];
-        // multiple errors can happen -> once one occurs
-        // handle it after checking the list
+        // multiple errors can happen -> once one occurs handle it after checking the list
         while (1) begin
             drv.wait_tf(cause, err_type, burst_addr, error, last);
             // if bus error occurs

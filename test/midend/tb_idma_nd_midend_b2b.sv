@@ -61,8 +61,7 @@ module tb_idma_nd_midend_b2b;
     .busy_o(busy)
   );
 
-  // Backpressure on burst_req_ready is essential: during a stall stride_sel_q
-  // collapses toward 0, which is what can defeat the base reload. ready always-1 hides it.
+  // Backpressure is essential: stride_sel_q collapses toward 0 during a stall
   logic [2:0] bp_lfsr;
   always @(posedge clk or negedge rst_n)
     if (!rst_n) bp_lfsr <= 3'b101;

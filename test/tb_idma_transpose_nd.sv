@@ -34,8 +34,7 @@ module tb_idma_transpose_nd
   localparam int unsigned NumDim    = 4;                     // 1D + {row, row-tile, col-tile}
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
 
-  // Geometry cases (M, N, EB) swept in one elaboration: aligned + edge
-  // (M or N not a multiple of NE) for int8/fp16/fp32. EB>StrbWidth cases skip.
+  // Geometry cases swept in one elaboration: aligned and edge, int8 and fp16
   localparam int unsigned NCases = 13;
   localparam int unsigned Cases [NCases][3] = '{
     '{ 8,  8, 1}, '{16, 16, 1}, '{16,  8, 1}, '{ 8,  8, 2}, '{ 6,  8, 1},
@@ -153,8 +152,7 @@ module tb_idma_transpose_nd
   addr_t sb = 'h0000_1000;
   addr_t db = 'h0000_4000;
 
-  // every AW (incl. wstrb=0 padding rows) must stay in the active case's padded
-  // dst allocation [chk_db, chk_aw_hi) — else a strict slave would DECERR
+  // every AW must stay inside the active case padded destination
   logic  chk_active = 1'b0;
   addr_t chk_db, chk_aw_hi;
   always @(posedge clk)
@@ -215,9 +213,7 @@ module tb_idma_transpose_nd
     nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
     nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
     nd_req.burst_req.opt.last         = 1'b1;
-    // ND midend strides are INCREMENTAL deltas (added on dim roll-over), NOT
-    // absolute pitches. Aᵀ uses padded pitch mp*eb (aligned writes); src keeps
-    // n*eb (misaligned reads coalesce in the pre-engine buffer).
+    // ND midend strides are incremental deltas, not absolute pitches
     nd_req.d_req[0].reps        = reps_t'(ne);
     nd_req.d_req[0].src_strides = addr_t'(int'(n*eb));
     nd_req.d_req[0].dst_strides = addr_t'(int'(mp*eb));

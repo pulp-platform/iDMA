@@ -93,8 +93,7 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
 
     assign idma_req         = idma_dv.req;
     assign req_valid        = idma_dv.req_valid;
-    // TB only inspects the written memory; keep rsp_ready asserted so the read
-    // datapath can drain R into the buffer.
+    // rsp_ready stays high so the read datapath can drain
     assign rsp_ready        = 1'b1;
     assign idma_eh_req      = idma_dv.eh_req;
     assign eh_req_valid     = idma_dv.eh_req_valid;
@@ -227,8 +226,7 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
         do_copy(LEN, 32'h0000_1000, 32'h0000_2000, 1, 1, 'd2);
         check("same1", 1, 32'h0000_2000, LEN, s1);
 
-        // cross-head: read head 0, write head 1 -> data must land in head 1's memory.
-        // With the dst_head<-src_head bug it lands in head 0 instead, so this fails.
+        // cross-head: the dst_head<-src_head bug lands the data in head 0
         do_copy(LEN, 32'h0000_1000, 32'h0000_3000, 0, 1, 'd3);
         check("cross0to1", 1, 32'h0000_3000, LEN, s0);
 

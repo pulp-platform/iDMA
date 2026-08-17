@@ -376,8 +376,7 @@ module tb_idma_desc64_top
             end
             generated_stimuli.push_back(current_stimuli_group);
         end
-        // make the last stimulus generate an irq to simplify the IRQ
-        // acquisition
+        // make the last stimulus generate an irq to simplify the IRQ acquisition
         generated_stimuli[$][$].do_irq = 1'b1;
         golden_queue[$].did_irq = 1'b1;
     endfunction : generate_stimuli
@@ -514,8 +513,7 @@ module tb_idma_desc64_top
             current_result = ar_seen_result.pop_front();
             i_axi_iface_driver.mon_r(r_beat);
             if ($isunknown(r_beat.r_data)) begin
-                // drop current result
-                // as it is a prefetched one
+                // drop current result as it is a prefetched one
             end else begin
                 inflight_results_after_reads.push_back(current_result);
             end
@@ -572,8 +570,7 @@ module tb_idma_desc64_top
             automatic b_beat_t  b_beat;
             automatic result_t  current_result;
 
-            // HACK: I'm taking advantage of the knowledge that the irq and
-            // B happen in the same cycle
+            // relies on the irq and B landing in the same cycle
             i_axi_iface_driver.mon_b(b_beat);
             wait(w_seen_result.size() > 0);
             current_result = w_seen_result.pop_front();
