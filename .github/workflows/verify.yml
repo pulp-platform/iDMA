@@ -53,6 +53,7 @@ jobs:
         uses: ./.github/actions/verify-setup
         with:
           verilator: 'true'
+          ccache-key: elab-${{ matrix.id }}
       -
         name: Generate RTL
         run: uv run --locked make idma_hw_all
@@ -149,6 +150,7 @@ jobs:
         uses: ./.github/actions/verify-setup
         with:
           verilator: 'true'
+          ccache-key: sim-${{ matrix.suite }}
       -
         name: Generate RTL
         run: uv run --locked make idma_hw_all
