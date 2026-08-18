@@ -28,10 +28,10 @@ Compute is configured at two levels:
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `EnableCompute` | `bit` | Elaborate the compute engine at all |
-| `ComputeOps` | `idma_pkg::compute_enable_t` | Per-op enable mask: `transpose`, `mxquant`, `mxdequant`, `mxfp16`, `alu`, `alu_mul` |
+| `ComputeOps` | `idma_pkg::compute_enable_t` | Per-op enable mask: `transpose`, `mxquant`, `mxdequant`, `mxfp16`, `alu`, `alu_mul`, `dual` |
 | `ComputeTuning` | `idma_pkg::compute_tuning_t` | Implementation knobs (`transpose_full_duplex`) |
 
-`mxfp16` gates the FP16 source/destination paths of the MX ops and `alu_mul` the ALU multiplier; leaving them off drops that area. An op (or ALU function) requested at run time but not elaborated is caught by the legalizer (`ComputeOpUnsupported`) and a simulation assertion in the dispatcher.
+`mxfp16` gates the FP16 source/destination paths of the MX ops and `alu_mul` the ALU multiplier; leaving them off drops that area. `dual` elaborates the second operand stream for the two-operand ALU functions (see [Two-Operand Transfers](#two-operand-transfers)) and only takes effect on backends with a single write port and one read protocol with at least two heads (`2r_axi_w_axi`). An op (or ALU function) requested at run time but not elaborated is caught by the legalizer (`ComputeOpUnsupported`, `ComputeOperandsUnsupported`) and a simulation assertion in the dispatcher.
 
 **Per transfer** (`idma_req_t.opt.compute`, type `idma_pkg::compute_options_t`):
 
@@ -88,8 +88,25 @@ The block scale is currently an internal signed 2's-complement value, not the OC
 | `ALU_ANDI` | `x & imm` | `alu` |
 | `ALU_ORI` | `x \| imm` | `alu` |
 | `ALU_XORI` | `x ^ imm` | `alu` |
+| `ALU_ADD` | `a + b` | `alu`, `dual` |
+| `ALU_SUB` | `a - b` | `alu`, `dual` |
+| `ALU_MUL` | `a * b` | `alu`, `alu_mul`, `dual` |
+| `ALU_AND` | `a & b` | `alu`, `dual` |
+| `ALU_OR` | `a \| b` | `alu`, `dual` |
+| `ALU_XOR` | `a ^ b` | `alu`, `dual` |
+| `ALU_AXPY` | `imm * a + b` | `alu`, `alu_mul`, `dual` |
 
-The unit is combinational and passes the per-lane valid/ready of the dataflow buffer straight through, so it has no alignment or length constraints beyond a plain copy and no internal state to drain. `tb_idma_alu` checks it byte-exact against a DPI-C golden across misaligned bases, partial tail beats, page crossings and multi-burst lengths.
+The unit is combinational and passes the per-lane valid/ready of the dataflow buffer straight through, so it has no alignment or length constraints beyond a plain copy and no internal state to drain. `tb_idma_alu` checks the single-operand functions byte-exact against a DPI-C golden across misaligned bases, partial tail beats, page crossings and multi-burst lengths; `tb_idma_dual` does the same for the two-operand functions on `2r_axi_w_axi`.
+
+## Two-Operand Transfers
+
+On a backend with two read heads and `ComputeOps.dual` set, a two-operand ALU function consumes two concurrent read streams: operand `a` from one head, operand `b` from the other. Software issues an **operand pair**: a normal transfer with the two-operand op (source `a`, the destination, `src_head` of `a`) immediately followed by its **operand-only partner** with the same compute configuration and length, source `b` and the other `src_head`. The partner writes nothing; its destination is ignored.
+
+- The legalizer parks the partner and interleaves the read bursts of both operands (`a`, `b`, `a`, ...); the first operand's reads only start once the partner is accepted, so neither stream can run ahead further than the per-head request queues hold. Each partner then completes with a single operand-only burst after the first operand's last write, so both requests get their response in order (the partner's never overtakes the first's).
+- The transport layer queues requests per read head (a role, `a` or `b`, sits on one head at a time), shifts each head's data into its own dataflow buffer and joins the two buffers lane by lane in front of the compute engine: a lane is presented once both operands hold it and popped from both when written. An operand that arrives early stalls in its buffer until the other has caught up.
+- Operand-only bursts issue no AW and no W; their response is fabricated once every earlier B has returned.
+
+Constraints (legalizer assertions): the request after a two-operand request must be its partner with the same compute configuration (`ComputeOperandPair`), the same length (`ComputeOperandLength`) and another read head (`ComputeOperandHead`); a two-operand function on a backend without the second stream is rejected (`ComputeOperandsUnsupported`). The two operands may be misaligned independently. Both requests use the AXI ID and options of the first for the write side; the partner's `src` AXI options apply to its reads. Error handling is not available with compute in general.
 
 ## Size-Changing Transfers
 
@@ -110,6 +127,8 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 | `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
 | `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported |
 | `ComputeMxdequantLengthFits` | dequant output length must fit the `length` field width |
+| `ComputeOperandsUnsupported` | two-operand functions need `dual` on a two-read-head backend |
+| `ComputeOperandPair` / `ComputeOperandLength` / `ComputeOperandHead` | the operand-only partner follows immediately with the same config and length on another head |
 
 ## Source Files
 
@@ -120,4 +139,4 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 - `src/idma_float_pkg.sv` - FP32/FP16 <-> MXFP8 cast math and block scale
 - `src/idma_pkg.sv` - `compute_options_t`, `compute_op_e`, `alu_func_e`, `compute_enable_t`, MX block geometry
 - `src/backend/tpl/idma_legalizer.sv.tpl` - size-changing length calc and compute constraints
-- `src/backend/tpl/idma_transport_layer.sv.tpl` - engine instantiation (`gen_compute`)
+- `src/backend/tpl/idma_transport_layer.sv.tpl` - engine instantiation (`gen_compute`), operand streams (`gen_operand_streams`) and the operand-only write bypass

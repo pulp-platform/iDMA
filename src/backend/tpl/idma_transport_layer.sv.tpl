@@ -29,6 +29,10 @@ module idma_transport_layer_${name_uniqueifier} #(
     /// Implementation tuning knobs for the compute engines
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
+% if dual_operand_eligible:
+    /// Write bursts that can be in flight; bounds the operand-only completion counter
+    parameter int unsigned MetaFifoDepth = 32'd8,
+% endif
     /// Print the info of the FIFO configuration
     parameter bit PrintFifoInfo = 1'b0,
     /// `r_dp_req_t` type:
@@ -279,6 +283,30 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if one_write_port:
     assign w_dp_ready_o = w_dp_req_ready;
 % endif
+% if dual_operand_eligible:
+<%
+    drp = dual_read_protocol
+    dmh = mh_format['ar'][drp]
+%>
+    /// Operand streams: 2 when the compute engine has the second (b) stream
+    localparam int unsigned NumOperands = (EnableCompute && ComputeOps.dual) ? 32'd2 : 32'd1;
+
+    // per-head read request handles (single-stream mux or per-head queues, see below)
+    r_dp_req_t ${dmh}${drp}_r_dp_req_h;
+    logic      ${dmh}${drp}_r_dp_valid_h;
+    logic      ${dmh}${drp}_r_dp_rsp_ready_h;
+    strb_t     ${dmh}${drp}_buffer_in_ready_h;
+    logic      r_dp_queued;
+
+    // second operand buffer output and the join with the first
+    byte_t [StrbWidth-1:0] buffer_b_out;
+    strb_t                 buffer_b_out_valid, buffer_b_ready;
+    logic                  cmp_dual;
+
+    // write port behind the operand-only bypass
+    logic      w_port_dp_valid, w_port_dp_ready, w_port_rsp_valid, w_port_rsp_ready;
+    w_dp_rsp_t w_port_dp_rsp;
+% endif
 
     //--------------------------------------
     // Read Ports
@@ -288,7 +316,173 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 ${rendered_read_ports[read_port]}
 
 % endfor
-% if not one_read_port:
+% if dual_operand_eligible:
+    //--------------------------------------
+    // Read Multiplexers / Operand Streams
+    //--------------------------------------
+
+    always_comb begin : gen_read_meta_channel_multiplexer
+        case(ar_req_i.src_protocol)
+        idma_pkg::${database[drp]['protocol_enum']}: ar_ready_o = ${drp}_ar_ready [ar_req_i.src_head];
+        default:       ar_ready_o = 1'b0;
+        endcase
+    end
+
+    // request whose beats enter the first operand buffer (selects the read shift)
+    r_dp_req_t buffer_in_req;
+
+    if (NumOperands == 32'd2) begin : gen_operand_streams
+        // per-head fall-through queues run both operands at once; a role sits on one head at a time
+        logic [${dual_num_heads}-1:0] head_role_b, head_act_a, head_act_b, head_hold_a, head_hold_b;
+        logic [${dual_num_heads}-1:0] head_sel, head_q_ready;
+        strb_t                   buffer_b_in_valid, buffer_b_in_ready;
+        byte_t [StrbWidth-1:0]   buffer_b_in, buffer_b_in_shifted;
+        byte_t [2*StrbWidth-1:0] buffer_b_in_tmp;
+        r_dp_req_t               buffer_b_in_req;
+
+        for (genvar h = 0; h < ${dual_num_heads}; h++) begin : gen_head_queue
+            logic [cc_pkg::cnt_width(2)-1:0] head_q_usage;
+            assign head_role_b[h] = ${drp}_r_dp_req_h[h].operand_b;
+            assign head_act_a[h]  = ${drp}_r_dp_valid_h[h] & ~head_role_b[h];
+            assign head_act_b[h]  = ${drp}_r_dp_valid_h[h] &  head_role_b[h];
+            assign head_hold_a[h] = (head_q_usage != '0) & ~head_role_b[h];
+            assign head_hold_b[h] = (head_q_usage != '0) &  head_role_b[h];
+            assign head_sel[h]    = r_dp_valid_i &
+                (r_dp_req_i.src_protocol == idma_pkg::${database[drp]['protocol_enum']}) &
+                (r_dp_req_i.src_head == h) &
+                ~|((r_dp_req_i.operand_b ? head_hold_b : head_hold_a) &
+                   ~(${dual_num_heads}'d1 << h));
+
+            cc_stream_fifo #(
+                .FallThrough ( 1'b1       ),
+                .Depth       ( 32'd2      ),
+                .data_t      ( r_dp_req_t )
+            ) i_head_queue (
+                .clk_i,
+                .rst_ni,
+                .clr_i   ( 1'b0                    ),
+                .flush_i ( 1'b0                    ),
+                .usage_o ( head_q_usage            ),
+                .data_i  ( r_dp_req_i              ),
+                .valid_i ( head_sel[h]             ),
+                .ready_o ( head_q_ready[h]         ),
+                .data_o  ( ${drp}_r_dp_req_h[h]    ),
+                .valid_o ( ${drp}_r_dp_valid_h[h]  ),
+                .ready_i ( ${drp}_r_dp_ready[h]    )
+            );
+
+            assign ${drp}_r_dp_rsp_ready_h[h] = r_dp_ready_i;
+            assign ${drp}_buffer_in_ready_h[h] = head_role_b[h] ? buffer_b_in_ready
+                                                                : buffer_in_ready;
+        end
+
+        assign r_dp_ready_o = |(head_sel & head_q_ready);
+        assign r_dp_queued  = |${drp}_r_dp_valid_h;
+
+        // read responses are only consumed by the error handler, which compute excludes
+        always_comb begin : gen_read_response_multiplexer
+            r_dp_valid_o = 1'b0;
+            r_dp_rsp_o   = '0;
+            for (int unsigned h = 0; h < ${dual_num_heads}; h++) begin
+                if (${drp}_r_dp_valid[h]) begin
+                    r_dp_valid_o = 1'b1;
+                    r_dp_rsp_o   = ${drp}_r_dp_rsp[h];
+                end
+            end
+        end
+
+        // the a-role head feeds the first buffer, the b-role head the second
+        always_comb begin : gen_operand_multiplexer
+            buffer_in         = '0;
+            buffer_in_valid   = '0;
+            buffer_in_req     = '0;
+            buffer_b_in       = '0;
+            buffer_b_in_valid = '0;
+            buffer_b_in_req   = '0;
+            for (int unsigned h = 0; h < ${dual_num_heads}; h++) begin
+                if (head_act_a[h]) begin
+                    buffer_in       = ${drp}_buffer_in[h];
+                    buffer_in_valid = ${drp}_buffer_in_valid[h];
+                    buffer_in_req   = ${drp}_r_dp_req_h[h];
+                end
+                if (head_act_b[h]) begin
+                    buffer_b_in       = ${drp}_buffer_in[h];
+                    buffer_b_in_valid = ${drp}_buffer_in_valid[h];
+                    buffer_b_in_req   = ${drp}_r_dp_req_h[h];
+                end
+            end
+        end
+
+        assign buffer_b_in_tmp     = {buffer_b_in, buffer_b_in} >> (buffer_b_in_req.shift * 8);
+        assign buffer_b_in_shifted = buffer_b_in_tmp[$bits(buffer_b_in_shifted)/8-1:0];
+
+        idma_dataflow_element #(
+            .BufferDepth   ( BufferDepth   ),
+            .StrbWidth     ( StrbWidth     ),
+            .PrintFifoInfo ( PrintFifoInfo ),
+            .strb_t        ( strb_t        ),
+            .byte_t        ( byte_t        )
+        ) i_dataflow_element_b (
+            .clk_i       ( clk_i               ),
+            .rst_ni      ( rst_ni              ),
+            .data_i      ( buffer_b_in_shifted ),
+            .valid_i     ( buffer_b_in_valid   ),
+            .ready_o     ( buffer_b_in_ready   ),
+            .data_o      ( buffer_b_out        ),
+            .valid_o     ( buffer_b_out_valid  ),
+            .ready_i     ( buffer_b_ready      )
+        );
+
+        assign cmp_dual = idma_pkg::compute_operands(w_dp_req_i.compute) == 32'd2;
+    end else begin : gen_read_multiplexer
+        for (genvar h = 0; h < ${dual_num_heads}; h++) begin : gen_head_handle
+            assign ${drp}_r_dp_req_h[h]       = r_dp_req_i;
+            assign ${drp}_r_dp_valid_h[h]     =
+                (r_dp_req_i.src_protocol == idma_pkg::${database[drp]['protocol_enum']}) &
+                (r_dp_req_i.src_head == h) & r_dp_valid_i;
+            assign ${drp}_r_dp_rsp_ready_h[h] =
+                (r_dp_req_i.src_protocol == idma_pkg::${database[drp]['protocol_enum']}) &
+                (r_dp_req_i.src_head == h) & r_dp_ready_i;
+            assign ${drp}_buffer_in_ready_h[h] = buffer_in_ready;
+        end
+        assign r_dp_queued       = 1'b0;
+        assign buffer_in_req     = r_dp_req_i;
+        assign buffer_b_out      = '0;
+        assign buffer_b_out_valid = '0;
+        assign cmp_dual          = 1'b0;
+
+        always_comb begin
+            if (r_dp_valid_i) begin
+                case(r_dp_req_i.src_protocol)
+                idma_pkg::${database[drp]['protocol_enum']}: begin
+                    r_dp_ready_o    = ${drp}_r_dp_ready [r_dp_req_i.src_head];
+                    r_dp_rsp_o      = ${drp}_r_dp_rsp [r_dp_req_i.src_head];
+                    r_dp_valid_o    = ${drp}_r_dp_valid [r_dp_req_i.src_head];
+
+                    buffer_in       = ${drp}_buffer_in [r_dp_req_i.src_head];
+                    buffer_in_valid = ${drp}_buffer_in_valid [r_dp_req_i.src_head];
+                end
+                default: begin
+                    r_dp_ready_o    = 1'b0;
+                    r_dp_rsp_o      = '0;
+                    r_dp_valid_o    = 1'b0;
+
+                    buffer_in       = '0;
+                    buffer_in_valid = '0;
+                end
+                endcase
+            end else begin
+                r_dp_ready_o    = 1'b0;
+                r_dp_rsp_o      = '0;
+                r_dp_valid_o    = 1'b0;
+
+                buffer_in       = '0;
+                buffer_in_valid = '0;
+            end
+        end
+    end
+
+% elif not one_read_port:
     //--------------------------------------
     // Read Multiplexers
     //--------------------------------------
@@ -354,7 +548,11 @@ ${rendered_read_ports[read_port]}
     // Read Barrel shifter
     //--------------------------------------
 
+% if dual_operand_eligible:
+    assign buffer_in_tmp = {buffer_in, buffer_in} >> (buffer_in_req.shift * 8);
+% else:
     assign buffer_in_tmp = {buffer_in, buffer_in} >> (r_dp_req_i.shift * 8);
+% endif
     assign buffer_in_shifted = buffer_in_tmp[$bits(buffer_in_shifted)/8-1:0];
 
     //--------------------------------------
@@ -382,7 +580,58 @@ ${rendered_read_ports[read_port]}
     // On-the-fly compute
     //--------------------------------------
 
-% if compute_eligible:
+% if dual_operand_eligible:
+    if (EnableCompute) begin : gen_compute
+        logic                  cmp_active;
+        byte_t [StrbWidth-1:0] cmp_data_o;
+        strb_t                 cmp_strb_o, cmp_lane_valid, cmp_lane_ready, cmp_lane_valid_i;
+        byte_t [NumOperands*StrbWidth-1:0] cmp_data_i;
+
+        if (NumOperands == 32'd2) begin : gen_two_operands
+            assign cmp_data_i = {buffer_b_out, buffer_out};
+        end else begin : gen_one_operand
+            assign cmp_data_i = buffer_out;
+        end
+
+        idma_otf_compute #(
+            .StrbWidth           ( StrbWidth          ),
+            .ComputeEnable       ( ComputeOps         ),
+            .ComputeTuning       ( ComputeTuning      ),
+            .NumOperands         ( NumOperands        )
+        ) i_idma_otf_compute (
+            .clk_i,
+            .rst_ni,
+            .compute_i   ( w_dp_req_i.compute ),
+            .cfg_valid_i ( w_dp_valid_i        ),
+            .active_o    ( cmp_active          ),
+            .data_i       ( cmp_data_i          ),
+            .lane_valid_i ( cmp_lane_valid_i    ),
+            .lane_ready_o ( cmp_lane_ready      ),
+            .data_o       ( cmp_data_o          ),
+            .strb_o       ( cmp_strb_o          ),
+            .lane_valid_o ( cmp_lane_valid      ),
+            .ready_i      ( w_dp_req_ready      ),
+            .lane_ready_i ( buffer_out_ready_shifted )
+        );
+
+        // join: a two-operand op sees a lane once both buffers hold it and pops both
+        assign cmp_lane_valid_i  = cmp_dual ? buffer_out_valid & buffer_b_out_valid
+                                            : buffer_out_valid;
+        assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
+        assign wr_valid          = cmp_active ? cmp_lane_valid : buffer_out_valid;
+        assign wr_strb           = cmp_active ? cmp_strb_o : '1;
+        assign dataflow_ready_in = cmp_active ? (cmp_dual ? cmp_lane_ready & buffer_b_out_valid
+                                                          : cmp_lane_ready)
+                                              : buffer_out_ready_shifted;
+        assign buffer_b_ready    = (cmp_active & cmp_dual) ? cmp_lane_ready & buffer_out_valid : '0;
+    end else begin : gen_no_compute
+        assign wr_data           = buffer_out;
+        assign wr_valid          = buffer_out_valid;
+        assign wr_strb           = '1;
+        assign dataflow_ready_in = buffer_out_ready_shifted;
+        assign buffer_b_ready    = '0;
+    end
+% elif compute_eligible:
     if (EnableCompute) begin : gen_compute
         logic                  cmp_active;
         byte_t [StrbWidth-1:0] cmp_data_o;
@@ -495,6 +744,40 @@ ${rendered_read_ports[read_port]}
 % endfor
         default:       aw_ready_o = 1'b0;
         endcase
+    end
+
+% endif
+% if dual_operand_eligible:
+    //--------------------------------------
+    // Operand-only write bypass
+    //--------------------------------------
+
+    if (NumOperands == 32'd2) begin : gen_operand_only_write
+        // an operand-only burst writes nothing; its response follows every pending B
+        logic [cc_pkg::cnt_width(MetaFifoDepth)-1:0] b_pending_d, b_pending_q;
+        logic ghost, ghost_fire;
+
+        assign ghost      = w_dp_valid_i & w_dp_req_i.operand_only;
+        assign ghost_fire = ghost & (b_pending_q == '0);
+
+        assign w_port_dp_valid  = w_dp_valid_i & ~ghost;
+        assign w_dp_req_ready   = ghost ? ghost_fire & w_dp_ready_i : w_port_dp_ready;
+        assign w_dp_valid_o     = ghost_fire | w_port_rsp_valid;
+        assign w_dp_rsp_o       = ghost_fire ? '0 : w_port_dp_rsp;
+        assign w_port_rsp_ready = w_dp_ready_i & ~ghost_fire;
+
+        always_comb begin
+            b_pending_d = b_pending_q;
+            if (w_port_dp_valid & w_port_dp_ready)   b_pending_d = b_pending_d + 1'b1;
+            if (w_port_rsp_valid & w_port_rsp_ready) b_pending_d = b_pending_d - 1'b1;
+        end
+        `FF(b_pending_q, b_pending_d, '0, clk_i, rst_ni)
+    end else begin : gen_no_operand_only_write
+        assign w_port_dp_valid  = w_dp_valid_i;
+        assign w_dp_req_ready   = w_port_dp_ready;
+        assign w_dp_valid_o     = w_port_rsp_valid;
+        assign w_dp_rsp_o       = w_port_dp_rsp;
+        assign w_port_rsp_ready = w_dp_ready_i;
     end
 
 % endif
@@ -622,8 +905,14 @@ ${rendered_write_ports[write_port]}
     //--------------------------------------
     // Module Control
     //--------------------------------------
+% if dual_operand_eligible:
+    assign r_dp_busy_o   = r_dp_valid_i | r_dp_queued;
+    assign w_dp_busy_o   = w_dp_valid_i | w_dp_ready_o;
+    assign buffer_busy_o = |buffer_out_valid | |buffer_b_out_valid;
+% else:
     assign r_dp_busy_o   = r_dp_valid_i;
     assign w_dp_busy_o   = w_dp_valid_i | w_dp_ready_o;
     assign buffer_busy_o = |buffer_out_valid;
+% endif
 
 endmodule

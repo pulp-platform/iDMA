@@ -9,7 +9,7 @@
 
 """ MARIO backend interaction"""
 from mako.template import Template
-from mario.util import compute_eligible, eval_key, prot_key
+from mario.util import compute_eligible, dual_operand_eligible, eval_key, prot_key
 
 
 def render_backend(prot_ids: dict, db: dict, tpl_file: str) -> str:
@@ -56,6 +56,7 @@ def render_backend(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'one_read_port': srp,
             'one_write_port': swp,
             'compute_eligible': is_compute_eligible,
+            'dual_operand_eligible': bool(dual_operand_eligible(prot_id, prot_ids, db)),
             'used_non_bursting_write_protocols':
                 prot_key(used_write_prots, 'bursts', 'not_supported', db),
             'combined_aw_and_w':

@@ -77,7 +77,13 @@ module idma_legalizer_${name_uniqueifier} #(
     /// Read machine of the legalizer is busy
     output logic r_busy_o,
     /// Write machine of the legalizer is busy
+% if dual_operand_eligible:
+    output logic w_busy_o,
+    /// A two-operand request waits for its operand-only partner
+    output logic operand_pair_o
+% else:
     output logic w_busy_o
+% endif
 );
 % if len(used_protocols) != 1:
     function int unsigned max_size(input int unsigned a, b);
@@ -183,6 +189,21 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     page_len_t w_num_bytes;
     offset_t   w_addr_offset;
     logic      w_done;
+% if dual_operand_eligible:
+
+    // operand pair: the parked partner interleaves its reads and completes with one ghost burst
+    idma_mut_tf_t     pair_tf_d,   pair_tf_q;
+    idma_mut_tf_t     pair_w_tf_d, pair_w_tf_q;
+    idma_mut_tf_opt_t pair_opt_d,  pair_opt_q;
+    logic [$bits(req_i.length)-1:0] pair_len_d, pair_len_q;
+    logic expect_b_d, expect_b_q, ghost_pending_d, ghost_pending_q, w_ghost_d, w_ghost_q;
+    logic r_operand_b_d, r_operand_b_q, dual_req, swap, ghost_load;
+    idma_mut_tf_t     r_tf_adv, w_tf_adv;
+    idma_mut_tf_opt_t opt_tf_adv;
+
+    assign dual_req = req_i.opt.compute.enable &
+                      (idma_pkg::compute_operands(req_i.opt.compute) == 32'd2);
+% endif
 
 
     //--------------------------------------
@@ -404,6 +425,19 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         r_tf_d   = r_tf_q;
         w_tf_d   = w_tf_q;
         opt_tf_d = opt_tf_q;
+% if dual_operand_eligible:
+        pair_tf_d       = pair_tf_q;
+        pair_w_tf_d     = pair_w_tf_q;
+        pair_opt_d      = pair_opt_q;
+        pair_len_d      = pair_len_q;
+        expect_b_d      = expect_b_q;
+        ghost_pending_d = ghost_pending_q;
+        w_ghost_d       = w_ghost_q;
+        r_operand_b_d   = r_operand_b_q;
+        r_tf_adv        = r_tf_q;
+        w_tf_adv        = w_tf_q;
+        opt_tf_adv      = opt_tf_q;
+% endif
 
         // default: not done
         r_done = 1'b0;
@@ -458,6 +492,49 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             w_done = 1'b1;
         end
 
+% if dual_operand_eligible:
+        //--------------------------------------
+        // Operand pair
+        //--------------------------------------
+        // the parked read tracker swaps in after every accepted burst of the active one
+        swap = pair_tf_q.valid & r_ready_i & !flush_i;
+        if (swap) begin
+            pair_tf_d               = r_tf_d;
+            r_tf_d                  = pair_tf_q;
+            opt_tf_d.src_head       = pair_opt_q.src_head;
+            opt_tf_d.src_protocol   = pair_opt_q.src_protocol;
+            opt_tf_d.read_shift     = pair_opt_q.read_shift;
+            opt_tf_d.src_axi_opt    = pair_opt_q.src_axi_opt;
+            opt_tf_d.src_max_llen   = pair_opt_q.src_max_llen;
+            opt_tf_d.src_reduce_len = pair_opt_q.src_reduce_len;
+            pair_opt_d.src_head       = opt_tf_q.src_head;
+            pair_opt_d.src_protocol   = opt_tf_q.src_protocol;
+            pair_opt_d.read_shift     = opt_tf_q.read_shift;
+            pair_opt_d.src_axi_opt    = opt_tf_q.src_axi_opt;
+            pair_opt_d.src_max_llen   = opt_tf_q.src_max_llen;
+            pair_opt_d.src_reduce_len = opt_tf_q.src_reduce_len;
+            r_operand_b_d           = ~r_operand_b_q;
+        end
+        // once the first operand's writes are issued, the partner's completion burst follows
+        ghost_load = ghost_pending_q & ~w_ghost_q & w_ready_i & !flush_i & (~w_tf_q.valid | w_done);
+        if (ghost_load) begin
+            w_tf_d                = pair_w_tf_q;
+            opt_tf_d.dst_protocol = pair_opt_q.dst_protocol;
+            opt_tf_d.dst_head     = pair_opt_q.dst_head;
+            opt_tf_d.write_shift  = pair_opt_q.write_shift;
+            opt_tf_d.dst_axi_opt  = pair_opt_q.dst_axi_opt;
+            opt_tf_d.super_last   = pair_opt_q.super_last;
+            w_ghost_d             = 1'b1;
+        end
+        if (w_ghost_q & w_tf_q.valid & w_ready_i & !flush_i) begin
+            ghost_pending_d = 1'b0;
+            w_ghost_d       = 1'b0;
+        end
+        r_tf_adv   = r_tf_d;
+        w_tf_adv   = w_tf_d;
+        opt_tf_adv = opt_tf_d;
+
+% endif
         //--------------------------------------
         // Refill
         //--------------------------------------
@@ -525,6 +602,24 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 opt_tf_d.read_shift  =   req_i.src_addr[OffsetWidth-1:0];
                 opt_tf_d.write_shift = - req_i.dst_addr[OffsetWidth-1:0];
             end
+% if dual_operand_eligible:
+            if (expect_b_q) begin
+                // operand-only partner: park it and keep the first operand's trackers running
+                pair_tf_d          = r_tf_d;
+                pair_w_tf_d        = w_tf_d;
+                pair_w_tf_d.length = 'd1;
+                pair_opt_d         = opt_tf_d;
+                r_tf_d             = r_tf_adv;
+                w_tf_d             = w_tf_adv;
+                opt_tf_d           = opt_tf_adv;
+                expect_b_d         = 1'b0;
+                ghost_pending_d    = 1'b1;
+            end else begin
+                expect_b_d    = dual_req;
+                pair_len_d    = req_i.length;
+                r_operand_b_d = 1'b0;
+            end
+% endif
         end
     end
 
@@ -561,7 +656,12 @@ ${database[protocol]['legalizer_read_meta_channel']}
         tailer:       OffsetWidth'(r_num_bytes + r_addr_offset),
         shift:        opt_tf_q.read_shift,
         decouple_aw:  opt_tf_q.decouple_aw,
+% if dual_operand_eligible:
+        is_single:    r_num_bytes <= StrbWidth,
+        operand_b:    r_operand_b_q
+% else:
         is_single:    r_num_bytes <= StrbWidth
+% endif
     };
 
     // Write meta channel and data path
@@ -634,6 +734,9 @@ ${database[protocol]['legalizer_write_data_path']}
     // busy output
     assign r_busy_o = r_tf_q.valid;
     assign w_busy_o = w_tf_q.valid;
+% if dual_operand_eligible:
+    assign operand_pair_o = expect_b_q;
+% endif
 
 
     //--------------------------------------
@@ -668,11 +771,20 @@ ${database[protocol]['legalizer_write_data_path']}
  })\
         % endif       
 ) begin
+% if dual_operand_eligible:
+            // a two-operand request reads only once its partner is here, so the bursts interleave
+            r_tf_ena  = (r_ready_i & !flush_i & !expect_b_q) | kill_i;
+            w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
+
+            r_valid_o = r_tf_q.valid & r_ready_i & !flush_i & !expect_b_q;
+            w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
+% else:
             r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
             w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
 
             r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
             w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
+% endif
         end else begin
             r_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
             w_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
@@ -683,7 +795,13 @@ ${database[protocol]['legalizer_write_data_path']}
     end
 
     // load next idma request: if both machines are done!
+% if dual_operand_eligible:
+    assign ready_o = expect_b_q ? !flush_i :
+                     r_done & ~pair_tf_q.valid & w_done & ~(ghost_pending_q & ~w_ghost_q) &
+                     r_ready_i & w_ready_i & !flush_i;
+% else:
     assign ready_o = r_done & w_done & r_ready_i & w_ready_i & !flush_i;
+% endif
 
 
     //--------------------------------------
@@ -692,6 +810,16 @@ ${database[protocol]['legalizer_write_data_path']}
     `FF (opt_tf_q, opt_tf_d,           '0, clk_i, rst_ni)
     `FFL(r_tf_q,   r_tf_d,   r_tf_ena, '0, clk_i, rst_ni)
     `FFL(w_tf_q,   w_tf_d,   w_tf_ena, '0, clk_i, rst_ni)
+% if dual_operand_eligible:
+    `FF (pair_tf_q,       pair_tf_d,       '0, clk_i, rst_ni)
+    `FF (pair_w_tf_q,     pair_w_tf_d,     '0, clk_i, rst_ni)
+    `FF (pair_opt_q,      pair_opt_d,      '0, clk_i, rst_ni)
+    `FF (pair_len_q,      pair_len_d,      '0, clk_i, rst_ni)
+    `FF (expect_b_q,      expect_b_d,      '0, clk_i, rst_ni)
+    `FF (ghost_pending_q, ghost_pending_d, '0, clk_i, rst_ni)
+    `FF (w_ghost_q,       w_ghost_d,       '0, clk_i, rst_ni)
+    `FF (r_operand_b_q,   r_operand_b_d,   '0, clk_i, rst_ni)
+% endif
 
 
     //--------------------------------------
@@ -755,6 +883,22 @@ ${database[protocol]['legalizer_write_data_path']}
                   ~(EnableCompute &
                     idma_pkg::compute_op_supported(ComputeOps, req_i.opt.compute))),
                   clk_i, !rst_ni)
+% endif
+% if dual_operand_eligible:
+    // a two-operand op needs the second operand stream elaborated
+    `ASSERT_NEVER(ComputeOperandsUnsupported, (ready_o & valid_i & dual_req &
+                  ~(EnableCompute & ComputeOps.dual)), clk_i, !rst_ni)
+    // the request after a two-operand request is its partner: same op and length, other head
+    `ASSERT_NEVER(ComputeOperandPair, (ready_o & valid_i & expect_b_q &
+                  ~(dual_req & (req_i.opt.compute == opt_tf_q.compute))), clk_i, !rst_ni)
+    `ASSERT_NEVER(ComputeOperandLength, (ready_o & valid_i & expect_b_q &
+                  (req_i.length != pair_len_q)), clk_i, !rst_ni)
+    `ASSERT_NEVER(ComputeOperandHead, (ready_o & valid_i & expect_b_q &
+                  (req_i.opt.src_head == opt_tf_q.src_head)), clk_i, !rst_ni)
+% elif compute_eligible:
+    // NOT IMPLEMENTED: two-operand ops need a multi-head read backend
+    `ASSERT_NEVER(ComputeOperandsUnsupported, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (idma_pkg::compute_operands(req_i.opt.compute) == 32'd2)), clk_i, !rst_ni)
 % endif
 
 endmodule

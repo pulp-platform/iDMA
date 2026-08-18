@@ -9,7 +9,7 @@
 
 """ MARIO legalizer interaction"""
 from mako.template import Template
-from mario.util import indent_block, eval_key, prot_key, compute_eligible
+from mario.util import indent_block, eval_key, prot_key, compute_eligible, dual_operand_eligible
 
 
 def prot_force_decouple(used_prots: list, db: dict) -> list:
@@ -39,6 +39,10 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         srp = len(used_read_prots) == 1
         swp = len(used_write_prots) == 1
 
+        # dual-operand backends tag operand-only bursts in the write data path request
+        dual = bool(dual_operand_eligible(prot_id, prot_ids, db))
+        w_dp_req_extra = ',\n    operand_only: w_ghost_q' if dual else ''
+
         # Indent read meta channel
         for rp in used_read_prots:
             # format DB entry
@@ -53,7 +57,9 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
             # if datapath exists
             if 'legalizer_write_data_path' in db[wp]:
                 # format DB entry
-                data_path = indent_block(db[wp]['legalizer_write_data_path'], 3 - swp, 4)
+                data_path = Template(db[wp]['legalizer_write_data_path']).render(
+                    w_dp_req_extra=w_dp_req_extra)
+                data_path = indent_block(data_path, 3 - swp, 4)
                 db[wp]['legalizer_write_data_path'] = data_path
 
         has_page_read_bursting = eval_key(used_read_prots, 'bursts', 'split_at_page_boundary', db)
@@ -67,6 +73,7 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'name_uniqueifier': prot_id,
             'database': db,
             'compute_eligible': compute_eligible(used_read_prots, used_write_prots, db),
+            'dual_operand_eligible': dual,
             'used_read_protocols': used_read_prots,
             'used_write_protocols': used_write_prots,
             'used_protocols': prot_ids[prot_id]['used'],

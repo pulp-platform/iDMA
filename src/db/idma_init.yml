@@ -88,7 +88,7 @@ read_template: |
         .read_req_t       ( ${req_t}           ),
         .read_rsp_t       ( ${rsp_t}           )
     ) i_idma_init_read${mh} (
-        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_req_i        ( ${r_dp_req_i} ),
         .r_dp_valid_i      ( ${r_dp_valid_i} ),
         .r_dp_ready_o      ( ${r_dp_ready_o} ),
         .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
@@ -101,7 +101,7 @@ read_template: |
         .read_rsp_i        ( ${read_response} ),
         .buffer_in_o       ( ${buffer_in} ),
         .buffer_in_valid_o ( ${buffer_in_valid} ),
-        .buffer_in_ready_i ( buffer_in_ready )
+        .buffer_in_ready_i ( ${buffer_in_ready} )
     );
 write_template: |
     idma_init_write #(

@@ -220,6 +220,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         offset_t              shift;
         logic                 decouple_aw;
         logic                 is_single;
+% if dual_operand_eligible:
+        logic                 operand_b;  // burst of the second (operand-only) stream
+% endif
     } r_dp_req_t;
 
     /// The datapath read response type provides feedback from the read part of the datapath:
@@ -249,6 +252,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         axi_pkg::len_t        num_beats;
         logic                 is_single;
         idma_pkg::compute_options_t compute;
+% if dual_operand_eligible:
+        logic                 operand_only;  // completes without writing (operand-only transfer)
+% endif
     } w_dp_req_t;
 
     /// The datapath write response type provides feedback from the write part of the datapath:
@@ -443,6 +449,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     // Compute config serialization interlock
     //--------------------------------------
     logic req_valid_leg, leg_ready;
+% if dual_operand_eligible:
+    logic leg_operand_pair;
+% endif
 % if compute_eligible:
     if (EnableCompute) begin : gen_compute_cfg_gate
         // a request whose compute config differs from the last accepted one waits
@@ -451,7 +460,13 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         logic backend_active, cmp_cfg_stall;
         assign backend_active = busy_o.buffer_busy | busy_o.r_dp_busy | busy_o.w_dp_busy |
                                 busy_o.r_leg_busy | busy_o.w_leg_busy | busy_o.raw_coupler_busy;
+% if dual_operand_eligible:
+        // an operand pair shares one config; its partner passes so the legalizer can check it
+        assign cmp_cfg_stall  = req_valid & (idma_req_i.opt.compute != cmp_cfg_q) & backend_active &
+                                ~leg_operand_pair;
+% else:
         assign cmp_cfg_stall  = req_valid & (idma_req_i.opt.compute != cmp_cfg_q) & backend_active;
+% endif
         assign req_valid_leg  = req_valid & ~cmp_cfg_stall;
         assign req_ready_o    = leg_ready & ~cmp_cfg_stall;
         always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -501,10 +516,19 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             .flush_i   ( legalizer_flush   ),
             .kill_i    ( legalizer_kill    ),
             .r_busy_o  ( busy_o.r_leg_busy ),
+% if dual_operand_eligible:
+            .w_busy_o  ( busy_o.w_leg_busy ),
+            .operand_pair_o ( leg_operand_pair )
+% else:
             .w_busy_o  ( busy_o.w_leg_busy )
+% endif
         );
 
     end else begin : gen_no_hw_legalizer
+% if dual_operand_eligible:
+        // NOT IMPLEMENTED: operand pairs need the hardware legalizer
+        assign leg_operand_pair = 1'b0;
+% endif
         // stream fork is used to synchronize the two decoupled channels without the need for a
         // FIFO here.
         cc_stream_fork #(
@@ -532,7 +556,12 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0]),
             shift:        OffsetWidth'(idma_req_i.src_addr[OffsetWidth-1:0]),
             decouple_aw:  idma_req_i.opt.beo.decouple_aw,
+% if dual_operand_eligible:
+            is_single:    len == '0,
+            operand_b:    1'b0
+% else:
             is_single:    len == '0
+% endif
         };
 
         // assemble write datapath request
@@ -544,7 +573,12 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             shift:        OffsetWidth'(- idma_req_i.dst_addr[OffsetWidth-1:0]),
             num_beats:    len,
             is_single:    len == '0,
+% if dual_operand_eligible:
+            compute:      idma_req_i.opt.compute,
+            operand_only: 1'b0
+% else:
             compute:      idma_req_i.opt.compute
+% endif
         };
 
         // if the legalizer is bypassed; every burst is the last of the 1D transfer
@@ -563,7 +597,12 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
     // data path, meta channels, and last queues have to be ready for the legalizer to be ready
     assign r_ready = r_dp_req_in_ready & ar_ready;
+% if dual_operand_eligible:
+    // an operand-only burst issues no AW
+    assign w_ready = w_dp_req_in_ready & (aw_ready | w_req.w_dp_req.operand_only) & w_last_ready;
+% else:
     assign w_ready = w_dp_req_in_ready & aw_ready & w_last_ready;
+% endif
 
 
     //--------------------------------------
@@ -758,6 +797,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .ComputeOps                  ( ComputeOps                  ),
         .ComputeTuning               ( ComputeTuning               ),
 % endif
+% if dual_operand_eligible:
+        .MetaFifoDepth               ( MetaFifoDepth               ),
+% endif
         .PrintFifoInfo               ( PrintFifoInfo               ),
         .r_dp_req_t                  ( r_dp_req_t                  ),
         .w_dp_req_t                  ( w_dp_req_t                  ),
@@ -914,7 +956,11 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
 % else:           
  w_meta_req_tagged           ),
 % endif
+% if dual_operand_eligible:
+            .aw_valid_i       ( w_valid & ~w_req.w_dp_req.operand_only ),
+% else:
             .aw_valid_i       ( w_valid                     ),
+% endif
             .aw_ready_o       ( aw_ready                    ),
             .aw_req_o         ( aw_req_dp                   ),
             .aw_valid_o       ( aw_valid_dp                 ),
@@ -959,7 +1005,11 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
     % else:
  w_meta_req_tagged         ),
     % endif
+% if dual_operand_eligible:
+            .valid_i   ( w_valid && aw_ready && !w_req.w_dp_req.operand_only ),
+% else:
             .valid_i   ( w_valid && aw_ready        ),
+% endif
             .ready_o   ( aw_ready                   ),
             .data_o    ( aw_req_dp                  ),
             .valid_o   ( aw_valid_dp                ),
@@ -979,7 +1029,11 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
             .clk_i      ( clk_i             ),
             .rst_ni     ( rst_ni            ),
             .clr_i      ( 1'b0              ),
+% if dual_operand_eligible:
+            .valid_i    ( w_valid & ~w_req.w_dp_req.operand_only ),
+% else:
             .valid_i    ( w_valid           ),
+% endif
             .ready_o    ( aw_ready          ),
             .data_i     (\
     % if one_write_port:

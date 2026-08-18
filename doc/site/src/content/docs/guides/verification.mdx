@@ -169,7 +169,9 @@ The on-the-fly compute engines have dedicated self-checking testbenches, checked
 | `idma_sim_tb_idma_transpose_b2b` | ND midend -> `rw_axi` | Two back-to-back transposes to distinct destinations |
 | `idma_sim_tb_idma_mxquant` | `rw_axi` backend, `COMPUTE_MXQUANT{,_FP16}` | FP32/FP16 -> MXFP8 33 B blocks, golden `idma_mxquant_dpi.c`; one run crosses a 4K page |
 | `idma_sim_tb_idma_alu` | `rw_axi` backend, `COMPUTE_ALU` | Every ALU function over misaligned, tail-beat, page-crossing and multi-burst geometries at `DataWidth` 32..1024 under random AXI stalls, golden `idma_alu_dpi.c` |
-| `idma_sim_tb_idma_mxneg` | `rw_axi` backend | One illegal compute request per case; each legalizer guard must fire (cases 14-16 cover the ALU) |
+| `idma_sim_tb_idma_mxneg` | `rw_axi` backend | One illegal compute request per case; each legalizer guard must fire (cases 14-17 cover the ALU) |
+| `idma_sim_tb_idma_dual` | `2r_axi_w_axi` backend, two-operand `COMPUTE_ALU` | Operand pairs over independently misaligned, page-crossing and multi-burst geometries on both head assignments, single-operand ops and copies on either head, random stalls on all three AXI ports, golden `idma_alu_dpi.c`; builds the multi-head RTL in and restores the default set afterwards |
+| `idma_sim_tb_idma_dualneg` | `2r_axi_w_axi` backend | Operand-pair guards: mismatched partner, length, head, missing second stream |
 
 These `idma_sim_tb_*` targets drive Questa directly (they source `compile.tcl` and run under vsim), so they are Questa-only; pass the tool binaries through the `VSIM` / `VLOG` / `VLIB` variables:
 

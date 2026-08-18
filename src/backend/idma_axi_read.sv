@@ -160,12 +160,12 @@ module idma_axi_read #(
 
     // the buffer can be pushed to if all the masked FIFO buffers (mask_in) are ready.
     assign in_ready = &(buffer_in_ready_i | ~mask_in);
-    // the read can accept data if the buffer is ready and the response channel is ready
-    assign read_req_o.r_ready = in_ready & r_dp_ready_i;
+    // the read can accept data if a request is present and buffer and response channel are ready
+    assign read_req_o.r_ready = in_ready & r_dp_ready_i & r_dp_valid_i;
 
     // once valid data is applied, it can be pushed in all the selected (mask_in) buffers
     // be sure the response channel is ready
-    assign in_valid          = read_rsp_i.r_valid & in_ready & r_dp_ready_i;
+    assign in_valid          = read_rsp_i.r_valid & in_ready & r_dp_ready_i & r_dp_valid_i;
     assign buffer_in_valid_o = in_valid ? mask_in : '0;
 
     // r_dp_ready_o is triggered by the last element arriving from the read

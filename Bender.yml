@@ -165,3 +165,5 @@ sources:
     files:
       - test/tb_idma_backend_multihead.sv
       - test/tb_idma_backend_multihead_rw.sv
+      - test/tb_idma_dual.sv
+      - test/tb_idma_dualneg.sv

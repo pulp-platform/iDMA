@@ -68,7 +68,7 @@ legalizer_write_data_path: |
         shift: opt_tf_q.write_shift,
         num_beats: w_req_o.aw_req.axi.aw_chan.len,
         is_single: w_req_o.aw_req.axi.aw_chan.len == '0,
-        compute: opt_tf_q.compute
+        compute: opt_tf_q.compute${w_dp_req_extra}
     };
 read_template: |
     idma_axi_read #(
@@ -83,7 +83,7 @@ read_template: |
     ) i_idma_axi_read${mh} (
         .clk_i             ( clk_i      ),
         .rst_ni            ( rst_ni     ),
-        .r_dp_req_i        ( r_dp_req_i ),
+        .r_dp_req_i        ( ${r_dp_req_i} ),
         .r_dp_valid_i      ( ${r_dp_valid_i} ),
         .r_dp_ready_o      ( ${r_dp_ready_o} ),
         .r_dp_rsp_o        ( ${r_dp_rsp_o} ),
@@ -96,7 +96,7 @@ read_template: |
         .read_rsp_i        ( ${read_response} ),
         .buffer_in_o       ( ${buffer_in} ),
         .buffer_in_valid_o ( ${buffer_in_valid} ),
-        .buffer_in_ready_i ( buffer_in_ready )
+        .buffer_in_ready_i ( ${buffer_in_ready} )
     );
 write_template: |
     idma_axi_write #(

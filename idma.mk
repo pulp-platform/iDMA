@@ -494,7 +494,7 @@ idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	         "10 ComputeTransposeSingleBeat 64 1 1 1 1" "11 ComputeMxdequantLengthFits 64 1 1 1 1" \
 	         "12 ComputeMxFp16Width 1024 1 1 1 1" "13 not.elaborated 64 1 0 1 1" \
 	         "14 ComputeOpUnsupported 64 1 1 0 1" "15 ComputeOpUnsupported 64 1 1 1 0" \
-	         "16 ComputeOpUnsupported 64 1 1 1 1"; do \
+	         "16 ComputeOpUnsupported 64 1 1 1 1" "17 ComputeOperandsUnsupported 64 1 1 1 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
 	    -gEnAlu=$$6 -gEnAluMul=$$7 \
@@ -508,6 +508,39 @@ idma_sim_tb_idma_alu: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_alu_dpi.c)
 	$(call idma_run_mx_sim,tb_idma_alu,32 64 128 256 512 1024)
+
+# Multi-head sims need the out-of-tree ids in the RTL; build them in, run, then restore
+IDMA_MH_SIM_IDS := 2r_axi_w_axi
+$(IDMA_VSIM_DIR)/compile_multihead.tcl: $(IDMA_BENDER_FILES)
+	$(MAKE) idma_hw_all IDMA_ADD_IDS="$(IDMA_MH_SIM_IDS)"
+	$(call idma_generate_vsim, $@, -t sim -t test -t idma_test -t synth -t rtl -t asic -t snitch_cluster -t multihead,../../..)
+
+define idma_restore_default_rtl
+	rm -f $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_VSIM_DIR)/compile_multihead.tcl
+	$(MAKE) idma_hw_all
+endef
+
+.PHONY: idma_sim_tb_idma_dual
+idma_sim_tb_idma_dual: $(IDMA_VSIM_DIR)/compile_multihead.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_multihead.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_alu_dpi.c)
+	$(call idma_run_mx_sim,tb_idma_dual,32 64 128 256 512 1024)
+	$(call idma_restore_default_rtl)
+
+# each case must print its guard assert; case 4 needs the second operand stream compiled out
+.PHONY: idma_sim_tb_idma_dualneg
+idma_sim_tb_idma_dualneg: $(IDMA_VSIM_DIR)/compile_multihead.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_multihead.tcl; quit"
+	cd $(IDMA_VSIM_DIR); set -e; \
+	for c in "1 ComputeOperandPair 1" "2 ComputeOperandLength 1" "3 ComputeOperandHead 1" \
+	         "4 ComputeOperandsUnsupported 0"; do \
+	  set -- $$c; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gEnDual=$$3 \
+	    tb_idma_dualneg -do "run -all; quit" > dualneg_$$1.log 2>&1 || true; \
+	  if grep -qE "(ASSERT FAILED.*$$2|$$2)" dualneg_$$1.log; then echo "[DUALNEG] case $$1 $$2 FIRED"; \
+	  else echo "[DUALNEG] case $$1 $$2 DID NOT FIRE (see dualneg_$$1.log)"; exit 1; fi; \
+	done
+	$(call idma_restore_default_rtl)
 
 .PHONY: idma_sim_tb_idma_transpose_midend
 idma_sim_tb_idma_transpose_midend: $(IDMA_VSIM_DIR)/compile.tcl

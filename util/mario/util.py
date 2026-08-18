@@ -50,6 +50,22 @@ def compute_eligible(used_read_prots: list, used_write_prots: list, db: dict) ->
     return bool(read_protocols & compute_protocols) and bool(write_protocols & compute_protocols)
 
 
+def dual_operand_eligible(prot_id: str, prot_ids: dict, db: dict) -> dict:
+    """Return the read protocol and head count if this backend can host the second
+    operand stream: compute-eligible, one write port, one read protocol with >= 2 heads."""
+    ar_prots = prot_ids[prot_id]['ar']
+    aw_prots = prot_ids[prot_id]['aw']
+    heads_r = prot_ids[prot_id]['multihead']['r']
+    heads_w = prot_ids[prot_id]['multihead']['w']
+    if not compute_eligible(ar_prots, aw_prots, db):
+        return {}
+    if len(aw_prots) != 1 or heads_w[aw_prots[0]] != 1:
+        return {}
+    if len(ar_prots) != 1 or heads_r[ar_prots[0]] < 2:
+        return {}
+    return {'protocol': ar_prots[0], 'num_heads': heads_r[ar_prots[0]]}
+
+
 def prepare_ids(id_strs: list) -> dict:
     """Parses and validates the IDs """
 

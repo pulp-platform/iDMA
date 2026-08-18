@@ -107,7 +107,7 @@ Read when `compute_op` is `alu`; sampled together with `compute_cfg`.
 
 | Bits | Field | Description |
 |------|-------|-------------|
-| 3:0 | `alu_func` | Byte-wise function (`idma_pkg::alu_func_e`): `not`, `addi`, `subi`, `muli`, `andi`, `ori`, `xori` |
+| 3:0 | `alu_func` | Byte-wise function (`idma_pkg::alu_func_e`): `not`, `addi`, `subi`, `muli`, `andi`, `ori`, `xori`; two-operand `add`, `sub`, `mul`, `and`, `or`, `xor`, `axpy` (multi-head backends, not reachable from this frontend as it sets no `src_head`) |
 | 11:4 | `alu_imm` | 8-bit immediate, broadcast to every byte lane |
 | 31:12 | - | Reserved |
 

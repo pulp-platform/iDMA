@@ -23,6 +23,8 @@ IDMA_TOP           ?=
 # Backend variant a leg covers
 IDMA_VERIFY_ID     ?= rw_axi
 IDMA_MULTIHEAD_PAT := 2r_axi_w_axi 2rw_axi
+# ComputeOps masks elaborated on the two-read-head variant: alu+alu_mul+dual, everything
+IDMA_MULTIHEAD_COMPUTE := 7 127
 IDMA_VERIFY_DB     := $(IDMA_ROOT)/$(IDMA_JOBS_JSON)
 IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
 IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang
@@ -164,7 +166,17 @@ idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_synth.f --top idma_backend_synth_$$id \
 	    $(IDMA_SLANG_ARGS); \
 	done
-	set -e; for tb in tb_idma_backend_multihead tb_idma_backend_multihead_rw; do \
+	# the two-read-head variant with the second operand stream elaborated
+	set -e; for c in $(IDMA_MULTIHEAD_COMPUTE); do \
+	  echo "--- verilator idma_backend_synth_2r_axi_w_axi [$$c] ---"; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_multihead.f \
+	    --top-module idma_backend_synth_2r_axi_w_axi -GEnableCompute=1 -GComputeOps=$$c; \
+	  echo "--- slang idma_backend_synth_2r_axi_w_axi [$$c] ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_synth.f --top idma_backend_synth_2r_axi_w_axi \
+	    -GEnableCompute=1 -GComputeOps=$$c $(IDMA_SLANG_ARGS); \
+	done
+	set -e; for tb in tb_idma_backend_multihead tb_idma_backend_multihead_rw \
+	                  tb_idma_dual tb_idma_dualneg; do \
 	  echo "--- slang $$tb ---"; \
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_tb.f --top $$tb \
 	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS); \

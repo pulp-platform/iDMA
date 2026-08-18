@@ -10,7 +10,7 @@
 """ MARIO transport layer interaction"""
 from mako.template import Template
 
-from mario.util import compute_eligible
+from mario.util import compute_eligible, dual_operand_eligible
 
 
 def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
@@ -20,6 +20,9 @@ def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
 
     # single read port
     srp = len(prot_ids[prot_id]['ar']) == 1
+
+    # dual-operand backends drive every head from a per-head request handle
+    dual = dual_operand_eligible(prot_id, prot_ids, db)
 
     # Render read ports
     for rp in prot_ids[prot_id]['ar']:
@@ -113,10 +116,21 @@ ar_valid_i\
                 buffer_in = f'{rp}_buffer_in{mh_bus}'
                 buffer_in_valid = f'{rp}_buffer_in_valid{mh_bus}'
 
+            # dual-operand: request, valid, response ready and buffer ready are per head
+            read_dp_request = 'r_dp_req_i'
+            buffer_in_ready = 'buffer_in_ready'
+            if dual:
+                read_dp_request = f'{rp}_r_dp_req_h{mh_bus}'
+                read_dp_valid_in = f'{rp}_r_dp_valid_h{mh_bus}'
+                read_dp_ready_in = f'{rp}_r_dp_rsp_ready_h{mh_bus}'
+                buffer_in_ready = f'{rp}_buffer_in_ready_h{mh_bus}'
+
             read_port_context = {
                 'database': db,
                 'req_t': read_req_str,
                 'rsp_t': read_rsp_str,
+                'r_dp_req_i': read_dp_request,
+                'buffer_in_ready': buffer_in_ready,
                 'r_dp_valid_i': read_dp_valid_in,
                 'r_dp_ready_o': read_dp_ready_out,
                 'r_dp_rsp_o': read_dp_response,
@@ -148,6 +162,9 @@ def render_write_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
 
     # single read port
     swp = len(prot_ids[prot_id]['aw']) == 1
+
+    # dual-operand backends route the write port through the operand-only bypass
+    dual = dual_operand_eligible(prot_id, prot_ids, db)
 
     # Render read ports
     for wp in prot_ids[prot_id]['aw']:
@@ -181,7 +198,20 @@ def render_write_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
                 write_req_str = f'{wp}_req_t'
                 write_rsp_str = f'{wp}_rsp_t'
 
-            if swp:
+            if swp and dual:
+                write_dp_valid_in = 'w_port_dp_valid'
+                write_dp_ready_out = 'w_port_dp_ready'
+                write_dp_response = 'w_port_dp_rsp'
+                write_dp_valid_out = 'w_port_rsp_valid'
+                write_dp_ready_in = 'w_port_rsp_ready'
+                write_meta_request = 'aw_req_i'
+                write_meta_valid = 'aw_valid_i'
+                write_meta_ready = 'aw_ready_o'
+                w_chan_valid = 'w_chan_valid_o'
+                w_chan_ready = 'w_chan_ready_o'
+                w_chan_first = 'w_chan_first_o'
+                buffer_out_ready = 'buffer_out_ready'
+            elif swp:
                 write_dp_valid_in = 'w_dp_valid_i'
                 write_dp_ready_out = 'w_dp_req_ready'
                 write_dp_response = 'w_dp_rsp_o'
@@ -282,6 +312,7 @@ def render_transport_layer(prot_ids: dict, db: dict, tpl_file: str) -> str:
 
         # Render Transport Layer
         is_compute_eligible = compute_eligible(prot_ids[prot_id]['ar'], prot_ids[prot_id]['aw'], db)
+        dual = dual_operand_eligible(prot_id, prot_ids, db)
         context = {
             'name_uniqueifier': prot_id,
             'database': db,
@@ -293,6 +324,9 @@ def render_transport_layer(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'mh_format': mh_format,
             'any_mh': any_mh,
             'compute_eligible': is_compute_eligible,
+            'dual_operand_eligible': bool(dual),
+            'dual_read_protocol': dual.get('protocol'),
+            'dual_num_heads': dual.get('num_heads'),
             'rendered_read_ports': render_read_mgr_inst(prot_id, prot_ids, db),
             'rendered_write_ports': render_write_mgr_inst(prot_id, prot_ids, db)
         }

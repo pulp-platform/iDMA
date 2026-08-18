@@ -14,7 +14,9 @@ module idma_otf_compute #(
   /// Compile-time per-op feature enables
   parameter idma_pkg::compute_enable_t ComputeEnable = '0,
   /// Implementation tuning knobs
-  parameter idma_pkg::compute_tuning_t ComputeTuning = '1
+  parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
+  /// Operand streams presented on `data_i` (2: a second, lane-aligned stream for dual ops)
+  parameter int unsigned NumOperands = 32'd1
 ) (
   input  logic clk_i,
   input  logic rst_ni,
@@ -25,10 +27,10 @@ module idma_otf_compute #(
   /// A supported compute op is armed for this transfer
   output logic                       active_o,
 
-  /// Input beat stream (from the dataflow buffer): per-lane valid/ready
-  input  logic [StrbWidth-1:0][7:0] data_i,
-  input  logic [StrbWidth-1:0]      lane_valid_i,
-  output logic [StrbWidth-1:0]      lane_ready_o,
+  /// Input beat stream(s) (from the dataflow buffers): per-lane valid/ready of the joined beat
+  input  logic [NumOperands*StrbWidth-1:0][7:0] data_i,
+  input  logic [StrbWidth-1:0]                  lane_valid_i,
+  output logic [StrbWidth-1:0]                  lane_ready_o,
 
   /// Output beat stream: per-lane valid (occupancy) + per-byte strobe (edge mask)
   output logic [StrbWidth-1:0][7:0] data_o,
@@ -65,6 +67,15 @@ module idma_otf_compute #(
   logic beat_valid;
   assign beat_valid = &lane_valid_i;
 
+  // operand split: a is always present, b only when a second stream is elaborated
+  logic [StrbWidth-1:0][7:0] data_a, data_b;
+  assign data_a = data_i[StrbWidth-1:0];
+  if (NumOperands > 1) begin : gen_operand_b
+    assign data_b = data_i[2*StrbWidth-1:StrbWidth];
+  end else begin : gen_no_operand_b
+    assign data_b = '0;
+  end
+
   // transpose sub-unit
   logic [StrbWidth-1:0][7:0] tp_data;
   logic [StrbWidth-1:0]      tp_strb;
@@ -82,7 +93,7 @@ module idma_otf_compute #(
       .transp_mode_i   ( eff_compute.params.transpose.mode       ),
       .tensor_size_m_i ( eff_compute.params.transpose.tensor_m   ),
       .tensor_size_n_i ( eff_compute.params.transpose.tensor_n   ),
-      .data_i          ( data_i                                  ),
+      .data_i          ( data_a                                  ),
       .valid_i         ( beat_valid & sel_transpose              ),
       .ready_o         ( tp_in_ready                             ),
       .data_o          ( tp_data                                 ),
@@ -108,7 +119,7 @@ module idma_otf_compute #(
       .rst_ni,
       .clear_i      ( ~sel_mxquant          ),
       .src_fmt_i    ( mx_fmt                ),
-      .data_i       ( data_i                ),
+      .data_i       ( data_a                ),
       .valid_i      ( beat_valid & sel_mxquant ),
       .ready_o      ( mx_in_ready           ),
       .data_o       ( mx_data               ),
@@ -135,7 +146,7 @@ module idma_otf_compute #(
       .rst_ni,
       .clear_i      ( ~sel_mxdequant          ),
       .dst_fmt_i    ( mx_fmt                  ),
-      .data_i       ( data_i                  ),
+      .data_i       ( data_a                  ),
       .valid_i      ( beat_valid & sel_mxdequant ),
       .ready_o      ( dq_in_ready             ),
       .data_o       ( dq_data                 ),
@@ -159,9 +170,10 @@ module idma_otf_compute #(
     ) i_idma_otf_alu (
       .func_i       ( eff_compute.params.alu.func ),
       .imm_i        ( eff_compute.params.alu.imm  ),
-      .data_i       ( data_i                      ),
+      .data_i       ( data_a                      ),
       .lane_valid_i ( lane_valid_i & {StrbWidth{sel_alu}} ),
       .lane_ready_o ( alu_lane_ready              ),
+      .data_b_i     ( data_b                      ),
       .data_o       ( alu_data                    ),
       .lane_valid_o ( alu_lane_valid              ),
       .lane_ready_i ( lane_ready_i & {StrbWidth{sel_alu}} )
@@ -215,6 +227,10 @@ module idma_otf_compute #(
     assert (idma_pkg::compute_op_supported(ComputeEnable, compute_i))
       else $fatal(1, "idma_otf_compute: compute op %0d not elaborated (ComputeEnable)",
                   compute_i.op);
+  // a two-operand op needs the second stream elaborated (legalizer fence reports first)
+  always @(posedge clk_i) if (rst_ni && cfg_valid_i && compute_i.enable)
+    assert (idma_pkg::compute_operands(compute_i) <= NumOperands)
+      else $fatal(1, "idma_otf_compute: two-operand op without a second operand stream");
   // backstop: the backend request interlock must never let a differing config in while busy
   always @(posedge clk_i) if (rst_ni && cfg_valid_i && (compute_i != latched_q))
     assert (!(mx_busy || dq_busy))
