@@ -852,6 +852,28 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
     if (RAWCouplingAvail) begin : gen_r_aw_coupler
 % if one_read_port and one_write_port and (used_read_protocols[0] == used_write_protocols[0]):
+        // per-transfer decouple_aw tag travelling with the write datapath request
+        logic w_decouple_aw_out;
+
+        // mirrors i_w_dp_req exactly: same depth, same push valid, same pop ready
+        cc_stream_fifo_optimal_wrap #(
+            .Depth     ( NumAxInFlight + ComputeFifoDepth ),
+            .data_t    ( logic                            ),
+            .PrintInfo ( PrintFifoInfo                    )
+        ) i_w_decouple_aw (
+            .clk_i      ( clk_i               ),
+            .rst_ni     ( rst_ni              ),
+            .clr_i      ( 1'b0                ),
+            .flush_i    ( 1'b0                ),
+            .usage_o    ( /* NOT CONNECTED */ ),
+            .data_i     ( w_req.decouple_aw   ),
+            .valid_i    ( w_valid             ),
+            .ready_o    ( /* NOT CONNECTED */ ),
+            .data_o     ( w_decouple_aw_out   ),
+            .valid_o    ( /* NOT CONNECTED */ ),
+            .ready_i    ( w_dp_req_out_ready  )
+        );
+
         // instantiate the channel coupler
         idma_channel_coupler #(
             .NumAxInFlight   ( NumAxInFlight               ),
@@ -871,6 +893,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             .w_req_valid_i    ( w_chan_valid                ),
             .w_req_ready_i    ( w_chan_ready                ),
             .w_req_first_i    ( w_chan_first                ),
+            .w_decouple_aw_i  ( w_decouple_aw_out           ),
             .aw_decouple_aw_i ( \
 % if one_write_port:
 w_req.decouple_aw\
