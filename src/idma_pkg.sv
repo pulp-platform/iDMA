@@ -122,9 +122,23 @@ package idma_pkg;
         logic [TransposeDimWidth-1:0] tensor_n;
     } transpose_options_t;
 
+    /// Width of the per-op compute parameter union (set by the widest member)
+    localparam int unsigned ComputeParamsWidth = $bits(transpose_options_t);
+
+    /// ALU immediate width (one byte lane)
+    localparam int unsigned AluImmWidth = 32'd8;
+
+    /// ALU options: function and byte immediate, padded to the union width
+    typedef struct packed {
+        logic [ComputeParamsWidth-$bits(alu_func_e)-AluImmWidth-1:0] reserved;
+        alu_func_e                                                    func;
+        logic [AluImmWidth-1:0]                                       imm;
+    } alu_options_t;
+
     /// Per-op compute parameter union (members must be equal width)
     typedef union packed {
         transpose_options_t transpose;
+        alu_options_t       alu;
     } compute_params_t;
 
     /// Compute option type: per-transfer on-the-fly compute selection
@@ -134,13 +148,14 @@ package idma_pkg;
         compute_params_t params;
     } compute_options_t;
 
-    /// Compile-time per-op compute feature enables; `mxfp16` gates the FP16
-    /// source/destination format paths of the MX ops (area opt-out)
+    /// Compile-time per-op compute feature enables; `mxfp16` and `alu_mul` are area opt-outs
     typedef struct packed {
         logic transpose;
         logic mxquant;
         logic mxdequant;
         logic mxfp16;
+        logic alu;
+        logic alu_mul;
     } compute_enable_t;
 
     /// Implementation tuning knobs for the compute engines
@@ -158,14 +173,26 @@ package idma_pkg;
                ? MX_FMT_FP16 : MX_FMT_FP32;
     endfunction
 
-    /// Single source of truth: is `op` elaborated under this feature mask?
-    function automatic logic compute_op_supported(compute_enable_t ena, compute_op_e op);
-        unique case (op)
+    /// Single source of truth: does the ALU function use the multiplier?
+    function automatic logic alu_func_uses_mul(alu_func_e func);
+        return func inside {ALU_MULI};
+    endfunction
+
+    /// Single source of truth: is the ALU function defined?
+    function automatic logic alu_func_defined(alu_func_e func);
+        return func inside {ALU_NOT, ALU_ADDI, ALU_SUBI, ALU_MULI, ALU_ANDI, ALU_ORI, ALU_XORI};
+    endfunction
+
+    /// Single source of truth: is the requested op elaborated under this feature mask?
+    function automatic logic compute_op_supported(compute_enable_t ena, compute_options_t cmp);
+        unique case (cmp.op)
             COMPUTE_TRANSPOSE:      return ena.transpose;
             COMPUTE_MXQUANT:        return ena.mxquant;
             COMPUTE_MXQUANT_FP16:   return ena.mxquant   & ena.mxfp16;
             COMPUTE_MXDEQUANT:      return ena.mxdequant;
             COMPUTE_MXDEQUANT_FP16: return ena.mxdequant & ena.mxfp16;
+            COMPUTE_ALU:            return ena.alu & alu_func_defined(cmp.params.alu.func) &
+                                           (~alu_func_uses_mul(cmp.params.alu.func) | ena.alu_mul);
             default:                return 1'b0;
         endcase
     endfunction

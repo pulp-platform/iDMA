@@ -160,6 +160,18 @@ addrmap idma_reg #(
         mxquant_fp16   = 4'd3 { desc = "MX quant, FP16 source (64B -> 33B per 32-element block)."; };
         mxdequant      = 4'd4 { desc = "MX dequant, FP32 destination (33B -> 128B per 32-element block)."; };
         mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (33B -> 64B per 32-element block)."; };
+        alu            = 4'd6 { desc = "Byte-wise SIMD ALU; the function is selected in compute_alu."; };
+    };
+
+    // Byte-wise ALU function (idma_pkg::alu_func_e): 8-bit lanes, wrapping arithmetic
+    enum alu_func {
+        not  = 4'd0 { desc = "y = ~x"; };
+        addi = 4'd1 { desc = "y = x + imm"; };
+        subi = 4'd2 { desc = "y = x - imm"; };
+        muli = 4'd3 { desc = "y = x * imm (needs the alu_mul feature)"; };
+        andi = 4'd4 { desc = "y = x & imm"; };
+        ori  = 4'd5 { desc = "y = x | imm"; };
+        xori = 4'd6 { desc = "y = x ^ imm"; };
     };
 
     reg compute_cfg {
@@ -188,6 +200,23 @@ addrmap idma_reg #(
         } reserved [31:31] = 0;
     };
 
+    reg compute_alu {
+        name = "compute_alu";
+        desc = "ALU function and immediate for compute_op = alu; sampled with compute_cfg.";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Byte-wise ALU function (idma_pkg::alu_func_e).";
+            encode = alu_func;
+        } alu_func [3:0] = 0;
+        field {
+            desc = "8-bit immediate operand, broadcast to every byte lane.";
+        } alu_imm [11:4] = 0;
+        field {
+            desc = "Reserved.";
+        } reserved [31:12] = 0;
+    };
+
     regfile dim {
         dst_stride dst_stride[SysAddrWidth/32];
         src_stride src_stride[SysAddrWidth/32];
@@ -204,6 +233,7 @@ addrmap idma_reg #(
              length   length[SysAddrWidth/32];
              dim      dim[NumDims-1 | NumDims == 1];
              compute_cfg compute_cfg;
+             compute_alu compute_alu;
 };
 
 `endif // IDMA_REG_RDL

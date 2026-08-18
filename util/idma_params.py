@@ -180,8 +180,8 @@ def main():
             if not ops_fields or not tuning_fields:
                 raise SystemExit('error: cannot read compute_enable_t/compute_tuning_t; '
                                  'the compute sweep cannot be validated')
-            # MSB first; mxfp16 gates FP16 paths only, so it enables no datapath alone
-            real_ops = [f for f in ops_fields if f != 'mxfp16']
+            # MSB first; mxfp16 and alu_mul gate sub-paths only, so they enable no datapath alone
+            real_ops = [f for f in ops_fields if f not in ('mxfp16', 'alu_mul')]
             real_mask = 0
             for pos, name in enumerate(reversed(ops_fields)):
                 if name in real_ops:

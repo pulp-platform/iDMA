@@ -9,6 +9,8 @@
 // the matching legalizer guard assert to report (compile with +define+INC_ASSERT).
 // The runner greps the transcript for the assert name; case 9 provokes transfer
 // overlap and expects the mxquant sub-unit's clear-with-in-flight-state fatal.
+// Cases 14-16 cover the ALU: op compiled out, multiplier compiled out, undefined
+// function.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -23,7 +25,9 @@ module tb_idma_mxneg
   parameter int unsigned TFLenWidth = 32,
   parameter int unsigned NegCase    = 1,
   parameter bit          EnDequant  = 1'b1,
-  parameter bit          EnFp16     = 1'b1
+  parameter bit          EnFp16     = 1'b1,
+  parameter bit          EnAlu      = 1'b1,
+  parameter bit          EnAluMul   = 1'b1
 );
 
   `include "include/tb_idma_mx_common.svh"
@@ -37,7 +41,8 @@ module tb_idma_mxneg
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
     .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, mxquant: 1'b1, mxfp16: EnFp16,
-                                            mxdequant: EnDequant, default: '0}),
+                                            mxdequant: EnDequant, alu: EnAlu, alu_mul: EnAluMul,
+                                            default: '0}),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth),
@@ -57,7 +62,7 @@ module tb_idma_mxneg
   task automatic issue(input addr_t src, input addr_t dst, input int unsigned L,
                        input idma_pkg::compute_op_e op,
                        input idma_pkg::protocol_e src_prot, input idma_pkg::protocol_e dst_prot,
-                       input bit wait_done);
+                       input bit wait_done, input logic [3:0] alu_func = 4'd0);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
     idma_req.src_addr = src;
@@ -70,6 +75,7 @@ module tb_idma_mxneg
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = (op != idma_pkg::COMPUTE_NONE);
     idma_req.opt.compute.op      = op;
+    idma_req.opt.compute.params.alu.func = idma_pkg::alu_func_e'(alu_func);
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -104,6 +110,11 @@ module tb_idma_mxneg
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       13: issue(Src, Dst, 64, idma_pkg::COMPUTE_MXQUANT_FP16,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      14: issue(Src, Dst, 64, idma_pkg::COMPUTE_ALU, idma_pkg::AXI, idma_pkg::AXI, 1'b0,
+                4'(idma_pkg::ALU_ADDI));
+      15: issue(Src, Dst, 64, idma_pkg::COMPUTE_ALU, idma_pkg::AXI, idma_pkg::AXI, 1'b0,
+                4'(idma_pkg::ALU_MULI));
+      16: issue(Src, Dst, 64, idma_pkg::COMPUTE_ALU, idma_pkg::AXI, idma_pkg::AXI, 1'b0, 4'hF);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 

@@ -51,12 +51,12 @@ typedef struct packed {
 ```verilog
 typedef struct packed {
     logic             enable;  // Arm compute for this transfer
-    compute_op_e      op;      // Op selector (transpose, MX quant/dequant)
-    compute_params_t  params;  // Per-op parameters (transpose tensor dims/mode)
+    compute_op_e      op;      // Op selector (transpose, MX quant/dequant, ALU)
+    compute_params_t  params;  // Per-op parameter union (transpose dims/mode, ALU func/imm)
 } compute_options_t;
 ```
 
-`compute_op_e` encodes `COMPUTE_NONE`, `COMPUTE_TRANSPOSE`, `COMPUTE_MXQUANT`, `COMPUTE_MXQUANT_FP16`, `COMPUTE_MXDEQUANT`, and `COMPUTE_MXDEQUANT_FP16`. The enum is generated from `idma_reg.rdl` so RTL and the SW headers share one encoding.
+`compute_op_e` encodes `COMPUTE_NONE`, `COMPUTE_TRANSPOSE`, `COMPUTE_MXQUANT`, `COMPUTE_MXQUANT_FP16`, `COMPUTE_MXDEQUANT`, `COMPUTE_MXDEQUANT_FP16`, and `COMPUTE_ALU`. It and the ALU function enum `alu_func_e` are generated from `idma_reg.rdl` so RTL and the SW headers share one encoding.
 
 ## Transfer Response (`idma_rsp_t`)
 

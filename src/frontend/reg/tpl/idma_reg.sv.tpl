@@ -248,12 +248,18 @@ module idma_${identifier} #(
           dma_reg2hw[i].compute_cfg.compute_enable.value;
       nxt_dma_req${sep}opt.compute.op                        =
           idma_pkg::compute_op_e'(dma_reg2hw[i].compute_cfg.compute_op.value);
-      nxt_dma_req${sep}opt.compute.params.transpose.mode     =
-          dma_reg2hw[i].compute_cfg.transpose_mode.value;
-      nxt_dma_req${sep}opt.compute.params.transpose.tensor_m =
-          dma_reg2hw[i].compute_cfg.transpose_tensor_m.value;
-      nxt_dma_req${sep}opt.compute.params.transpose.tensor_n =
-          dma_reg2hw[i].compute_cfg.transpose_tensor_n.value;
+      if (dma_reg2hw[i].compute_cfg.compute_op.value == idma_pkg::COMPUTE_ALU) begin
+        nxt_dma_req${sep}opt.compute.params.alu.func =
+            idma_pkg::alu_func_e'(dma_reg2hw[i].compute_alu.alu_func.value);
+        nxt_dma_req${sep}opt.compute.params.alu.imm  = dma_reg2hw[i].compute_alu.alu_imm.value;
+      end else begin
+        nxt_dma_req${sep}opt.compute.params.transpose.mode     =
+            dma_reg2hw[i].compute_cfg.transpose_mode.value;
+        nxt_dma_req${sep}opt.compute.params.transpose.tensor_m =
+            dma_reg2hw[i].compute_cfg.transpose_tensor_m.value;
+        nxt_dma_req${sep}opt.compute.params.transpose.tensor_n =
+            dma_reg2hw[i].compute_cfg.transpose_tensor_n.value;
+      end
 
 % if num_dim != 1:
       // ND connections

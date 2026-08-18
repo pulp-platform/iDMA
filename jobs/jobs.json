@@ -452,7 +452,10 @@
                 { "tag" : "mxneg_7", "params" : { "NegCase" : 7, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxSrcProtocol" },
                 { "tag" : "mxneg_8", "params" : { "NegCase" : 8, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxDstProtocol" },
                 { "tag" : "mxneg_10", "params" : { "NegCase" : 10, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeSingleBeat" },
-                { "tag" : "mxneg_13", "params" : { "NegCase" : 13, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 0 }, "token" : "ComputeOpUnsupported" }
+                { "tag" : "mxneg_13", "params" : { "NegCase" : 13, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 0 }, "token" : "ComputeOpUnsupported" },
+                { "tag" : "mxneg_14", "params" : { "NegCase" : 14, "DataWidth" : 64, "EnAlu" : 0 }, "token" : "ComputeOpUnsupported" },
+                { "tag" : "mxneg_15", "params" : { "NegCase" : 15, "DataWidth" : 64, "EnAluMul" : 0 }, "token" : "ComputeOpUnsupported" },
+                { "tag" : "mxneg_16", "params" : { "NegCase" : 16, "DataWidth" : 64 }, "token" : "ComputeOpUnsupported" }
             ],
             "exclude" : [
                 { "case" : 4,  "why" : "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046" },
@@ -461,13 +464,37 @@
             ]
         }
     },
+    "alu" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 32,
+            "UserWidth"   : 1,
+            "AxiIdWidth"  : 12,
+            "TFLenWidth"  : 32
+        },
+        "testbench" : "tb_idma_alu",
+        "verify" : {
+            "dpi" : "idma_alu_dpi",
+            "token" : "[ALU] ALL PASS",
+            "legs" : [
+                { "tag" : "alu_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "alu_64", "params" : { "DataWidth" : 64 } },
+                { "tag" : "alu_128", "params" : { "DataWidth" : 128 } },
+                { "tag" : "alu_256", "params" : { "DataWidth" : 256 } },
+                { "tag" : "alu_512", "params" : { "DataWidth" : 512 } },
+                { "tag" : "alu_1024", "params" : { "DataWidth" : 1024 } }
+            ]
+        }
+    },
     "_verify" : {
         "elab_widths" : [32, 64, 512, 1024],
         "elab_compute" : [
-            { "width" : 64, "ops" : 15, "tuning" : 1 },
-            { "width" : 512, "ops" : 15, "tuning" : 1 },
-            { "width" : 64, "ops" : 8, "tuning" : 0 },
-            { "width" : 64, "ops" : 6, "tuning" : 1 }
+            { "width" : 64, "ops" : 63, "tuning" : 1 },
+            { "width" : 512, "ops" : 63, "tuning" : 1 },
+            { "width" : 64, "ops" : 32, "tuning" : 0 },
+            { "width" : 64, "ops" : 24, "tuning" : 1 },
+            { "width" : 64, "ops" : 2, "tuning" : 1 }
         ],
         "elab_shared_tops" : [
             "idma_desc64_synth", "idma_nd_midend_synth",

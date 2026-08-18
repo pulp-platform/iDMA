@@ -753,7 +753,7 @@ ${database[protocol]['legalizer_write_data_path']}
     // the requested op must be elaborated in this configuration
     `ASSERT_NEVER(ComputeOpUnsupported, (ready_o & valid_i & req_i.opt.compute.enable &
                   ~(EnableCompute &
-                    idma_pkg::compute_op_supported(ComputeOps, req_i.opt.compute.op))),
+                    idma_pkg::compute_op_supported(ComputeOps, req_i.opt.compute))),
                   clk_i, !rst_ni)
 % endif
 

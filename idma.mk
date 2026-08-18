@@ -482,23 +482,32 @@ idma_sim_tb_idma_mxclear: $(IDMA_VSIM_DIR)/compile.tcl
 	  else echo "[MXCLR] $$2 clear-guard DID NOT FIRE (see mxclear_$$2.log)"; exit 1; fi; \
 	done
 
-# each case must print its guard assert; case 6 needs the op compiled out, case 4 a 1024-bit bus
+# each case must print its guard assert; cases 6/14/15 need a feature compiled out, case 4 a 1024-bit bus
 .PHONY: idma_sim_tb_idma_mxneg
 idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); set -e; \
-	for c in "1 ComputeSizeAligned 64 1 1" "2 ComputeSrcAligned 64 1 1" \
-	         "3 ComputeDstAligned 64 1 1" "4 ComputeMxFp16Width 1024 1 1" \
-	         "5 ComputeMxdequantBeatAligned 64 1 1" "6 ComputeOpUnsupported 64 0 1" \
-	         "7 ComputeMxSrcProtocol 64 1 1" "8 ComputeMxDstProtocol 64 1 1" \
-	         "10 ComputeTransposeSingleBeat 64 1 1" "11 ComputeMxdequantLengthFits 64 1 1" \
-	         "12 ComputeMxFp16Width 1024 1 1" "13 not.elaborated 64 1 0"; do \
+	for c in "1 ComputeSizeAligned 64 1 1 1 1" "2 ComputeSrcAligned 64 1 1 1 1" \
+	         "3 ComputeDstAligned 64 1 1 1 1" "4 ComputeMxFp16Width 1024 1 1 1 1" \
+	         "5 ComputeMxdequantBeatAligned 64 1 1 1 1" "6 ComputeOpUnsupported 64 0 1 1 1" \
+	         "7 ComputeMxSrcProtocol 64 1 1 1 1" "8 ComputeMxDstProtocol 64 1 1 1 1" \
+	         "10 ComputeTransposeSingleBeat 64 1 1 1 1" "11 ComputeMxdequantLengthFits 64 1 1 1 1" \
+	         "12 ComputeMxFp16Width 1024 1 1 1 1" "13 not.elaborated 64 1 0 1 1" \
+	         "14 ComputeOpUnsupported 64 1 1 0 1" "15 ComputeOpUnsupported 64 1 1 1 0" \
+	         "16 ComputeOpUnsupported 64 1 1 1 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
+	    -gEnAlu=$$6 -gEnAluMul=$$7 \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \
 	  if grep -qE "(ASSERT FAILED.*$$2|$$2)" mxneg_$$1.log; then echo "[MXNEG] case $$1 $$2 FIRED"; \
 	  else echo "[MXNEG] case $$1 $$2 DID NOT FIRE (see mxneg_$$1.log)"; exit 1; fi; \
 	done
+
+.PHONY: idma_sim_tb_idma_alu
+idma_sim_tb_idma_alu: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_alu_dpi.c)
+	$(call idma_run_mx_sim,tb_idma_alu,32 64 128 256 512 1024)
 
 .PHONY: idma_sim_tb_idma_transpose_midend
 idma_sim_tb_idma_transpose_midend: $(IDMA_VSIM_DIR)/compile.tcl

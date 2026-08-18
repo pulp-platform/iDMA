@@ -385,9 +385,8 @@ ${rendered_read_ports[read_port]}
 % if compute_eligible:
     if (EnableCompute) begin : gen_compute
         logic                  cmp_active;
-        logic                  cmp_in_ready;
         byte_t [StrbWidth-1:0] cmp_data_o;
-        strb_t                 cmp_strb_o, cmp_lane_valid;
+        strb_t                 cmp_strb_o, cmp_lane_valid, cmp_lane_ready;
 
         idma_otf_compute #(
             .StrbWidth           ( StrbWidth          ),
@@ -399,9 +398,9 @@ ${rendered_read_ports[read_port]}
             .compute_i   ( w_dp_req_i.compute ),
             .cfg_valid_i ( w_dp_valid_i        ),
             .active_o    ( cmp_active          ),
-            .data_i      ( buffer_out          ),
-            .valid_i     ( &buffer_out_valid   ),
-            .in_ready_o  ( cmp_in_ready        ),
+            .data_i       ( buffer_out          ),
+            .lane_valid_i ( buffer_out_valid    ),
+            .lane_ready_o ( cmp_lane_ready      ),
             .data_o       ( cmp_data_o          ),
             .strb_o       ( cmp_strb_o          ),
             .lane_valid_o ( cmp_lane_valid      ),
@@ -412,8 +411,7 @@ ${rendered_read_ports[read_port]}
         assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
         assign wr_valid          = cmp_active ? cmp_lane_valid : buffer_out_valid;
         assign wr_strb           = cmp_active ? cmp_strb_o : '1;
-        assign dataflow_ready_in = cmp_active ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}}
-                                              : buffer_out_ready_shifted;
+        assign dataflow_ready_in = cmp_active ? cmp_lane_ready : buffer_out_ready_shifted;
     end else begin : gen_no_compute
         assign wr_data           = buffer_out;
         assign wr_valid          = buffer_out_valid;

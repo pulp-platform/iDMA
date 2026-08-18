@@ -6,7 +6,8 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 /// On-the-fly compute dispatcher: routes one op per transfer to its sub-unit.
-/// A config change drains the engine before the next transfer starts.
+/// A config change drains the engine before the next transfer starts. The
+/// transpose and MX units consume whole beats; the ALU handshakes per lane.
 module idma_otf_compute #(
   /// Byte lanes per beat (= DataWidth/8)
   parameter int unsigned StrbWidth       = 32'd8,
@@ -24,10 +25,10 @@ module idma_otf_compute #(
   /// A supported compute op is armed for this transfer
   output logic                       active_o,
 
-  /// Input beat stream (from the dataflow buffer)
+  /// Input beat stream (from the dataflow buffer): per-lane valid/ready
   input  logic [StrbWidth-1:0][7:0] data_i,
-  input  logic                      valid_i,
-  output logic                      in_ready_o,
+  input  logic [StrbWidth-1:0]      lane_valid_i,
+  output logic [StrbWidth-1:0]      lane_ready_o,
 
   /// Output beat stream: per-lane valid (occupancy) + per-byte strobe (edge mask)
   output logic [StrbWidth-1:0][7:0] data_o,
@@ -46,18 +47,23 @@ module idma_otf_compute #(
   assign eff_compute = cfg_valid_i ? compute_i : latched_q;
 
   // per-op select: one legality predicate, then route by op
-  logic op_legal, sel_transpose, sel_mxquant, sel_mxdequant;
+  logic op_legal, sel_transpose, sel_mxquant, sel_mxdequant, sel_alu;
   idma_pkg::mx_fmt_e mx_fmt;
   assign op_legal      = eff_compute.enable &
-                         idma_pkg::compute_op_supported(ComputeEnable, eff_compute.op);
+                         idma_pkg::compute_op_supported(ComputeEnable, eff_compute);
   assign sel_transpose = op_legal & (eff_compute.op == idma_pkg::COMPUTE_TRANSPOSE);
   assign sel_mxquant   = op_legal & (eff_compute.op inside {idma_pkg::COMPUTE_MXQUANT,
                                                             idma_pkg::COMPUTE_MXQUANT_FP16});
   assign sel_mxdequant = op_legal & (eff_compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
                                                             idma_pkg::COMPUTE_MXDEQUANT_FP16});
+  assign sel_alu       = op_legal & (eff_compute.op == idma_pkg::COMPUTE_ALU);
   assign mx_fmt        = idma_pkg::compute_op_fmt(eff_compute.op);
 
   assign active_o = op_legal;
+
+  // the transpose and MX units consume whole beats
+  logic beat_valid;
+  assign beat_valid = &lane_valid_i;
 
   // transpose sub-unit
   logic [StrbWidth-1:0][7:0] tp_data;
@@ -77,7 +83,7 @@ module idma_otf_compute #(
       .tensor_size_m_i ( eff_compute.params.transpose.tensor_m   ),
       .tensor_size_n_i ( eff_compute.params.transpose.tensor_n   ),
       .data_i          ( data_i                                  ),
-      .valid_i         ( valid_i & sel_transpose                 ),
+      .valid_i         ( beat_valid & sel_transpose              ),
       .ready_o         ( tp_in_ready                             ),
       .data_o          ( tp_data                                 ),
       .strb_o          ( tp_strb                                 ),
@@ -103,7 +109,7 @@ module idma_otf_compute #(
       .clear_i      ( ~sel_mxquant          ),
       .src_fmt_i    ( mx_fmt                ),
       .data_i       ( data_i                ),
-      .valid_i      ( valid_i & sel_mxquant ),
+      .valid_i      ( beat_valid & sel_mxquant ),
       .ready_o      ( mx_in_ready           ),
       .data_o       ( mx_data               ),
       .lane_valid_o ( mx_lane_valid         ),
@@ -130,7 +136,7 @@ module idma_otf_compute #(
       .clear_i      ( ~sel_mxdequant          ),
       .dst_fmt_i    ( mx_fmt                  ),
       .data_i       ( data_i                  ),
-      .valid_i      ( valid_i & sel_mxdequant ),
+      .valid_i      ( beat_valid & sel_mxdequant ),
       .ready_o      ( dq_in_ready             ),
       .data_o       ( dq_data                 ),
       .lane_valid_o ( dq_lane_valid           ),
@@ -142,33 +148,61 @@ module idma_otf_compute #(
     assign dq_busy = 1'b0;
   end
 
+  // ALU sub-unit
+  logic [StrbWidth-1:0][7:0] alu_data;
+  logic [StrbWidth-1:0]      alu_lane_valid, alu_lane_ready;
+
+  if (ComputeEnable.alu) begin : gen_alu
+    idma_otf_alu #(
+      .StrbWidth ( StrbWidth             ),
+      .MulEn     ( ComputeEnable.alu_mul )
+    ) i_idma_otf_alu (
+      .func_i       ( eff_compute.params.alu.func ),
+      .imm_i        ( eff_compute.params.alu.imm  ),
+      .data_i       ( data_i                      ),
+      .lane_valid_i ( lane_valid_i & {StrbWidth{sel_alu}} ),
+      .lane_ready_o ( alu_lane_ready              ),
+      .data_o       ( alu_data                    ),
+      .lane_valid_o ( alu_lane_valid              ),
+      .lane_ready_i ( lane_ready_i & {StrbWidth{sel_alu}} )
+    );
+  end else begin : gen_no_alu
+    assign alu_data = '0; assign alu_lane_valid = '0; assign alu_lane_ready = '0;
+  end
+
   // output dispatch, routed per opcode
   always_comb begin
     data_o       = '0;
     strb_o       = '0;
     lane_valid_o = '0;
-    in_ready_o   = 1'b0;
+    lane_ready_o = '0;
     if (op_legal) begin
       unique case (eff_compute.op)
         idma_pkg::COMPUTE_TRANSPOSE: begin
           data_o       = tp_data;
           strb_o       = tp_strb;
           lane_valid_o = {StrbWidth{tp_valid}};
-          in_ready_o   = tp_in_ready;
+          lane_ready_o = {StrbWidth{beat_valid & tp_in_ready}};
         end
         idma_pkg::COMPUTE_MXQUANT,
         idma_pkg::COMPUTE_MXQUANT_FP16: begin
           data_o       = mx_data;
           strb_o       = '1;
           lane_valid_o = mx_lane_valid;
-          in_ready_o   = mx_in_ready;
+          lane_ready_o = {StrbWidth{beat_valid & mx_in_ready}};
         end
         idma_pkg::COMPUTE_MXDEQUANT,
         idma_pkg::COMPUTE_MXDEQUANT_FP16: begin
           data_o       = dq_data;
           strb_o       = '1;
           lane_valid_o = dq_lane_valid;
-          in_ready_o   = dq_in_ready;
+          lane_ready_o = {StrbWidth{beat_valid & dq_in_ready}};
+        end
+        idma_pkg::COMPUTE_ALU: begin
+          data_o       = alu_data;
+          strb_o       = '1;
+          lane_valid_o = alu_lane_valid;
+          lane_ready_o = alu_lane_ready;
         end
         default: ;
       endcase
@@ -178,7 +212,7 @@ module idma_otf_compute #(
   // pragma translate_off
   // an op that is not elaborated must never be presented (legalizer fence reports first)
   always @(posedge clk_i) if (rst_ni && cfg_valid_i && compute_i.enable)
-    assert (idma_pkg::compute_op_supported(ComputeEnable, compute_i.op))
+    assert (idma_pkg::compute_op_supported(ComputeEnable, compute_i))
       else $fatal(1, "idma_otf_compute: compute op %0d not elaborated (ComputeEnable)",
                   compute_i.op);
   // backstop: the backend request interlock must never let a differing config in while busy
