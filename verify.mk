@@ -24,7 +24,7 @@ IDMA_TOP           ?=
 IDMA_VERIFY_ID     ?= rw_axi
 IDMA_MULTIHEAD_PAT := 2r_axi_w_axi 2rw_axi
 # ComputeOps masks elaborated on the two-read-head variant: alu+alu_mul+dual, everything
-IDMA_MULTIHEAD_COMPUTE := 7 127
+IDMA_MULTIHEAD_COMPUTE := 14 255
 IDMA_VERIFY_DB     := $(IDMA_ROOT)/$(IDMA_JOBS_JSON)
 IDMA_VERIFY_DIR    := $(IDMA_ROOT)/target/verify
 IDMA_SLANG_DIR     := $(IDMA_ROOT)/target/sim/slang

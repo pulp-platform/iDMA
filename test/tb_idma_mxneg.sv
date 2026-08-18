@@ -9,8 +9,8 @@
 // the matching legalizer guard assert to report (compile with +define+INC_ASSERT).
 // The runner greps the transcript for the assert name; case 9 provokes transfer
 // overlap and expects the mxquant sub-unit's clear-with-in-flight-state fatal.
-// Cases 14-17 cover the ALU: op compiled out, multiplier compiled out, undefined
-// function, two-operand function on a single-read-head backend.
+// Cases 14-17 cover the ALU (op or multiplier compiled out, undefined function, two-operand
+// function without a second read head), 18-19 the casts (odd length, unit compiled out).
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -27,7 +27,8 @@ module tb_idma_mxneg
   parameter bit          EnDequant  = 1'b1,
   parameter bit          EnFp16     = 1'b1,
   parameter bit          EnAlu      = 1'b1,
-  parameter bit          EnAluMul   = 1'b1
+  parameter bit          EnAluMul   = 1'b1,
+  parameter bit          EnCast     = 1'b1
 );
 
   `include "include/tb_idma_mx_common.svh"
@@ -42,7 +43,7 @@ module tb_idma_mxneg
     .EnableCompute(1'b1),
     .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, mxquant: 1'b1, mxfp16: EnFp16,
                                             mxdequant: EnDequant, alu: EnAlu, alu_mul: EnAluMul,
-                                            dual: 1'b1, default: '0}),
+                                            dual: 1'b1, fpcast: EnCast, default: '0}),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth),
@@ -117,6 +118,10 @@ module tb_idma_mxneg
       16: issue(Src, Dst, 64, idma_pkg::COMPUTE_ALU, idma_pkg::AXI, idma_pkg::AXI, 1'b0, 4'hF);
       17: issue(Src, Dst, 64, idma_pkg::COMPUTE_ALU, idma_pkg::AXI, idma_pkg::AXI, 1'b0,
                 4'(idma_pkg::ALU_ADD));
+      18: issue(Src, Dst, StrbWidth + 4, idma_pkg::COMPUTE_CAST_FP32_I8,
+                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      19: issue(Src, Dst, 4 * StrbWidth, idma_pkg::COMPUTE_CAST_BF16_FP32,
+                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 

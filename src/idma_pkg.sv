@@ -98,6 +98,13 @@ package idma_pkg;
             COMPUTE_MXQUANT_FP16:   return MxFp16BlockBytes;
             COMPUTE_MXDEQUANT:      return MxBlockBytes;
             COMPUTE_MXDEQUANT_FP16: return MxBlockBytes;
+            COMPUTE_CAST_FP32_I8,
+            COMPUTE_CAST_FP32_I16,
+            COMPUTE_CAST_FP32_BF16: return 32'd4;
+            COMPUTE_CAST_BF16_I8,
+            COMPUTE_CAST_BF16_I16,
+            COMPUTE_CAST_BF16_FP32,
+            COMPUTE_CAST_FP16_FP32: return 32'd2;
             default:                return 32'd1;
         endcase
     endfunction
@@ -108,8 +115,22 @@ package idma_pkg;
             COMPUTE_MXQUANT_FP16:   return MxBlockBytes;
             COMPUTE_MXDEQUANT:      return MxFp32BlockBytes;
             COMPUTE_MXDEQUANT_FP16: return MxFp16BlockBytes;
+            COMPUTE_CAST_FP32_I8,
+            COMPUTE_CAST_BF16_I8:   return 32'd1;
+            COMPUTE_CAST_FP32_I16,
+            COMPUTE_CAST_FP32_BF16,
+            COMPUTE_CAST_BF16_I16:  return 32'd2;
+            COMPUTE_CAST_BF16_FP32,
+            COMPUTE_CAST_FP16_FP32: return 32'd4;
             default:                return 32'd1;
         endcase
+    endfunction
+
+    /// Single source of truth: is `op` an element cast (beat-aligned, whole-beat unit)?
+    function automatic logic compute_op_is_cast(compute_op_e op);
+        return op inside {COMPUTE_CAST_FP32_I8, COMPUTE_CAST_FP32_I16, COMPUTE_CAST_FP32_BF16,
+                          COMPUTE_CAST_BF16_I8, COMPUTE_CAST_BF16_I16, COMPUTE_CAST_BF16_FP32,
+                          COMPUTE_CAST_FP16_FP32};
     endfunction
 
     /// Transpose tensor dimension width (elements)
@@ -157,6 +178,7 @@ package idma_pkg;
         logic alu;
         logic alu_mul;
         logic dual;
+        logic fpcast;
     } compute_enable_t;
 
     /// Implementation tuning knobs for the compute engines
@@ -206,7 +228,7 @@ package idma_pkg;
             COMPUTE_ALU:            return ena.alu & alu_func_defined(cmp.params.alu.func) &
                                            (~alu_func_uses_mul(cmp.params.alu.func) | ena.alu_mul) &
                                            (~alu_func_dual(cmp.params.alu.func) | ena.dual);
-            default:                return 1'b0;
+            default:                return compute_op_is_cast(cmp.op) & ena.fpcast;
         endcase
     endfunction
 

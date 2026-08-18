@@ -456,7 +456,9 @@
                 { "tag" : "mxneg_14", "params" : { "NegCase" : 14, "DataWidth" : 64, "EnAlu" : 0 }, "token" : "ComputeOpUnsupported" },
                 { "tag" : "mxneg_15", "params" : { "NegCase" : 15, "DataWidth" : 64, "EnAluMul" : 0 }, "token" : "ComputeOpUnsupported" },
                 { "tag" : "mxneg_16", "params" : { "NegCase" : 16, "DataWidth" : 64 }, "token" : "ComputeOpUnsupported" },
-                { "tag" : "mxneg_17", "params" : { "NegCase" : 17, "DataWidth" : 64 }, "token" : "ComputeOperandsUnsupported" }
+                { "tag" : "mxneg_17", "params" : { "NegCase" : 17, "DataWidth" : 64 }, "token" : "ComputeOperandsUnsupported" },
+                { "tag" : "mxneg_18", "params" : { "NegCase" : 18, "DataWidth" : 64 }, "token" : "ComputeCastBeatAligned" },
+                { "tag" : "mxneg_19", "params" : { "NegCase" : 19, "DataWidth" : 64, "EnCast" : 0 }, "token" : "ComputeOpUnsupported" }
             ],
             "exclude" : [
                 { "case" : 4,  "why" : "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046" },
@@ -488,14 +490,38 @@
             ]
         }
     },
+    "fpcast" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 32,
+            "UserWidth"   : 1,
+            "AxiIdWidth"  : 12,
+            "TFLenWidth"  : 32
+        },
+        "testbench" : "tb_idma_fpcast",
+        "verify" : {
+            "dpi" : "idma_fpcast_dpi",
+            "token" : "[CAST] ALL PASS",
+            "legs" : [
+                { "tag" : "fpcast_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "fpcast_64", "params" : { "DataWidth" : 64 } },
+                { "tag" : "fpcast_128", "params" : { "DataWidth" : 128 } },
+                { "tag" : "fpcast_256", "params" : { "DataWidth" : 256 } },
+                { "tag" : "fpcast_512", "params" : { "DataWidth" : 512 } },
+                { "tag" : "fpcast_1024", "params" : { "DataWidth" : 1024 } }
+            ]
+        }
+    },
     "_verify" : {
         "elab_widths" : [32, 64, 512, 1024],
         "elab_compute" : [
-            { "width" : 64, "ops" : 127, "tuning" : 1 },
-            { "width" : 512, "ops" : 127, "tuning" : 1 },
-            { "width" : 64, "ops" : 64, "tuning" : 0 },
-            { "width" : 64, "ops" : 48, "tuning" : 1 },
-            { "width" : 64, "ops" : 4, "tuning" : 1 }
+            { "width" : 64, "ops" : 255, "tuning" : 1 },
+            { "width" : 512, "ops" : 255, "tuning" : 1 },
+            { "width" : 64, "ops" : 128, "tuning" : 0 },
+            { "width" : 64, "ops" : 96, "tuning" : 1 },
+            { "width" : 64, "ops" : 8, "tuning" : 1 },
+            { "width" : 64, "ops" : 1, "tuning" : 1 }
         ],
         "elab_shared_tops" : [
             "idma_desc64_synth", "idma_nd_midend_synth",
@@ -511,6 +537,7 @@
         "guards_untested" : [
             { "guard" : "ComputeMxFp16Width", "why" : "only reachable from the excluded 1024 cases" },
             { "guard" : "ComputeMxdequantLengthFits", "why" : "case 11 is never accepted" },
+            { "guard" : "ComputeCastLengthFits", "why" : "same shape as MxdequantLengthFits: the request is never accepted" },
             { "guard" : "ComputeDstTilelink", "why" : "no TileLink backend variant exists" },
             { "guard" : "ComputeOperandPair", "why" : "multi-head only; fired by idma_sim_tb_idma_dualneg (Questa)" },
             { "guard" : "ComputeOperandLength", "why" : "multi-head only; fired by idma_sim_tb_idma_dualneg (Questa)" },

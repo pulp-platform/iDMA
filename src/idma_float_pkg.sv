@@ -5,7 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// FP-cast core for MX compute: FP16/FP32 <-> MXFP8 (E5M2) with E8M0 block scale.
+/// FP-cast core for MX compute (FP16/FP32 <-> MXFP8 with E8M0 block scale) and the
+/// element casts FP32/BF16 -> INT8/INT16, FP32 <-> BF16.
 package idma_float_pkg;
 
   // block geometry is single-homed in idma_pkg
@@ -240,6 +241,60 @@ package idma_float_pkg;
     if (fp32_exp <= 0) return sign_bit;
     else if (fp32_exp >= 255) return sign_bit | {1'b0, 8'hFE, 23'h7FFFFF};
     else return sign_bit | (32'(fp32_exp[7:0]) << 23) | 32'(out_mant);
+  endfunction
+
+  // FP32 -> two's complement integer of IntBits: RNE, saturating, NaN -> 0
+  function automatic logic [31:0] fp32_to_int_rne_sat(input logic [31:0] fp32_bits,
+                                                      input int unsigned int_bits);
+    logic        sign;
+    logic [7:0]  exp32;
+    logic [22:0] man32;
+    int          unb, sh;
+    logic [23:0] full_mant;
+    logic [55:0] shifted;
+    logic [31:0] mag, sat_pos, sat_neg;
+    logic        guard, sticky;
+
+    sign    = fp32_bits[31];
+    exp32   = fp32_bits[30:23];
+    man32   = fp32_bits[22:0];
+    sat_pos = (32'd1 << (int_bits - 1)) - 32'd1;
+    sat_neg = 32'd0 - (32'd1 << (int_bits - 1));
+    if (exp32 == 8'hFF && man32 != 23'd0) return 32'd0;
+    if (exp32 == 8'hFF)                   return sign ? sat_neg : sat_pos;
+    if (exp32 == 8'd0)                    return 32'd0;
+    unb = int'(exp32) - Fp32Bias;
+    if (unb < -1)                  return 32'd0;
+    if (unb >= int'(int_bits))     return sign ? sat_neg : sat_pos;
+    // integer part in [23+unb+1 : 23], guard just below, sticky the rest
+    full_mant = {1'b1, man32};
+    shifted   = {32'd0, full_mant} << (unb + 1);
+    mag       = shifted[55:24];
+    guard     = shifted[23];
+    sticky    = |shifted[22:0];
+    if (guard && (sticky || mag[0])) mag = mag + 32'd1;
+    if (sign) begin
+      if (mag > (32'd1 << (int_bits - 1))) return sat_neg;
+      return 32'd0 - mag;
+    end
+    if (mag > sat_pos) return sat_pos;
+    return mag;
+  endfunction
+
+  // FP32 -> BF16: RNE, NaN quieted
+  function automatic logic [15:0] fp32_bits_to_bf16(input logic [31:0] fp32_bits);
+    logic [31:0] rounded;
+    if (fp32_bits[30:23] == 8'hFF && fp32_bits[22:0] != 23'd0)
+      return {fp32_bits[31], 8'hFF, 1'b1, 6'd0};
+    rounded = fp32_bits + 32'h7FFF + 32'(fp32_bits[16]);
+    return rounded[31:16];
+  endfunction
+
+  // BF16 -> FP32: exact, NaN quieted
+  function automatic logic [31:0] bf16_bits_to_fp32(input logic [15:0] bf16_bits);
+    if (bf16_bits[14:7] == 8'hFF && bf16_bits[6:0] != 7'd0)
+      return {bf16_bits, 16'd0} | 32'h0040_0000;
+    return {bf16_bits, 16'd0};
   endfunction
 
 endpackage

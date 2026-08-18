@@ -563,7 +563,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             // size-changing compute: write length follows the per-op byte ratio
             if (EnableCompute && req_i.opt.compute.enable) begin
                 unique case (req_i.opt.compute.op)
-% for op in ['COMPUTE_MXQUANT', 'COMPUTE_MXQUANT_FP16', 'COMPUTE_MXDEQUANT', 'COMPUTE_MXDEQUANT_FP16']:
+% for op in ['COMPUTE_MXQUANT', 'COMPUTE_MXQUANT_FP16', 'COMPUTE_MXDEQUANT', 'COMPUTE_MXDEQUANT_FP16', 'COMPUTE_CAST_FP32_I8', 'COMPUTE_CAST_FP32_I16', 'COMPUTE_CAST_FP32_BF16', 'COMPUTE_CAST_BF16_I8', 'COMPUTE_CAST_BF16_FP32', 'COMPUTE_CAST_FP16_FP32']:
                     idma_pkg::${op}:
                         w_tf_d.length =
                             (req_i.length / idma_pkg::compute_in_bytes(idma_pkg::${op}))
@@ -877,6 +877,18 @@ ${database[protocol]['legalizer_write_data_path']}
                   (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
                    idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
                   (req_i.opt.dst_protocol != idma_pkg::AXI)), clk_i, !rst_ni)
+    // element casts convert whole beats: beat-aligned addresses and a beat-multiple length
+    `ASSERT_NEVER(ComputeCastBeatAligned, (ready_o & valid_i & req_i.opt.compute.enable &
+                  idma_pkg::compute_op_is_cast(req_i.opt.compute.op) &
+                  ((req_i.length % StrbWidth != 0) | (req_i.src_addr[OffsetWidth-1:0] != '0) |
+                   (req_i.dst_addr[OffsetWidth-1:0] != '0))), clk_i, !rst_ni)
+    // NOT IMPLEMENTED: expanding cast output length that overflows the length field
+    `ASSERT_NEVER(ComputeCastLengthFits, (ready_o & valid_i & req_i.opt.compute.enable &
+                  idma_pkg::compute_op_is_cast(req_i.opt.compute.op) &
+                  ($bits(req_i.length) < 64) &
+                  (((64'(req_i.length) / 64'(idma_pkg::compute_in_bytes(req_i.opt.compute.op))) *
+                    64'(idma_pkg::compute_out_bytes(req_i.opt.compute.op))) >=
+                   (65'd1 << $bits(req_i.length)))), clk_i, !rst_ni)
 % if compute_eligible:
     // the requested op must be elaborated in this configuration
     `ASSERT_NEVER(ComputeOpUnsupported, (ready_o & valid_i & req_i.opt.compute.enable &

@@ -1,17 +1,18 @@
 ---
 title: Compute
-description: On-the-fly transpose, OCP microscaling (MX) quant/dequant and a byte-wise SIMD ALU in the transport datapath.
+description: On-the-fly transpose, OCP microscaling (MX) quant/dequant, a byte-wise SIMD ALU and element casts in the transport datapath.
 ---
 
 ## On-the-Fly Compute Role
 
 iDMA can transform data *while it is in flight* instead of moving it verbatim. The compute engine sits in the transport layer on the write side, between the read dataflow buffer and the write barrel shifter, so the transform runs on the beats streaming from source to destination with no round trip to memory. It is optional and elaborated only when `EnableCompute` is set; otherwise the write path is a plain pass-through.
 
-Three op families are provided:
+Four op families are provided:
 
 - **Transpose** (`idma_otf_transpose`) - tiled matrix transpose, element size 1/2/4/8 B.
 - **MX quant / dequant** (`idma_otf_mxquant`, `idma_otf_mxdequant`) - OCP microscaling conversion between FP32/FP16 and MXFP8, with the FP cast math in `src/idma_float_pkg.sv`.
 - **ALU** (`idma_otf_alu`) - byte-wise SIMD arithmetic and logic against an immediate, one independent 8-bit lane per byte.
+- **Element casts** (`idma_otf_fpcast`) - FP32/BF16 -> INT8/INT16 (round to nearest even, saturating), FP32 -> BF16, BF16/FP16 -> FP32, with the arithmetic in `src/idma_float_pkg.sv`.
 
 A single dispatcher, `idma_otf_compute`, routes one op per transfer to the selected sub-unit. Changing the compute config drains the engine before the next transfer starts. The transpose and MX units consume whole beats; the ALU handshakes per byte lane, so it accepts any alignment and length like a plain copy.
 
@@ -28,7 +29,7 @@ Compute is configured at two levels:
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `EnableCompute` | `bit` | Elaborate the compute engine at all |
-| `ComputeOps` | `idma_pkg::compute_enable_t` | Per-op enable mask: `transpose`, `mxquant`, `mxdequant`, `mxfp16`, `alu`, `alu_mul`, `dual` |
+| `ComputeOps` | `idma_pkg::compute_enable_t` | Per-op enable mask: `transpose`, `mxquant`, `mxdequant`, `mxfp16`, `alu`, `alu_mul`, `dual`, `fpcast` |
 | `ComputeTuning` | `idma_pkg::compute_tuning_t` | Implementation knobs (`transpose_full_duplex`) |
 
 `mxfp16` gates the FP16 source/destination paths of the MX ops and `alu_mul` the ALU multiplier; leaving them off drops that area. `dual` elaborates the second operand stream for the two-operand ALU functions (see [Two-Operand Transfers](#two-operand-transfers)) and only takes effect on backends with a single write port and one read protocol with at least two heads (`2r_axi_w_axi`). An op (or ALU function) requested at run time but not elaborated is caught by the legalizer (`ComputeOpUnsupported`, `ComputeOperandsUnsupported`) and a simulation assertion in the dispatcher.
@@ -53,6 +54,13 @@ Compute is configured at two levels:
 | `COMPUTE_MXDEQUANT` | Dequantize, FP32 destination | 33 B / block | 128 B / block |
 | `COMPUTE_MXDEQUANT_FP16` | Dequantize, FP16 destination | 33 B / block | 64 B / block |
 | `COMPUTE_ALU` | Byte-wise ALU, function in `params.alu` | 1 B | 1 B |
+| `COMPUTE_CAST_FP32_I8` | FP32 -> INT8, RNE, saturating | 4 B | 1 B |
+| `COMPUTE_CAST_FP32_I16` | FP32 -> INT16, RNE, saturating | 4 B | 2 B |
+| `COMPUTE_CAST_FP32_BF16` | FP32 -> BF16, RNE | 4 B | 2 B |
+| `COMPUTE_CAST_BF16_I8` | BF16 -> INT8, RNE, saturating | 2 B | 1 B |
+| `COMPUTE_CAST_BF16_I16` | BF16 -> INT16, RNE, saturating | 2 B | 2 B |
+| `COMPUTE_CAST_BF16_FP32` | BF16 -> FP32, exact | 2 B | 4 B |
+| `COMPUTE_CAST_FP16_FP32` | FP16 -> FP32, exact | 2 B | 4 B |
 
 ## Transpose
 
@@ -108,6 +116,12 @@ On a backend with two read heads and `ComputeOps.dual` set, a two-operand ALU fu
 
 Constraints (legalizer assertions): the request after a two-operand request must be its partner with the same compute configuration (`ComputeOperandPair`), the same length (`ComputeOperandLength`) and another read head (`ComputeOperandHead`); a two-operand function on a backend without the second stream is rejected (`ComputeOperandsUnsupported`). The two operands may be misaligned independently. Both requests use the AXI ID and options of the first for the write side; the partner's `src` AXI options apply to its reads. Error handling is not available with compute in general.
 
+## Element Casts
+
+`idma_otf_fpcast` converts every element of an input beat and packs the converted bytes contiguously into a two-beat buffer that drains through the write side (`lane_valid_o` marks the filled bytes, the write pops what it consumes). NaN casts to integer as 0, +-Inf and out-of-range values saturate, integer rounding is round-to-nearest-even; FP32 -> BF16 rounds to nearest even and quiets NaN; BF16/FP16 -> FP32 are exact (NaN quieted). Casts consume whole beats: the legalizer requires beat-aligned source and destination and a beat-multiple length (`ComputeCastBeatAligned`), sizes the write length by the element ratio and requires the expanded length to fit the length field (`ComputeCastLengthFits`). `tb_idma_fpcast` checks every cast byte-exact against a host-FPU DPI-C golden over exponent sweeps and the corner cases (zeros, infinities, NaNs, subnormals, rounding ties, saturation edges).
+
+There is no integer -> float cast; the reference design has none either.
+
 ## Size-Changing Transfers
 
 MX ops change the byte count between read and write. The legalizer computes the write length from the per-op ratio:
@@ -127,6 +141,8 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 | `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
 | `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported |
 | `ComputeMxdequantLengthFits` | dequant output length must fit the `length` field width |
+| `ComputeCastBeatAligned` | element casts: beat-aligned src/dst and a beat-multiple `length` |
+| `ComputeCastLengthFits` | expanding casts: output length must fit the `length` field width |
 | `ComputeOperandsUnsupported` | two-operand functions need `dual` on a two-read-head backend |
 | `ComputeOperandPair` / `ComputeOperandLength` / `ComputeOperandHead` | the operand-only partner follows immediately with the same config and length on another head |
 
@@ -136,7 +152,8 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 - `src/backend/idma_otf_transpose.sv` - tiled transpose engine
 - `src/backend/idma_otf_mxquant.sv`, `src/backend/idma_otf_mxdequant.sv` - MX pack/expand
 - `src/backend/idma_otf_alu.sv` - byte-wise SIMD ALU
-- `src/idma_float_pkg.sv` - FP32/FP16 <-> MXFP8 cast math and block scale
+- `src/backend/idma_otf_fpcast.sv` - element casts
+- `src/idma_float_pkg.sv` - FP32/FP16 <-> MXFP8 cast math, block scale, FP32/BF16 -> INT and FP32 <-> BF16 casts
 - `src/idma_pkg.sv` - `compute_options_t`, `compute_op_e`, `alu_func_e`, `compute_enable_t`, MX block geometry
 - `src/backend/tpl/idma_legalizer.sv.tpl` - size-changing length calc and compute constraints
 - `src/backend/tpl/idma_transport_layer.sv.tpl` - engine instantiation (`gen_compute`), operand streams (`gen_operand_streams`) and the operand-only write bypass

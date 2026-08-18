@@ -482,7 +482,7 @@ idma_sim_tb_idma_mxclear: $(IDMA_VSIM_DIR)/compile.tcl
 	  else echo "[MXCLR] $$2 clear-guard DID NOT FIRE (see mxclear_$$2.log)"; exit 1; fi; \
 	done
 
-# each case must print its guard assert; cases 6/14/15 need a feature compiled out, case 4 a 1024-bit bus
+# each case must print its guard assert; cases 6/14/15/19 need a feature compiled out, case 4 a 1024-bit bus
 .PHONY: idma_sim_tb_idma_mxneg
 idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -494,10 +494,11 @@ idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	         "10 ComputeTransposeSingleBeat 64 1 1 1 1" "11 ComputeMxdequantLengthFits 64 1 1 1 1" \
 	         "12 ComputeMxFp16Width 1024 1 1 1 1" "13 not.elaborated 64 1 0 1 1" \
 	         "14 ComputeOpUnsupported 64 1 1 0 1" "15 ComputeOpUnsupported 64 1 1 1 0" \
-	         "16 ComputeOpUnsupported 64 1 1 1 1" "17 ComputeOperandsUnsupported 64 1 1 1 1"; do \
+	         "16 ComputeOpUnsupported 64 1 1 1 1" "17 ComputeOperandsUnsupported 64 1 1 1 1" \
+	         "18 ComputeCastBeatAligned 64 1 1 1 1" "19 ComputeOpUnsupported 64 1 1 1 1 0"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
-	    -gEnAlu=$$6 -gEnAluMul=$$7 \
+	    -gEnAlu=$$6 -gEnAluMul=$$7 -gEnCast=$${8:-1} \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \
 	  if grep -qE "(ASSERT FAILED.*$$2|$$2)" mxneg_$$1.log; then echo "[MXNEG] case $$1 $$2 FIRED"; \
 	  else echo "[MXNEG] case $$1 $$2 DID NOT FIRE (see mxneg_$$1.log)"; exit 1; fi; \
@@ -541,6 +542,12 @@ idma_sim_tb_idma_dualneg: $(IDMA_VSIM_DIR)/compile_multihead.tcl
 	  else echo "[DUALNEG] case $$1 $$2 DID NOT FIRE (see dualneg_$$1.log)"; exit 1; fi; \
 	done
 	$(call idma_restore_default_rtl)
+
+.PHONY: idma_sim_tb_idma_fpcast
+idma_sim_tb_idma_fpcast: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_fpcast_dpi.c)
+	$(call idma_run_mx_sim,tb_idma_fpcast,32 64 128 256 512 1024)
 
 .PHONY: idma_sim_tb_idma_transpose_midend
 idma_sim_tb_idma_transpose_midend: $(IDMA_VSIM_DIR)/compile.tcl

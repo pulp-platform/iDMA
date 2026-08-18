@@ -161,6 +161,13 @@ addrmap idma_reg #(
         mxdequant      = 4'd4 { desc = "MX dequant, FP32 destination (33B -> 128B per 32-element block)."; };
         mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (33B -> 64B per 32-element block)."; };
         alu            = 4'd6 { desc = "Byte-wise SIMD ALU; the function is selected in compute_alu."; };
+        cast_fp32_i8   = 4'd7 { desc = "Element cast FP32 -> INT8, round to nearest even, saturating (4B -> 1B)."; };
+        cast_fp32_i16  = 4'd8 { desc = "Element cast FP32 -> INT16, round to nearest even, saturating (4B -> 2B)."; };
+        cast_fp32_bf16 = 4'd9 { desc = "Element cast FP32 -> BF16, round to nearest even (4B -> 2B)."; };
+        cast_bf16_i8   = 4'd10 { desc = "Element cast BF16 -> INT8, round to nearest even, saturating (2B -> 1B)."; };
+        cast_bf16_i16  = 4'd11 { desc = "Element cast BF16 -> INT16, round to nearest even, saturating (2B -> 2B)."; };
+        cast_bf16_fp32 = 4'd12 { desc = "Element cast BF16 -> FP32, exact (2B -> 4B)."; };
+        cast_fp16_fp32 = 4'd13 { desc = "Element cast FP16 -> FP32, exact (2B -> 4B)."; };
     };
 
     // Byte-wise ALU function (idma_pkg::alu_func_e): 8-bit lanes, wrapping arithmetic

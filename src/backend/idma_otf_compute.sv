@@ -49,7 +49,7 @@ module idma_otf_compute #(
   assign eff_compute = cfg_valid_i ? compute_i : latched_q;
 
   // per-op select: one legality predicate, then route by op
-  logic op_legal, sel_transpose, sel_mxquant, sel_mxdequant, sel_alu;
+  logic op_legal, sel_transpose, sel_mxquant, sel_mxdequant, sel_alu, sel_cast;
   idma_pkg::mx_fmt_e mx_fmt;
   assign op_legal      = eff_compute.enable &
                          idma_pkg::compute_op_supported(ComputeEnable, eff_compute);
@@ -59,6 +59,7 @@ module idma_otf_compute #(
   assign sel_mxdequant = op_legal & (eff_compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
                                                             idma_pkg::COMPUTE_MXDEQUANT_FP16});
   assign sel_alu       = op_legal & (eff_compute.op == idma_pkg::COMPUTE_ALU);
+  assign sel_cast      = op_legal & idma_pkg::compute_op_is_cast(eff_compute.op);
   assign mx_fmt        = idma_pkg::compute_op_fmt(eff_compute.op);
 
   assign active_o = op_legal;
@@ -182,6 +183,32 @@ module idma_otf_compute #(
     assign alu_data = '0; assign alu_lane_valid = '0; assign alu_lane_ready = '0;
   end
 
+  // element-cast sub-unit
+  logic [StrbWidth-1:0][7:0] fc_data;
+  logic [StrbWidth-1:0]      fc_lane_valid;
+  logic                      fc_in_ready, fc_busy;
+
+  if (ComputeEnable.fpcast) begin : gen_fpcast
+    idma_otf_fpcast #(
+      .StrbWidth ( StrbWidth )
+    ) i_idma_otf_fpcast (
+      .clk_i,
+      .rst_ni,
+      .clear_i      ( ~sel_cast              ),
+      .op_i         ( eff_compute.op         ),
+      .data_i       ( data_a                 ),
+      .valid_i      ( beat_valid & sel_cast  ),
+      .ready_o      ( fc_in_ready            ),
+      .data_o       ( fc_data                ),
+      .lane_valid_o ( fc_lane_valid          ),
+      .lane_ready_i ( lane_ready_i & {StrbWidth{sel_cast}} ),
+      .busy_o       ( fc_busy                )
+    );
+  end else begin : gen_no_fpcast
+    assign fc_data = '0; assign fc_lane_valid = '0; assign fc_in_ready = 1'b0;
+    assign fc_busy = 1'b0;
+  end
+
   // output dispatch, routed per opcode
   always_comb begin
     data_o       = '0;
@@ -216,6 +243,18 @@ module idma_otf_compute #(
           lane_valid_o = alu_lane_valid;
           lane_ready_o = alu_lane_ready;
         end
+        idma_pkg::COMPUTE_CAST_FP32_I8,
+        idma_pkg::COMPUTE_CAST_FP32_I16,
+        idma_pkg::COMPUTE_CAST_FP32_BF16,
+        idma_pkg::COMPUTE_CAST_BF16_I8,
+        idma_pkg::COMPUTE_CAST_BF16_I16,
+        idma_pkg::COMPUTE_CAST_BF16_FP32,
+        idma_pkg::COMPUTE_CAST_FP16_FP32: begin
+          data_o       = fc_data;
+          strb_o       = '1;
+          lane_valid_o = fc_lane_valid;
+          lane_ready_o = {StrbWidth{beat_valid & fc_in_ready}};
+        end
         default: ;
       endcase
     end
@@ -233,8 +272,8 @@ module idma_otf_compute #(
       else $fatal(1, "idma_otf_compute: two-operand op without a second operand stream");
   // backstop: the backend request interlock must never let a differing config in while busy
   always @(posedge clk_i) if (rst_ni && cfg_valid_i && (compute_i != latched_q))
-    assert (!(mx_busy || dq_busy))
-      else $fatal(1, "idma_otf_compute: compute config changed while an MX unit is busy");
+    assert (!(mx_busy || dq_busy || fc_busy))
+      else $fatal(1, "idma_otf_compute: compute config changed while a unit is busy");
   // pragma translate_on
 
 endmodule : idma_otf_compute

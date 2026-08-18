@@ -95,7 +95,7 @@ Present when on-the-fly [compute](../compute/) is elaborated (`EnableCompute`). 
 | Bits | Field | Description |
 |------|-------|-------------|
 | 0 | `compute_enable` | Enable on-the-fly compute for the launched transfer |
-| 4:1 | `compute_op` | Op selector (`idma_pkg::compute_op_e`): `transpose`, `mxquant`, `mxquant_fp16`, `mxdequant`, `mxdequant_fp16`, `alu` |
+| 4:1 | `compute_op` | Op selector (`idma_pkg::compute_op_e`): `transpose`, `mxquant`, `mxquant_fp16`, `mxdequant`, `mxdequant_fp16`, `alu`, `cast_*` |
 | 6:5 | `transpose_mode` | Transpose element size: `1 << transpose_mode` bytes (8/16/32/64 bit) |
 | 18:7 | `transpose_tensor_m` | Transpose M dimension in elements (non-zero when transpose enabled) |
 | 30:19 | `transpose_tensor_n` | Transpose N dimension in elements (non-zero when transpose enabled) |

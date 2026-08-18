@@ -56,7 +56,7 @@ typedef struct packed {
 } compute_options_t;
 ```
 
-`compute_op_e` encodes `COMPUTE_NONE`, `COMPUTE_TRANSPOSE`, `COMPUTE_MXQUANT`, `COMPUTE_MXQUANT_FP16`, `COMPUTE_MXDEQUANT`, `COMPUTE_MXDEQUANT_FP16`, and `COMPUTE_ALU`. It and the ALU function enum `alu_func_e` are generated from `idma_reg.rdl` so RTL and the SW headers share one encoding.
+`compute_op_e` encodes `COMPUTE_NONE`, `COMPUTE_TRANSPOSE`, `COMPUTE_MXQUANT`, `COMPUTE_MXQUANT_FP16`, `COMPUTE_MXDEQUANT`, `COMPUTE_MXDEQUANT_FP16`, `COMPUTE_ALU`, and the seven `COMPUTE_CAST_*` element casts. It and the ALU function enum `alu_func_e` are generated from `idma_reg.rdl` so RTL and the SW headers share one encoding.
 
 ## Transfer Response (`idma_rsp_t`)
 

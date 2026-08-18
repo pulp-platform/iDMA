@@ -48,6 +48,7 @@ sources:
       - src/backend/idma_otf_mxquant.sv
       - src/backend/idma_otf_mxdequant.sv
       - src/backend/idma_otf_alu.sv
+      - src/backend/idma_otf_fpcast.sv
       - src/backend/idma_otf_compute.sv
       - src/backend/idma_error_handler.sv
       - src/backend/idma_init_read.sv
@@ -147,6 +148,7 @@ sources:
       - test/tb_idma_mxperf.sv
       - test/tb_idma_mxclear.sv
       - test/tb_idma_alu.sv
+      - test/tb_idma_fpcast.sv
 
   # Tightly-coupled inst64 frontend testbenches (needs the snitch_cluster-gated RTL)
   - target: all(idma_test, snitch_cluster)
