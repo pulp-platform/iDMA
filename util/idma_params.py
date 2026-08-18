@@ -15,6 +15,11 @@ Both slang and verilator take those flags verbatim. slang silently ignores a
 ``-G`` whose parameter does not exist, so every name is checked against the
 module header here; an unknown or misspelled parameter is a hard error rather
 than a configuration that quietly does not apply.
+
+An entry may carry a ``tb_params`` block next to ``params``. Those are applied
+only when the requested top is the entry's testbench, so a knob the synthesis
+wrapper does not have (a memory model, a watchdog) can still be part of the
+configuration a testbench is elaborated and simulated in.
 """
 
 import argparse
@@ -137,7 +142,10 @@ def main():
     seen = set()
     base = {}
     for name, body in matches:
-        params = body.get('params', {})
+        params = dict(body.get('params', {}))
+        # testbench-only knobs; the synthesis wrapper does not declare them
+        if body.get('testbench') == args.top:
+            params.update(body.get('tb_params', {}))
         unknown = sorted(set(params) - declared)
         if unknown:
             raise SystemExit('error: {} names parameter(s) {} that module {} does not '
