@@ -101,9 +101,10 @@ def main():
     build_log = os.path.join(workdir, tag + '_build.log')
     run_log = os.path.join(workdir, tag + '_run.log')
 
+    # 1ns/1ps like slang and questa; the default 1ps unit fires a 400 ms guard at 400 us
     build = shlex.split(args.verilator) + [
         '--binary', '--timing', '--assert', '-Wno-fatal', '--error-limit', '1000',
-        '-CFLAGS', '-O2',
+        '-CFLAGS', '-O2', '--timescale', '1ns/1ps',
         '--unroll-count', '4096', '--unroll-stmts', '200000',
         '-Mdir', objdir, '-o', 'simv',
         '-f', os.path.abspath(args.flist), '--top-module', args.top,
