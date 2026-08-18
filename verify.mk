@@ -63,6 +63,14 @@ define idma_elab_cfg
 	  $(IDMA_SOURCE_GLOBS) > $(IDMA_VERIFY_DIR)/$1.cfg
 endef
 
+# The same for a testbench $1: the jobs.json sets only, tb_params included
+define idma_elab_cfg_tb
+	mkdir -p $(IDMA_VERIFY_DIR)
+	$(PYTHON) $(IDMA_UTIL_DIR)/idma_params.py --top $1 \
+	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) \
+	  $(IDMA_SOURCE_GLOBS) > $(IDMA_VERIFY_DIR)/$1.cfg
+endef
+
 # Filelists
 $(IDMA_VLT_DIR)/idma_verify.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
 	mkdir -p $(IDMA_VLT_DIR)
@@ -105,10 +113,20 @@ idma_slang_elab: $(IDMA_SLANG_DIR)/synth.f
 	  echo "idma_slang_elab: $(IDMA_TOP) FAILED"; exit $$rc
 
 # slang only; verilator cannot parse the verification stack
+# One run per jobs.json configuration: a memory model reached by no entry is a
+# generate branch no gate ever elaborates
 idma_slang_tb: $(IDMA_SLANG_DIR)/tb.f
 	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
-	$(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $(IDMA_TOP) \
-	  $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS)
+	$(call idma_elab_cfg_tb,$(IDMA_TOP))
+	@test -s $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg || \
+	  { echo "error: no configurations for $(IDMA_TOP)"; exit 1; }
+	@rc=0; while read -r cfg flags; do \
+	  echo "--- slang $(IDMA_TOP) [$$cfg] $$flags ---"; \
+	  $(SLANG) -f $(IDMA_SLANG_DIR)/tb.f --top $(IDMA_TOP) \
+	    $(IDMA_SLANG_ARGS) $(IDMA_SLANG_TB_ARGS) $$flags || rc=1; \
+	done < $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg; \
+	test $$rc -eq 0 && echo "idma_slang_tb: $(IDMA_TOP) OK" || \
+	  echo "idma_slang_tb: $(IDMA_TOP) FAILED"; exit $$rc
 
 # One backend variant: synthesis top under both front ends, plus its testbench
 idma_verify_backend:
