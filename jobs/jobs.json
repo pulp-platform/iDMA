@@ -461,6 +461,24 @@
             ]
         }
     },
+    "mxperf" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 32,
+            "UserWidth"   : 1,
+            "AxiIdWidth"  : 12,
+            "TFLenWidth"  : 32
+        },
+        "testbench" : "tb_idma_mxperf",
+        "verify" : {
+            "token" : "[MXPF] ALL PASS",
+            "legs" : [
+                { "tag" : "mxperf_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "mxperf_64", "params" : { "DataWidth" : 64 } }
+            ]
+        }
+    },
     "_verify" : {
         "elab_widths" : [32, 64, 512, 1024],
         "elab_compute" : [
@@ -487,10 +505,12 @@
         ],
         "tops_untested" : [
             { "top" : "tb_idma_nd_midend_b2b", "why" : "hangs ([B2B] timeout); latent reset/LFSR race" },
-            { "top" : "tb_idma_transpose_nd", "why" : "AW outside the destination allocation at 80 ns" },
-            { "top" : "tb_idma_transpose_b2b", "why" : "stream_watchdog trip after 4000 idle cycles" },
-            { "top" : "tb_idma_mxrand", "why" : "testbench timeout at 400 ms of simulated time" },
-            { "top" : "tb_idma_mxperf", "why" : "hangs on the first compute transfer" },
+            { "top" : "tb_idma_transpose_nd",
+              "why" : "verilator only: the ND response never fires once the first case drains" },
+            { "top" : "tb_idma_transpose_b2b",
+              "why" : "verilator only: the first geometry never completes, watchdog trip" },
+            { "top" : "tb_idma_mxrand",
+              "why" : "verilator only: transfer 1 never completes, even at NumXfers=1 StallPct=0" },
             { "top" : "tb_idma_rt_midend", "why" : "fails under --assert on cc_rr_arb_tree lock" },
             { "top" : "the 88 directed job files", "why" : "verilator cannot drive the class-based stimulus" }
         ]
