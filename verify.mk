@@ -247,7 +247,7 @@ idma_verify_codegen:
 	$(PYTHON) $(IDMA_UTIL_DIR)/check_jobs.py --ids "$(IDMA_BACKEND_IDS)" \
 	  --jobs $(IDMA_ROOT)/$(IDMA_JOBS_JSON) --jobs-dir $(IDMA_ROOT)/jobs \
 	  --verify-db $(IDMA_VERIFY_DB) \
-	  --matrix-file $(IDMA_ROOT)/.github/workflows/verify.yml \
+	  --matrix-file $(IDMA_ROOT)/.github/workflows/elaborate.yml \
 	  --mxneg-tb $(IDMA_ROOT)/test/tb_idma_mxneg.sv \
 	  --mxneg-guard-src $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl \
 	  $(IDMA_SOURCE_GLOBS)

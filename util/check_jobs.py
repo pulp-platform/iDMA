@@ -19,7 +19,7 @@ still describe the same design:
      case or named as untested. Without (e) a new case or a new guard is added to
      the design and silently exercised by nothing.
 
-The simulation matrix is not checked: CI fans it out over src/db/verify.yml, the
+The simulation matrix is not checked: CI fans it out over jobs/jobs.json, the
 same file that drives the local runs. The backend-id matrix is a literal list in
 the workflow, so (e) still compares it against the ids.
 
