@@ -5,17 +5,15 @@
 # Author:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-# License-free verification matrix; the run set is src/db/verify.yml
+# License-free elaboration matrix; the run set is jobs/jobs.json
 
-name: verify
+name: elaborate
 
 on:
   workflow_call:
   workflow_dispatch:
 
 jobs:
-
-  # jobs.json and the generated tree must still describe the same design
   codegen-consistency:
     runs-on: ubuntu-24.04
     steps:
@@ -29,7 +27,6 @@ jobs:
         name: Check jobs.json, the CI matrix and codegen determinism
         run: uv run --locked make idma_verify_codegen
 
-  # One backend variant: its jobs.json parameters, a width sweep, its testbench
   elab-backend:
     strategy:
       fail-fast: false
@@ -61,7 +58,6 @@ jobs:
         name: Elaborate ${{ matrix.id }}
         run: uv run --locked make idma_verify_backend IDMA_VERIFY_ID=${{ matrix.id }}
 
-  # The non-backend synthesis tops, plus the inst64 testbench
   elab-shared-tops:
     runs-on: ubuntu-24.04
     steps:
@@ -80,7 +76,6 @@ jobs:
         name: Elaborate the shared synthesis tops
         run: uv run --locked make idma_verify_shared
 
-  # Testbench tops; verilator cannot parse the verification stack, so slang only
   elab-tb-shared:
     runs-on: ubuntu-24.04
     steps:
@@ -97,7 +92,6 @@ jobs:
         name: Elaborate the shared testbenches
         run: uv run --locked make idma_verify_tb_shared
 
-  # Out-of-tree multi-head build; license-free but generated only on request
   elab-multihead:
     runs-on: ubuntu-24.04
     steps:
@@ -112,53 +106,3 @@ jobs:
       -
         name: Elaborate the multi-head variants and testbenches
         run: uv run --locked make idma_verify_multihead
-
-  # The suite list comes from the database, so a new suite needs no edit here
-  sim-matrix:
-    needs: [elab-backend, elab-shared-tops, elab-tb-shared]
-    runs-on: ubuntu-24.04
-    outputs:
-      suites: ${{ steps.legs.outputs.suites }}
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
-        name: Set up toolchain
-        uses: ./.github/actions/verify-setup
-      -
-        name: Read the suites from the verification database
-        id: legs
-        run: |
-          suites=$(uv run --locked python util/run_verify.py --emit-matrix suites)
-          echo "suites=$suites" >> "$GITHUB_OUTPUT"
-
-  # Real simulation; run_verify.py knows which suites are negative tests
-  simulate:
-    needs: sim-matrix
-    if: needs.sim-matrix.outputs.suites != ''
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.sim-matrix.outputs.suites) }}
-    runs-on: ubuntu-24.04
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
-        name: Set up toolchain
-        uses: ./.github/actions/verify-setup
-        with:
-          verilator: 'true'
-          ccache-key: sim-${{ matrix.suite }}
-      -
-        name: Generate RTL
-        run: uv run --locked make idma_hw_all
-      -
-        name: Simulate ${{ matrix.suite }}
-        run: uv run --locked make idma_verify_sim_${{ matrix.suite }} \
-          IDMA_VLT_MAKEFLAGS="-j4 OBJCACHE=ccache"
-      -
-        name: ccache statistics
-        if: always()
-        run: ccache --show-stats
