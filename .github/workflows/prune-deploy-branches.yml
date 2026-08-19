@@ -66,6 +66,10 @@ jobs:
 
           gh api --paginate "/repos/${repo}/branches?per_page=100" --jq '.[].name' > branches.txt
 
+          # A deploy branch tipped by a tag is a published release artefact.
+          gh api --paginate "/repos/${repo}/tags?per_page=100" \
+            --jq '.[].commit.sha' | sort -u > tagged.txt
+
           while IFS= read -r br; do
             # Hard allow-list: only __deploy__ refs are ever touchable.
             case "$br" in __deploy__*) : ;; *) continue ;; esac
@@ -85,6 +89,11 @@ jobs:
             cepoch="$(date -u -d "$cdate" +%s)" \
               || { echo "SKIP  (bad date)         $br"; continue; }
             age=$(( (now - cepoch) / 86400 ))
+
+            # Never prune a branch whose tip is tagged, whatever its age or target.
+            if grep -qx "$sha" tagged.txt; then
+              echo "KEEP  (release tag)     $br"; kept=$((kept+1)); continue
+            fi
 
             # Feature-branch deploys are pure CI cruft: always prune. Mainline deploys
             # follow the retention window.
