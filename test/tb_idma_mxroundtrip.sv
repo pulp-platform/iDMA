@@ -5,10 +5,9 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// MX roundtrip through one rw_axi backend: at <=512b FP16 -> MXFP8 -> FP16
-// (COMPUTE_MXQUANT_FP16 then COMPUTE_MXDEQUANT_FP16), above FP32 -> MXFP8 ->
-// FP32. Both stages checked byte-exact against the DPI-C golden
-// (idma_mxquant_dpi.c); quant->dequant is thus the exact E5M2 identity.
+// MX roundtrip through one rw_axi backend, quant then dequant, checked
+// byte-exact against the DPI-C golden (idma_mxquant_dpi.c); the roundtrip is
+// the exact E5M2 identity. QuantFp16 picks the element format of both legs.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -20,7 +19,8 @@ module tb_idma_mxroundtrip
   parameter int unsigned AddrWidth  = 32,
   parameter int unsigned UserWidth  = 1,
   parameter int unsigned AxiIdWidth = 12,
-  parameter int unsigned TFLenWidth = 32
+  parameter int unsigned TFLenWidth = 32,
+  parameter bit          QuantFp16  = 1'b1
 );
 
   import "DPI-C" function void gm_load(input int idx, input int val);
@@ -42,7 +42,7 @@ module tb_idma_mxroundtrip
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
     .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1,
-                                            mxfp16: (StrbWidth <= 64), default: '0}),
+                                            mxfp16: QuantFp16, default: '0}),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth),
@@ -102,8 +102,6 @@ module tb_idma_mxroundtrip
     repeat (20) @(posedge clk);
   endtask
 
-  // FP16 quant leg up to StrbWidth 64 (512b); FP32 leg above (1024b)
-  localparam bit          QuantFp16 = StrbWidth <= 64;
   localparam int unsigned QuantInBytes = QuantFp16 ? 64 : 128;
 
   initial begin
