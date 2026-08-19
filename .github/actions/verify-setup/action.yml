@@ -48,12 +48,23 @@ runs:
         fi
         bender --version
 
+    - if: inputs.verilator == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/apt-debs
+        key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v1
+
     # ubuntu's verilator ships OBJCACHE empty, so the sims pass OBJCACHE=ccache
     - if: inputs.verilator == 'true'
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y verilator ccache
+        if ls "$HOME/.cache/apt-debs"/*.deb >/dev/null 2>&1; then
+          sudo dpkg -i "$HOME/.cache/apt-debs"/*.deb || sudo apt-get -f install -y
+        else
+          echo "apt-debs cache miss; installing from the archive"
+          sudo apt-get update
+          sudo apt-get install -y verilator ccache
+        fi
         echo "CCACHE_DIR=$HOME/.cache/ccache" >> "$GITHUB_ENV"
         echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
     - if: inputs.verilator == 'true'

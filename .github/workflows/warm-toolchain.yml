@@ -1,0 +1,35 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+name: warm-toolchain
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+
+  warm:
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Restore package cache
+        id: debs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/apt-debs
+          key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v1
+      -
+        name: Download packages
+        if: steps.debs.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/.cache/apt-debs"
+          sudo apt-get update
+          sudo apt-get install -y -d \
+            -o Dir::Cache::archives="$HOME/.cache/apt-debs" \
+            verilator ccache
+          ls -1 "$HOME/.cache/apt-debs"/*.deb | wc -l
