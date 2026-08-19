@@ -27,6 +27,10 @@ jobs:
     uses: ./.github/workflows/lint.yml
     secrets: inherit
 
+  warm-toolchain:
+    uses: ./.github/workflows/warm-toolchain.yml
+    secrets: inherit
+
   build:
     needs: lint
     uses: ./.github/workflows/build.yml
@@ -38,7 +42,7 @@ jobs:
     secrets: inherit
 
   verify:
-    needs: lint
+    needs: [lint, warm-toolchain]
     uses: ./.github/workflows/verify.yml
     secrets: inherit
 
