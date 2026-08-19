@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## 0.7.0 - 2026-08-17
+## 0.7.0 - 2026-08-19
 
 ### Added
 - Add multi-head capabilities to the backend and front-ends [#85](https://github.com/pulp-platform/iDMA/pull/85),
@@ -70,7 +70,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   [#127](https://github.com/pulp-platform/iDMA/pull/127),
   [#175](https://github.com/pulp-platform/iDMA/pull/175).
 
+- Sweep the MX roundtrip over both element formats, covering the `mxfp16` opt-out below a
+  1024b bus [#203](https://github.com/pulp-platform/iDMA/pull/203).
+- Publish the documentation site from `master` only
+  [#208](https://github.com/pulp-platform/iDMA/pull/208).
+
 ### Fixed
+- Gate the channel coupler `AW` release on a queued `AW` and carry `decouple_aw` down the write
+  datapath [#204](https://github.com/pulp-platform/iDMA/pull/204). The coupler released an `AW`
+  while its store was empty, presenting a stale payload, and its credit counter charged stall
+  cycles rather than transfers, so `AW` desynchronised from `W` until the transfer hung. This
+  corrects the accounting introduced with [#80](https://github.com/pulp-platform/iDMA/pull/80)
+  while keeping its fix.
 - Send `AW` when `W` is ready, fixing AW starvation with `decouple_rw` and without `decouple_aw`
   [#80](https://github.com/pulp-platform/iDMA/pull/80).
 - Break a combinational loop in the desc64 speculation FIFO
