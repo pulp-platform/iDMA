@@ -8,7 +8,7 @@
 `include "common_cells/registers.svh"
 `include "common_cells/assertions.svh"
 `include "idma/typedef.svh"
-`include "idma/tracer_rw_axi_rw_init_rw_obi.svh"
+`include "idma/tracer_r_init_rw_axi_rw_obi.svh"
 
 /// Implements the tightly-coupled frontend. This module can directly be connected
 /// to an accelerator bus in the snitch system
@@ -127,13 +127,8 @@ module idma_inst64_top #(
     } obi_write_meta_channel_t;
 
     typedef struct packed {
-        init_req_chan_t req_chan;
-    } init_write_meta_channel_t;
-
-    typedef struct packed {
-        axi_write_meta_channel_t  axi;
-        obi_write_meta_channel_t  obi;
-        init_write_meta_channel_t init;
+        axi_write_meta_channel_t axi;
+        obi_write_meta_channel_t obi;
     } write_meta_channel_t;
 
     // internal AXI channels
@@ -141,8 +136,8 @@ module idma_inst64_top #(
     axi_res_t [NumChannels-1:0] axi_read_rsp, axi_write_rsp;
 
     // internal Init channels
-    init_req_t [NumChannels-1:0] init_read_req, init_write_req;
-    init_rsp_t [NumChannels-1:0] init_read_rsp, init_write_rsp;
+    init_req_t [NumChannels-1:0] init_read_req;
+    init_rsp_t [NumChannels-1:0] init_read_rsp;
     logic [NumChannels-1:0][7:0] init_read_req_byte;
     logic [NumChannels-1:0][7:0] init_read_rsq_byte;
 
@@ -209,7 +204,7 @@ module idma_inst64_top #(
     // Backend instantiation
     //--------------------------------------
     for (genvar c = 0; c < NumChannels; c++) begin : gen_backend
-        idma_backend_rw_axi_rw_init_rw_obi #(
+        idma_backend_r_init_rw_axi_rw_obi #(
             .DataWidth            ( AxiDataWidth                ),
             .AddrWidth            ( AxiAddrWidth                ),
             .UserWidth            ( AxiUserWidth                ),
@@ -240,7 +235,7 @@ module idma_inst64_top #(
             .obi_rsp_t            ( obi_res_t                   ),
             .read_meta_channel_t  ( read_meta_channel_t         ),
             .write_meta_channel_t ( write_meta_channel_t        )
-        ) i_idma_backend_rw_axi_rw_init_rw_obi (
+        ) i_idma_backend_r_init_rw_axi_rw_obi (
             .clk_i,
             .rst_ni,
             .idma_req_i       ( idma_req       [c] ),
@@ -260,8 +255,6 @@ module idma_inst64_top #(
             .obi_read_rsp_i   ( obi_read_rsp   [c] ),
             .axi_write_req_o  ( axi_write_req  [c] ),
             .axi_write_rsp_i  ( axi_write_rsp  [c] ),
-            .init_write_req_o ( init_write_req [c] ),
-            .init_write_rsp_i ( init_write_rsp [c] ),
             .obi_write_req_o  ( obi_write_req  [c] ),
             .obi_write_rsp_i  ( obi_write_rsp  [c] ),
             .busy_o           ( idma_busy      [c] )
@@ -798,8 +791,8 @@ module idma_inst64_top #(
                 $sformat(trace_file, "dma_trace_%05x_%05x.log", hart_id_i, c);
             end
             // attach the tracer
-            `IDMA_TRACER_RW_AXI_RW_INIT_RW_OBI(
-                gen_backend[c].i_idma_backend_rw_axi_rw_init_rw_obi, trace_file);
+            `IDMA_TRACER_R_INIT_RW_AXI_RW_OBI(
+                gen_backend[c].i_idma_backend_r_init_rw_axi_rw_obi, trace_file);
         end
     end
 `endif
