@@ -1,0 +1,62 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+# License-free simulation matrix; the run set is jobs/jobs.json
+
+name: simulate
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  sim-matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      suites: ${{ steps.legs.outputs.suites }}
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+      -
+        name: Read the suites from the verification database
+        id: legs
+        run: |
+          suites=$(uv run --locked python util/run_verify.py --emit-matrix suites)
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+
+  simulate:
+    needs: sim-matrix
+    if: needs.sim-matrix.outputs.suites != ''
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.sim-matrix.outputs.suites) }}
+    runs-on: ubuntu-24.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up toolchain
+        uses: ./.github/actions/verify-setup
+        with:
+          verilator: 'true'
+          ccache-key: sim-${{ matrix.suite }}
+      -
+        name: Generate RTL
+        run: uv run --locked make idma_hw_all
+      -
+        name: Simulate ${{ matrix.suite }}
+        run: uv run --locked make idma_verify_sim_${{ matrix.suite }} \
+          IDMA_VLT_MAKEFLAGS="-j4 OBJCACHE=ccache"
+      -
+        name: ccache statistics
+        if: always()
+        run: ccache --show-stats

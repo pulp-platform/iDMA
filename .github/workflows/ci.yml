@@ -41,14 +41,19 @@ jobs:
     uses: ./.github/workflows/analyze.yml
     secrets: inherit
 
-  verify:
+  elaborate:
     needs: [lint, warm-toolchain]
-    uses: ./.github/workflows/verify.yml
+    uses: ./.github/workflows/elaborate.yml
+    secrets: inherit
+
+  simulate:
+    needs: elaborate
+    uses: ./.github/workflows/simulate.yml
     secrets: inherit
 
   # The licensed EDA pipeline runs only once the license-free matrix is green
   gitlab-ci:
-    needs: [build, verify]
+    needs: [build, elaborate, simulate]
     uses: ./.github/workflows/gitlab-ci.yml
     secrets: inherit
 
