@@ -12,7 +12,11 @@
             "tiny"            : "backend_rw_axi/tiny.txt",
             "error_simple"    : "backend_rw_axi/error_simple.txt",
             "error_mixed"     : "backend_rw_axi/error_mixed.txt",
-            "zero_transfer"   : "backend_rw_axi/zero_transfer.txt"
+            "zero_transfer"   : "backend_rw_axi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_rw_axi/zero_transfer_busy.txt",
+            "zero_then_real"  : "backend_rw_axi/zero_then_real.txt",
+            "zero_unal_src"   : "backend_rw_axi/zero_unaligned_src.txt",
+            "zero_unal_dst"   : "backend_rw_axi/zero_unaligned_dst.txt"
         },
         "params" : {
             "DataWidth"           : 32,
@@ -86,7 +90,8 @@
             "mixed"           : "backend_r_axi_w_obi/mixed.txt",
             "small"           : "backend_r_axi_w_obi/small.txt",
             "tiny"            : "backend_r_axi_w_obi/tiny.txt",
-            "zero_transfer"   : "backend_r_axi_w_obi/zero_transfer.txt"
+            "zero_transfer"   : "backend_r_axi_w_obi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_r_axi_w_obi/zero_transfer_busy.txt"
         },
         "params" : {
             "DataWidth"           : 32,
@@ -119,7 +124,8 @@
             "mixed"           : "backend_r_obi_w_axi/mixed.txt",
             "small"           : "backend_r_obi_w_axi/small.txt",
             "tiny"            : "backend_r_obi_w_axi/tiny.txt",
-            "zero_transfer"   : "backend_r_obi_w_axi/zero_transfer.txt"
+            "zero_transfer"   : "backend_r_obi_w_axi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_r_obi_w_axi/zero_transfer_busy.txt"
         },
         "params" : {
             "DataWidth"           : 32,
@@ -152,7 +158,8 @@
             "mixed"           : "backend_r_axi_rw_init_rw_obi/mixed.txt",
             "small"           : "backend_r_axi_rw_init_rw_obi/small.txt",
             "tiny"            : "backend_r_axi_rw_init_rw_obi/tiny.txt",
-            "zero_transfer"   : "backend_r_axi_rw_init_rw_obi/zero_transfer.txt"
+            "zero_transfer"   : "backend_r_axi_rw_init_rw_obi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_r_axi_rw_init_rw_obi/zero_transfer_busy.txt"
         },
         "params" : {
             "DataWidth"           : 32,
@@ -185,7 +192,8 @@
             "mixed"           : "backend_r_obi_rw_init_w_axi/mixed.txt",
             "small"           : "backend_r_obi_rw_init_w_axi/small.txt",
             "tiny"            : "backend_r_obi_rw_init_w_axi/tiny.txt",
-            "zero_transfer"   : "backend_r_obi_rw_init_w_axi/zero_transfer.txt"
+            "zero_transfer"   : "backend_r_obi_rw_init_w_axi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_r_obi_rw_init_w_axi/zero_transfer_busy.txt"
         },
         "params" : {
             "DataWidth"           : 32,
@@ -218,7 +226,8 @@
             "mixed"           : "backend_rw_axi_rw_init_rw_obi/mixed.txt",
             "small"           : "backend_rw_axi_rw_init_rw_obi/small.txt",
             "tiny"            : "backend_rw_axi_rw_init_rw_obi/tiny.txt",
-            "zero_transfer"   : "backend_rw_axi_rw_init_rw_obi/zero_transfer.txt"
+            "zero_transfer"   : "backend_rw_axi_rw_init_rw_obi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_rw_axi_rw_init_rw_obi/zero_transfer_busy.txt"
         },
         "params" : {
             "DataWidth"           : 32,
@@ -251,7 +260,9 @@
             "mixed"           : "backend_rw_axi_rw_axis/mixed.txt",
             "small"           : "backend_rw_axi_rw_axis/small.txt",
             "tiny"            : "backend_rw_axi_rw_axis/tiny.txt",
-            "zero_transfer"   : "backend_rw_axi_rw_axis/zero_transfer.txt"
+            "zero_transfer"   : "backend_rw_axi_rw_axis/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_rw_axi_rw_axis/zero_transfer_busy.txt",
+            "zero_then_real"  : "backend_rw_axi_rw_axis/zero_then_real.txt"
     },
         "params" : {
             "DataWidth"           : 32,
@@ -284,7 +295,8 @@
             "mixed"           : "backend_rw_obi/mixed.txt",
             "small"           : "backend_rw_obi/small.txt",
             "tiny"            : "backend_rw_obi/tiny.txt",
-            "zero_transfer"   : "backend_rw_obi/zero_transfer.txt"
+            "zero_transfer"   : "backend_rw_obi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_rw_obi/zero_transfer_busy.txt"
     },
         "params" : {
             "DataWidth"           : 32,
@@ -305,6 +317,62 @@
         "proc_id" : "rw_obi",
         "testbench" : "tb_idma_backend_rw_obi",
         "synth_top" : "idma_backend_synth_rw_obi"
+    },
+    "rw_axi_zerolen_accept" : {
+        "jobs" : {
+            "zero_transfer"   : "backend_rw_axi/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_rw_axi/zero_transfer_busy.txt",
+            "zero_then_real"  : "backend_rw_axi/zero_then_real.txt",
+            "zero_unal_src"   : "backend_rw_axi/zero_unaligned_src.txt",
+            "zero_unal_dst"   : "backend_rw_axi/zero_unaligned_dst.txt",
+            "simple"          : "backend_rw_axi/simple.txt"
+        },
+        "params" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 32,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 12,
+            "NumAxInFlight"       : 3,
+            "BufferDepth"         : 3,
+            "TFLenWidth"          : 32,
+            "MemSysDepth"         : 0,
+            "CombinedShifter"     : 1,
+            "MaskInvalidData"     : 1,
+            "RAWCouplingAvail"    : 1,
+            "HardwareLegalizer"   : 1,
+            "RejectZeroTransfers" : 0,
+            "ErrorHandling"       : 1
+        },
+        "proc_id" : "rw_axi",
+        "testbench": "tb_idma_backend_rw_axi",
+        "synth_top": "idma_backend_synth_rw_axi"
+    },
+    "rw_axi_rw_axis_zerolen_accept" : {
+        "jobs" : {
+            "zero_transfer"   : "backend_rw_axi_rw_axis/zero_transfer.txt",
+            "zero_tf_busy"    : "backend_rw_axi_rw_axis/zero_transfer_busy.txt",
+            "zero_then_real"  : "backend_rw_axi_rw_axis/zero_then_real.txt",
+            "simple"          : "backend_rw_axi_rw_axis/simple.txt"
+        },
+        "params" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 32,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 12,
+            "NumAxInFlight"       : 3,
+            "BufferDepth"         : 3,
+            "TFLenWidth"          : 32,
+            "MemSysDepth"         : 0,
+            "CombinedShifter"     : 0,
+            "MaskInvalidData"     : 1,
+            "RAWCouplingAvail"    : 0,
+            "HardwareLegalizer"   : 1,
+            "RejectZeroTransfers" : 0,
+            "ErrorHandling"       : 0
+        },
+        "proc_id" : "rw_axi_rw_axis",
+        "testbench" : "tb_idma_backend_rw_axi_rw_axis",
+        "synth_top" : "idma_backend_synth_rw_axi_rw_axis"
     },
     "4d_extension" : {
         "jobs" : {

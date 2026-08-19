@@ -31,7 +31,7 @@ The most important parameters for a new integration are `DataWidth` (match your 
 | `RAWCouplingAvail` | 1 | Enable R-AW coupling hardware. Should be 1 for pure AXI-to-AXI variants (`rw_axi`); set to 0 for mixed-protocol variants where the write protocol has no AW channel |
 | `MaskInvalidData` | 1 | Zero out invalid bytes on the manager interface to reduce toggling |
 | `HardwareLegalizer` | 1 | Include hardware burst legalization. If 0, software must ensure legal bursts |
-| `RejectZeroTransfers` | 1 | Reject zero-length transfers with a `BACKEND` error response |
+| `RejectZeroTransfers` | 1 | Response payload for a zero-length transfer: 1 rejects it with a `BACKEND` error, 0 completes it successfully as a no-op. Either way the transfer moves no bytes, issues no bus transaction and returns exactly one response |
 | `ErrorCap` | `NO_ERROR_HANDLING` | Error handling capability: `NO_ERROR_HANDLING` or `ERROR_HANDLING` |
 | `PrintFifoInfo` | 0 | Print FIFO configuration during elaboration |
 
