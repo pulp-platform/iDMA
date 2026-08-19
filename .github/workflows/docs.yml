@@ -47,7 +47,9 @@ jobs:
           target: riscv64-elf
       -
         name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
       -
         name: Install Bender
         uses: pulp-platform/pulp-actions/bender-install@v2.5.0
