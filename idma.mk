@@ -439,12 +439,14 @@ idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_b2b -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_b2b -do "run -all; quit"
 
-# MX sim across data widths; Questa hides $fatal, so grep the transcript
+# MX sim over data widths; $(3) tags the log, $(4) adds elaboration parameters
 define idma_run_mx_sim
 	cd $(IDMA_VSIM_DIR); set -e; for dw in $(2); do \
-	  $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=$$dw $(1) -do "run -all; quit" > $(1)_$$dw.log 2>&1 || true; \
-	  if grep -qE "Error:|Fatal:" $(1)_$$dw.log; then \
-	    echo "$(1) DW=$$dw FAILED (see $(1)_$$dw.log)"; tail -40 $(1)_$$dw.log; exit 1; fi; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=$$dw $(4) $(1) \
+	    -do "run -all; quit" > $(1)_$(3)$$dw.log 2>&1 || true; \
+	  if grep -qE "Error:|Fatal:" $(1)_$(3)$$dw.log; then \
+	    echo "$(1) $(3)DW=$$dw FAILED (see $(1)_$(3)$$dw.log)"; \
+	    tail -40 $(1)_$(3)$$dw.log; exit 1; fi; \
 	done
 endef
 
@@ -452,19 +454,20 @@ endef
 idma_sim_tb_idma_mxquant: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mxquant,32 64 256 512 1024)
+	$(call idma_run_mx_sim,tb_idma_mxquant,32 64 256 512 1024,,)
 
 .PHONY: idma_sim_tb_idma_mxroundtrip
 idma_sim_tb_idma_mxroundtrip: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,fp16_,-gQuantFp16=1)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024,fp32_,-gQuantFp16=0)
 
 .PHONY: idma_sim_tb_idma_mxrand
 idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mxrand,32 64 256 512 1024)
+	$(call idma_run_mx_sim,tb_idma_mxrand,32 64 256 512 1024,,)
 
 .PHONY: idma_sim_tb_idma_mxperf
 idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
