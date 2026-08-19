@@ -71,7 +71,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.output.page_url }}
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
     steps:
       -
         name: Deploy to Github Pages
