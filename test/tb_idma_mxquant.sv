@@ -27,6 +27,8 @@ module tb_idma_mxquant
   import "DPI-C" function void gm_mxquant(input int num_blocks);
   import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_stim_fp16(input int e, input int total);
+  import "DPI-C" function int  gm_stim_fp32(input int e, input int total);
 
   `include "include/tb_idma_mx_common.svh"
 
@@ -63,43 +65,6 @@ module tb_idma_mxquant
     .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
 
 
-  // deterministic FP16 normal for global element index e
-  function automatic logic [15:0] fp16_gen(input int unsigned e);
-    automatic logic [15:0] sgn = 16'((e & 1) << 15);
-    automatic logic [15:0] exp = 16'((1 + (e % 30)) << 10);
-    automatic logic [15:0] man = 16'((e * 53) & 10'h3FF);
-    return sgn | exp | man;
-  endfunction
-
-  // deterministic FP32 pattern; block 0 all-tiny (scale clamp), block 1 Inf/NaN
-  // poisoned with finite lanes (scale-scan exclusion), last 8 elements specials
-  function automatic logic [31:0] fp32_gen(input int unsigned e, input int unsigned total);
-    if (e < 32)
-      return 32'((e & 1) << 31) | 32'(((1 + (e % 13)) & 8'hFF) << 23) | 32'((e * 977) & 23'h7FFFFF);
-    if (e < 64) begin
-      if (e == 32) return 32'h7F80_0000;
-      if (e == 33) return 32'hFFC0_0001;
-      return 32'((e & 1) << 31) | 32'(((100 + (e % 30)) & 8'hFF) << 23)
-             | 32'((e * 331) & 23'h7FFFFF);
-    end
-    if (e + 8 >= total) begin
-      unique case (e % 8)
-        0: return 32'h0000_0000;
-        1: return 32'h8000_0000;
-        2: return 32'h0000_0345;
-        3: return 32'h7F80_0000;
-        4: return 32'hFF80_0000;
-        5: return 32'h7FC1_2345;
-        6: return 32'h7F7F_FFFF;
-        7: return 32'h0080_0000;
-        // unreachable: e % 8 covers 0-7; a sentinel fails the byte-exact compare
-        default: return 32'hDEAD_BEEF;
-      endcase
-    end
-    return 32'((e & 1) << 31) | 32'(((64 + (e % 128)) & 8'hFF) << 23)
-           | 32'((e * 32'd2654435761) & 23'h7FFFFF);
-  endfunction
-
   // one num_blocks FP16->MXFP8 transfer; returns error count
   task automatic do_mxquant(input addr_t src, input addr_t dst, input int unsigned num_blocks,
                             output int unsigned errs);
@@ -108,7 +73,7 @@ module tb_idma_mxquant
     automatic logic [15:0] h;
     errs = 0;
     for (int unsigned el = 0; el < num_blocks*32; el++) begin
-      h = fp16_gen(el);
+      h = 16'(gm_stim_fp16(int'(el), int'(num_blocks*32)));
       wr_mem(src + el*2,     h[7:0]);
       wr_mem(src + el*2 + 1, h[15:8]);
       gm_load(int'(el*2),     int'(h[7:0]));
@@ -150,7 +115,7 @@ module tb_idma_mxquant
     automatic logic [31:0] w;
     errs = 0;
     for (int unsigned el = 0; el < num_blocks*32; el++) begin
-      w = fp32_gen(el, num_blocks*32);
+      w = 32'(gm_stim_fp32(int'(el), int'(num_blocks*32)));
       for (int unsigned b = 0; b < 4; b++) begin
         wr_mem(src + el*4 + b, w[b*8 +: 8]);
         gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));

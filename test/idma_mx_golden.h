@@ -5,9 +5,9 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Bit-exact C goldens for the MX compute ops, shared by the DPI-C testbench
-// glue and by integrators' on-target tests: FP32/FP16 -> MXFP8 (E5M2)
-// quantization and MXFP8 -> FP32/FP16 dequantization; blocks are
+// Bit-exact C goldens and deterministic stimulus for the MX compute ops, shared
+// by the DPI-C testbench glue and by integrators' on-target tests: FP32/FP16 ->
+// MXFP8 (E5M2) quantization and MXFP8 -> FP32/FP16 dequantization; blocks are
 // [1B E8M0 scale][32B E5M2]. Pure functions over integer bit patterns.
 
 #pragma once
@@ -128,4 +128,63 @@ static inline uint16_t fp32_to_fp16_bits(uint32_t f) {
   uint32_t rounded = man16 + (guard && ((man16 & 1u) || sticky));
   if (rounded >> 10) return (uint16_t)((sign << 15) | (1u << 10));
   return (uint16_t)((sign << 15) | rounded);
+}
+
+// Deterministic FP16 stimulus for global element e of a total-element buffer:
+// distinct normal blocks, with the LAST 6 blocks driving the corners -
+// [nb-6..nb-4] wide dynamic range (subnormal/flush), [nb-3,nb-2] saturation,
+// [nb-1] Inf/NaN - so a short run still exercises every band.
+static inline uint16_t mx_stim_fp16(uint32_t e, uint32_t total) {
+  uint32_t blk = e / 32u, lane = e % 32u, nb = total / 32u;
+  if (nb >= 6u && blk + 6u >= nb && blk + 3u < nb) {
+    static const uint16_t sm[8] = {0x0200u, 0x0100u, 0x0080u, 0x0040u,
+                                   0x3C00u, 0xBC00u, 0x0001u, 0x0000u};
+    if (lane == 0u) return 0x7800u;
+    return sm[(lane + blk) & 7u];
+  }
+  if (nb >= 6u && (blk + 3u == nb || blk + 2u == nb)) {
+    if (lane == 0u) return (blk + 3u == nb) ? 0x7BFFu : 0xFBFFu;
+    return (uint16_t)(0x3C00u + (((lane * 7u) + (blk + 2u == nb ? 1u : 0u)) & 0x3FFu));
+  }
+  if (nb >= 6u && blk + 1u == nb) {
+    if (lane == 0u) return 0x7C00u;
+    if (lane == 1u) return 0xFC00u;
+    if (lane == 2u) return 0x7E00u;
+    return (uint16_t)(0x0200u + lane);
+  }
+  {
+    uint32_t j   = (lane + blk * 7u) & 0x1Fu;
+    uint32_t sgn = (j & 1u) << 15;
+    uint32_t man = ((j * 53u) + blk * 11u) & 0x3FFu;
+    int ne = (int)(12u + (j % 8u)) + (int)(blk % 9u) - 4;
+    if (ne < 1) ne = 1;
+    if (ne > 30) ne = 30;
+    return (uint16_t)(sgn | ((uint32_t)ne << 10) | man);
+  }
+}
+
+// Deterministic FP32 stimulus for global element e of a total-element buffer:
+// block 0 all-tiny (scale clamp), block 1 Inf/NaN poisoned with finite lanes
+// (scale-scan exclusion), the last 8 elements specials, normals elsewhere.
+static inline uint32_t mx_stim_fp32(uint32_t e, uint32_t total) {
+  if (e < 32u)
+    return ((e & 1u) << 31) | (((1u + (e % 13u)) & 0xFFu) << 23) | ((e * 977u) & 0x7FFFFFu);
+  if (e < 64u) {
+    if (e == 32u) return 0x7F800000u;
+    if (e == 33u) return 0xFFC00001u;
+    return ((e & 1u) << 31) | (((100u + (e % 30u)) & 0xFFu) << 23) | ((e * 331u) & 0x7FFFFFu);
+  }
+  if (e + 8u >= total) {
+    switch (e % 8u) {
+      case 0: return 0x00000000u;
+      case 1: return 0x80000000u;
+      case 2: return 0x00000345u;
+      case 3: return 0x7F800000u;
+      case 4: return 0xFF800000u;
+      case 5: return 0x7FC12345u;
+      case 6: return 0x7F7FFFFFu;
+      default: return 0x00800000u;
+    }
+  }
+  return ((e & 1u) << 31) | (((64u + (e % 128u)) & 0xFFu) << 23) | ((e * 2654435761u) & 0x7FFFFFu);
 }

@@ -26,6 +26,9 @@ int gm_get(int idx) {
   return -1;
 }
 
+int gm_stim_fp16(int e, int total) { return (int)mx_stim_fp16((uint32_t)e, (uint32_t)total); }
+int gm_stim_fp32(int e, int total) { return (int)mx_stim_fp32((uint32_t)e, (uint32_t)total); }
+
 void gm_mxdequant_fp16(int num_blocks) {
   for (int b = 0; b < num_blocks; ++b) {
     int dec = (int)(int8_t)gm_in[b*33];

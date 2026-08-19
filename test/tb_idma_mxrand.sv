@@ -32,6 +32,8 @@ module tb_idma_mxrand
   import "DPI-C" function void gm_mxdequant(input int num_blocks);
   import "DPI-C" function void gm_mxdequant_fp16(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_stim_fp16(input int e, input int total);
+  import "DPI-C" function int  gm_stim_fp32(input int e, input int total);
 
   `include "include/tb_idma_mx_common.svh"
 
@@ -91,20 +93,6 @@ module tb_idma_mxrand
 
   int unsigned rsp_cnt;
   always @(posedge clk) if (rsp_valid && rsp_ready) rsp_cnt <= rsp_cnt + 1;
-
-  function automatic logic [15:0] fp16_gen(input int unsigned e);
-    automatic logic [15:0] sgn = 16'((e & 1) << 15);
-    automatic logic [15:0] exp = 16'((1 + (e % 30)) << 10);
-    automatic logic [15:0] man = 16'((e * 53) & 10'h3FF);
-    return sgn | exp | man;
-  endfunction
-
-  function automatic logic [31:0] fp32_gen(input int unsigned e);
-    automatic logic [31:0] sgn = 32'((e & 1) << 31);
-    automatic logic [31:0] exp = 32'(((64 + (e % 128)) & 8'hFF) << 23);
-    automatic logic [31:0] man = 32'((e * 32'd2654435761) & 23'h7FFFFF);
-    return sgn | exp | man;
-  endfunction
 
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
                          input logic en, input idma_pkg::compute_op_e op);
@@ -166,12 +154,12 @@ module tb_idma_mxrand
                                    : DstBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
           for (int unsigned el = 0; el < nb * 32; el++) begin
             if (fp16) begin
-              h = fp16_gen(salt + el);
+              h = 16'(gm_stim_fp16(int'(salt + el), int'(salt + nb*32)));
               for (int unsigned b = 0; b < 2; b++) begin
                 wr_mem(src + el*2 + b, h[b*8 +: 8]); gm_load(int'(el*2 + b), int'(h[b*8 +: 8]));
               end
             end else begin
-              w = fp32_gen(salt + el);
+              w = 32'(gm_stim_fp32(int'(salt + el), int'(salt + nb*32)));
               for (int unsigned b = 0; b < 4; b++) begin
                 wr_mem(src + el*4 + b, w[b*8 +: 8]); gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
               end
@@ -226,7 +214,7 @@ module tb_idma_mxrand
       automatic logic [7:0] bgold [BK][BNb*33];
       for (int unsigned k = 0; k < BK; k++) begin
         for (int unsigned el = 0; el < BNb * 32; el++) begin
-          w = fp32_gen(k * 7919 + el);
+          w = 32'(gm_stim_fp32(int'(k * 7919 + el), int'(k * 7919 + BNb*32)));
           for (int unsigned b = 0; b < 4; b++) begin
             wr_mem(SrcBase + k * 'h2000 + el*4 + b, w[b*8 +: 8]);
             gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
