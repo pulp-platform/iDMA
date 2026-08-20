@@ -208,7 +208,8 @@ $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(ID
 	  -P NumDims=$(call dimension,$*) \
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
 
-$(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv:
+$(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv: $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv
+$(IDMA_RTL_DIR)/idma_desc64_reg_top.sv: $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl
 	# desc64 is APB-native with hand-written wrappers, outside the CPUIF selector
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif apb4-flat \
