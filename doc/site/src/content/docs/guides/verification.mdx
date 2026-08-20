@@ -167,7 +167,9 @@ The on-the-fly compute engines have dedicated self-checking testbenches, checked
 | `idma_sim_tb_idma_otf_transpose` | `idma_otf_transpose` standalone | Transpose engine over `StrbWidth` and `FullDuplex` sweeps, golden `idma_transpose_dpi.c` |
 | `idma_sim_tb_idma_transpose_nd` | ND midend -> `rw_axi` -> `axi_sim_mem` | Multi-tile transpose end-to-end at `DataWidth` 32/64 |
 | `idma_sim_tb_idma_transpose_b2b` | ND midend -> `rw_axi` | Two back-to-back transposes to distinct destinations |
-| `idma_sim_tb_idma_mxquant` | `rw_axi` backend, `COMPUTE_MXQUANT{,_FP16}` | FP32/FP16 -> MXFP8 33 B blocks, golden `idma_mxquant_dpi.c`; one run crosses a 4K page |
+| `idma_sim_tb_idma_mxquant` | `rw_axi` backend, `COMPUTE_MXQUANT{,_FP16}` | FP32/FP16 -> MXFP8 33 B blocks, golden `idma_mx_golden.h`; one run crosses a 4K page |
+
+The MX goldens and their deterministic stimulus live in `test/idma_mx_golden.h`, a dependency-free C99 header of `static inline` functions over plain byte buffers: `mx_quant_fp16` / `mx_quant_fp32` and `mx_dequant_fp16` / `mx_dequant_fp32` convert whole buffers of `[1 B E8M0 scale][32 B E5M2]` blocks, and `mx_stim_fp16` / `mx_stim_fp32` regenerate the exact stimulus the testbenches use, where the `salt` argument varies the normal lanes without moving the corner blocks. `test/idma_mxquant_dpi.c` is only the DPI-C shim around it, so integrators can include the header directly and check on-target results against the same bit-exact model instead of re-deriving it.
 
 These `idma_sim_tb_*` targets drive Questa directly (they source `compile.tcl` and run under vsim), so they are Questa-only; pass the tool binaries through the `VSIM` / `VLOG` / `VLIB` variables:
 
