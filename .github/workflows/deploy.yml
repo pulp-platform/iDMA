@@ -14,7 +14,7 @@ on:
         description: Backend variants to generate.
         required: false
         type: string
-        default: "rw_axi r_obi_w_axi r_axi_w_obi rw_axi_rw_axis rw_obi r_obi_rw_init_w_axi r_axi_rw_init_rw_obi rw_axi_rw_init_rw_obi"
+        default: "rw_axi r_obi_w_axi r_axi_w_obi rw_axi_rw_axis rw_obi r_obi_rw_init_w_axi r_axi_rw_init_rw_obi rw_axi_rw_init_rw_obi r_init_rw_axi_rw_obi"
       IDMA_ADD_FE_IDS:
         description: Register frontend variants to generate.
         required: false
@@ -31,7 +31,7 @@ on:
         description: Backend variants to generate.
         required: false
         type: string
-        default: "rw_axi r_obi_w_axi r_axi_w_obi rw_axi_rw_axis rw_obi r_obi_rw_init_w_axi r_axi_rw_init_rw_obi rw_axi_rw_init_rw_obi"
+        default: "rw_axi r_obi_w_axi r_axi_w_obi rw_axi_rw_axis rw_obi r_obi_rw_init_w_axi r_axi_rw_init_rw_obi rw_axi_rw_init_rw_obi r_init_rw_axi_rw_obi"
       IDMA_ADD_FE_IDS:
         description: Register frontend variants to generate.
         required: false

@@ -17,8 +17,7 @@ package idma_inst64_tb_pkg;
     localparam int unsigned NumAxInFlight   = 32'd3;
     localparam int unsigned DMAReqFifoDepth = 32'd3;
     localparam int unsigned NumChannels     = 32'd1;
-    // Tracer off; idma_inst64_top applies the rw_axi tracer macro to a
-    // rw_axi_rw_init_rw_obi backend instance, which is a separate open issue.
+    // Tracer off; the testbench does not consume trace files.
     localparam int unsigned DMATracing      = 32'd0;
 
     localparam time    Period      = 10ns;
