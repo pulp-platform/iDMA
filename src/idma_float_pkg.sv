@@ -67,7 +67,7 @@ package idma_float_pkg;
     logic exp_is_zero, exp_is_max, mant_is_zero;
     logic [ 3:0] rounded;
     logic guard, sticky, roundup;
-    int   out_exp;
+    logic signed [31:0] out_exp;
     logic carry;
     logic [ 5:0] sh_amt;
     logic [ 3:0] sub_kept;
@@ -213,7 +213,7 @@ package idma_float_pkg;
     logic [ 4:0] exp_e5;
     logic [ 1:0] mant;
     logic [31:0] sign_bit;
-    int          fp32_exp;
+    logic signed [31:0] fp32_exp;
     logic [22:0] out_mant;
     logic exp_is_zero, exp_is_max;
 
