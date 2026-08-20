@@ -29,6 +29,8 @@ module tb_idma_mxroundtrip
   import "DPI-C" function void gm_mxdequant(input int num_blocks);
   import "DPI-C" function void gm_mxdequant_fp16(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_stim_fp16(input int e, input int total, input int salt);
+  import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
 
@@ -64,20 +66,6 @@ module tb_idma_mxroundtrip
   stream_watchdog #(.NumCycles(8000)) i_w_wd (
     .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
 
-
-  function automatic logic [15:0] fp16_gen(input int unsigned e);
-    automatic logic [15:0] sgn = 16'((e & 1) << 15);
-    automatic logic [15:0] exp = 16'((1 + (e % 30)) << 10);
-    automatic logic [15:0] man = 16'((e * 53) & 10'h3FF);
-    return sgn | exp | man;
-  endfunction
-
-  function automatic logic [31:0] fp32_gen(input int unsigned e);
-    automatic logic [31:0] sgn = 32'((e & 1) << 31);
-    automatic logic [31:0] exp = 32'(((64 + (e % 128)) & 8'hFF) << 23);
-    automatic logic [31:0] man = 32'((e * 32'd2654435761) & 23'h7FFFFF);
-    return sgn | exp | man;
-  endfunction
 
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
                          input idma_pkg::compute_op_e op);
@@ -118,7 +106,7 @@ module tb_idma_mxroundtrip
 
     if (QuantFp16) begin
       for (int unsigned el = 0; el < NumBlocks*32; el++) begin
-        h = fp16_gen(el);
+        h = 16'(gm_stim_fp16(int'(el), int'(NumBlocks*32), 0));
         wr_mem(src + el*2,     h[7:0]);
         wr_mem(src + el*2 + 1, h[15:8]);
         gm_load(int'(el*2),     int'(h[7:0]));
@@ -127,7 +115,7 @@ module tb_idma_mxroundtrip
       gm_mxquant(int'(NumBlocks));
     end else begin
       for (int unsigned el = 0; el < NumBlocks*32; el++) begin
-        w = fp32_gen(el);
+        w = 32'(gm_stim_fp32(int'(el), int'(NumBlocks*32), 0));
         for (int unsigned b = 0; b < 4; b++) begin
           wr_mem(src + el*4 + b, w[b*8 +: 8]);
           gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
