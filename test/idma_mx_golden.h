@@ -8,7 +8,7 @@
 // Bit-exact C goldens and deterministic stimulus for the MX compute ops, shared
 // by the DPI-C testbench glue and by integrators' on-target tests: FP32/FP16 ->
 // MXFP8 (E5M2) quantization and MXFP8 -> FP32/FP16 dequantization; blocks are
-// [1B E8M0 scale][32B E5M2]. Pure functions over integer bit patterns.
+// [1B E8M0 scale][32B E5M2]. Pure functions over bit patterns and caller-owned buffers.
 
 #pragma once
 
@@ -102,8 +102,7 @@ static inline uint32_t dequant_e5m2_fp32(uint8_t b, int scaled) {
   return sign_bit | ((uint32_t)fp32_exp << 23) | out_mant;
 }
 
-// IEEE FP32 -> FP16 narrowing: RNE, overflow saturates to +-Inf (same rounding
-// as idma_float_pkg::fp32_bits_to_fp16)
+// IEEE FP32 -> FP16 narrowing, RNE; same rounding as idma_float_pkg::fp32_bits_to_fp16
 static inline uint16_t fp32_to_fp16_bits(uint32_t f) {
   uint32_t sign = (f >> 31) & 1u, exp32 = (f >> 23) & 0xFFu, man32 = f & 0x7FFFFFu;
   if (exp32 == 0xFFu) return (uint16_t)((sign << 15) | (0x1Fu << 10) | (man32 ? 0x200u : 0u));
@@ -130,50 +129,105 @@ static inline uint16_t fp32_to_fp16_bits(uint32_t f) {
   return (uint16_t)((sign << 15) | rounded);
 }
 
-// Deterministic FP16 stimulus for global element e of a total-element buffer:
-// distinct normal blocks, with the LAST 6 blocks driving the corners -
-// [nb-6..nb-4] wide dynamic range (subnormal/flush), [nb-3,nb-2] saturation,
-// [nb-1] Inf/NaN - so a short run still exercises every band.
-static inline uint16_t mx_stim_fp16(uint32_t e, uint32_t total) {
+// Quantize num_blocks 64B FP16 blocks from in into 33B MX blocks in out.
+static inline void mx_quant_fp16(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
+  for (uint32_t b = 0; b < num_blocks; ++b) {
+    uint32_t blk[32];
+    uint8_t scale;
+    for (uint32_t lane = 0; lane < 32u; ++lane) {
+      uint16_t h = (uint16_t)((uint32_t)in[b*64u + lane*2u]
+                            | ((uint32_t)in[b*64u + lane*2u + 1u] << 8));
+      blk[lane] = fp16_to_fp32_bits(h);
+    }
+    scale = block_scale_e5m2(blk, 32u);
+    out[b*33u] = scale;
+    for (uint32_t lane = 0; lane < 32u; ++lane)
+      out[b*33u + 1u + lane] = quantize_fp32_e5m2(blk[lane], (int8_t)scale);
+  }
+}
+
+// Quantize num_blocks 128B FP32 blocks from in into 33B MX blocks in out.
+static inline void mx_quant_fp32(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
+  for (uint32_t b = 0; b < num_blocks; ++b) {
+    uint32_t blk[32];
+    uint8_t scale;
+    for (uint32_t lane = 0; lane < 32u; ++lane)
+      blk[lane] = (uint32_t)in[b*128u + lane*4u]
+                | ((uint32_t)in[b*128u + lane*4u + 1u] << 8)
+                | ((uint32_t)in[b*128u + lane*4u + 2u] << 16)
+                | ((uint32_t)in[b*128u + lane*4u + 3u] << 24);
+    scale = block_scale_e5m2(blk, 32u);
+    out[b*33u] = scale;
+    for (uint32_t lane = 0; lane < 32u; ++lane)
+      out[b*33u + 1u + lane] = quantize_fp32_e5m2(blk[lane], (int8_t)scale);
+  }
+}
+
+// Dequantize num_blocks 33B MX blocks from in into 64B FP16 blocks in out.
+static inline void mx_dequant_fp16(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
+  for (uint32_t b = 0; b < num_blocks; ++b) {
+    int dec = (int)(int8_t)in[b*33u];
+    for (uint32_t lane = 0; lane < 32u; ++lane) {
+      uint16_t h = fp32_to_fp16_bits(dequant_e5m2_fp32(in[b*33u + 1u + lane], dec));
+      out[b*64u + lane*2u]      = (uint8_t)(h & 0xFFu);
+      out[b*64u + lane*2u + 1u] = (uint8_t)((uint32_t)h >> 8);
+    }
+  }
+}
+
+// Dequantize num_blocks 33B MX blocks from in into 128B FP32 blocks in out.
+static inline void mx_dequant_fp32(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
+  for (uint32_t b = 0; b < num_blocks; ++b) {
+    int dec = (int)(int8_t)in[b*33u];
+    for (uint32_t lane = 0; lane < 32u; ++lane) {
+      uint32_t f = dequant_e5m2_fp32(in[b*33u + 1u + lane], dec);
+      out[b*128u + lane*4u + 0u] = (uint8_t)(f & 0xFFu);
+      out[b*128u + lane*4u + 1u] = (uint8_t)((f >> 8) & 0xFFu);
+      out[b*128u + lane*4u + 2u] = (uint8_t)((f >> 16) & 0xFFu);
+      out[b*128u + lane*4u + 3u] = (uint8_t)((f >> 24) & 0xFFu);
+    }
+  }
+}
+
+// Deterministic FP16 stimulus for element e of a total-element buffer; last blocks hold corners.
+static inline uint16_t mx_stim_fp16(uint32_t e, uint32_t total, uint32_t salt) {
   uint32_t blk = e / 32u, lane = e % 32u, nb = total / 32u;
+  static const uint16_t sm[8] = {0x0200u, 0x0100u, 0x0080u, 0x0040u,
+                                 0x3C00u, 0xBC00u, 0x0001u, 0x0000u};
+  if (nb < 6u && blk + 1u == nb) {
+    if (lane == 0u) return 0x7BFFu;  // max normal: pins the scale and rounds up to saturation
+    if (lane == 1u) return 0x7C00u;
+    if (lane == 2u) return 0xFC00u;
+    if (lane == 3u) return 0x7E00u;
+    return sm[(lane + salt) & 7u];
+  }
   if (nb >= 6u && blk + 6u >= nb && blk + 3u < nb) {
-    static const uint16_t sm[8] = {0x0200u, 0x0100u, 0x0080u, 0x0040u,
-                                   0x3C00u, 0xBC00u, 0x0001u, 0x0000u};
     if (lane == 0u) return 0x7800u;
-    return sm[(lane + blk) & 7u];
+    return sm[(lane + blk + salt) & 7u];
   }
   if (nb >= 6u && (blk + 3u == nb || blk + 2u == nb)) {
     if (lane == 0u) return (blk + 3u == nb) ? 0x7BFFu : 0xFBFFu;
-    return (uint16_t)(0x3C00u + (((lane * 7u) + (blk + 2u == nb ? 1u : 0u)) & 0x3FFu));
+    return (uint16_t)(0x3C00u + (((lane * 7u) + (blk + 2u == nb ? 1u : 0u) + salt) & 0x3FFu));
   }
   if (nb >= 6u && blk + 1u == nb) {
     if (lane == 0u) return 0x7C00u;
     if (lane == 1u) return 0xFC00u;
     if (lane == 2u) return 0x7E00u;
-    return (uint16_t)(0x0200u + lane);
+    return (uint16_t)(0x0200u + ((lane + salt) & 0x1Fu));
   }
   {
-    uint32_t j   = (lane + blk * 7u) & 0x1Fu;
+    uint32_t j   = (lane + blk * 7u + salt) & 0x1Fu;
     uint32_t sgn = (j & 1u) << 15;
-    uint32_t man = ((j * 53u) + blk * 11u) & 0x3FFu;
-    int ne = (int)(12u + (j % 8u)) + (int)(blk % 9u) - 4;
+    uint32_t man = ((j * 53u) + blk * 11u + salt * 29u) & 0x3FFu;
+    int ne = (int)(12u + (j % 8u)) + (int)((blk + salt) % 9u) - 4;
     if (ne < 1) ne = 1;
     if (ne > 30) ne = 30;
     return (uint16_t)(sgn | ((uint32_t)ne << 10) | man);
   }
 }
 
-// Deterministic FP32 stimulus for global element e of a total-element buffer:
-// block 0 all-tiny (scale clamp), block 1 Inf/NaN poisoned with finite lanes
-// (scale-scan exclusion), the last 8 elements specials, normals elsewhere.
-static inline uint32_t mx_stim_fp32(uint32_t e, uint32_t total) {
-  if (e < 32u)
-    return ((e & 1u) << 31) | (((1u + (e % 13u)) & 0xFFu) << 23) | ((e * 977u) & 0x7FFFFFu);
-  if (e < 64u) {
-    if (e == 32u) return 0x7F800000u;
-    if (e == 33u) return 0xFFC00001u;
-    return ((e & 1u) << 31) | (((100u + (e % 30u)) & 0xFFu) << 23) | ((e * 331u) & 0x7FFFFFu);
-  }
+// Deterministic FP32 stimulus for element e of a total-element buffer; fixed blocks hold corners.
+static inline uint32_t mx_stim_fp32(uint32_t e, uint32_t total, uint32_t salt) {
   if (e + 8u >= total) {
     switch (e % 8u) {
       case 0: return 0x00000000u;
@@ -186,5 +240,15 @@ static inline uint32_t mx_stim_fp32(uint32_t e, uint32_t total) {
       default: return 0x00800000u;
     }
   }
-  return ((e & 1u) << 31) | (((64u + (e % 128u)) & 0xFFu) << 23) | ((e * 2654435761u) & 0x7FFFFFu);
+  if (e < 32u)
+    return ((e & 1u) << 31) | (((1u + ((e + salt) % 13u)) & 0xFFu) << 23)
+         | (((e * 977u) + salt) & 0x7FFFFFu);
+  if (e < 64u) {
+    if (e == 32u) return 0x7F800000u;
+    if (e == 33u) return 0xFFC00001u;
+    return ((e & 1u) << 31) | (((100u + ((e + salt) % 30u)) & 0xFFu) << 23)
+         | (((e * 331u) + salt) & 0x7FFFFFu);
+  }
+  return ((e & 1u) << 31) | (((64u + ((e + salt) % 128u)) & 0xFFu) << 23)
+       | (((e * 2654435761u) + salt) & 0x7FFFFFu);
 }

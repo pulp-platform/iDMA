@@ -32,8 +32,8 @@ module tb_idma_mxrand
   import "DPI-C" function void gm_mxdequant(input int num_blocks);
   import "DPI-C" function void gm_mxdequant_fp16(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
-  import "DPI-C" function int  gm_stim_fp16(input int e, input int total);
-  import "DPI-C" function int  gm_stim_fp32(input int e, input int total);
+  import "DPI-C" function int  gm_stim_fp16(input int e, input int total, input int salt);
+  import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
 
@@ -154,12 +154,12 @@ module tb_idma_mxrand
                                    : DstBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
           for (int unsigned el = 0; el < nb * 32; el++) begin
             if (fp16) begin
-              h = 16'(gm_stim_fp16(int'(salt + el), int'(salt + nb*32)));
+              h = 16'(gm_stim_fp16(int'(el), int'(nb*32), int'(salt)));
               for (int unsigned b = 0; b < 2; b++) begin
                 wr_mem(src + el*2 + b, h[b*8 +: 8]); gm_load(int'(el*2 + b), int'(h[b*8 +: 8]));
               end
             end else begin
-              w = 32'(gm_stim_fp32(int'(salt + el), int'(salt + nb*32)));
+              w = 32'(gm_stim_fp32(int'(el), int'(nb*32), int'(salt)));
               for (int unsigned b = 0; b < 4; b++) begin
                 wr_mem(src + el*4 + b, w[b*8 +: 8]); gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
               end
@@ -214,7 +214,7 @@ module tb_idma_mxrand
       automatic logic [7:0] bgold [BK][BNb*33];
       for (int unsigned k = 0; k < BK; k++) begin
         for (int unsigned el = 0; el < BNb * 32; el++) begin
-          w = 32'(gm_stim_fp32(int'(k * 7919 + el), int'(k * 7919 + BNb*32)));
+          w = 32'(gm_stim_fp32(int'(el), int'(BNb*32), int'(k * 7919)));
           for (int unsigned b = 0; b < 4; b++) begin
             wr_mem(SrcBase + k * 'h2000 + el*4 + b, w[b*8 +: 8]);
             gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));

@@ -27,8 +27,8 @@ module tb_idma_mxquant
   import "DPI-C" function void gm_mxquant(input int num_blocks);
   import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
-  import "DPI-C" function int  gm_stim_fp16(input int e, input int total);
-  import "DPI-C" function int  gm_stim_fp32(input int e, input int total);
+  import "DPI-C" function int  gm_stim_fp16(input int e, input int total, input int salt);
+  import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
 
@@ -73,7 +73,7 @@ module tb_idma_mxquant
     automatic logic [15:0] h;
     errs = 0;
     for (int unsigned el = 0; el < num_blocks*32; el++) begin
-      h = 16'(gm_stim_fp16(int'(el), int'(num_blocks*32)));
+      h = 16'(gm_stim_fp16(int'(el), int'(num_blocks*32), 0));
       wr_mem(src + el*2,     h[7:0]);
       wr_mem(src + el*2 + 1, h[15:8]);
       gm_load(int'(el*2),     int'(h[7:0]));
@@ -115,7 +115,7 @@ module tb_idma_mxquant
     automatic logic [31:0] w;
     errs = 0;
     for (int unsigned el = 0; el < num_blocks*32; el++) begin
-      w = 32'(gm_stim_fp32(int'(el), int'(num_blocks*32)));
+      w = 32'(gm_stim_fp32(int'(el), int'(num_blocks*32), 0));
       for (int unsigned b = 0; b < 4; b++) begin
         wr_mem(src + el*4 + b, w[b*8 +: 8]);
         gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
