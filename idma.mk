@@ -208,8 +208,6 @@ $(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(ID
 	  -P NumDims=$(call dimension,$*) \
 	  -P Log2NumDims=$(call log2dimension,$(call dimension,$*))
 
-# One recipe emits all three desc64 files; a plain multi-target rule would run
-# it once per target (racing under make -j), so the two siblings hang off reg_top.
 $(IDMA_RTL_DIR)/idma_desc64_reg_pkg.sv $(IDMA_RTL_DIR)/idma_desc64_addrmap_pkg.sv: $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv
 $(IDMA_RTL_DIR)/idma_desc64_reg_top.sv: $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl
 	# desc64 is APB-native with hand-written wrappers, outside the CPUIF selector
