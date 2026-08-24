@@ -390,6 +390,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// intermediate signals to reject zero length transfers
     logic      is_length_zero;
     logic      req_valid;
+    logic      zero_len_stall;
     idma_rsp_t idma_rsp;
     logic      rsp_valid;
     logic      rsp_ready;
@@ -403,11 +404,41 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     // Reject Zero Length Transfers
     //--------------------------------------
     if (RejectZeroTransfers) begin : gen_reject_zero_transfers
+        /// number of accepted transfers that still owe a response
+        typedef logic [$clog2(MetaFifoDepth + 32'd2)-1:0] num_outst_t;
+
+        num_outst_t num_outst_q;
+        logic       tf_accept, tf_complete;
+        logic       zero_len_accept, zero_rsp_pending_q;
+
         // is the current transfer length 0?
         assign is_length_zero = idma_req_i.length == '0;
 
         // bypass valid as long as length is not zero, otherwise suppress it
         assign req_valid = is_length_zero ? 1'b0 : req_valid_i;
+
+        // hold a zero length request back while a transfer still owes a response or an older
+        // rejection is unaccepted; the injected rejection must not overtake either
+        assign zero_len_stall = is_length_zero & (zero_rsp_pending_q | (num_outst_q != '0));
+
+        // outstanding transfer counter; mirrors the one in the error handler
+        assign tf_accept   = req_valid & req_ready_o;
+        assign tf_complete = rsp_valid & rsp_ready & ~idma_rsp.error;
+
+        always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
+            if (!rst_ni)                        num_outst_q <= '0;
+            else if (tf_accept & ~tf_complete)  num_outst_q <= num_outst_q + 'd1;
+            else if (tf_complete & ~tf_accept)  num_outst_q <= num_outst_q - 'd1;
+        end
+
+        // the rejection is a proper stream: it is held until the consumer accepts it
+        assign zero_len_accept = is_length_zero & req_valid_i & req_ready_o;
+
+        always_ff @(posedge clk_i or negedge rst_ni) begin : proc_zero_rsp_pending
+            if (!rst_ni)                               zero_rsp_pending_q <= 1'b0;
+            else if (zero_len_accept)                  zero_rsp_pending_q <= 1'b1;
+            else if (zero_rsp_pending_q & rsp_ready_i) zero_rsp_pending_q <= 1'b0;
+        end
 
         // modify response
         always_comb begin : proc_modify_response_zero_length
@@ -416,8 +447,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             rsp_ready   = rsp_ready_i;
             rsp_valid_o = rsp_valid;
 
-            // a zero transfer happens
-            if (is_length_zero & req_valid_i & req_ready_o) begin
+            // a zero transfer is pending
+            if (zero_rsp_pending_q) begin
                 // block backend
                 rsp_ready = 1'b0;
                 // generate new response
@@ -432,10 +463,11 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     // just bypass signals
     end else begin : gen_bypass_zero_transfers
         // bypass
-        assign req_valid   = req_valid_i;
-        assign idma_rsp_o  = idma_rsp;
-        assign rsp_ready   = rsp_ready_i;
-        assign rsp_valid_o = rsp_valid;
+        assign req_valid      = req_valid_i;
+        assign zero_len_stall = 1'b0;
+        assign idma_rsp_o     = idma_rsp;
+        assign rsp_ready      = rsp_ready_i;
+        assign rsp_valid_o    = rsp_valid;
     end
 
 
@@ -453,18 +485,18 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
                                 busy_o.r_leg_busy | busy_o.w_leg_busy | busy_o.raw_coupler_busy;
         assign cmp_cfg_stall  = req_valid & (idma_req_i.opt.compute != cmp_cfg_q) & backend_active;
         assign req_valid_leg  = req_valid & ~cmp_cfg_stall;
-        assign req_ready_o    = leg_ready & ~cmp_cfg_stall;
+        assign req_ready_o    = leg_ready & ~cmp_cfg_stall & ~zero_len_stall;
         always_ff @(posedge clk_i or negedge rst_ni) begin
             if (!rst_ni)                        cmp_cfg_q <= '0;
             else if (req_valid_leg & leg_ready) cmp_cfg_q <= idma_req_i.opt.compute;
         end
     end else begin : gen_no_compute_cfg_gate
         assign req_valid_leg = req_valid;
-        assign req_ready_o   = leg_ready;
+        assign req_ready_o   = leg_ready & ~zero_len_stall;
     end
 % else:
     assign req_valid_leg = req_valid;
-    assign req_ready_o   = leg_ready;
+    assign req_ready_o   = leg_ready & ~zero_len_stall;
 % endif
 
     //--------------------------------------
