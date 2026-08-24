@@ -169,7 +169,8 @@ write_bridge_template: |
         // Handle writes
         while(axis_jobs.size() > 0) begin
             current_job = axis_jobs.pop_front();
-            // a zero-length transfer emits no beats; waiting for one would steal the next job's
+            // a zero-length transfer emits no beats at either setting of RejectZeroTransfers;
+            // waiting for one would steal the next job's packet
             if (current_job.length == 0) continue;
             address = { current_job.dst_addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} };
             axis_obi_write_req.a.addr = address;
