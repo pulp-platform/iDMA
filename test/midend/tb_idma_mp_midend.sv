@@ -15,19 +15,24 @@
 module tb_idma_mp_midend #(
   parameter int unsigned NumBEs      = 32'd4,
   parameter int unsigned RegionWidth = 32'h1000,
-  parameter int unsigned AddrWidth   = 32'd32
+  parameter int unsigned AddrWidth   = 32'd32,
+  parameter int unsigned UserWidth   = 32'd36
 );
 
   localparam int unsigned RegionStart = 32'h0000_0000;
   localparam int unsigned RegionEnd   = RegionStart + NumBEs * RegionWidth;
   localparam int unsigned NotInvolvedLen = 32'd1;
 
+  typedef logic [UserWidth-1:0] user_t;
   typedef logic [AddrWidth-1:0] addr_t;
   typedef logic [        31:0] tf_len_t;
   typedef logic [         2:0] id_t;
 
-  `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, id_t, addr_t, tf_len_t)
+  `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, id_t, addr_t, tf_len_t, user_t)
   `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
+
+  // recognisable pattern, wider than 32 bits to prove the type is carried
+  localparam user_t           UserTag = user_t'(36'h9_ABCD_EF12);
 
   logic clk, rst_n;
 
@@ -92,6 +97,8 @@ module tb_idma_mp_midend #(
     chk($sformatf("%s be%0d src", name, i), req_out[i].src_addr, exp_src);
     chk($sformatf("%s be%0d dst", name, i), req_out[i].dst_addr, exp_dst);
     chk($sformatf("%s be%0d len", name, i), req_out[i].length,   exp_len);
+    // metadata, the user field included, is forwarded untouched
+    chk($sformatf("%s be%0d user", name, i), 64'(req_out[i].user), 64'(UserTag));
   endtask
 
   /// A back-end outside the transfer emits the tie-off request, not a slice.
@@ -106,6 +113,7 @@ module tb_idma_mp_midend #(
     req_in.src_addr = addr_t'(src);
     req_in.dst_addr = addr_t'(dst);
     req_in.length   = tf_len_t'(len);
+    req_in.user     = UserTag;
     #1ns;
   endtask
 
