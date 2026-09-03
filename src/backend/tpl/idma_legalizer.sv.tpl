@@ -170,7 +170,9 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     % endif
 % endfor
     page_len_t w_num_bytes_to_pb;
+% if not always_decoupled:
     page_len_t c_num_bytes_to_pb;
+% endif
 
     // read process
     page_len_t r_num_bytes_possible;
@@ -351,16 +353,23 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
     //--------------------------------------
     // page boundary check
     //--------------------------------------
+% if not always_decoupled:
     // how many transfers are remaining when concerning both r/w pages?
     // take the boundary that is closer
     assign c_num_bytes_to_pb = (r_num_bytes_to_pb > w_num_bytes_to_pb) ?
                                 w_num_bytes_to_pb : r_num_bytes_to_pb;
+% endif
 
 
     //--------------------------------------
     // Synchronized R/W process
     //--------------------------------------
     always_comb begin : proc_num_bytes_possible
+% if always_decoupled:
+        // Every protocol here forces decoupling: never coupled
+        r_num_bytes_possible = r_num_bytes_to_pb;
+        w_num_bytes_possible = w_num_bytes_to_pb;
+% else:
         // Default: Coupled
         r_num_bytes_possible = c_num_bytes_to_pb;
         w_num_bytes_possible = c_num_bytes_to_pb;
@@ -392,6 +401,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             r_num_bytes_possible = r_num_bytes_to_pb;
             w_num_bytes_possible = w_num_bytes_to_pb;
         end
+% endif
     end
 
     assign r_addr_offset = r_tf_q.addr[OffsetWidth-1:0];
@@ -644,6 +654,14 @@ ${database[protocol]['legalizer_write_data_path']}
     // * rw_decoupled: either machine advances
 
     always_comb begin : proc_legalizer_flow_control
+% if always_decoupled:
+        // Every protocol here forces decoupling: never coupled
+        r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
+        w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
+
+        r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
+        w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
+% else:
         if ( opt_tf_q.decouple_rw\
         % if len(used_non_bursting_or_force_decouple_read_protocols) != 0:
 
@@ -680,6 +698,7 @@ ${database[protocol]['legalizer_write_data_path']}
             r_valid_o = r_tf_q.valid & w_ready_i & r_ready_i & !flush_i;
             w_valid_o = w_tf_q.valid & r_ready_i & w_ready_i & !flush_i;
         end
+% endif
     end
 
     // load next idma request: if both machines are done!
