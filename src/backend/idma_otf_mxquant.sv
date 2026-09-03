@@ -62,11 +62,18 @@ module idma_otf_mxquant
   assign fp16_act = (Fp16Up != 1'b0) && (src_fmt_i == idma_pkg::MX_FMT_FP16);
 
   // lane-exact pop: a tail beat pops only its own bytes
-  logic [PopW-1:0] pop_cnt;
+  logic [PopW-1:0]      pop_cnt;
+  logic [StrbWidth-1:0] pop_bits;
+  logic [PopW-1:0]      pop_tree [StrbWidth];
   always_comb begin
     pop_cnt = '0;
+    pop_bits = lane_ready_i & lane_valid_o;
     for (int i = 0; i < StrbWidth; i++)
-      if (lane_ready_i[i] && lane_valid_o[i]) pop_cnt += PopW'(1);
+      pop_tree[i] = PopW'(pop_bits[i]);
+    for (int s = StrbWidth/2; s > 0; s = s/2)
+      for (int i = 0; i < s; i++)
+        pop_tree[i] = pop_tree[i] + pop_tree[i+s];
+    pop_cnt = pop_tree[0];
   end
 
   assign busy_o = (fill_q != '0) || (pack_off_q != '0);
