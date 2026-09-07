@@ -12,6 +12,8 @@ tb_define: "PROT_AXI4"
 bursts: "split_at_page_boundary"
 page_size: 4096
 max_beats_per_burst: 256
+supports_fixed_bursts: "true"
+max_beats_per_fixed_burst: 16
 legalizer_force_decouple: "false"
 read_meta_channel: "ar_chan"
 write_meta_channel: "aw_chan"
