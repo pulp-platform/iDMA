@@ -62,6 +62,10 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         has_page_write_bursting = eval_key(used_write_prots, 'bursts', 'split_at_page_boundary', db)
         has_pow2_write_bursting = eval_key(used_write_prots, 'bursts', 'only_pow2', db)
         has_write_bursting = has_page_write_bursting or has_pow2_write_bursting
+        has_fixed_read_bursting = any(
+            db[p].get('supports_fixed_bursts', 'false') == 'true' for p in used_read_prots)
+        has_fixed_write_bursting = any(
+            db[p].get('supports_fixed_bursts', 'false') == 'true' for p in used_write_prots)
         # assemble context
         context = {
             'name_uniqueifier': prot_id,
@@ -84,6 +88,10 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
                 has_page_write_bursting,
             'has_pow2_write_bursting':
                 has_pow2_write_bursting,
+            'has_fixed_read_bursting':
+                has_fixed_read_bursting,
+            'has_fixed_write_bursting':
+                has_fixed_write_bursting,
             'used_non_bursting_write_protocols':
                 prot_key(used_write_prots, 'bursts', 'not_supported', db),
             'used_non_bursting_read_protocols':
