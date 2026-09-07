@@ -78,6 +78,8 @@ module idma_axi_write #(
     input  strb_t buffer_out_valid_i,
     /// Ready to buffer
     output strb_t buffer_out_ready_o,
+    /// Logical byte positions consumed, before applying the external write-strobe mask
+    output strb_t buffer_out_consumed_o,
     /// External write-strobe mask (ANDed into wstrb); tie to '1 when unused
     input  strb_t mask_ext_i
 );
@@ -87,6 +89,8 @@ module idma_axi_write #(
 
     // corresponds to the strobe: the write aligned data that is currently valid in the buffer
     strb_t mask_out;
+    // Byte positions belonging to this write beat, before suppressing compute-invalid bytes.
+    strb_t logical_mask_out;
 
     // write signals: is this the first / last element in a burst?
     logic first_w;
@@ -140,15 +144,15 @@ module idma_axi_write #(
     // determine valid data to pop by calculation the wstrb
     always_comb begin : proc_out_mask_generator
         // default case: all ones
-        mask_out = '1;
+        logical_mask_out = '1;
         // is first word: some bytes at the beginning may be invalid
-        mask_out = first_w ? (mask_out & w_first_mask) : mask_out;
+        logical_mask_out = first_w ? (logical_mask_out & w_first_mask) : logical_mask_out;
         // is last word in write burst: some bytes at the end may be invalid
         if (w_dp_req_i.tailer != '0 & last_w) begin
-            mask_out = mask_out & w_last_mask;
+            logical_mask_out = logical_mask_out & w_last_mask;
         end
         // external mask (OTF compute)
-        mask_out = mask_out & mask_ext_i;
+        mask_out = logical_mask_out & mask_ext_i;
     end
 
 
@@ -180,6 +184,8 @@ module idma_axi_write #(
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
+    // Compute beats track all logical positions, including those suppressed by their strobe.
+    assign buffer_out_consumed_o = write_happening ? logical_mask_out : '0;
 
     // signal the bus that we are ready
     assign write_req_o.w_valid = ready_to_write;

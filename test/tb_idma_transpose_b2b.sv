@@ -29,8 +29,11 @@ module tb_idma_transpose_b2b
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
 
   // Geometry cases (M, N, EB); EB>StrbWidth cases skip.
-  localparam int unsigned NCases = 4;
-  localparam int unsigned Cases [NCases][3] = '{ '{6, 8, 1}, '{8, 8, 1}, '{13, 19, 1}, '{5, 5, 2} };
+  localparam int unsigned NCases = 5;
+  localparam int unsigned Cross4KCase = NCases - 1;
+  localparam int unsigned Cases [NCases][3] = '{
+    '{6, 8, 1}, '{8, 8, 1}, '{13, 19, 1}, '{5, 5, 2}, '{7, 11, 1}
+  };
 
   typedef logic [AddrWidth-1:0]  addr_t;
   typedef logic [DataWidth-1:0]  data_t;
@@ -234,7 +237,7 @@ module tb_idma_transpose_b2b
 
   initial begin
     automatic int unsigned total = 0, e1, e2;
-    automatic addr_t db1 = 'h0000_4000;
+    automatic addr_t db1;
     automatic addr_t db2 = 'h0000_8000;   // DIFFERENT base — a stale-addr bug misplaces xfer 2
     automatic int unsigned m, n, eb;
     automatic bit first_compact;
@@ -250,9 +253,14 @@ module tb_idma_transpose_b2b
         for (int unsigned c = 0; c < n; c++)
           for (int unsigned b = 0; b < eb; b++)
             wr_mem(sb + (r*n + c)*eb + b, 8'((( (r*n+c)*eb + b )*7 + 3) & 8'hFF));
+
+      // The final case starts two bytes below a 4 KiB boundary. Its first logical output beat
+      // therefore crosses 0x5000 for every tested StrbWidth and must be split by the legalizer.
+      db1 = (k == Cross4KCase) ? 'h0000_4ffe : 'h0000_4000;
       // Alternate the order so both padded->compact and compact->padded
-      // transitions are covered while retaining distinct destination bases.
-      first_compact = bit'(k & 1);
+      // transitions are covered while retaining distinct destination bases. Force compact mode
+      // for the boundary-crossing transfer to exercise partial transpose-output strobes as well.
+      first_compact = (k == Cross4KCase) ? 1'b1 : bit'(k & 1);
       $display("[B2BT] %0dx%0d EB=%0d: compact=%0d -> db=%0h, compact=%0d -> db=%0h",
                m, n, eb, first_compact, db1, !first_compact, db2);
       do_transpose(m, n, eb, first_compact, db1, e1);
