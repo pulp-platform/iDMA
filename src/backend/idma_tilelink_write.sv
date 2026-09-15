@@ -79,7 +79,9 @@ module idma_tilelink_write #(
     /// Valid from buffer
     input  strb_t buffer_out_valid_i,
     /// Ready to buffer
-    output strb_t buffer_out_ready_o
+    output strb_t buffer_out_ready_o,
+    /// Logical byte positions consumed by an accepted write
+    output strb_t buffer_out_consumed_o
 );
     // offsets needed for masks to empty buffer
     strb_t w_first_mask;
@@ -169,6 +171,7 @@ module idma_tilelink_write #(
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
+    assign buffer_out_consumed_o = buffer_out_ready_o;
 
     // signal the bus that we are ready
     assign write_req_o.a_valid = ready_to_write;
