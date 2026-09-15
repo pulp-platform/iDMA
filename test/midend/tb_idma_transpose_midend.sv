@@ -8,9 +8,9 @@
 `include "idma/typedef.svh"
 
 /// Unit check for idma_transpose_midend: the expanded NumDim=4 ND request must
-/// match the golden compact and tile-padded geometries, and a non-transpose
-/// request must pass through unchanged. Sweeps a geometry list internally
-/// (one elaboration per bus width).
+/// match the golden compact, tile-padded, and explicitly pitched geometries.
+/// A non-transpose request must pass through unchanged. Sweeps a geometry list
+/// internally (one elaboration per bus width).
 module tb_idma_transpose_midend #(
   parameter int unsigned DataWidth = 512,
   parameter int unsigned AddrWidth = 64
@@ -54,15 +54,21 @@ module tb_idma_transpose_midend #(
     end
   endtask
 
-  // Check both compact and tile-padded expansion for one transpose geometry.
+  // Check one transpose geometry. Zero row strides select the layout-derived
+  // defaults; nonzero values exercise explicitly pitched source and destination rows.
   task automatic chk_geom(input int unsigned m, input int unsigned n, input int unsigned eb,
-                          input bit compact);
+                          input bit compact, input int unsigned src_row_stride = 0,
+                          input int unsigned dst_row_stride = 0);
     automatic int unsigned ne   = StrbWidth/eb;
     automatic int unsigned mode = (eb==4) ? 2 : (eb==2) ? 1 : 0;
     automatic int unsigned yt   = (m + ne - 1)/ne;
     automatic int unsigned nt   = (n + ne - 1)/ne;
     automatic int unsigned mp   = yt*ne;
     automatic int unsigned dp   = compact ? m : mp;
+    automatic int unsigned effective_src_row_stride =
+        (src_row_stride == 0) ? n*eb : src_row_stride;
+    automatic int unsigned effective_dst_row_stride =
+        (dst_row_stride == 0) ? dp*eb : dst_row_stride;
     nd_in = '0;
     nd_in.burst_req.src_addr = 64'h1000;
     nd_in.burst_req.dst_addr = 64'h2000;
@@ -72,18 +78,23 @@ module tb_idma_transpose_midend #(
     nd_in.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
     nd_in.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
     nd_in.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
+    nd_in.d_req[0].src_strides = addr_t'(src_row_stride);
+    nd_in.d_req[0].dst_strides = addr_t'(dst_row_stride);
     #1;
     // golden geometry (same formulas as tb_idma_transpose_nd)
     chk("length",  nd_out.burst_req.length,     ne*eb);
     chk("d0.reps", nd_out.d_req[0].reps,        ne);
-    chk("d0.src",  nd_out.d_req[0].src_strides, addr_t'(n*eb));
-    chk("d0.dst",  nd_out.d_req[0].dst_strides, addr_t'(dp*eb));
+    chk("d0.src",  nd_out.d_req[0].src_strides, addr_t'(effective_src_row_stride));
+    chk("d0.dst",  nd_out.d_req[0].dst_strides, addr_t'(effective_dst_row_stride));
     chk("d1.reps", nd_out.d_req[1].reps,        yt);
-    chk("d1.src",  nd_out.d_req[1].src_strides, addr_t'(n*eb));
-    chk("d1.dst",  nd_out.d_req[1].dst_strides, addr_t'(int'(ne*eb) - int'((ne-1)*dp*eb)));
+    chk("d1.src",  nd_out.d_req[1].src_strides, addr_t'(effective_src_row_stride));
+    chk("d1.dst",  nd_out.d_req[1].dst_strides,
+        addr_t'(int'(ne*eb) - int'((ne-1)*effective_dst_row_stride)));
     chk("d2.reps", nd_out.d_req[2].reps,        nt);
-    chk("d2.src",  nd_out.d_req[2].src_strides, addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb)));
-    chk("d2.dst",  nd_out.d_req[2].dst_strides, addr_t'(int'(dp*eb) - int'((yt-1)*ne*eb)));
+    chk("d2.src",  nd_out.d_req[2].src_strides,
+        addr_t'(int'(ne*eb) - int'((yt*ne-1)*effective_src_row_stride)));
+    chk("d2.dst",  nd_out.d_req[2].dst_strides,
+        addr_t'(int'(effective_dst_row_stride) - int'((yt-1)*ne*eb)));
     // addresses + compute must survive untouched
     chk("src_addr", nd_out.burst_req.src_addr, 64'h1000);
     chk("dst_addr", nd_out.burst_req.dst_addr, 64'h2000);
@@ -112,8 +123,13 @@ module tb_idma_transpose_midend #(
       chk_geom(Cases[k][0], Cases[k][1], Cases[k][2], 1'b1);
     end
 
-    if (errs == 0) $display("[MID] ALL PASS (%0d geometries x 2 layouts, StrbWidth=%0d)",
-                            NCases, StrbWidth);
+    // Use pitches with padding that is deliberately unrelated to the tile width.
+    chk_geom(13, 19, 2, 1'b0, 48, 40);
+    chk_geom(13, 19, 2, 1'b1, 48, 40);
+
+    if (errs == 0)
+      $display("[MID] ALL PASS (%0d default geometries x 2 layouts plus pitched cases, StrbWidth=%0d)",
+               NCases, StrbWidth);
     else           $fatal(1, "[MID] FAIL: %0d mismatches", errs);
     $finish;
   end
