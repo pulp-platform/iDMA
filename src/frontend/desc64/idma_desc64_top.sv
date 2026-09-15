@@ -111,7 +111,8 @@ typedef struct packed {
     ///                bit 2: cache read alloc
     ///                bit 3: cache write alloc
     /// bits 23:16     AXI ID used for the transfer
-    /// bits 31:24     unused/reserved
+    /// bit  24        enable deadlock-free mode by reserving data-buffer capacity before reads
+    /// bits 31:25     unused/reserved
     logic [31:0] flags;
     /// length of request in bytes
     logic [31:0] length;

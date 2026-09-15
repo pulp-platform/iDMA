@@ -12,3 +12,5 @@ bender
 todo
 .venv
 modelsim.ini
+# for emacs enjoyers
+**/*.~undo-tree~

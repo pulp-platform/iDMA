@@ -49,7 +49,7 @@ module idma_transpose_midend #(
     always_comb begin : proc_expand
         logic [ModeW-1:0]        mode;
         logic [TensorW-1:0]      tm, tn;
-        logic signed [WorkW-1:0] m, n, log2ne, ne, yt, nt, nxe, mpe;
+        logic signed [WorkW-1:0] m, n, log2ne, ne, yt, nt, nxe, me, mpe, dst_row_bytes;
         logic signed [WorkW-1:0] strb_c;   // NE*E == StrbWidth (mode cancels)
 
         nd_req_o = nd_req_i;   // passthrough
@@ -66,7 +66,11 @@ module idma_transpose_midend #(
             yt     = (m + ne - 1) >>> log2ne;                  // ceil(M/NE)
             nt     = (n + ne - 1) >>> log2ne;                  // ceil(N/NE)
             nxe    = n  <<< mode;                              // N*E  (E = 1<<mode)
-            mpe    = yt <<< Log2Strb;                          // MP*E = YT*NE*E = YT*StrbWidth
+            me     = m  <<< mode;                              // M*E: compact destination row size
+            mpe    = yt <<< Log2Strb;                          // padded destination row size
+            // Compact rows can be unaligned to the datapath and may require split AXI beats.
+            // Legacy mode retains one complete tile-row slot per row tile.
+            dst_row_bytes = nd_req_i.burst_req.opt.compute.params.transpose.compact ? me : mpe;
             strb_c = $signed(WorkW'(StrbWidth));               // NE*E (one tile-row = StrbWidth B)
 
             nd_req_o.burst_req.length     = LenW'(StrbWidth);
@@ -74,16 +78,18 @@ module idma_transpose_midend #(
             // d_req[0] = local row within tile (reps NE)
             nd_req_o.d_req[0].reps        = ne[RepW-1:0];
             nd_req_o.d_req[0].src_strides = addr_t'(nxe);
-            nd_req_o.d_req[0].dst_strides = addr_t'(mpe);
-            // d_req[1] = row-tile (reps YT). (NE-1)*MPE = (MPE<<log2ne) - MPE.
+            nd_req_o.d_req[0].dst_strides = addr_t'(dst_row_bytes);
+            // d_req[1] advances to the next row tile and rewinds the local output-row walk.
             nd_req_o.d_req[1].reps        = yt[RepW-1:0];
             nd_req_o.d_req[1].src_strides = addr_t'(nxe);
-            nd_req_o.d_req[1].dst_strides = addr_t'(strb_c - (mpe <<< log2ne) + mpe);
+            nd_req_o.d_req[1].dst_strides =
+                addr_t'(strb_c - (dst_row_bytes <<< log2ne) + dst_row_bytes);
             // d_req[2] = col-tile (reps NT). (YT*NE-1)*NXE = ((YT*N)<<Log2Strb) - NXE;
-            //            the dst rewind MPE-(YT-1)*StrbWidth collapses to StrbWidth.
+            //            destination output rows are dst_row_bytes apart.
             nd_req_o.d_req[2].reps        = nt[RepW-1:0];
             nd_req_o.d_req[2].src_strides = addr_t'(strb_c - ((yt * n) <<< Log2Strb) + nxe);
-            nd_req_o.d_req[2].dst_strides = addr_t'(strb_c);
+            nd_req_o.d_req[2].dst_strides =
+                addr_t'(dst_row_bytes - (yt <<< Log2Strb) + strb_c);
             // the walk is exactly 4-D: neutralize any higher dims
             for (int unsigned d = 3; d < NumDim-1; d++) begin
                 nd_req_o.d_req[d].reps        = RepW'(1);

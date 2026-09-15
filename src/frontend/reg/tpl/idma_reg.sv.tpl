@@ -241,6 +241,7 @@ module idma_${identifier} #(
       nxt_dma_req${sep}opt.beo.dst_max_llen   = dma_reg2hw[i].conf.dst_max_llen.value;
       nxt_dma_req${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.value;
       nxt_dma_req${sep}opt.beo.dst_reduce_len = dma_reg2hw[i].conf.dst_reduce_len.value;
+      nxt_dma_req${sep}opt.beo.deadlock_free  = dma_reg2hw[i].conf.deadlock_free.value;
 
       // Optional on-the-fly compute settings are part of the transfer descriptor and
       // are captured together with the address/stride fields when next_id is read.
@@ -254,6 +255,9 @@ module idma_${identifier} #(
           dma_reg2hw[i].compute_cfg.transpose_tensor_m.value;
       nxt_dma_req${sep}opt.compute.params.transpose.tensor_n =
           dma_reg2hw[i].compute_cfg.transpose_tensor_n.value;
+      // Compact mode removes tile padding from destination rows.
+      nxt_dma_req${sep}opt.compute.params.transpose.compact  =
+          dma_reg2hw[i].compute_cfg.transpose_compact.value;
 
 % if num_dim != 1:
       // ND connections
