@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## Unreleased
 
 ### Added
+- Strided transpose: independent source and destination row strides allow a
+  region of a larger matrix to be transposed directly into another matrix.
+  Strides are in bytes; zero retains the default compact or padded row spacing.
 - Per-transfer `deadlock_free` mode. Before issuing a read burst, the backend
   reserves enough buffer space for all bytes that burst will return. Space is
   freed when the data leaves the buffer, not when the read response arrives.
