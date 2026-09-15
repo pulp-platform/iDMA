@@ -1,5 +1,9 @@
+// Copyright 2026 Mosaic SoC AG.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
+
+// Authors:
+// - Georg Rutishauser <georg@mosaic-soc.com>
 
 `include "common_cells/assertions.svh"
 
