@@ -156,4 +156,28 @@
     `IDMA_TYPEDEF_INIT_RSP_T(__name``_rsp_t, __name``_rsp_chan_t)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA inst64 Event Struct
+//
+// The inst64 frontend drives every member from idma_inst64_events; integrators only count them.
+//
+// Usage Example:
+// `IDMA_TYPEDEF_EVENTS_T(dma_events_t, DataWidth)
+`define IDMA_TYPEDEF_EVENTS_T(__events_t, __data_w)                      \
+    typedef struct packed {                                              \
+        logic           aw_valid, aw_ready, aw_done, aw_stall;           \
+        axi_pkg::len_t  aw_len;                                          \
+        axi_pkg::size_t aw_size;                                         \
+        logic           ar_valid, ar_ready, ar_done, ar_stall;           \
+        axi_pkg::len_t  ar_len;                                          \
+        axi_pkg::size_t ar_size;                                         \
+        logic           r_valid, r_ready, r_done, r_bw, r_stall, buf_r_stall; \
+        logic           w_valid, w_ready, w_done, w_stall, buf_w_stall;  \
+        logic [$clog2((__data_w)/8):0] num_bytes_written;                \
+        logic           b_valid, b_ready, b_done;                        \
+        logic           obi_wr_req, obi_rd_req;                          \
+        logic           dma_busy;                                        \
+    } __events_t;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 `endif
