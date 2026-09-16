@@ -72,12 +72,14 @@ module idma_inst64_events #(
         events_o.r_done = axi_req_i.r_ready &&  axi_rsp_i.r_valid;
         events_o.r_bw = axi_req_i.r_ready &&  axi_rsp_i.r_valid;
         events_o.r_stall = axi_req_i.r_ready && !axi_rsp_i.r_valid;
+        events_o.buf_r_stall = !axi_req_i.r_ready && axi_rsp_i.r_valid;
 
         // w
         events_o.w_valid = axi_req_i.w_valid;
         events_o.w_ready = axi_rsp_i.w_ready;
         events_o.w_done = axi_rsp_i.w_ready && axi_req_i.w_valid;
         events_o.w_stall = !axi_rsp_i.w_ready && axi_req_i.w_valid;
+        events_o.buf_w_stall = axi_rsp_i.w_ready && !axi_req_i.w_valid;
         if (axi_rsp_i.w_ready && axi_req_i.w_valid) begin
             events_o.num_bytes_written = num_bytes_written;
         end
