@@ -74,11 +74,11 @@ addrmap idma_reg #(
     reg next_id {
         regwidth = 32;
         name = "next_id";
-        desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
+        desc = "Launch transfer and return its allocated ID. Returns 0 if the launch queue cannot accept the transfer or this register port loses simultaneous launch arbitration.";
         default sw = r;
         default hw = w;
         field {
-            desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
+            desc = "Launch transfer and return its allocated ID. ID 0 means that no transfer was queued and software must retry.";
             rd_swacc = true;
         } next_id [31:0] = 0;
     };
