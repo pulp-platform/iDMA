@@ -35,6 +35,9 @@ module idma_otf_mxquant
   // FP32 packs one block per beat up to StrbWidth 128; FP16 above 64 is rejected by the legalizer
   initial assert (StrbWidth >= 4 && StrbWidth <= 128 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_mxquant: StrbWidth (%0d) must be a power of two in [4, 128]", StrbWidth);
+  // the block-scale max reduces as a halving tree; a non-power-of-two block drops elements
+  initial assert ((MxBlockSize & (MxBlockSize-1)) == 0) else
+      $fatal(1, "idma_otf_mxquant: MxBlockSize (%0d) must be a power of two", MxBlockSize);
 
   localparam int unsigned BufSize     = MxCompressedBlockBytes + StrbWidth;
   localparam int unsigned OffsetWidth = $clog2(BufSize) + 1;
@@ -66,7 +69,6 @@ module idma_otf_mxquant
   logic [StrbWidth-1:0] pop_bits;
   logic [PopW-1:0]      pop_tree [StrbWidth];
   always_comb begin
-    pop_cnt = '0;
     pop_bits = lane_ready_i & lane_valid_o;
     for (int i = 0; i < StrbWidth; i++)
       pop_tree[i] = PopW'(pop_bits[i]);
