@@ -76,6 +76,8 @@ idma_reg64_2d #(
     .req_valid_o    ( fe_valid     ),
     .req_ready_i    ( fe_ready     ),
     .next_id_i      ( fe_next_id   ),  // current transfer ID returned on next_id read
+    .req_id_o       ( fe_req_id    ),  // ID allocated with fe_req
+    .id_alloc_o     ( fe_id_alloc  ),  // advance the ID generator on this pulse
     .stream_idx_o   ( fe_stream    ),
     .done_id_i      ( fe_done_id   ),  // per-stream completed IDs (from the ID tracker)
     .busy_i         ( be_busy      ),  // per-stream backend busy flags

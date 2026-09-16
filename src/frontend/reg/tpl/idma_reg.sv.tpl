@@ -41,6 +41,8 @@ module idma_${identifier} #(
   parameter int unsigned DataWidth      = 32'd512,
   /// Compute ops of the backend; a launch of any other op is refused
   parameter idma_pkg::compute_enable_t ComputeOps = '1,
+  /// Number of launches buffered between the register ports and request output; zero bypasses it
+  parameter int unsigned LaunchFifoDepth = NumRegs,
 % if _fam == 'apb':
   /// APB4 request type
   parameter type         apb_req_t      = logic,
@@ -81,7 +83,12 @@ module idma_${identifier} #(
   output dma_req_t   dma_req_o,
   output logic       req_valid_o,
   input  logic       req_ready_i,
+  /// Current unallocated transfer ID
   input  cnt_width_t next_id_i,
+  /// Transfer ID carried with dma_req_o
+  output cnt_width_t req_id_o,
+  /// Pulse indicating that next_id_i was allocated to a launch
+  output logic       id_alloc_o,
   output stream_t    stream_idx_o,
   /// Status signals
   input  cnt_width_t           [NumStreams-1:0] done_id_i,
@@ -100,18 +107,27 @@ module idma_${identifier} #(
   idma_${identifier}_reg_pkg::idma_reg__out_t dma_reg2hw [NumRegs-1:0];
   idma_${identifier}_reg_pkg::idma_reg__in_t  dma_hw2reg [NumRegs-1:0];
 
-  // arbitration output
-  dma_req_t [NumRegs-1:0] arb_dma_req_q;
-  logic     [NumRegs-1:0] arb_valid;
-  logic     [NumRegs-1:0] arb_ready;
-  logic [cc_pkg::idx_width(NumRegs)-1:0] arb_idx;
+  // A next_id read atomically allocates an ID and queues the corresponding descriptor.  Keeping
+  // all three values in one ordered FIFO ensures that IDs are issued in allocation order even
+  // when several independent register ports launch transfers.
+  typedef struct packed {
+    dma_req_t req;
+    stream_t  stream;
+  } launch_candidate_t;
 
-  // per-port launch-pending latch
-  logic    [NumRegs-1:0] launch_pending_q;
-  stream_t [NumRegs-1:0] held_stream_q;
+  typedef struct packed {
+    dma_req_t   req;
+    stream_t    stream;
+    cnt_width_t id;
+  } launch_entry_t;
 
-  // stream of the arbitrated winner, not the last pending port
-  assign stream_idx_o = req_valid_o ? held_stream_q[arb_idx] : '0;
+  launch_candidate_t [NumRegs-1:0] launch_candidate;
+  logic              [NumRegs-1:0] launch_valid;
+  logic              [NumRegs-1:0] launch_grant;
+  launch_candidate_t               selected_launch;
+  launch_entry_t                   launch_fifo_in, launch_fifo_out;
+  logic                            selected_launch_valid;
+  logic                            launch_fifo_ready;
 
   // generate the registers
   for (genvar i = 0; i < NumRegs; i++) begin : gen_core_regs
@@ -178,7 +194,7 @@ module idma_${identifier} #(
       .hwif_in   ( dma_hw2reg       [i] )
     );
 
-    // a next_id rd_swacc strobe launches a transfer; latched until the arbiter accepts
+    // A next_id rd_swacc strobe attempts a launch; arbitration decides its returned ID.
     logic     read_happens;
     stream_t  read_stream;
     dma_req_t nxt_dma_req;
@@ -228,26 +244,10 @@ module idma_${identifier} #(
       end
     end
 
-    // set on the read strobe (or an accept-and-reload in the same cycle), clear on accept
-    always_ff @(posedge clk_i or negedge rst_ni) begin : proc_launch_pending
-        if (!rst_ni) begin
-            launch_pending_q[i] <= 1'b0;
-            held_stream_q   [i] <= '0;
-            arb_dma_req_q   [i] <= '0;
-        end else begin
-            if (read_happens && (!launch_pending_q[i] || arb_ready[i])) begin
-                launch_pending_q[i] <= 1'b1;
-                held_stream_q   [i] <= read_stream;
-                arb_dma_req_q   [i] <= nxt_dma_req;
-            end else if (launch_pending_q[i] && arb_ready[i]) begin
-                launch_pending_q[i] <= 1'b0;
-            end
-        end
-    end
+    assign launch_valid[i]     = read_happens;
+    assign launch_candidate[i] = '{req: nxt_dma_req, stream: read_stream};
 
-    assign arb_valid[i] = launch_pending_q[i];
-
-    // combinational request struct, captured into arb_dma_req_q at launch time
+    // Combinational descriptor snapshot presented to the centralized launch allocator.
     always_comb begin : proc_hw_req_conv
       // all fields are zero per default
       nxt_dma_req = '0;
@@ -354,7 +354,8 @@ module idma_${identifier} #(
     // observational registers: drive .next (read-side launch is the rd_swacc strobe above)
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
         assign dma_hw2reg[i].status[c].busy.next     = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].next_id[c].next_id.next = launch_ok ? next_id_i : '0;
+        // ID zero reports that this launch lost arbitration or that the launch FIFO was full.
+        assign dma_hw2reg[i].next_id[c].next_id.next = launch_grant[i] ? next_id_i : '0;
         assign dma_hw2reg[i].done_id[c].done_id.next = done_id_i[c];
     end
 
@@ -373,25 +374,71 @@ module idma_${identifier} #(
     $fatal(1, "idma_${identifier}: mx_cfg fields do not match idma_pkg::mx_options_t");
   end
 
-  // arbitration
+  // At most one register port allocates an ID per cycle.  Other simultaneous reads complete with
+  // ID zero and may be retried, keeping the register interfaces non-blocking without requiring a
+  // multi-write FIFO or duplicated ID-counter arithmetic.
   cc_rr_arb_tree #(
     .NumIn     ( NumRegs   ),
-    .data_t    ( dma_req_t ),
+    .data_t    ( launch_candidate_t ),
     .ExtPrio   ( 0         ),
-    .AxiVldRdy ( 1         ),
-    .LockIn    ( 1         )
+    // Launch strobes are one-cycle events rather than held valid/ready streams. A request that
+    // cannot be granted immediately completes with ID zero, so the arbiter must not lock it in.
+    .AxiVldRdy ( 0         ),
+    .LockIn    ( 0         )
   ) i_rr_arb_tree (
     .clk_i,
     .rst_ni,
     .clr_i   ( 1'b0        ),
     .rr_i    ( '0          ),
-    .req_i   ( arb_valid   ),
-    .gnt_o   ( arb_ready   ),
-    .data_i  ( arb_dma_req_q ),
-    .gnt_i   ( req_ready_i ),
-    .req_o   ( req_valid_o ),
-    .data_o  ( dma_req_o   ),
-    .idx_o   ( arb_idx     )
+    .req_i   ( launch_valid          ),
+    .gnt_o   ( launch_grant          ),
+    .data_i  ( launch_candidate      ),
+    .gnt_i   ( launch_fifo_ready     ),
+    .req_o   ( selected_launch_valid ),
+    .data_o  ( selected_launch       ),
+    .idx_o   ( /* unused */          )
   );
+
+  always_comb begin : proc_launch_fifo_input
+    launch_fifo_in        = '0;
+    launch_fifo_in.req    = selected_launch.req;
+    launch_fifo_in.stream = selected_launch.stream;
+    launch_fifo_in.id     = next_id_i;
+  end
+
+  assign id_alloc_o = selected_launch_valid & launch_fifo_ready;
+
+  if (LaunchFifoDepth == 0) begin : gen_launch_bypass
+    // Without frontend buffering, a launch is allocated only if the downstream request interface
+    // accepts it immediately. Otherwise its next_id read returns zero and software retries it.
+    assign launch_fifo_ready = req_ready_i;
+    assign launch_fifo_out   = launch_fifo_in;
+    assign req_valid_o       = selected_launch_valid;
+  end else begin : gen_launch_fifo
+    cc_stream_fifo #(
+      .FallThrough ( 1'b0            ),
+      .Depth       ( LaunchFifoDepth ),
+      .data_t      ( launch_entry_t  )
+    ) i_launch_fifo (
+      .clk_i,
+      .rst_ni,
+      .clr_i   ( 1'b0                  ),
+      .flush_i ( 1'b0                  ),
+      .usage_o ( /* unused */          ),
+      .data_i  ( launch_fifo_in        ),
+      .valid_i ( selected_launch_valid ),
+      .ready_o ( launch_fifo_ready     ),
+      .data_o  ( launch_fifo_out       ),
+      .valid_o ( req_valid_o           ),
+      .ready_i ( req_ready_i           )
+    );
+  end
+
+  assign dma_req_o    = launch_fifo_out.req;
+  assign stream_idx_o = launch_fifo_out.stream;
+  assign req_id_o     = launch_fifo_out.id;
+
+  `ASSERT(OneLaunchAllocated, $onehot0(launch_grant), clk_i, !rst_ni,
+      "At most one register port may allocate a transfer ID per cycle")
 
 endmodule
