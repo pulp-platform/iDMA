@@ -40,12 +40,16 @@ package idma_float_pkg;
       input logic [31:0] fp32_bits[MxBlockSize], input int bias);
     logic [7:0] max_exp;
     logic [7:0] elem_exp;
+    logic [7:0] exp_tree [MxBlockSize];
     int         scale;
     max_exp = 8'd0;
-    for (int i = 0; i < MxBlockSize; i++) begin
-      elem_exp = fp32_bits[i][30:23];
-      if (elem_exp != 8'hFF && elem_exp > max_exp) max_exp = elem_exp;
-    end
+    for (int i = 0; i < MxBlockSize; i++)
+      exp_tree[i] = (fp32_bits[i][30:23] == 8'hFF) ? 8'd0 : fp32_bits[i][30:23];
+    for (int s = MxBlockSize/2; s > 0; s = s/2)
+      for (int i = 0; i < s; i++)
+        exp_tree[i] = (exp_tree[i] > exp_tree[i+s]) ? exp_tree[i] : exp_tree[i+s];
+    max_exp = exp_tree[0];
+
     scale = int'(max_exp) - Fp32Bias - bias;
     if (scale < -128) scale = -128;
     else if (scale > 127) scale = 127;
