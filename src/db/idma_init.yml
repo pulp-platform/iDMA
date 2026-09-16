@@ -18,29 +18,7 @@ combined_aw_and_w: "false"
 read_slave: "false"
 passive_req: "false"
 typedefs: |
-    /// init read request
-    typedef struct packed {
-        logic [AddrWidth-1:0]  cfg;
-        logic [DataWidth-1:0]  term;
-        logic [StrbWidth-1:0]  strb;
-        logic [AxiIdWidth-1:0] id;
-    } init_req_chan_t;
-
-    typedef struct packed {
-        init_req_chan_t req_chan;
-        logic           req_valid;
-        logic           rsp_ready;
-    } init_req_t;
-
-    typedef struct packed {
-        logic [DataWidth-1:0] init;
-    } init_rsp_chan_t;
-
-    typedef struct packed {
-        init_rsp_chan_t rsp_chan;
-        logic           rsp_valid;
-        logic           req_ready;
-    } init_rsp_t;
+    `IDMA_TYPEDEF_INIT_ALL(init, AddrWidth, DataWidth, StrbWidth, AxiIdWidth)
 read_bridge_template: |
     cc_spill_register #(
         .data_t ( logic ),

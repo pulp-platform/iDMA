@@ -99,4 +99,61 @@
     `IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA INIT Protocol Channel Structs
+//
+// INIT has no external protocol repository, so iDMA owns its channel definitions. Integrators
+// instantiating an INIT-capable backend or the inst64 frontend need these to fill the corresponding
+// parameter types.
+//
+// The *_STRUCT variants are anonymous, for use in a localparam type parameter list.
+//
+// Usage Example:
+// `IDMA_TYPEDEF_INIT_ALL(init, AddrWidth, DataWidth, StrbWidth, AxiIdWidth)
+`define IDMA_INIT_REQ_CHAN_STRUCT(__addr_w, __data_w, __strb_w, __id_w)  \
+    struct packed {                                                      \
+        logic [(__addr_w)-1:0] cfg;                                      \
+        logic [(__data_w)-1:0] term;                                     \
+        logic [(__strb_w)-1:0] strb;                                     \
+        logic [(__id_w)-1:0] id;                                         \
+    }
+`define IDMA_INIT_RSP_CHAN_STRUCT(__data_w)                              \
+    struct packed {                                                      \
+        logic [(__data_w)-1:0] init;                                     \
+    }
+`define IDMA_INIT_REQ_STRUCT(__chan_t)                                   \
+    struct packed {                                                      \
+        __chan_t req_chan;                                               \
+        logic    req_valid;                                              \
+        logic    rsp_ready;                                              \
+    }
+`define IDMA_INIT_RSP_STRUCT(__chan_t)                                   \
+    struct packed {                                                      \
+        __chan_t rsp_chan;                                               \
+        logic    rsp_valid;                                              \
+        logic    req_ready;                                              \
+    }
+`define IDMA_TYPEDEF_INIT_REQ_CHAN_T(__chan_t, __addr_w, __data_w, __strb_w, __id_w) \
+    typedef `IDMA_INIT_REQ_CHAN_STRUCT(__addr_w, __data_w, __strb_w, __id_w) __chan_t;
+`define IDMA_TYPEDEF_INIT_RSP_CHAN_T(__chan_t, __data_w) \
+    typedef `IDMA_INIT_RSP_CHAN_STRUCT(__data_w) __chan_t;
+`define IDMA_TYPEDEF_INIT_REQ_T(__req_t, __chan_t) \
+    typedef `IDMA_INIT_REQ_STRUCT(__chan_t) __req_t;
+`define IDMA_TYPEDEF_INIT_RSP_T(__rsp_t, __chan_t) \
+    typedef `IDMA_INIT_RSP_STRUCT(__chan_t) __rsp_t;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA Full INIT Protocol Structs
+//
+// Usage Example:
+// `IDMA_TYPEDEF_INIT_ALL(init, AddrWidth, DataWidth, StrbWidth, AxiIdWidth)
+`define IDMA_TYPEDEF_INIT_ALL(__name, __addr_w, __data_w, __strb_w, __id_w)             \
+    `IDMA_TYPEDEF_INIT_REQ_CHAN_T(__name``_req_chan_t, __addr_w, __data_w, __strb_w, __id_w) \
+    `IDMA_TYPEDEF_INIT_RSP_CHAN_T(__name``_rsp_chan_t, __data_w)                        \
+    `IDMA_TYPEDEF_INIT_REQ_T(__name``_req_t, __name``_req_chan_t)                       \
+    `IDMA_TYPEDEF_INIT_RSP_T(__name``_rsp_t, __name``_rsp_chan_t)
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 `endif
