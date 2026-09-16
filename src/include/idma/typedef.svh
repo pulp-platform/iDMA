@@ -100,15 +100,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// iDMA INIT Protocol Channel Structs
-//
-// INIT has no external protocol repository, so iDMA owns its channel definitions. Integrators
-// instantiating an INIT-capable backend or the inst64 frontend need these to fill the corresponding
-// parameter types.
-//
-// The *_STRUCT variants are anonymous, for use in a localparam type parameter list.
-//
-// Usage Example:
+// iDMA INIT channel structs; the *_STRUCT variants are anonymous, for a localparam type list
 // `IDMA_TYPEDEF_INIT_ALL(init, AddrWidth, DataWidth, StrbWidth, AxiIdWidth)
 `define IDMA_INIT_REQ_CHAN_STRUCT(__addr_w, __data_w, __strb_w, __id_w)  \
     struct packed {                                                      \
@@ -145,10 +137,7 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// iDMA Full INIT Protocol Structs
-//
-// Usage Example:
-// `IDMA_TYPEDEF_INIT_ALL(init, AddrWidth, DataWidth, StrbWidth, AxiIdWidth)
+// iDMA full INIT protocol structs
 `define IDMA_TYPEDEF_INIT_ALL(__name, __addr_w, __data_w, __strb_w, __id_w)             \
     `IDMA_TYPEDEF_INIT_REQ_CHAN_T(__name``_req_chan_t, __addr_w, __data_w, __strb_w, __id_w) \
     `IDMA_TYPEDEF_INIT_RSP_CHAN_T(__name``_rsp_chan_t, __data_w)                        \
@@ -157,11 +146,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// iDMA inst64 Event Struct
-//
-// The inst64 frontend drives every member from idma_inst64_events; integrators only count them.
-//
-// Usage Example:
+// iDMA inst64 event struct; idma_inst64_events drives every member
 // `IDMA_TYPEDEF_EVENTS_T(dma_events_t, DataWidth)
 `define IDMA_TYPEDEF_EVENTS_T(__events_t, __data_w)                      \
     typedef struct packed {                                              \
