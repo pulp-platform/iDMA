@@ -6,6 +6,7 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 `include "axi/typedef.svh"
+`include "idma/typedef.svh"
 `include "obi/typedef.svh"
 
 package idma_inst64_tb_pkg;
@@ -59,26 +60,8 @@ package idma_inst64_tb_pkg;
     endfunction
     localparam obi_pkg::obi_cfg_t ObiCfg = tb_obi_cfg();
 
-    // INIT meta-channel types (mirror src/db/idma_init.yml)
-    typedef struct packed {
-        logic [AxiAddrWidth-1:0]   cfg;
-        logic [AxiDataWidth-1:0]   term;
-        logic [AxiDataWidth/8-1:0] strb;
-        logic [AxiIdWidth-1:0]     id;
-    } init_req_chan_t;
-    typedef struct packed {
-        init_req_chan_t req_chan;
-        logic           req_valid;
-        logic           rsp_ready;
-    } init_req_t;
-    typedef struct packed {
-        logic [AxiDataWidth-1:0] init;
-    } init_rsp_chan_t;
-    typedef struct packed {
-        init_rsp_chan_t rsp_chan;
-        logic           rsp_valid;
-        logic           req_ready;
-    } init_rsp_t;
+    // INIT meta-channel types
+    `IDMA_TYPEDEF_INIT_ALL(init, AxiAddrWidth, AxiDataWidth, AxiDataWidth/8, AxiIdWidth)
 
     typedef axi_pkg::xbar_rule_64_t addr_rule_t;
 

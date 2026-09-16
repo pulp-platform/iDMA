@@ -99,4 +99,70 @@
     `IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA INIT channel structs; the *_STRUCT variants are anonymous, for a localparam type list
+// `IDMA_TYPEDEF_INIT_ALL(init, AddrWidth, DataWidth, StrbWidth, AxiIdWidth)
+`define IDMA_INIT_REQ_CHAN_STRUCT(__addr_w, __data_w, __strb_w, __id_w)  \
+    struct packed {                                                      \
+        logic [(__addr_w)-1:0] cfg;                                      \
+        logic [(__data_w)-1:0] term;                                     \
+        logic [(__strb_w)-1:0] strb;                                     \
+        logic [(__id_w)-1:0] id;                                         \
+    }
+`define IDMA_INIT_RSP_CHAN_STRUCT(__data_w)                              \
+    struct packed {                                                      \
+        logic [(__data_w)-1:0] init;                                     \
+    }
+`define IDMA_INIT_REQ_STRUCT(__chan_t)                                   \
+    struct packed {                                                      \
+        __chan_t req_chan;                                               \
+        logic    req_valid;                                              \
+        logic    rsp_ready;                                              \
+    }
+`define IDMA_INIT_RSP_STRUCT(__chan_t)                                   \
+    struct packed {                                                      \
+        __chan_t rsp_chan;                                               \
+        logic    rsp_valid;                                              \
+        logic    req_ready;                                              \
+    }
+`define IDMA_TYPEDEF_INIT_REQ_CHAN_T(__chan_t, __addr_w, __data_w, __strb_w, __id_w) \
+    typedef `IDMA_INIT_REQ_CHAN_STRUCT(__addr_w, __data_w, __strb_w, __id_w) __chan_t;
+`define IDMA_TYPEDEF_INIT_RSP_CHAN_T(__chan_t, __data_w) \
+    typedef `IDMA_INIT_RSP_CHAN_STRUCT(__data_w) __chan_t;
+`define IDMA_TYPEDEF_INIT_REQ_T(__req_t, __chan_t) \
+    typedef `IDMA_INIT_REQ_STRUCT(__chan_t) __req_t;
+`define IDMA_TYPEDEF_INIT_RSP_T(__rsp_t, __chan_t) \
+    typedef `IDMA_INIT_RSP_STRUCT(__chan_t) __rsp_t;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA full INIT protocol structs
+`define IDMA_TYPEDEF_INIT_ALL(__name, __addr_w, __data_w, __strb_w, __id_w)             \
+    `IDMA_TYPEDEF_INIT_REQ_CHAN_T(__name``_req_chan_t, __addr_w, __data_w, __strb_w, __id_w) \
+    `IDMA_TYPEDEF_INIT_RSP_CHAN_T(__name``_rsp_chan_t, __data_w)                        \
+    `IDMA_TYPEDEF_INIT_REQ_T(__name``_req_t, __name``_req_chan_t)                       \
+    `IDMA_TYPEDEF_INIT_RSP_T(__name``_rsp_t, __name``_rsp_chan_t)
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA inst64 event struct; idma_inst64_events drives every member
+// `IDMA_TYPEDEF_EVENTS_T(dma_events_t, DataWidth)
+`define IDMA_TYPEDEF_EVENTS_T(__events_t, __data_w)                      \
+    typedef struct packed {                                              \
+        logic           aw_valid, aw_ready, aw_done, aw_stall;           \
+        axi_pkg::len_t  aw_len;                                          \
+        axi_pkg::size_t aw_size;                                         \
+        logic           ar_valid, ar_ready, ar_done, ar_stall;           \
+        axi_pkg::len_t  ar_len;                                          \
+        axi_pkg::size_t ar_size;                                         \
+        logic           r_valid, r_ready, r_done, r_bw, r_stall, buf_r_stall; \
+        logic           w_valid, w_ready, w_done, w_stall, buf_w_stall;  \
+        logic [$clog2((__data_w)/8):0] num_bytes_written;                \
+        logic           b_valid, b_ready, b_done;                        \
+        logic           obi_wr_req, obi_rd_req;                          \
+        logic           dma_busy;                                        \
+    } __events_t;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 `endif
