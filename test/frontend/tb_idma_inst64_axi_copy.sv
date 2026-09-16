@@ -12,7 +12,8 @@
 module tb_idma_inst64_axi_copy;
     import idma_inst64_tb_pkg::*;
 
-    idma_inst64_base harness ();
+    // The antiphase R/W stall is what makes the two buffer-stall events assert at all
+    idma_inst64_base #(.StallPattern(1'b1)) harness ();
 
     localparam int unsigned TimeoutCycles  = 32'd200000;
     localparam int unsigned CopySize       = 32'd4096;
@@ -44,8 +45,8 @@ module tb_idma_inst64_axi_copy;
     typedef enum int unsigned {
         EvAwValid, EvAwReady, EvAwDone, EvAwStall, EvAwLen, EvAwSize,
         EvArValid, EvArReady, EvArDone, EvArStall, EvArLen, EvArSize,
-        EvRValid,  EvRReady,  EvRDone,  EvRBw,     EvRStall,
-        EvWValid,  EvWReady,  EvWDone,  EvWStall,  EvBytes,
+        EvRValid,  EvRReady,  EvRDone,  EvRBw,     EvRStall, EvRBufStall,
+        EvWValid,  EvWReady,  EvWDone,  EvWStall,  EvWBufStall, EvBytes,
         EvBValid,  EvBReady,  EvBDone,  EvBusy,
         EvNumFields
     } ev_field_e;
@@ -88,11 +89,15 @@ module tb_idma_inst64_axi_copy;
         // r_bw duplicates r_done in the RTL; compare it to the pins, never to ev.r_done.
         ev_field_ok[EvRBw    ] = ev.r_bw     === (bus_req.r_ready && bus_res.r_valid);
         ev_field_ok[EvRStall ] = ev.r_stall  === (bus_req.r_ready && !bus_res.r_valid);
+        // Read buffer full: the DUT refuses data the memory is offering
+        ev_field_ok[EvRBufStall] = ev.buf_r_stall === (!bus_req.r_ready && bus_res.r_valid);
 
         ev_field_ok[EvWValid ] = ev.w_valid  === bus_req.w_valid;
         ev_field_ok[EvWReady ] = ev.w_ready  === bus_res.w_ready;
         ev_field_ok[EvWDone  ] = ev.w_done   === w_hs;
         ev_field_ok[EvWStall ] = ev.w_stall  === (bus_req.w_valid && !bus_res.w_ready);
+        // Write buffer empty: the memory is ready and the DUT has no beat to give
+        ev_field_ok[EvWBufStall] = ev.buf_w_stall === (bus_res.w_ready && !bus_req.w_valid);
         ev_field_ok[EvBytes  ] = ev.num_bytes_written ===
                                  (w_hs ? 32'($countones(bus_req.w.strb)) : 32'd0);
 
@@ -127,6 +132,8 @@ module tb_idma_inst64_axi_copy;
     int unsigned ev_b_beats       = 0;
     int unsigned ev_busy_cycles   = 0;
     int unsigned ev_bytes_written = 0;
+    int unsigned ev_buf_r_stalls  = 0;
+    int unsigned ev_buf_w_stalls  = 0;
     axi_pkg::len_t  ev_ar_len_seen,  ev_aw_len_seen;
     axi_pkg::size_t ev_ar_size_seen, ev_aw_size_seen;
 
@@ -150,6 +157,8 @@ module tb_idma_inst64_axi_copy;
             if (ev.w_done)   ev_w_beats++;
             if (ev.b_done)   ev_b_beats++;
             if (ev.dma_busy) ev_busy_cycles++;
+            if (ev.buf_r_stall) ev_buf_r_stalls++;
+            if (ev.buf_w_stall) ev_buf_w_stalls++;
             ev_bytes_written += ev.num_bytes_written;
         end
     end
@@ -283,16 +292,19 @@ module tb_idma_inst64_axi_copy;
                    ExpAxLen, ExpAxSize);
         end
         if (ev_busy_cycles == 0) $fatal(1, "events never reported the DMA busy");
+        // The stall pattern forces both, so a zero here means the event is not driven
+        if (ev_buf_r_stalls == 0) $fatal(1, "events never reported a read buffer stall");
+        if (ev_buf_w_stalls == 0) $fatal(1, "events never reported a write buffer stall");
 
         if (errors != 0) $fatal(1, "TEST FAILED: %0d errors", errors);
         $display("[TB] TEST PASSED: %0d B copied, ar=%0d aw=%0d beats", bytes_checked,
                  axi_ar_beats, axi_aw_beats);
         $display({"[TB] events cross-checked vs bus pins: %0d fields every cycle; totals ",
                   "ar=%0d aw=%0d b=%0d r=%0d r_bw=%0d w=%0d beats, len=%0d size=%0d, ",
-                  "%0d B written, busy %0d cycles"},
+                  "%0d B written, busy %0d cycles, buf_r_stall %0d buf_w_stall %0d cycles"},
                  NumEvFields, ev_ar_beats, ev_aw_beats, ev_b_beats, ev_r_beats,
                  ev_r_bw_beats, ev_w_beats, ev_aw_len_seen, ev_aw_size_seen,
-                 ev_bytes_written, ev_busy_cycles);
+                 ev_bytes_written, ev_busy_cycles, ev_buf_r_stalls, ev_buf_w_stalls);
         $finish;
     end
 

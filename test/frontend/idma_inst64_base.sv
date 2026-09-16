@@ -9,6 +9,8 @@
 /// one AXI plus one OBI simulation memory per channel.
 module idma_inst64_base #(
     parameter int unsigned DMATracing = idma_inst64_tb_pkg::DMATracing,
+    /// Stall the AXI R source and W sink in antiphase, see `gen_stall` below
+    parameter bit          StallPattern = 1'b0,
     /// TCDM (OBI) window; every address outside it decodes to ToSoC, i.e. AXI
     parameter logic [63:0] TcdmStart = 64'h0000_0000_1000_0000,
     parameter logic [63:0] TcdmEnd   = 64'h0000_0000_1001_0000
@@ -92,6 +94,40 @@ module idma_inst64_base #(
     //--------------------------------------
     // Memory subsystem
     //--------------------------------------
+    axi_req_t  [NumChannels-1:0] mem_req;
+    axi_resp_t [NumChannels-1:0] mem_res;
+
+    // Antiphase R/W stall: the DMA buffer alternately backs up and runs dry.
+    // A go bit only falls after its channel handshake, so no valid is ever withdrawn.
+    if (StallPattern) begin : gen_stall
+        logic [4:0] phase;
+        logic       w_go, r_go;
+
+        always_ff @(posedge clk or negedge rst_n) begin
+            if (!rst_n) begin
+                phase <= '0;
+                w_go  <= 1'b1;
+                r_go  <= 1'b1;
+            end else begin
+                phase <= phase + 5'd1;
+                w_go  <= !phase[4] || (w_go && axi_req[0].w_valid && !mem_res[0].w_ready);
+                r_go  <=  phase[4] || (r_go && mem_res[0].r_valid && !axi_req[0].r_ready);
+            end
+        end
+
+        always_comb begin
+            mem_req = axi_req;
+            axi_res = mem_res;
+            mem_req[0].w_valid = axi_req[0].w_valid && w_go;
+            mem_req[0].r_ready = axi_req[0].r_ready && r_go;
+            axi_res[0].w_ready = mem_res[0].w_ready && w_go;
+            axi_res[0].r_valid = mem_res[0].r_valid && r_go;
+        end
+    end else begin : gen_no_stall
+        assign mem_req = axi_req;
+        assign axi_res = mem_res;
+    end
+
     for (genvar c = 0; c < NumChannels; c++) begin : gen_mem_ch
         axi_sim_mem #(
             .AddrWidth         ( AxiAddrWidth ),
@@ -107,8 +143,8 @@ module idma_inst64_base #(
         ) i_axi_sim_mem (
             .clk_i             ( clk        ),
             .rst_ni            ( rst_n      ),
-            .axi_req_i         ( axi_req[c] ),
-            .axi_rsp_o         ( axi_res[c] ),
+            .axi_req_i         ( mem_req[c] ),
+            .axi_rsp_o         ( mem_res[c] ),
             .mon_w_valid_o     ( /* NC */   ),
             .mon_w_addr_o      ( /* NC */   ),
             .mon_w_data_o      ( /* NC */   ),
