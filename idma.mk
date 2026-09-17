@@ -434,6 +434,15 @@ idma_sim_tb_idma_inst64_axi_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_axi_co
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_axi_copy.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_axi_copy.log
 
+.PHONY: idma_sim_tb_idma_inst64_alias_copy
+idma_sim_tb_idma_inst64_alias_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_alias_copy.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_alias_copy.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_inst64_alias_copy \
+		-logfile inst64_alias_copy.log -do "run -all; quit"
+	# Questa does not propagate $$fatal to the exit code; gate on the transcript
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_alias_copy.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_alias_copy.log
+
 .PHONY: idma_sim_tb_idma_transpose_b2b
 idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -596,18 +605,21 @@ IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
 idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
 
-# inst64 gate: the only public concrete binding of idma_inst64_top
-IDMA_INST64_TB   := tb_idma_inst64_axi_copy
+# inst64 gate: the only public concrete bindings of idma_inst64_top
+IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:
 	mkdir -p $(IDMA_VLT_DIR)
-	$(BENDER) script verilator $(IDMA_INST64_T) --top $(IDMA_INST64_TB) \
-	  > $(IDMA_VLT_DIR)/idma_inst64_tb.f
-	$(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_inst64_tb.f \
-	  --top-module $(IDMA_INST64_TB)
+	@rc=0; for tb in $(IDMA_INST64_TBS); do \
+	  echo "--- elaborating $$tb ---"; \
+	  $(BENDER) script verilator $(IDMA_INST64_T) --top $$tb \
+	    > $(IDMA_VLT_DIR)/$$tb.f || { rc=1; continue; }; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/$$tb.f \
+	    --top-module $$tb || rc=1; \
+	done; exit $$rc
 
 # verilator elaborates every synth top, so fork PRs catch port and param breaks
 IDMA_LINT_TOPS ?= $(addprefix idma_backend_synth_,$(IDMA_BACKEND_IDS)) \
