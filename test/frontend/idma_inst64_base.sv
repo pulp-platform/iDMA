@@ -40,10 +40,7 @@ module idma_inst64_base #(
     dma_events_t [NumChannels-1:0] events;
     logic        [NumChannels-1:0] busy;
 
-    // TCDMAliasEnable defaults to 0, so addr_map_i holds exactly one rule. It must name a
-    // real TCDM window: an all-zero rule is NOT a miss, cc_addr_decode reads end_addr == 0
-    // as "end of address space" and would route every address to TCDMDMA (OBI).
-    // Anything outside the window falls back to default_idx_i = ToSoC, i.e. AXI.
+    // An all-zero rule is not a miss; cc_addr_decode reads end_addr == 0 as end of memory.
     addr_rule_t [0:0] addr_map;
     assign addr_map[0] = '{idx: idma_pkg::TCDMDMA, start_addr: TcdmStart, end_addr: TcdmEnd};
 
