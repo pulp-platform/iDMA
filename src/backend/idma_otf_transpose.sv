@@ -49,6 +49,19 @@ module idma_otf_transpose #(
   initial assert (StrbWidth >= 2 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_transpose: StrbWidth (%0d) must be a power of two >= 2", StrbWidth);
 
+  // Latch one transfer's geometry on its first input beat.  Once its final tile has been filled,
+  // input is blocked until that tile drains; geometry from a following request can therefore not
+  // affect an in-flight transpose.
+  logic                geometry_valid_q;
+  logic [1:0]          transp_mode_q;
+  logic [DimWidth-1:0] tensor_size_m_q, tensor_size_n_q;
+  logic [1:0]          active_transp_mode;
+  logic [DimWidth-1:0] active_tensor_size_m, active_tensor_size_n;
+
+  assign active_transp_mode   = geometry_valid_q ? transp_mode_q : transp_mode_i;
+  assign active_tensor_size_m = geometry_valid_q ? tensor_size_m_q : tensor_size_m_i;
+  assign active_tensor_size_n = geometry_valid_q ? tensor_size_n_q : tensor_size_n_i;
+
   // geometry: NE is a power of two, so only shifts and AND-masks
   logic [1:0]       eff_mode;         // element-size mode, saturated at LaneW
   logic [LaneW:0]   ne_m1;            // NE-1
@@ -57,14 +70,14 @@ module idma_otf_transpose #(
   logic [LaneW:0]   leftover_rows, leftover_cols;  // M%NE, N%NE (run-global)
 
   // saturate at LaneW: out-of-contract mode (E>StrbWidth) degrades to NE=1
-  assign eff_mode      = (transp_mode_i > LaneW) ? LaneW[1:0] : transp_mode_i;
+  assign eff_mode      = (active_transp_mode > LaneW) ? LaneW[1:0] : active_transp_mode;
   assign ne_m1         = (1 << (LaneW - eff_mode)) - 1;            // NE-1
   assign log2_ne       = LaneW - eff_mode;
   // Widen the ceil-div add by one bit so it cannot wrap at the dim range.
-  assign y_tiles       = DimWidth'(((DimWidth+1)'(tensor_size_m_i) + ne_m1) >> log2_ne);
-  assign n_tiles       = DimWidth'(((DimWidth+1)'(tensor_size_n_i) + ne_m1) >> log2_ne);
-  assign leftover_rows = tensor_size_m_i & ne_m1;
-  assign leftover_cols = tensor_size_n_i & ne_m1;
+  assign y_tiles       = DimWidth'(((DimWidth+1)'(active_tensor_size_m) + ne_m1) >> log2_ne);
+  assign n_tiles       = DimWidth'(((DimWidth+1)'(active_tensor_size_n) + ne_m1) >> log2_ne);
+  assign leftover_rows = active_tensor_size_m & ne_m1;
+  assign leftover_cols = active_tensor_size_n & ne_m1;
 
   // FF tile banks (ping-pong when FullDuplex), E=1 worst case (StrbWidth x StrbWidth B)
   logic [StrbWidth-1:0][7:0] tile_q [NumBanks][StrbWidth];
@@ -87,7 +100,8 @@ module idma_otf_transpose #(
   assign wr_last = (wr_cnt == ne_m1[LaneW-1:0]);
   assign rd_last = (rd_cnt == ne_m1[LaneW-1:0]);
 
-  assign ready_o   = ~full_q[wr_bank];
+  logic input_blocked_q;
+  assign ready_o   = ~full_q[wr_bank] & ~input_blocked_q;
   assign valid_int =  full_q[rd_bank];
 
   // tile walkers (col-tile outer, row-tile inner); drain trails fill by up to one tile
@@ -107,11 +121,43 @@ module idma_otf_transpose #(
   logic shadow_last_n [NumBanks];
 
   // fill-/drain-complete events
-  logic fill_done, drain_done, exec_done;
-  assign fill_done  = in_hs  & wr_last;
-  assign drain_done = out_hs & rd_last;
+  logic fill_done, fill_exec_done, drain_done, exec_done;
+  assign fill_done      = in_hs & wr_last;
+  assign fill_exec_done = fill_done & last_y_tile_w & last_n_tile_w;
+  assign drain_done     = out_hs & rd_last;
   // transfer done once the final tile drains
   assign exec_done  = drain_done & last_y_tile_r & last_n_tile_r;
+
+  // Serialize complete transfers while retaining tile-level ping-pong operation within a transfer.
+  // The geometry input may switch to the next descriptor after the final fill, but ready_o remains
+  // low and the latched geometry remains active until the final tile has left the tile banks.
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      geometry_valid_q <= 1'b0;
+      transp_mode_q    <= '0;
+      tensor_size_m_q  <= '0;
+      tensor_size_n_q  <= '0;
+      input_blocked_q  <= 1'b0;
+    end else if (clear_i) begin
+      geometry_valid_q <= 1'b0;
+      transp_mode_q    <= '0;
+      tensor_size_m_q  <= '0;
+      tensor_size_n_q  <= '0;
+      input_blocked_q  <= 1'b0;
+    end else begin
+      if (in_hs && !geometry_valid_q) begin
+        geometry_valid_q <= 1'b1;
+        transp_mode_q    <= transp_mode_i;
+        tensor_size_m_q  <= tensor_size_m_i;
+        tensor_size_n_q  <= tensor_size_n_i;
+      end
+      if (fill_exec_done) input_blocked_q <= 1'b1;
+      if (exec_done) begin
+        geometry_valid_q <= 1'b0;
+        input_blocked_q  <= 1'b0;
+      end
+    end
+  end
 
   // producer (input) side
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -186,9 +232,9 @@ module idma_otf_transpose #(
   // full/empty token
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      full_q <= 2'b00;
-    end else if (clear_i || exec_done) begin
-      full_q <= 2'b00;
+      full_q <= '0;
+    end else if (clear_i) begin
+      full_q <= '0;
     end else begin
       if (fill_done)  full_q[wr_bank] <= 1'b1;
       if (drain_done) full_q[rd_bank] <= 1'b0;
@@ -245,5 +291,17 @@ module idma_otf_transpose #(
       strb_o  <= strb_int;
     end
   end
+
+`ifndef SYNTHESIS
+  // The final drain is only legal after the final fill has closed the input side.
+  assert property (@(posedge clk_i) disable iff (!rst_ni || clear_i)
+      exec_done |-> input_blocked_q)
+  else $error("idma_otf_transpose: final tile drained without an active transfer barrier");
+
+  // Once the final tile is buffered, no beat from the next descriptor may enter this transfer.
+  assert property (@(posedge clk_i) disable iff (!rst_ni || clear_i)
+      input_blocked_q |-> !in_hs)
+  else $error("idma_otf_transpose: accepted input while waiting for the final tile to drain");
+`endif
 
 endmodule : idma_otf_transpose

@@ -8,6 +8,7 @@
 
 `include "idma/guard.svh"
 `include "common_cells/registers.svh"
+`include "common_cells/assertions.svh"
 
 /// Implementing the transport layer in the iDMA backend.
 module idma_transport_layer_${name_uniqueifier} #(
@@ -45,11 +46,13 @@ module idma_transport_layer_${name_uniqueifier} #(
     parameter type write_meta_channel_tagged_t = logic,
 % endif
     /// Read Meta channel type
-    parameter type read_meta_channel_t = logic\
-% if not one_read_port:
-,
-    parameter type read_meta_channel_tagged_t = logic\
-% endif
+    parameter type read_meta_channel_t = logic,
+    /// Read request with byte-lane reservation metadata
+    parameter type read_reservation_req_t = logic,
+    /// Transfer byte-count type
+    parameter type tf_len_t = logic,
+    /// Byte-lane offset type
+    parameter type offset_t = logic\
 % for protocol in used_protocols:
 ,
     /// ${database[protocol]['full_name']} Request and Response channel type
@@ -154,11 +157,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     input  logic w_dp_ready_i,
 
     /// Read meta request
-% if not one_read_port:
-    input  read_meta_channel_tagged_t ar_req_i,
-% else:
-    input  read_meta_channel_t ar_req_i,
-% endif
+    input  read_reservation_req_t ar_req_i,
     /// Read meta request valid
     input  logic ar_valid_i,
     /// Read meta request ready
@@ -216,10 +215,13 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if not one_write_port:
     % for p in used_write_protocols:
     strb_t ${mh_format['aw'][p]}${p}_buffer_out_ready;
+    strb_t ${mh_format['aw'][p]}${p}_buffer_out_consumed;
     % endfor
 % endif
     strb_t buffer_out_ready;
     strb_t buffer_out_ready_shifted;
+    strb_t buffer_out_consumed;
+    strb_t buffer_out_consumed_shifted;
 
     // shifted data flowing into the buffer
 % if not one_read_port:
@@ -238,6 +240,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
+    logic                  ar_gated_valid, ar_gated_ready;
+    strb_t                 buffer_out_handshake;
 
 % if not one_read_port:
     // Read multiplexed signals
@@ -260,7 +264,6 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic ${mh_format['aw'][protocol]}${protocol}_w_dp_ready;
     w_dp_rsp_t ${mh_format['aw'][protocol]}${protocol}_w_dp_rsp;
     logic ${mh_format['aw'][protocol]}${protocol}_aw_ready;
-
     %endfor
     logic w_dp_req_valid;
     logic w_dp_rsp_mux_valid, w_dp_rsp_mux_ready;
@@ -284,6 +287,30 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     // Read Ports
     //--------------------------------------
 
+    // Reserve space in every byte-lane FIFO before allowing a read-address request to reach the
+    // memory interface.  Entries are returned when the corresponding bytes leave the dataflow
+    // buffer, including when the optional compute engine consumes a complete beat.
+    assign buffer_out_handshake = buffer_out_valid & dataflow_ready_in;
+
+    idma_read_reservation_gate #(
+        .StrbWidth      ( StrbWidth      ),
+        .BufferDepth    ( BufferDepth    ),
+        .NumAxInFlight  ( NumAxInFlight  ),
+        .len_t          ( tf_len_t       ),
+        .lane_t         ( offset_t       )
+    ) i_idma_read_reservation_gate (
+        .clk_i,
+        .rst_ni,
+        .ar_valid_i      ( ar_valid_i                 ),
+        .ar_ready_o      ( ar_ready_o                 ),
+        .ar_valid_o      ( ar_gated_valid             ),
+        .ar_ready_i      ( ar_gated_ready             ),
+        .num_bytes_i     ( ar_req_i.num_bytes         ),
+        .start_lane_i    ( ar_req_i.start_lane        ),
+        .deadlock_free_i ( ar_req_i.deadlock_free     ),
+        .buffer_pop_i    ( buffer_out_handshake       )
+    );
+
 % for read_port in used_read_protocols:
 ${rendered_read_ports[read_port]}
 
@@ -297,12 +324,13 @@ ${rendered_read_ports[read_port]}
         case(ar_req_i.src_protocol)
 % for rp in used_read_protocols:
     % if mh_format['ar'][rp] == '':
-        idma_pkg::${database[rp]['protocol_enum']}: ar_ready_o = ${rp}_ar_ready;
+        idma_pkg::${database[rp]['protocol_enum']}: ar_gated_ready = ${rp}_ar_ready;
     % else:
-        idma_pkg::${database[rp]['protocol_enum']}: ar_ready_o = ${rp}_ar_ready [ar_req_i.src_head];
+        idma_pkg::${database[rp]['protocol_enum']}: ar_gated_ready =
+            ${rp}_ar_ready [ar_req_i.src_head];
     % endif
 % endfor
-        default:       ar_ready_o = 1'b0;
+        default:       ar_gated_ready = 1'b0;
         endcase
     end
 
@@ -385,9 +413,11 @@ ${rendered_read_ports[read_port]}
 % if compute_eligible:
     if (EnableCompute) begin : gen_compute
         logic                  cmp_active;
-        logic                  cmp_in_ready;
+        logic                  cmp_in_ready, cmp_beat_valid, cmp_beat_ready;
         byte_t [StrbWidth-1:0] cmp_data_o;
         strb_t                 cmp_strb_o, cmp_lane_valid;
+        strb_t                 cmp_consumed_d, cmp_consumed_q;
+        strb_t                 cmp_consumed_this_cycle;
 
         idma_otf_compute #(
             .StrbWidth           ( StrbWidth          ),
@@ -404,16 +434,37 @@ ${rendered_read_ports[read_port]}
             .in_ready_o  ( cmp_in_ready        ),
             .data_o       ( cmp_data_o          ),
             .strb_o       ( cmp_strb_o          ),
+            .beat_valid_o ( cmp_beat_valid      ),
+            .beat_ready_i ( cmp_beat_ready      ),
             .lane_valid_o ( cmp_lane_valid      ),
-            .ready_i      ( w_dp_req_ready      ),
             .lane_ready_i ( buffer_out_ready_shifted )
         );
+
+        // Transpose produces atomic beats, but the legalizer may split one beat into multiple
+        // writes at a 4 KiB boundary. Track the logical byte positions covered by those writes and
+        // retire the transpose beat only after all positions have been consumed. MX engines use
+        // their independent lane handshake and therefore leave cmp_beat_valid deasserted.
+        assign cmp_consumed_this_cycle =
+            cmp_beat_valid ? buffer_out_consumed_shifted : '0;
+        assign cmp_beat_ready = &(cmp_consumed_q | cmp_consumed_this_cycle);
+
+        always_comb begin : proc_compute_consumed
+            cmp_consumed_d = cmp_consumed_q | cmp_consumed_this_cycle;
+            if (cmp_beat_valid && cmp_beat_ready) begin
+                cmp_consumed_d = '0;
+            end
+        end
+
+        `FF(cmp_consumed_q, cmp_consumed_d, '0, clk_i, rst_ni)
 
         assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
         assign wr_valid          = cmp_active ? cmp_lane_valid : buffer_out_valid;
         assign wr_strb           = cmp_active ? cmp_strb_o : '1;
         assign dataflow_ready_in = cmp_active ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}}
                                               : buffer_out_ready_shifted;
+
+        `ASSERT(ComputeConsumeValid, cmp_consumed_this_cycle != '0 |-> cmp_beat_valid, clk_i, !rst_ni, "Write datapath consumed bytes without a valid atomic compute result")
+        `ASSERT(ComputeBeatAllLanesValid, cmp_beat_valid |-> &cmp_lane_valid, clk_i, !rst_ni, "Scalar compute beat handshake requires all output lanes to be valid")
     end else begin : gen_no_compute
         assign wr_data           = buffer_out;
         assign wr_valid          = buffer_out_valid;
@@ -436,6 +487,8 @@ ${rendered_read_ports[read_port]}
     assign buffer_out_valid_shifted = strb_t'({wr_valid, wr_valid} >>   w_dp_req_i.shift);
     assign mask_ext_shifted         = strb_t'({wr_strb, wr_strb} >>   w_dp_req_i.shift);
     assign buffer_out_ready_shifted = strb_t'({buffer_out_ready, buffer_out_ready} >> - w_dp_req_i.shift);
+    assign buffer_out_consumed_shifted =
+        strb_t'({buffer_out_consumed, buffer_out_consumed} >> -w_dp_req_i.shift);
 
 % if not one_write_port:
     //--------------------------------------
@@ -466,12 +519,14 @@ ${rendered_read_ports[read_port]}
             w_chan_valid_o   = ${wp}_w_chan_valid;
             w_chan_ready_o   = ${wp}_w_chan_ready;
             w_chan_first_o   = ${wp}_w_chan_first;
+            buffer_out_consumed = ${wp}_buffer_out_consumed;
     % else:
             w_dp_req_ready   = ${wp}_w_dp_ready [w_dp_req_i.dst_head];
             buffer_out_ready = ${wp}_buffer_out_ready [w_dp_req_i.dst_head];
             w_chan_valid_o   = ${wp}_w_chan_valid [w_dp_req_i.dst_head];
             w_chan_ready_o   = ${wp}_w_chan_ready [w_dp_req_i.dst_head];
             w_chan_first_o   = ${wp}_w_chan_first [w_dp_req_i.dst_head];
+            buffer_out_consumed = ${wp}_buffer_out_consumed [w_dp_req_i.dst_head];
     % endif
         end
 % endfor
@@ -481,6 +536,7 @@ ${rendered_read_ports[read_port]}
             w_chan_valid_o   = 1'b0;
             w_chan_ready_o   = 1'b0;
             w_chan_first_o   = 1'b0;
+            buffer_out_consumed = '0;
         end
         endcase
     end

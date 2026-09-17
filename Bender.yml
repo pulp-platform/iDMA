@@ -44,6 +44,7 @@ sources:
       - src/backend/idma_axis_write.sv
       - src/backend/idma_channel_coupler.sv
       - src/backend/idma_dataflow_element.sv
+      - src/backend/idma_read_reservation_gate.sv
       - src/backend/idma_otf_transpose.sv
       - src/backend/idma_otf_mxquant.sv
       - src/backend/idma_otf_mxdequant.sv
@@ -71,6 +72,7 @@ sources:
       - src/midend/idma_nd_midend.sv
       - src/midend/idma_rt_midend.sv
       - src/midend/idma_transpose_midend.sv
+      - src/midend/idma_transpose_req_replay.sv
 
   # RISC-V opcode package for ooc use of inst64
   - target: all(rtl,snitch_cluster)

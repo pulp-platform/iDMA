@@ -15,6 +15,10 @@
 static uint8_t gm_in[GM_MAX_BYTES];
 static uint8_t gm_out[GM_MAX_BYTES];
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Load one input byte at flat byte index.
 void gm_load(int idx, int val) {
   if (idx >= 0 && idx < GM_MAX_BYTES) gm_in[idx] = (uint8_t)val;
@@ -33,3 +37,7 @@ int gm_get(int idx) {
   if (idx >= 0 && idx < GM_MAX_BYTES) return (int)gm_out[idx];
   return -1;
 }
+
+#ifdef __cplusplus
+}
+#endif

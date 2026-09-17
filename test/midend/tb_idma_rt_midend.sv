@@ -107,6 +107,12 @@ module tb_idma_rt_midend;
     logic out_req_handshake;
     assign out_req_handshake = out_req_valid & out_req_ready;
 
+    clocking bypass_cb @(posedge clk);
+        default input #1step output #0;
+        input byp_req_ready;
+        output byp_req, byp_req_valid;
+    endclocking
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out_rsp_valid <= 1'b0;
@@ -141,23 +147,23 @@ module tb_idma_rt_midend;
 
     // -- Bypass stimulus -----------------------------------------------
     initial begin : drive_bypass
+        automatic idma_nd_req_t request = '0;
         byp_req_valid = 1'b0;
         byp_req       = '0;
-        byp_req.burst_req.length   = 32'h0000_1000;
-        byp_req.burst_req.src_addr = 32'hC000_0000;
-        byp_req.burst_req.dst_addr = 32'hD000_0000;
+        request.burst_req.src_addr = 32'hC000_0000;
+        request.burst_req.dst_addr = 32'hD000_0000;
 
         wait (rst_n === 1'b1);
         @(posedge clk);
 
         // Issue 8 bypass requests interleaved with the counter traffic.
         for (int i = 0; i < 8; i++) begin
-            repeat (3 + (i % 4)) @(posedge clk);
-            byp_req_valid = 1'b1;
-            byp_req.burst_req.length = 32'h0000_1000 + i;
-            @(posedge clk);
-            while (!byp_req_ready) @(posedge clk);
-            byp_req_valid = 1'b0;
+            repeat (3 + (i % 4)) @(bypass_cb);
+            request.burst_req.length = 32'h0000_1000 + i;
+            bypass_cb.byp_req <= request;
+            bypass_cb.byp_req_valid <= 1'b1;
+            do @(bypass_cb); while (!bypass_cb.byp_req_ready);
+            bypass_cb.byp_req_valid <= 1'b0;
         end
     end
 
