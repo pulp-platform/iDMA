@@ -160,11 +160,9 @@ module idma_mp_dist_midend #(
         if (($unsigned(idma_req_i.src_addr) >= RegionStart) &&
             ($unsigned(idma_req_i.src_addr) <  RegionEnd  )) begin
           idma_req_o[i].src_addr[FullRegionAddressBits-1:0] = i*RegionWidth;
-          idma_req_o[i].dst_addr = idma_req_i.dst_addr + i*RegionWidth -
-                                   start_addr[DmaRegionAddressBits-1:0];
+          idma_req_o[i].dst_addr = idma_req_i.dst_addr + i*RegionWidth - start_addr;
         end else begin
-          idma_req_o[i].src_addr = idma_req_i.src_addr + i*RegionWidth -
-                                   start_addr[DmaRegionAddressBits-1:0];
+          idma_req_o[i].src_addr = idma_req_i.src_addr + i*RegionWidth - start_addr;
           idma_req_o[i].dst_addr[FullRegionAddressBits-1:0] = i*RegionWidth;
         end
         if ($unsigned(end_addr) >= (i+1)*RegionWidth) begin

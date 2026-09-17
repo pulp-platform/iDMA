@@ -38,6 +38,19 @@ All DMA instructions that return a value write to `rd` (destination register). T
 - Bit 1: Enable 2D mode (use previously set strides/reps). If 2D mode is enabled but `DMSTR`/`DMREP` were not called since the last transfer, the previously set stride and repetition values are reused. On reset, these default to zero
 - Bits 4:2: Channel select - `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
 
+### In-network collectives
+
+`DMUSER` is how a Snitch core reaches an interconnect that resolves collectives in the
+network, such as FlooNoC's multicast and reduction. The user word carries the destination
+mask and the collective opcode; iDMA forwards it to `aw.user` and interprets none of it.
+
+Participating cores must issue transfers that the legalizer decomposes identically. A
+reduction join matches incoming flits on destination and mask, so two participants that
+produce different burst counts for the same logical transfer will never join and the
+network stalls. The legalizer splits on the page boundary and the source offset, so equal
+lengths are not sufficient: give every participant the same source alignment relative to
+the page size, or the same `src_max_llen` with `src_reduce_len` set.
+
 ## Parameters
 
 For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are standard. Increase `NumChannels` only if you need independent DMA channels on separate address spaces.
@@ -51,6 +64,7 @@ For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are 
 | `NumAxInFlight` | Number of in-flight AXI transactions (default: 3) |
 | `DMAReqFifoDepth` | Depth of the request FIFO between frontend and midend (default: 3) |
 | `NumChannels` | Number of independent DMA channels, each with its own backend + ND midend (default: 1) |
+| `NumDim` | Number of ND dimensions handed to the ND midend (default: 2). `idma_transpose_midend` requires at least 4 |
 | `DMATracing` | Enable DMA trace file generation for debugging |
 
 ## Programming Sequence
