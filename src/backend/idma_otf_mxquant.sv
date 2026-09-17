@@ -35,6 +35,9 @@ module idma_otf_mxquant
   // FP32 packs one block per beat up to StrbWidth 128; FP16 above 64 is rejected by the legalizer
   initial assert (StrbWidth >= 4 && StrbWidth <= 128 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_mxquant: StrbWidth (%0d) must be a power of two in [4, 128]", StrbWidth);
+  // the block-scale max reduces as a halving tree; a non-power-of-two block drops elements
+  initial assert ((MxBlockSize & (MxBlockSize-1)) == 0) else
+      $fatal(1, "idma_otf_mxquant: MxBlockSize (%0d) must be a power of two", MxBlockSize);
 
   localparam int unsigned BufSize     = MxCompressedBlockBytes + StrbWidth;
   localparam int unsigned OffsetWidth = $clog2(BufSize) + 1;
@@ -62,11 +65,17 @@ module idma_otf_mxquant
   assign fp16_act = (Fp16Up != 1'b0) && (src_fmt_i == idma_pkg::MX_FMT_FP16);
 
   // lane-exact pop: a tail beat pops only its own bytes
-  logic [PopW-1:0] pop_cnt;
+  logic [PopW-1:0]      pop_cnt;
+  logic [StrbWidth-1:0] pop_bits;
+  logic [PopW-1:0]      pop_tree [StrbWidth];
   always_comb begin
-    pop_cnt = '0;
+    pop_bits = lane_ready_i & lane_valid_o;
     for (int i = 0; i < StrbWidth; i++)
-      if (lane_ready_i[i] && lane_valid_o[i]) pop_cnt += PopW'(1);
+      pop_tree[i] = PopW'(pop_bits[i]);
+    for (int s = StrbWidth/2; s > 0; s = s/2)
+      for (int i = 0; i < s; i++)
+        pop_tree[i] = pop_tree[i] + pop_tree[i+s];
+    pop_cnt = pop_tree[0];
   end
 
   assign busy_o = (fill_q != '0) || (pack_off_q != '0);
