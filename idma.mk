@@ -416,6 +416,14 @@ idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_nd -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_nd -do "run -all; quit"
 
+# OBI-destination transpose: the write strobe must mask edge tiles and padding
+.PHONY: idma_sim_tb_idma_transpose_obi
+idma_sim_tb_idma_transpose_obi: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	# the TB sweeps the geometry list internally; one run per bus width
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_obi -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_obi -do "run -all; quit"
+
 # Back-to-back: the ND midend must reload each transfer base address
 .PHONY: idma_sim_tb_idma_nd_midend_b2b
 idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
