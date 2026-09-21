@@ -72,11 +72,12 @@ sources:
       - src/midend/idma_rt_midend.sv
       - src/midend/idma_transpose_midend.sv
 
-  # RISC-V opcode package for ooc use of inst64
+  # RISC-V opcode and DMOPC decode packages for ooc use of inst64
   - target: all(rtl,snitch_cluster)
     files:
       # Level 0
       - src/frontend/inst64/idma_inst64_snitch_pkg.sv
+      - src/frontend/inst64/idma_inst64_compute_pkg.sv
 
   # Frontends
   - target: rtl
@@ -159,6 +160,7 @@ sources:
       - test/frontend/tb_idma_inst64_axi_copy.sv
       - test/frontend/tb_idma_inst64_alias_copy.sv
       - test/frontend/tb_idma_inst64_tcdm_copy.sv
+      - test/frontend/tb_idma_inst64_compute.sv
 
   # Multi-head directed backend testbenches
   - target: multihead

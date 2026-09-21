@@ -467,6 +467,21 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_tcdm_copy.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_tcdm_copy.log
 
+# DMOPC mxquant against the DPI-C golden, plus the unknown-opcode guard
+.PHONY: idma_sim_tb_idma_inst64_compute
+idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_inst64_compute \
+		-logfile inst64_compute.log -do "run -all; quit"
+	# Questa does not propagate $$fatal to the exit code; gate on the transcript
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute.log
+	# the guard must fire; a silent fallback to a plain copy would pass the run above
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=1 \
+		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true
+	cd $(IDMA_VSIM_DIR); grep -q "DmopcUnknownOpcode" inst64_compute_neg.log
+
 .PHONY: idma_sim_tb_idma_transpose_b2b
 idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -619,8 +634,9 @@ idma_vcs_clean:
 IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
 
 
-# Measured at 0 occurrences over the synth tops, so they gate
-IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT
+# Measured at 0 occurrences over the synth tops, so they gate; -Wno-fatal alone only warns
+IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT \
+                      -Werror-USERFATAL -Werror-USERERROR
 # Unroll budget matches util/run_vlt_sim.py; 5.020 reports BLKLOOPINIT without it
 IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
                       --unroll-count 4096 --unroll-stmts 200000
@@ -631,13 +647,16 @@ idma_verilator_clean:
 
 # inst64 gate: the only public concrete bindings of idma_inst64_top
 IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
-                    tb_idma_inst64_tcdm_copy
+                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
 
-# parameter sweeps run against the first testbench's file list
-IDMA_INST64_GTB  := tb_idma_inst64_axi_copy
-IDMA_INST64_G    := -GEnableTcdmObi=0 -GDMATracing=1
+# parameter sweeps; each entry is <testbench>:<parameter override>
+IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
+                    tb_idma_inst64_axi_copy:-GDMATracing=1 \
+                    tb_idma_inst64_compute:-GEnableCompute=1 \
+                    tb_idma_inst64_compute:-GEnableCompute=0 \
+                    tb_idma_inst64_compute:-GEnableTcdmObi=1
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:
@@ -650,9 +669,10 @@ idma_lint_inst64:
 	    --top-module $$tb || rc=1; \
 	done; exit $$rc
 	@for g in $(IDMA_INST64_G); do \
-	  echo "--- elaborating $(IDMA_INST64_GTB) $$g ---"; \
-	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/$(IDMA_INST64_GTB).f \
-	    --top-module $(IDMA_INST64_GTB) $$g || exit 1; \
+	  tb=$${g%%:*}; arg=$${g#*:}; \
+	  echo "--- elaborating $$tb $$arg ---"; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/$$tb.f \
+	    --top-module $$tb $$arg || exit 1; \
 	done
 
 # verilator elaborates every synth top, so fork PRs catch port and param breaks
