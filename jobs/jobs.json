@@ -553,6 +553,20 @@
             ]
         }
     },
+    "fixed_burst" : {
+        "jobs" : {
+        },
+        "params" : {
+        },
+        "testbench" : "tb_idma_backend_fixed_burst",
+        "verify" : {
+            "token" : "ALL CHECKS PASSED",
+            "legs" : [
+                { "tag" : "fixed_burst_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "fixed_burst_64", "params" : { "DataWidth" : 64 } }
+            ]
+        }
+    },
     "_verify" : {
         "elab_widths" : [32, 64, 512, 1024],
         "elab_compute" : [
