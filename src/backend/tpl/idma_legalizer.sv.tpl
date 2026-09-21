@@ -740,6 +740,11 @@ ${database[protocol]['legalizer_write_data_path']}
     `ASSERT_NEVER(ComputeTransposeSingleBeat, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &
                   (req_i.length > StrbWidth)), clk_i, !rst_ni)
+    // NOT IMPLEMENTED: transpose edge strobes need a mask_ext write port (AXI/OBI only)
+    `ASSERT_NEVER(ComputeTransposeDstStrobe, (ready_o & valid_i & req_i.opt.compute.enable &
+                  (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &
+                  !(req_i.opt.dst_protocol inside {idma_pkg::AXI, idma_pkg::OBI})),
+                  clk_i, !rst_ni)
     // NOT IMPLEMENTED: size-changing compute is validated on AXI src/dst only (TODO: OBI)
     `ASSERT_NEVER(ComputeMxSrcProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
                   (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
