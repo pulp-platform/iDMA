@@ -7,7 +7,7 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 ## Verification Overview
 
-iDMA uses a SystemVerilog testbench driven by **job files** that describe transfer sequences. The testbench compares hardware behavior against a byte-accurate golden model. The full job-file testbenches run under Questa or VCS; Verilator is wired for elaboration/lint only. Job files live in `jobs/backend_<variant>/`.
+iDMA uses a SystemVerilog testbench driven by **job files** that describe transfer sequences. The testbench compares hardware behavior against a byte-accurate golden model. The full job-file testbenches run under Questa or VCS. Verilator provides both synthesis-top lint/elaboration and behavioral simulation of selected self-checking testbenches. Job files live in `jobs/backend_<variant>/`.
 
 For documentation quality checks, see [Docs Verification Plan](../docs-verification/).
 
@@ -171,16 +171,21 @@ The on-the-fly compute engines have dedicated self-checking testbenches, checked
 
 The MX goldens and their deterministic stimulus live in `test/idma_mx_golden.h`, a dependency-free C99 header of `static inline` functions over plain byte buffers: `mx_quant_fp16` / `mx_quant_fp32` and `mx_dequant_fp16` / `mx_dequant_fp32` convert whole buffers of `[1 B E8M0 scale][32 B E5M2]` blocks, and `mx_stim_fp16` / `mx_stim_fp32` regenerate the exact stimulus the testbenches use, where the `salt` argument varies the normal lanes without moving the corner blocks. `test/idma_mxquant_dpi.c` is only the DPI-C shim around it, so integrators can include the header directly and check on-target results against the same bit-exact model instead of re-deriving it.
 
-These `idma_sim_tb_*` targets drive Questa directly (they source `compile.tcl` and run under vsim), so they are Questa-only; pass the tool binaries through the `VSIM` / `VLOG` / `VLIB` variables:
+These `idma_sim_tb_*` targets drive Questa directly (they source `compile.tcl` and run under vsim); pass the tool binaries through the `VSIM` / `VLOG` / `VLIB` variables:
 
 ```bash
 make idma_sim_tb_idma_mxquant VSIM="questa-2023.4 vsim" \
   VLOG="questa-2023.4 vlog" VLIB="questa-2023.4 vlib"
 ```
 
+Selected self-checking testbenches also have behavioral Verilator targets. Use
+`idma_sim_vlt_<testbench>` to run every declared parameterization of one testbench,
+or `idma_sim_vlt_all` to run all of them. Their independent build directories live
+under `target/sim/vlt/`.
+
 ## Running Simulations
 
-`idma.mk` wires three simulators. Questa and VCS run the full job-file testbenches; Verilator is wired for elaboration/lint only (it Verilates a chosen top with `--cc`, not a full behavioral run). Each flow takes its tool binaries as make variables, whose defaults are the bare `vsim` / `vcs` / `verilator` names; the Questa examples below use the `questa-2023.4` SEPP wrapper.
+`idma.mk` wires three simulators. Questa and VCS run the full job-file testbenches. Verilator is used separately for lint/elaboration and for behavioral simulation of selected self-checking testbenches. Each flow takes its tool binaries as make variables, whose defaults are the bare `vsim` / `vcs` / `verilator` names; the Questa examples below use the `questa-2023.4` SEPP wrapper.
 
 ### Prerequisites
 
@@ -227,14 +232,26 @@ make idma_sim_all   # Generate compile.tcl + start.tcl (Questa) and compile.sh (
   </TabItem>
   <TabItem label="Verilator">
 
-  Verilator is wired for elaboration / lint only (`--cc`), not a full job-file run. It pickles the design with `-D VERILATOR` and Verilates a chosen top, writing the result to `target/sim/verilator/<top>_elab.log`:
+  The lint flow checks generated synthesis tops and writes its intermediate files to
+  `target/lint/verilator/`:
 
   ```bash
-  make target/sim/verilator/idma_backend_synth_rw_axi_elab.log \
-    IDMA_VLT_TOP=idma_backend_synth_rw_axi VERILATOR=verilator
+  make idma_lint_all VERILATOR=verilator
+  make idma_lint_params IDMA_TOP=idma_backend_synth_rw_axi VERILATOR=verilator
   ```
 
-  Use this as a fast structural / lint check; run Questa or VCS for behavioral job-file simulation.
+  The behavioral flow builds executable models in per-configuration directories
+  under `target/sim/vlt/`. Friendly targets run all parameterizations declared for
+  a testbench:
+
+  ```bash
+  make idma_sim_vlt_tb_idma_transpose_nd VERILATOR=verilator
+  make idma_sim_vlt_all VERILATOR=verilator
+  ```
+
+  A single parameterization can be selected with its generated run target, for
+  example `idma_vlt_run_tb_idma_transpose_nd__dw64`. Set `TRACE=1` for FST tracing,
+  or `TRACE=2` to additionally trace structs.
 
   </TabItem>
 </Tabs>
