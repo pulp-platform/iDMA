@@ -90,6 +90,7 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 | `ComputeMxFp16Width` | FP16 element formats require `StrbWidth <= 64` (at most one block per beat) |
 | `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
 | `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported |
+| `ComputeTransposeDstStrobe` | transpose edge strobes need a write port that takes the compute byte mask (AXI or OBI) |
 | `ComputeMxdequantLengthFits` | dequant output length must fit the `length` field width |
 
 ## Source Files
