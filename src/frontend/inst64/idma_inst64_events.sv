@@ -8,6 +8,7 @@
 /// Event generation for iDMA
 module idma_inst64_events #(
     parameter int unsigned DataWidth     = 32'd0,
+    parameter bit          EnableObi     = 1'b1,
     parameter type         axi_req_t     = logic,
     parameter type         axi_res_t     = logic,
     parameter type         obi_req_t     = logic,
@@ -31,6 +32,17 @@ module idma_inst64_events #(
     localparam int unsigned StrbWidth = DataWidth / 8;
 
     logic [$clog2(StrbWidth)+1-1:0] num_bytes_written;
+
+    logic obi_wr_req, obi_rd_req;
+
+    // obi_req_t is `logic` without the OBI port, so guard the member selects.
+    if (EnableObi) begin : gen_obi_events
+        assign obi_wr_req = obi_req_i.req && obi_res_i.gnt && obi_req_i.a.we;
+        assign obi_rd_req = obi_req_i.req && obi_res_i.gnt && ~obi_req_i.a.we;
+    end else begin : gen_no_obi_events
+        assign obi_wr_req = 1'b0;
+        assign obi_rd_req = 1'b0;
+    end
 
     // need popcount common cell to get the number of bytes active in the strobe signal
     cc_popcount #(
@@ -90,8 +102,8 @@ module idma_inst64_events #(
         events_o.b_done = axi_req_i.b_ready && axi_rsp_i.b_valid;
 
         // obi
-        events_o.obi_wr_req = obi_req_i.req && obi_res_i.gnt && obi_req_i.a.we;
-        events_o.obi_rd_req = obi_req_i.req && obi_res_i.gnt && ~obi_req_i.a.we;
+        events_o.obi_wr_req = obi_wr_req;
+        events_o.obi_rd_req = obi_rd_req;
 
         // busy
         events_o.dma_busy = busy_i;

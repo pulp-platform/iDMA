@@ -9,11 +9,20 @@
 /// Proves the accelerator-bus programming sequence, that exactly one transfer is
 /// launched, that the payload lands byte-exact without overrunning the destination, and
 /// that the exported `dma_events_t` performance counters agree with the bus traffic.
-module tb_idma_inst64_axi_copy;
+/// `EnableTcdmObi` picks the topology; override it to 0 to cover the AXI-only one.
+module tb_idma_inst64_axi_copy #(
+    /// Topology under test; 0 drops the TCDM (OBI) port and routes every address to AXI
+    parameter bit          EnableTcdmObi = 1'b1,
+    parameter int unsigned DMATracing    = idma_inst64_tb_pkg::DMATracing
+);
     import idma_inst64_tb_pkg::*;
 
     // The antiphase R/W stall is what makes the two buffer-stall events assert at all
-    idma_inst64_base #(.StallPattern(1'b1)) harness ();
+    idma_inst64_base #(
+        .StallPattern  ( 1'b1          ),
+        .EnableTcdmObi ( EnableTcdmObi ),
+        .DMATracing    ( DMATracing    )
+    ) harness ();
 
     localparam int unsigned TimeoutCycles  = 32'd200000;
     localparam int unsigned CopySize       = 32'd4096;
@@ -30,8 +39,9 @@ module tb_idma_inst64_axi_copy;
     localparam axi_pkg::len_t  ExpAxLen     = axi_pkg::len_t'(ExpDataBeats - 1);
     localparam axi_pkg::size_t ExpAxSize    = axi_pkg::size_t'($clog2(BytesPerBeat));
 
-    localparam addr_t SrcAddr = 64'h8000_0000;
-    localparam addr_t DstAddr = 64'h9000_0000;
+    // The AXI-only topology copies inside the TCDM window, which decodes to OBI by default.
+    localparam addr_t SrcAddr = EnableTcdmObi ? 64'h8000_0000 : addr_t'(TcdmStart);
+    localparam addr_t DstAddr = EnableTcdmObi ? 64'h9000_0000 : addr_t'(TcdmStart + 64'h8000);
 
     int unsigned errors       = 0;
     int unsigned bytes_checked = 0;
@@ -48,6 +58,7 @@ module tb_idma_inst64_axi_copy;
         EvRValid,  EvRReady,  EvRDone,  EvRBw,     EvRStall, EvRBufStall,
         EvWValid,  EvWReady,  EvWDone,  EvWStall,  EvWBufStall, EvBytes,
         EvBValid,  EvBReady,  EvBDone,  EvBusy,
+        EvObiWrReq, EvObiRdReq,
         EvNumFields
     } ev_field_e;
 
@@ -57,9 +68,13 @@ module tb_idma_inst64_axi_copy;
     dma_events_t ev;
     axi_req_t    bus_req;
     axi_resp_t   bus_res;
-    assign ev      = harness.events[0];
-    assign bus_req = harness.axi_req[0];
-    assign bus_res = harness.axi_res[0];
+    obi_req_t    obi_bus_req;
+    obi_res_t    obi_bus_res;
+    assign ev          = harness.events[0];
+    assign bus_req     = harness.axi_req[0];
+    assign bus_res     = harness.axi_res[0];
+    assign obi_bus_req = harness.obi_req[0];
+    assign obi_bus_res = harness.obi_res[0];
 
     logic [NumEvFields-1:0] ev_field_ok;
 
@@ -106,6 +121,12 @@ module tb_idma_inst64_axi_copy;
         ev_field_ok[EvBDone  ] = ev.b_done   === (bus_req.b_ready && bus_res.b_valid);
 
         ev_field_ok[EvBusy   ] = ev.dma_busy === harness.busy[0];
+
+        // Zero in both topologies: no OBI port when EnableTcdmObi is 0, no TCDM transfer when 1.
+        ev_field_ok[EvObiWrReq] = ev.obi_wr_req ===
+            (obi_bus_req.req && obi_bus_res.gnt &&  obi_bus_req.a.we);
+        ev_field_ok[EvObiRdReq] = ev.obi_rd_req ===
+            (obi_bus_req.req && obi_bus_res.gnt && !obi_bus_req.a.we);
     end
 
     // One assertion per field so a failure names it
@@ -163,7 +184,7 @@ module tb_idma_inst64_axi_copy;
         end
     end
 
-    // Both endpoints sit outside the TCDM window, so the decoder picks AXI
+    // Either the endpoints sit outside the TCDM window or the OBI port is tied off
     a_no_obi_traffic : assert property (
         @(posedge harness.clk) disable iff (!harness.rst_n) !harness.obi_req[0].req
     ) else $fatal(1, "OBI leg requested during an AXI-to-AXI transfer: bad protocol decode");
@@ -213,15 +234,18 @@ module tb_idma_inst64_axi_copy;
     endtask
 
     initial begin : test_sequence
-        tf_id_t      tid;
-        logic [63:0] next_id_before;
-        logic [63:0] next_id_after;
-        logic [31:0] issued_req_id;
+        tf_id_t        tid;
+        logic [63:0]   next_id_before;
+        logic [63:0]   next_id_after;
+        logic [63:0]   next_id_memset;
+        logic [31:0]   issued_req_id;
+        acc_rsp_item_t memset_rsp;
 
         @(posedge harness.rst_n);
         repeat (10) @(posedge harness.clk);
 
-        $display("[TB] inst64 AXI-to-AXI copy: 0x%0h -> 0x%0h, %0d B", SrcAddr, DstAddr, CopySize);
+        $display("[TB] inst64 AXI-to-AXI copy (EnableTcdmObi=%0d): 0x%0h -> 0x%0h, %0d B",
+                 EnableTcdmObi, SrcAddr, DstAddr, CopySize);
         seed_memories();
 
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_before);
@@ -295,6 +319,20 @@ module tb_idma_inst64_axi_copy;
         // The stall pattern forces both, so a zero here means the event is not driven
         if (ev_buf_r_stalls == 0) $fatal(1, "events never reported a read buffer stall");
         if (ev_buf_w_stalls == 0) $fatal(1, "events never reported a write buffer stall");
+
+        // Without the INIT read port a DMINIT would degenerate into an AXI read of src_addr
+        if (!EnableTcdmObi) begin
+            harness.drv_if.dma_try_memset(CopySize, 2'b00, 3'd0, memset_rsp);
+            if (memset_rsp.error !== 1'b1) begin
+                $fatal(1, "DMINIT accepted without an INIT read port");
+            end
+            harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_memset);
+            if (next_id_memset !== next_id_after) begin
+                $fatal(1, "rejected DMINIT still launched a transfer: next_id %0d -> %0d",
+                       next_id_after, next_id_memset);
+            end
+            $display("[TB] DMINIT rejected with an error response, no transfer launched");
+        end
 
         if (errors != 0) $fatal(1, "TEST FAILED: %0d errors", errors);
         $display("[TB] TEST PASSED: %0d B copied, ar=%0d aw=%0d beats", bytes_checked,

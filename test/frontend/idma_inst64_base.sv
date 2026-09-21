@@ -11,9 +11,11 @@ module idma_inst64_base #(
     parameter int unsigned DMATracing = idma_inst64_tb_pkg::DMATracing,
     /// Stall the AXI R source and W sink in antiphase, see `gen_stall` below
     parameter bit          StallPattern = 1'b0,
+    /// Instantiate the TCDM (OBI) port and its memory; 0 selects the AXI-only topology
+    parameter bit          EnableTcdmObi = 1'b1,
     /// TCDM (OBI) window; every address outside it decodes to ToSoC, i.e. AXI
-    parameter logic [63:0] TcdmStart = 64'h0000_0000_1000_0000,
-    parameter logic [63:0] TcdmEnd   = 64'h0000_0000_1001_0000,
+    parameter logic [63:0] TcdmStart = idma_inst64_tb_pkg::TcdmStart,
+    parameter logic [63:0] TcdmEnd   = idma_inst64_tb_pkg::TcdmEnd,
     /// Second TCDM (OBI) window; `TcdmAliasEnd` of 0 leaves the alias rule out entirely
     parameter logic [63:0] TcdmAliasStart = 64'h0,
     parameter logic [63:0] TcdmAliasEnd   = 64'h0
@@ -63,6 +65,7 @@ module idma_inst64_base #(
         .DMAReqFifoDepth ( DMAReqFifoDepth ),
         .NumChannels     ( NumChannels     ),
         .NumAddrRules    ( NumAddrRules    ),
+        .EnableTcdmObi   ( EnableTcdmObi   ),
         .DMATracing      ( DMATracing      ),
         .axi_ar_chan_t   ( axi_ar_chan_t   ),
         .axi_aw_chan_t   ( axi_aw_chan_t   ),
@@ -171,27 +174,31 @@ module idma_inst64_base #(
 
         // Real OBI slave, not a '0 tie-off: a tie-off holds gnt low, so a mis-decoded
         // transfer would hang instead of failing visibly.
-        obi_sim_mem #(
-            .ObiCfg            ( ObiCfg     ),
-            .obi_req_t         ( obi_req_t  ),
-            .obi_rsp_t         ( obi_res_t  ),
-            .obi_r_chan_t      ( obi_r_chan_t ),
-            .WarnUninitialized ( 1'b0       ),
-            .ClearErrOnAccess  ( 1'b1       ),
-            .ApplDelay         ( ApplDelay  ),
-            .AcqDelay          ( AcqDelay   )
-        ) i_obi_sim_mem (
-            .clk_i       ( clk        ),
-            .rst_ni      ( rst_n      ),
-            .obi_req_i   ( obi_req[c] ),
-            .obi_rsp_o   ( obi_res[c] ),
-            .mon_valid_o ( /* NC */   ),
-            .mon_we_o    ( /* NC */   ),
-            .mon_addr_o  ( /* NC */   ),
-            .mon_wdata_o ( /* NC */   ),
-            .mon_be_o    ( /* NC */   ),
-            .mon_id_o    ( /* NC */   )
-        );
+        if (EnableTcdmObi) begin : gen_obi_mem
+            obi_sim_mem #(
+                .ObiCfg            ( ObiCfg     ),
+                .obi_req_t         ( obi_req_t  ),
+                .obi_rsp_t         ( obi_res_t  ),
+                .obi_r_chan_t      ( obi_r_chan_t ),
+                .WarnUninitialized ( 1'b0       ),
+                .ClearErrOnAccess  ( 1'b1       ),
+                .ApplDelay         ( ApplDelay  ),
+                .AcqDelay          ( AcqDelay   )
+            ) i_obi_sim_mem (
+                .clk_i       ( clk        ),
+                .rst_ni      ( rst_n      ),
+                .obi_req_i   ( obi_req[c] ),
+                .obi_rsp_o   ( obi_res[c] ),
+                .mon_valid_o ( /* NC */   ),
+                .mon_we_o    ( /* NC */   ),
+                .mon_addr_o  ( /* NC */   ),
+                .mon_wdata_o ( /* NC */   ),
+                .mon_be_o    ( /* NC */   ),
+                .mon_id_o    ( /* NC */   )
+            );
+        end else begin : gen_no_obi_mem
+            assign obi_res[c] = '0;
+        end
     end
 
     //--------------------------------------
@@ -225,19 +232,22 @@ module idma_inst64_base #(
     //--------------------------------------
     // OBI memory helpers (channel 0)
     //--------------------------------------
-    task automatic obi_mem_write_byte(
-        input addr_t addr,
-        input byte   data
-    );
-        gen_mem_ch[0].i_obi_sim_mem.mem[addr] = data;
-    endtask
+    // The OBI memory only exists in the TCDM topology, so its accessors live with it.
+    if (EnableTcdmObi) begin : gen_obi_access
+        task automatic obi_mem_write_byte(
+            input addr_t addr,
+            input byte   data
+        );
+            gen_mem_ch[0].gen_obi_mem.i_obi_sim_mem.mem[addr] = data;
+        endtask
 
-    function automatic logic [7:0] obi_mem_read_byte(input addr_t addr);
-        if (gen_mem_ch[0].i_obi_sim_mem.mem.exists(addr)) begin
-            return gen_mem_ch[0].i_obi_sim_mem.mem[addr];
-        end else begin
-            return 8'hXX;
-        end
-    endfunction
+        function automatic logic [7:0] obi_mem_read_byte(input addr_t addr);
+            if (gen_mem_ch[0].gen_obi_mem.i_obi_sim_mem.mem.exists(addr)) begin
+                return gen_mem_ch[0].gen_obi_mem.i_obi_sim_mem.mem[addr];
+            end else begin
+                return 8'hXX;
+            end
+        endfunction
+    end
 
 endmodule

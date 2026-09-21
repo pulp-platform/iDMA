@@ -110,8 +110,8 @@ interface idma_inst64_drv_if #(
         acc_req_valid = 1'b0;
     endtask
 
-    // / Pop the response for the last request; fails on timeout, id mismatch or error
-    task automatic acc_get_rsp(output acc_rsp_item_t item);
+    // / Pop the response for the last request; fails on timeout or id mismatch
+    task automatic acc_get_rsp_raw(output acc_rsp_item_t item);
         int unsigned waited;
         waited = 0;
         // Resample at AcqDelay so the queue push (active region) is visible to this task
@@ -131,6 +131,11 @@ interface idma_inst64_drv_if #(
         if (item.id !== last_req_id) begin
             $fatal(1, "[DRV] response id mismatch: expected %0d, got %0d", last_req_id, item.id);
         end
+    endtask
+
+    // / Same, but an error response is fatal; use `acc_get_rsp_raw` for a negative test
+    task automatic acc_get_rsp(output acc_rsp_item_t item);
+        acc_get_rsp_raw(item);
         if (item.error !== 1'b0) begin
             $fatal(1, "[DRV] response for req id %0d flags an error", last_req_id);
         end
@@ -198,6 +203,41 @@ interface idma_inst64_drv_if #(
         acc_get_rsp(item);
         transfer_id = item.data[31:0];
     endtask
+
+    /// Memset the destination via the INIT read port; data_op[21:20] = cfg, [24:22] = channel
+    task automatic dma_start_memset(
+        input  addr_t      length,
+        input  logic [1:0] cfg,
+        input  logic [2:0] channel,
+        output tf_id_t     transfer_id
+    );
+        acc_rsp_item_t item;
+        if (length == '0) $fatal(1, "[DRV] zero-length DMINIT: the backend rejects it silently");
+        dma_start_cycle = cycle_counter;
+        acc_issue(memset_encoding(cfg, channel), length, 64'b0);
+        acc_get_rsp(item);
+        transfer_id = item.data[31:0];
+    endtask
+
+    /// Same, but returns the raw response so the caller can check a rejection
+    task automatic dma_try_memset(
+        input  addr_t          length,
+        input  logic [1:0]     cfg,
+        input  logic [2:0]     channel,
+        output acc_rsp_item_t  item
+    );
+        acc_issue(memset_encoding(cfg, channel), length, 64'b0);
+        acc_get_rsp_raw(item);
+    endtask
+
+    function automatic logic [31:0] memset_encoding(
+        input logic [1:0] cfg,
+        input logic [2:0] channel
+    );
+        memset_encoding        = inst_encoding(idma_inst64_snitch_pkg::DMINIT);
+        memset_encoding[21:20] = cfg;
+        memset_encoding[24:22] = channel;
+    endfunction
 
     // / Status read; index 0 = completed_id, 1 = next_id, 2 = busy, 3 = fifo full
     task automatic dma_poll_status(

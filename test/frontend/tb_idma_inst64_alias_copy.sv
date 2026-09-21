@@ -69,7 +69,7 @@ module tb_idma_inst64_alias_copy;
 
     task automatic sentinel_obi(input addr_t base);
         for (int unsigned i = 0; i < CopySize + 2*GuardBytes; i++) begin
-            harness.obi_mem_write_byte(base - GuardBytes + i, Sentinel);
+            harness.gen_obi_access.obi_mem_write_byte(base - GuardBytes + i, Sentinel);
         end
     endtask
 
@@ -85,7 +85,8 @@ module tb_idma_inst64_alias_copy;
             logic [7:0] expected;
             logic [7:0] actual;
             expected = PatternStart + i;
-            actual   = obi ? harness.obi_mem_read_byte(base + i) : harness.mem_read_byte(base + i);
+            actual   = obi ? harness.gen_obi_access.obi_mem_read_byte(base + i)
+                           : harness.mem_read_byte(base + i);
             bytes_checked++;
             if (actual !== expected) begin
                 if (errors < 10) begin
@@ -101,9 +102,9 @@ module tb_idma_inst64_alias_copy;
         for (int unsigned i = 1; i <= GuardBytes; i++) begin
             logic [7:0] lo;
             logic [7:0] hi;
-            lo = obi ? harness.obi_mem_read_byte(base - i)
+            lo = obi ? harness.gen_obi_access.obi_mem_read_byte(base - i)
                      : harness.mem_read_byte(base - i);
-            hi = obi ? harness.obi_mem_read_byte(base + CopySize + i - 1)
+            hi = obi ? harness.gen_obi_access.obi_mem_read_byte(base + CopySize + i - 1)
                      : harness.mem_read_byte(base + CopySize + i - 1);
             if (lo !== Sentinel) begin
                 $error("%s destination underrun at -%0d: got 0x%02x", what, i, lo);
