@@ -32,8 +32,11 @@ module idma_otf_compute #(
   /// Output beat stream: per-lane valid (occupancy) + per-byte strobe (edge mask)
   output logic [StrbWidth-1:0][7:0] data_o,
   output logic [StrbWidth-1:0]      strb_o,
+  /// Scalar output handshake used by compute engines that retire complete beats
+  output logic                      beat_valid_o,
+  input  logic                      beat_ready_i,
+  /// Lane-wise output handshake used by compute engines with packed output data
   output logic [StrbWidth-1:0]      lane_valid_o,
-  input  logic                      ready_i,
   input  logic [StrbWidth-1:0]      lane_ready_i
 );
 
@@ -82,7 +85,7 @@ module idma_otf_compute #(
       .data_o          ( tp_data                                 ),
       .strb_o          ( tp_strb                                 ),
       .valid_o         ( tp_valid                                ),
-      .ready_i         ( ready_i & sel_transpose                 )
+      .ready_i         ( beat_ready_i & sel_transpose            )
     );
   end else begin : gen_no_transpose
     assign tp_data = '0; assign tp_strb = '0; assign tp_valid = 1'b0; assign tp_in_ready = 1'b0;
@@ -146,6 +149,7 @@ module idma_otf_compute #(
   always_comb begin
     data_o       = '0;
     strb_o       = '0;
+    beat_valid_o = 1'b0;
     lane_valid_o = '0;
     in_ready_o   = 1'b0;
     if (op_legal) begin
@@ -153,6 +157,7 @@ module idma_otf_compute #(
         idma_pkg::COMPUTE_TRANSPOSE: begin
           data_o       = tp_data;
           strb_o       = tp_strb;
+          beat_valid_o = tp_valid;
           lane_valid_o = {StrbWidth{tp_valid}};
           in_ready_o   = tp_in_ready;
         end

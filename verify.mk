@@ -72,8 +72,8 @@ define idma_elab_cfg_tb
 endef
 
 # Filelists
-$(IDMA_VLT_DIR)/idma_verify.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
-	mkdir -p $(IDMA_VLT_DIR)
+$(IDMA_LINT_DIR)/idma_verify.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_LINT_DIR)
 	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) > $@
 
 $(IDMA_SLANG_DIR)/synth.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL)
@@ -85,14 +85,14 @@ $(IDMA_SLANG_DIR)/tb.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(
 	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) > $@
 
 
-idma_lint_params: $(IDMA_VLT_DIR)/idma_verify.f
+idma_lint_params: $(IDMA_LINT_DIR)/idma_verify.f
 	@test -n "$(IDMA_TOP)" || { echo "error: set IDMA_TOP=<module>"; exit 1; }
 	$(call idma_elab_cfg,$(IDMA_TOP))
 	@test -s $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg || \
 	  { echo "error: no configurations for $(IDMA_TOP)"; exit 1; }
 	@rc=0; while read -r cfg flags; do \
 	  echo "--- verilator $(IDMA_TOP) [$$cfg] $$flags ---"; \
-	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_verify.f \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_LINT_DIR)/idma_verify.f \
 	    --top-module $(IDMA_TOP) $$flags || rc=1; \
 	done < $(IDMA_VERIFY_DIR)/$(IDMA_TOP).cfg; \
 	test $$rc -eq 0 && echo "idma_lint_params: $(IDMA_TOP) OK" || \
@@ -169,14 +169,14 @@ idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 	@test -s $(IDMA_VERIFY_DIR)/multihead_ids.list || \
 	  { echo "error: no multi-head ids listed"; exit 1; }
 	$(MAKE) idma_hw_all IDMA_ADD_IDS="$$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list)"
-	mkdir -p $(IDMA_VLT_DIR) $(IDMA_SLANG_DIR)
-	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) > $(IDMA_VLT_DIR)/idma_multihead.f
+	mkdir -p $(IDMA_LINT_DIR) $(IDMA_SLANG_DIR)
+	$(BENDER) script verilator $(IDMA_SLANG_SYNTH_T) > $(IDMA_LINT_DIR)/idma_multihead.f
 	$(BENDER) script flist-plus $(IDMA_SLANG_SYNTH_T) > $(IDMA_SLANG_DIR)/mh_synth.f
 	$(BENDER) script flist-plus $(IDMA_SLANG_TB_T) -t multihead \
 	  > $(IDMA_SLANG_DIR)/mh_tb.f
 	set -e; for id in $$(cat $(IDMA_VERIFY_DIR)/multihead_ids.list); do \
 	  echo "--- verilator idma_backend_synth_$$id ---"; \
-	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_multihead.f \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_LINT_DIR)/idma_multihead.f \
 	    --top-module idma_backend_synth_$$id; \
 	  echo "--- slang idma_backend_synth_$$id ---"; \
 	  $(SLANG) -f $(IDMA_SLANG_DIR)/mh_synth.f --top idma_backend_synth_$$id \
@@ -216,20 +216,20 @@ idma_verify_toolchain:
 
 IDMA_VERIFY_RUN     = VERILATOR="$(VERILATOR)" \
                       IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) $(IDMA_VLT_MAKEFLAGS)" \
-                      $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --vlt-dir $(IDMA_VLT_DIR)
+                      $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --vlt-dir $(IDMA_LINT_DIR)
 
-$(IDMA_VLT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_INCLUDE_ALL)
-	mkdir -p $(IDMA_VLT_DIR)
+$(IDMA_LINT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_LINT_DIR)
 	$(BENDER) script verilator $(IDMA_VLT_SIM_T) --top $* > $@
 
 # idma_mxquant_dpi and idma_transpose_dpi both export gm_load/gm_get; never link both
-$(IDMA_VLT_DIR)/%_dpi.o: $(IDMA_ROOT)/test/%_dpi.c
-	mkdir -p $(IDMA_VLT_DIR)
+$(IDMA_LINT_DIR)/%_dpi.o: $(IDMA_ROOT)/test/%_dpi.c
+	mkdir -p $(IDMA_LINT_DIR)
 	$(CC) -c -O2 -fPIC $< -o $@
 
 # One rule for every suite; the database names the top and the DPI object
 idma_verify_sim_%: idma_verify_toolchain
-	@p=$$($(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --prereqs $* --vlt-dir $(IDMA_VLT_DIR)) && \
+	@p=$$($(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --prereqs $* --vlt-dir $(IDMA_LINT_DIR)) && \
 	  test -n "$$p" && $(MAKE) $$p
 	$(IDMA_VERIFY_RUN) --suite $*
 
