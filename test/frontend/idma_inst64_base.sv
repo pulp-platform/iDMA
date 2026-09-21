@@ -13,6 +13,8 @@ module idma_inst64_base #(
     parameter bit          StallPattern = 1'b0,
     /// Instantiate the TCDM (OBI) port and its memory; 0 selects the AXI-only topology
     parameter bit          EnableTcdmObi = 1'b1,
+    /// Elaborate the backend on-the-fly compute datapath
+    parameter bit          EnableCompute = 1'b0,
     /// TCDM (OBI) window; every address outside it decodes to ToSoC, i.e. AXI
     parameter logic [63:0] TcdmStart = idma_inst64_tb_pkg::TcdmStart,
     parameter logic [63:0] TcdmEnd   = idma_inst64_tb_pkg::TcdmEnd,
@@ -67,6 +69,7 @@ module idma_inst64_base #(
         .NumAddrRules    ( NumAddrRules    ),
         .EnableTcdmObi   ( EnableTcdmObi   ),
         .DMATracing      ( DMATracing      ),
+        .EnableCompute   ( EnableCompute   ),
         .axi_ar_chan_t   ( axi_ar_chan_t   ),
         .axi_aw_chan_t   ( axi_aw_chan_t   ),
         .axi_req_t       ( axi_req_t       ),
