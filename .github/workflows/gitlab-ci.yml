@@ -30,4 +30,5 @@ jobs:
           domain: iis-git.ee.ethz.ch
           repo: github-mirror/idma
           token: ${{ secrets.GITLAB_TOKEN }}
-          poll-count: 10800 # (10800/60=180min=3hours)
+          poll-period: 60
+          poll-count: 180
