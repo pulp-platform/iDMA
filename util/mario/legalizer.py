@@ -62,6 +62,12 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
         has_page_write_bursting = eval_key(used_write_prots, 'bursts', 'split_at_page_boundary', db)
         has_pow2_write_bursting = eval_key(used_write_prots, 'bursts', 'only_pow2', db)
         has_write_bursting = has_page_write_bursting or has_pow2_write_bursting
+        # A port whose every protocol forces decoupling can never run coupled, so the
+        # runtime protocol test collapses to a constant.
+        all_read_force_decouple = len(used_read_prots) != 0 and \
+            set(prot_force_decouple(used_read_prots, db)) == set(used_read_prots)
+        all_write_force_decouple = len(used_write_prots) != 0 and \
+            set(prot_force_decouple(used_write_prots, db)) == set(used_write_prots)
         # assemble context
         context = {
             'name_uniqueifier': prot_id,
@@ -91,7 +97,9 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'used_non_bursting_or_force_decouple_read_protocols':
                 prot_force_decouple(used_read_prots, db),
             'used_non_bursting_or_force_decouple_write_protocols':
-                prot_force_decouple(used_write_prots, db)
+                prot_force_decouple(used_write_prots, db),
+            'always_decoupled':
+                all_read_force_decouple or all_write_force_decouple
         }
 
         # render

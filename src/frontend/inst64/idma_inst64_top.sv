@@ -20,6 +20,8 @@ module idma_inst64_top #(
     parameter int unsigned NumAxInFlight   = 32'd3,
     parameter int unsigned DMAReqFifoDepth = 32'd3,
     parameter int unsigned NumChannels     = 32'd1,
+    /// Number of ND dimensions; the transpose midend needs at least 4
+    parameter int unsigned NumDim         = 32'd2,
     parameter bit          TCDMAliasEnable = 1'b0,
     parameter int unsigned DMATracing      = 32'd0,
     parameter type         axi_ar_chan_t   = logic,
@@ -69,7 +71,6 @@ module idma_inst64_top #(
     localparam int unsigned TfIdWidth    = 32'd32;
     localparam int unsigned TFLenWidth   = AxiAddrWidth;
     localparam int unsigned RepWidth     = 32'd32;
-    localparam int unsigned NumDim       = 32'd2;
     localparam int unsigned BufferDepth  = 32'd3;
     localparam int unsigned NumRules     = 32'd5;
     localparam int unsigned AwInFlightCntWidth =

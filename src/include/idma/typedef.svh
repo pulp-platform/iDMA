@@ -58,11 +58,11 @@
 // iDMA Full Request and Response Structs
 //
 // Usage Example:
-// `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, axi_id_t, axi_addr_t, tf_len_t)
+// `IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, axi_id_t, axi_addr_t, tf_len_t[, user_t])
 // `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, axi_addr_t)
-`define IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, axi_id_t, axi_addr_t, tf_len_t) \
+`define IDMA_TYPEDEF_FULL_REQ_T(idma_req_t, axi_id_t, axi_addr_t, tf_len_t, user_t = logic) \
     `IDMA_TYPEDEF_OPTIONS_T(options_t, axi_id_t)                            \
-    `IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, axi_addr_t, options_t)
+    `IDMA_TYPEDEF_REQ_T(idma_req_t, tf_len_t, axi_addr_t, options_t, user_t)
 `define IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, axi_addr_t)                     \
     `IDMA_TYPEDEF_ERR_PAYLOAD_T(err_payload_t, axi_addr_t)                  \
     `IDMA_TYPEDEF_RSP_T(idma_rsp_t, err_payload_t)

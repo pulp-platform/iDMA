@@ -128,6 +128,7 @@ sources:
       - test/midend/tb_idma_nd_midend_b2b.sv
       - test/midend/tb_idma_rt_midend.sv
       - test/midend/tb_idma_transpose_midend.sv
+      - test/midend/tb_idma_mp_midend.sv
       # Level 2
       - test/future/idma_obi2axi_bridge.sv
       - test/future/idma_tilelink2axi_bridge.sv

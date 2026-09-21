@@ -512,6 +512,13 @@ idma_sim_tb_idma_transpose_midend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64  tb_idma_transpose_midend -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=512 tb_idma_transpose_midend -do "run -all; quit"
 
+.PHONY: idma_sim_tb_idma_mp_midend
+idma_sim_tb_idma_mp_midend: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	# the TB derives its geometry from the parameters; one run per topology
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumBEs=4 -gRegionWidth=4096 tb_idma_mp_midend -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumBEs=8 -gRegionWidth=1024 tb_idma_mp_midend -do "run -all; quit"
+
 .PHONY: idma_sim_tb_idma_rt_midend
 
 idma_sim_tb_idma_rt_midend: $(IDMA_VSIM_DIR)/compile.tcl
