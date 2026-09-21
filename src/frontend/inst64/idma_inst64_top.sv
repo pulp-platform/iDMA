@@ -703,7 +703,6 @@ module idma_inst64_top #(
                     idma_fe_req_d.burst_req.opt.axi_id       = idma_fe_sel_chan;
                     idma_fe_req_d.burst_req.length           = acc_req_i.data_arga;
                     idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
-                    // the INIT read port has no compute datapath; a memset stays a memset
                     idma_fe_req_d.burst_req.opt.compute      = '0;
 
                     // save correct value as src addr, depending on cfg

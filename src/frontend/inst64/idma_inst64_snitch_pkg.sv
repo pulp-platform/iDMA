@@ -19,7 +19,6 @@ package idma_inst64_snitch_pkg;
   localparam logic [31:0] DMREP              = 32'b000011100000?????000000000101011;
   localparam logic [31:0] DMUSER             = 32'b0001000??????????000000000101011;
   localparam logic [31:0] DMINIT             = 32'b0001001??????????000?????0101011;
-  // Not yet allocated upstream; funct7 0x0a is the first free slot after DMINIT.
   localparam logic [31:0] DMOPC              = 32'b0001010??????????000000000101011;
 
 endpackage

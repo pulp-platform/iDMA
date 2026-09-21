@@ -26,6 +26,22 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMSTR` | `rs1` = src_stride, `rs2` = dst_stride | Set 2D strides |
 | `DMREP` | `rs1` = repetitions | Set 2D repetition count |
 | `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
+| `DMOPC` | `rs1` = {transpose operands, opcode byte} | Select the on-the-fly compute op applied by every following `DMCPY`/`DMCPYI`. Requires `EnableCompute`; `DMINIT` transfers stay plain memsets |
+
+**Compute opcode byte** (`DMOPC`, `rs1[7:0]`, decoded in `idma_inst64_compute_pkg`):
+
+| Byte | Operation |
+|------|-----------|
+| `0x08` | Passthrough; return to a plain copy |
+| `0x20` | MX quantize, FP32 source |
+| `0x21` | MX dequantize, FP32 destination |
+| `0x22` | MX quantize, FP16 source |
+| `0x23` | MX dequantize, FP16 destination |
+| `0x50` | Tiled transpose; `rs1[17:16]` is the element-size mode, `rs1[29:18]` `tensor_m`, `rs1[41:30]` `tensor_n` |
+
+The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` is not yet allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
+
+The size-changing MX ops require AXI on both the source and the destination (`ComputeMxSrcProtocol` / `ComputeMxDstProtocol` in the legalizer), so they are only reachable for endpoints that decode outside the TCDM window. Transpose drives a per-beat write strobe that only `idma_axi_write` honours, so an OBI destination drops the edge-tile masking.
 
 **Status select values** (`DMSTAT`/`DMSTATI`):
 - `0`: Completed transfer ID - compare against the ID returned by `DMCPY` to check if a specific transfer has finished
@@ -54,6 +70,9 @@ For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are 
 | `NumAddrRules` | Number of decode rules `addr_map_i` carries (default: 1). Set it to 2 for a cluster with a TCDM alias region, more for further TCDM windows; every rule must name a real window, an all-zero rule decodes as end of memory and not as a miss |
 | `EnableTcdmObi` | Instantiate the TCDM (OBI) manager port and the INIT memset port (default: 1). Set to 0 for an integration without a TCDM port: the backend becomes AXI-only, `addr_map_i` and `NumAddrRules` are ignored, every address routes to AXI, and `DMINIT` is answered with an error response |
 | `DMATracing` | Enable DMA trace file generation for debugging |
+| `EnableCompute` | Elaborate the backend on-the-fly compute datapath (default: 0). With it off, a `DMOPC` that selects a real op fires the legalizer's `ComputeOpUnsupported` guard instead of silently copying. Setting it also switches the backend to the split shifter pair (`CombinedShifter` follows `!EnableCompute`), which the compute datapath requires |
+| `ComputeOps` | Per-op `idma_pkg::compute_enable_t` feature mask; only the ops it names are elaborated (default: all) |
+| `ComputeTuning` | `idma_pkg::compute_tuning_t` implementation knobs of the compute engines (default: all) |
 
 ## Programming Sequence
 
