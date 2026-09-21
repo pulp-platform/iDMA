@@ -71,11 +71,15 @@ module idma_obi_write #(
     input  strb_t buffer_out_valid_i,
     /// Ready to buffer
     output strb_t buffer_out_ready_o,
-    /// Logical byte positions consumed by an accepted write
-    output strb_t buffer_out_consumed_o
+    /// Logical byte positions consumed, before applying the external write-strobe mask
+    output strb_t buffer_out_consumed_o,
+    /// External write-strobe mask (ANDed into be); tie to '1 when unused
+    input  strb_t mask_ext_i
 );
     // corresponds to the strobe: the write aligned data that is currently valid in the buffer
     strb_t mask_out;
+    // write mask before the external mask is applied
+    strb_t logical_mask_out;
 
     // buffer is ready to write the requested data
     logic ready_to_write;
@@ -95,9 +99,12 @@ module idma_obi_write #(
     // only pop the data actually needed for write from the buffer,
     // determine valid data to pop by calculation the be
 
-    assign mask_out = ('1 << w_dp_req_i.offset) &
+    assign logical_mask_out = ('1 << w_dp_req_i.offset) &
         ((w_dp_req_i.tailer != '0) ? ('1 >> (StrbWidth - w_dp_req_i.tailer))
         : '1);
+
+    // external mask (OTF compute)
+    assign mask_out = logical_mask_out & mask_ext_i;
 
     //--------------------------------------
     // Write control
@@ -114,7 +121,8 @@ module idma_obi_write #(
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
-    assign buffer_out_consumed_o = buffer_out_ready_o;
+    // Compute beats track all logical positions, including those suppressed by their strobe.
+    assign buffer_out_consumed_o = write_happening ? logical_mask_out : '0;
 
     // signal the bus that we are ready
     assign write_req_o.req = ready_to_write;
