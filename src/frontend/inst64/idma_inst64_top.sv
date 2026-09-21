@@ -24,6 +24,9 @@ module idma_inst64_top #(
     parameter int unsigned NumAddrRules    = 32'd1,
     parameter bit          EnableTcdmObi   = 1'b1,
     parameter int unsigned DMATracing      = 32'd0,
+    parameter bit          EnableCompute   = 1'b0,
+    parameter idma_pkg::compute_enable_t ComputeOps    = '1,
+    parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -179,6 +182,8 @@ module idma_inst64_top #(
     logic         [NumChannels-1:0] idma_fe_req_ready;
 
     // frontend state
+    idma_pkg::compute_options_t idma_fe_compute_q;
+    logic                       idma_fe_dmopc;
     logic [1:0] idma_fe_cfg;
     logic [1:0] idma_fe_init_cfg;
     logic [1:0] idma_fe_status;
@@ -223,10 +228,10 @@ module idma_inst64_top #(
                 .BufferDepth          ( BufferDepth                 ),
                 .TFLenWidth           ( TFLenWidth                  ),
                 .MemSysDepth          ( 32'd16                      ),
-                .CombinedShifter      ( 1'b1                        ),
-                .EnableCompute        ( 1'b0                        ),
-                .ComputeOps           ( '0                          ),
-                .ComputeTuning        ( '1                          ),
+                .CombinedShifter      ( !EnableCompute              ),
+                .EnableCompute        ( EnableCompute               ),
+                .ComputeOps           ( ComputeOps                  ),
+                .ComputeTuning        ( ComputeTuning               ),
                 .RAWCouplingAvail     ( 1'b0                        ),
                 .MaskInvalidData      ( 1'b0                        ),
                 .HardwareLegalizer    ( 1'b1                        ),
@@ -279,10 +284,10 @@ module idma_inst64_top #(
                 .BufferDepth          ( BufferDepth                   ),
                 .TFLenWidth           ( TFLenWidth                    ),
                 .MemSysDepth          ( 32'd16                        ),
-                .CombinedShifter      ( 1'b1                          ),
-                .EnableCompute        ( 1'b0                          ),
-                .ComputeOps           ( '0                            ),
-                .ComputeTuning        ( '1                            ),
+                .CombinedShifter      ( !EnableCompute                ),
+                .EnableCompute        ( EnableCompute                 ),
+                .ComputeOps           ( ComputeOps                    ),
+                .ComputeTuning        ( ComputeTuning                 ),
                 .RAWCouplingAvail     ( 1'b0                          ),
                 .MaskInvalidData      ( 1'b0                          ),
                 .HardwareLegalizer    ( 1'b1                          ),
@@ -604,6 +609,7 @@ module idma_inst64_top #(
         idma_fe_req_d.burst_req.opt.beo.src_reduce_len = 1'b0;
         idma_fe_req_d.burst_req.opt.beo.dst_reduce_len = 1'b0;
         idma_fe_req_d.burst_req.opt.last               = 1'b0;
+        idma_fe_req_d.burst_req.opt.compute            = idma_fe_compute_q;
 
         // frontend config
         idma_fe_cfg      = '0;
@@ -697,6 +703,8 @@ module idma_inst64_top #(
                     idma_fe_req_d.burst_req.opt.axi_id       = idma_fe_sel_chan;
                     idma_fe_req_d.burst_req.length           = acc_req_i.data_arga;
                     idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
+                    // the INIT read port has no compute datapath; a memset stays a memset
+                    idma_fe_req_d.burst_req.opt.compute      = '0;
 
                     // save correct value as src addr, depending on cfg
                     case (idma_fe_init_cfg)
@@ -795,6 +803,13 @@ module idma_inst64_top #(
                     dma_op_name     = "DMUSER";
                 end
 
+                // latch the on-the-fly compute configuration, registered below
+                idma_inst64_snitch_pkg::DMOPC : begin
+                    acc_req_ready_o = 1'b1;
+                    is_dma_op       = 1'b1;
+                    dma_op_name     = "DMOPC";
+                end
+
                 default:;
             endcase
         end
@@ -849,6 +864,12 @@ module idma_inst64_top #(
     //--------------------------------------
     `FF(idma_fe_req_q, idma_fe_req_d, '0)
 
+    // DMOPC persists across transfers until the next DMOPC; reset is a plain copy
+    assign idma_fe_dmopc = acc_req_valid_i & acc_req_ready_o &
+                           (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMOPC);
+    `FFL(idma_fe_compute_q, idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga),
+         idma_fe_dmopc, '0)
+
 
     //--------------------------------------
     // DMA Tracer
@@ -885,5 +906,15 @@ module idma_inst64_top #(
     //--------------------------------------
     // The DMUSER field op-code supports axi user field width only up to 64 Bits.
     `ASSERT_INIT(CheckAxiUserField, AxiUserWidth <= 64);
+    // Every latched DMOPC byte must decode; an unknown byte silently falls back to a copy.
+    `ASSERT_NEVER(DmopcUnknownOpcode,
+                  idma_fe_dmopc & ~idma_inst64_compute_pkg::opc_known(acc_req_i.data_arga[7:0]),
+                  clk_i, !rst_ni)
+
+    // A compute op the RDL adds but DMOPC never encodes is unreachable, not a plain copy.
+    if (!idma_inst64_compute_pkg::ComputeOpsMapped) begin : gen_compute_op_map_check
+        $fatal(1, "idma_inst64_top: idma_pkg::compute_op_e value %0d has no DMOPC opcode byte",
+               idma_inst64_compute_pkg::UnmappedComputeOp);
+    end
 
 endmodule

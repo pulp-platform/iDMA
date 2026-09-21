@@ -619,8 +619,9 @@ idma_vcs_clean:
 IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
 
 
-# Measured at 0 occurrences over the synth tops, so they gate
-IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT
+# Measured at 0 occurrences over the synth tops, so they gate; -Wno-fatal alone only warns
+IDMA_VLT_WERROR    := -Werror-LATCH -Werror-MULTIDRIVEN -Werror-IMPLICIT \
+                      -Werror-USERFATAL -Werror-USERERROR
 # Unroll budget matches util/run_vlt_sim.py; 5.020 reports BLKLOOPINIT without it
 IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
                       --unroll-count 4096 --unroll-stmts 200000
