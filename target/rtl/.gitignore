@@ -1,6 +1,7 @@
-Bender.yml
-include/*
-!include/.gitkeep
-*.sv
-*.hjson
-.vidma_ids
+# Deactivated by deploy.py
+# Bender.yml
+# include/*
+# !include/.gitkeep
+# *.sv
+# *.hjson
+# .vidma_ids
