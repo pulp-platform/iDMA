@@ -20,7 +20,7 @@ module idma_inst64_top #(
     parameter int unsigned NumAxInFlight   = 32'd3,
     parameter int unsigned DMAReqFifoDepth = 32'd3,
     parameter int unsigned NumChannels     = 32'd1,
-    parameter bit          TCDMAliasEnable = 1'b0,
+    parameter int unsigned NumAddrRules    = 32'd1,
     parameter int unsigned DMATracing      = 32'd0,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
@@ -62,7 +62,7 @@ module idma_inst64_top #(
     // performance output
     output dma_events_t [NumChannels-1:0] events_o,
     // address decode map
-    input  addr_rule_t [TCDMAliasEnable:0] addr_map_i
+    input  addr_rule_t  [NumAddrRules-1:0] addr_map_i
 );
 
     // constants
@@ -191,7 +191,6 @@ module idma_inst64_top #(
     logic     acc_res_ready;
 
     // decoder signals
-    localparam int unsigned NoRules = (1 + TCDMAliasEnable);
     localparam int unsigned NoIndices = 1;
     logic [NoIndices-1:0] idx_src;
     logic                        idx_src_valid;
@@ -463,7 +462,7 @@ module idma_inst64_top #(
     // Address Decode
     cc_addr_decode #(
     .NoIndices  ( NoIndices ),
-    .NoRules    ( NoRules        ),
+    .NoRules    ( NumAddrRules   ),
     .addr_t     ( addr_t           ),
     .rule_t     ( addr_rule_t      )
     ) i_idma_src_decode (
@@ -479,7 +478,7 @@ module idma_inst64_top #(
     cc_addr_decode #(
     .NoIndices  ( NoIndices ),
     .addr_t     ( addr_t           ),
-    .NoRules    ( NoRules        ),
+    .NoRules    ( NumAddrRules   ),
     .rule_t     ( addr_rule_t      )
     ) i_idma_dst_decode (
     .addr_i           ( idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:0] ),
