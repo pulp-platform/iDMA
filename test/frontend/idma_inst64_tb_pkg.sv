@@ -21,6 +21,10 @@ package idma_inst64_tb_pkg;
     // Tracer off; the testbench does not consume trace files.
     localparam int unsigned DMATracing      = 32'd0;
 
+    // TCDM (OBI) window of the harness; every address outside it decodes to AXI.
+    localparam logic [63:0] TcdmStart       = 64'h0000_0000_1000_0000;
+    localparam logic [63:0] TcdmEnd         = 64'h0000_0000_1001_0000;
+
     localparam time    Period      = 10ns;
     localparam time    ApplDelay   = Period / 4;
     localparam time    AcqDelay    = Period * 3 / 4;
@@ -78,21 +82,8 @@ package idma_inst64_tb_pkg;
         logic        error;
     } acc_res_t;
 
-    // obi_wr_req/obi_rd_req are required: idma_inst64_events drives them unconditionally
-    typedef struct packed {
-        logic           aw_valid, aw_ready, aw_done, aw_stall;
-        axi_pkg::len_t  aw_len;
-        axi_pkg::size_t aw_size;
-        logic           ar_valid, ar_ready, ar_done, ar_stall;
-        axi_pkg::len_t  ar_len;
-        axi_pkg::size_t ar_size;
-        logic           r_valid, r_ready, r_done, r_bw, r_stall, buf_r_stall;
-        logic           w_valid, w_ready, w_done, w_stall, buf_w_stall;
-        logic [31:0]    num_bytes_written;
-        logic           b_valid, b_ready, b_done;
-        logic           obi_wr_req, obi_rd_req;
-        logic           dma_busy;
-    } dma_events_t;
+    // The exported type, so the testbench cannot drift from the snitch_cluster contract
+    `IDMA_TYPEDEF_EVENTS_T(dma_events_t, AxiDataWidth)
 
     // Captured accelerator response; the driver queues one entry per acc handshake
     typedef struct packed {

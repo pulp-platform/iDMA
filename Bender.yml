@@ -158,6 +158,7 @@ sources:
       # Level 3
       - test/frontend/tb_idma_inst64_axi_copy.sv
       - test/frontend/tb_idma_inst64_alias_copy.sv
+      - test/frontend/tb_idma_inst64_tcdm_copy.sv
 
   # Multi-head directed backend testbenches
   - target: multihead

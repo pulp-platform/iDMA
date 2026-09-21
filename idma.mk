@@ -45,6 +45,10 @@ IDMA_OCCAMY_IDS  := \
 IDMA_ADD_IDS     ?=
 IDMA_BACKEND_IDS ?= $(IDMA_BASE_IDS) $(IDMA_OCCAMY_IDS) $(IDMA_ADD_IDS)
 
+# idma_inst64_top includes both tracers and keeps a dotted ref to both backends, trimmed or not
+IDMA_INST64_IDS  := rw_axi r_init_rw_axi_rw_obi
+IDMA_TRACER_IDS  := $(sort $(IDMA_BACKEND_IDS) $(IDMA_INST64_IDS))
+
 # generated frontends
 IDMA_BASE_FE_IDS := reg32_3d reg64_2d reg64_1d
 IDMA_ADD_FE_IDS  ?=
@@ -159,7 +163,7 @@ idma_rtl_clean:
 
 # assemble the required files
 IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/tracer.svh
-IDMA_INCLUDE_ALL += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_INC_DIR)/tracer_$Y.svh)
+IDMA_INCLUDE_ALL += $(foreach Y,$(IDMA_TRACER_IDS),$(IDMA_INC_DIR)/tracer_$Y.svh)
 IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/compute.svh
 
 IDMA_RTL_ALL     += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
@@ -443,6 +447,26 @@ idma_sim_tb_idma_inst64_alias_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_alia
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_alias_copy.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_alias_copy.log
 
+# Same copy regression on the EnableTcdmObi = 0 topology, inside the TCDM window
+.PHONY: idma_sim_tb_idma_inst64_axi_only
+idma_sim_tb_idma_inst64_axi_only: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_axi_copy.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_axi_copy.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=0 \
+		tb_idma_inst64_axi_copy -logfile inst64_axi_only.log -do "run -all; quit"
+	# Questa does not propagate $$fatal to the exit code; gate on the transcript
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_axi_only.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_axi_only.log
+
+# Stages an AXI buffer through the TCDM window, so the OBI and INIT legs carry real beats
+.PHONY: idma_sim_tb_idma_inst64_tcdm_copy
+idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_copy.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_tcdm_copy.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_inst64_tcdm_copy \
+		-logfile inst64_tcdm_copy.log -do "run -all; quit"
+	# Questa does not propagate $$fatal to the exit code; gate on the transcript
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_tcdm_copy.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_tcdm_copy.log
+
 .PHONY: idma_sim_tb_idma_transpose_b2b
 idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -606,9 +630,14 @@ idma_verilator_clean:
 	rm -rf $(IDMA_VLT_DIR)
 
 # inst64 gate: the only public concrete bindings of idma_inst64_top
-IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy
+IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
+                    tb_idma_inst64_tcdm_copy
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
+
+# parameter sweeps run against the first testbench's file list
+IDMA_INST64_GTB  := tb_idma_inst64_axi_copy
+IDMA_INST64_G    := -GEnableTcdmObi=0 -GDMATracing=1
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:
@@ -620,6 +649,11 @@ idma_lint_inst64:
 	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/$$tb.f \
 	    --top-module $$tb || rc=1; \
 	done; exit $$rc
+	@for g in $(IDMA_INST64_G); do \
+	  echo "--- elaborating $(IDMA_INST64_GTB) $$g ---"; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/$(IDMA_INST64_GTB).f \
+	    --top-module $(IDMA_INST64_GTB) $$g || exit 1; \
+	done
 
 # verilator elaborates every synth top, so fork PRs catch port and param breaks
 IDMA_LINT_TOPS ?= $(addprefix idma_backend_synth_,$(IDMA_BACKEND_IDS)) \

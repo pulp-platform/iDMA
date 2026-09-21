@@ -52,6 +52,7 @@ For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are 
 | `DMAReqFifoDepth` | Depth of the request FIFO between frontend and midend (default: 3) |
 | `NumChannels` | Number of independent DMA channels, each with its own backend + ND midend (default: 1) |
 | `NumAddrRules` | Number of decode rules `addr_map_i` carries (default: 1). Set it to 2 for a cluster with a TCDM alias region, more for further TCDM windows; every rule must name a real window, an all-zero rule decodes as end of memory and not as a miss |
+| `EnableTcdmObi` | Instantiate the TCDM (OBI) manager port and the INIT memset port (default: 1). Set to 0 for an integration without a TCDM port: the backend becomes AXI-only, `addr_map_i` and `NumAddrRules` are ignored, every address routes to AXI, and `DMINIT` is answered with an error response |
 | `DMATracing` | Enable DMA trace file generation for debugging |
 
 ## Programming Sequence
