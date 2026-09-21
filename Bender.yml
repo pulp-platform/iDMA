@@ -145,6 +145,7 @@ sources:
       - test/tb_idma_mxneg.sv
       - test/tb_idma_mxperf.sv
       - test/tb_idma_mxclear.sv
+      - test/tb_idma_backend_fixed_burst.sv
 
   # Tightly-coupled inst64 frontend testbenches (needs the snitch_cluster-gated RTL)
   - target: all(idma_test, snitch_cluster)

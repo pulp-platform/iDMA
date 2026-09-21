@@ -684,7 +684,9 @@ package idma_test;
             input logic       transpose_en = 1'b0,
             input logic [1:0] transp_mode  = '0,
             input logic [11:0] tensor_m    = '0,
-            input logic [11:0] tensor_n    = '0
+            input logic [11:0] tensor_n    = '0,
+            input axi_pkg::burst_t src_burst = axi_pkg::BURST_INCR,
+            input axi_pkg::burst_t dst_burst = axi_pkg::BURST_INCR
         );
             idma.req.length                 <= #TA length;
             idma.req.src_addr               <= #TA src_addr;
@@ -693,6 +695,8 @@ package idma_test;
             idma.req.opt.dst_protocol       <= #TA dst_protocol;
             idma.req.opt.src_head           <= #TA src_head;
             idma.req.opt.dst_head           <= #TA dst_head;
+            idma.req.opt.src.burst          <= #TA src_burst;
+            idma.req.opt.dst.burst          <= #TA dst_burst;
             idma.req.opt.axi_id             <= #TA id;
             idma.req.opt.beo.decouple_aw    <= #TA decouple_aw;
             idma.req.opt.beo.decouple_rw    <= #TA decouple_rw;
@@ -718,6 +722,8 @@ package idma_test;
             idma.req.opt.dst_protocol       <= #TA idma_pkg::AXI;
             idma.req.opt.src_head           <= #TA '0;
             idma.req.opt.dst_head           <= #TA '0;
+            idma.req.opt.src.burst          <= #TA axi_pkg::BURST_INCR;
+            idma.req.opt.dst.burst          <= #TA axi_pkg::BURST_INCR;
             idma.req.opt.axi_id             <= #TA '0;
             idma.req.opt.beo.decouple_aw    <= #TA '0;
             idma.req.opt.beo.decouple_rw    <= #TA '0;
