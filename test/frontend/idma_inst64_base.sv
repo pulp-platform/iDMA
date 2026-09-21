@@ -13,7 +13,10 @@ module idma_inst64_base #(
     parameter bit          StallPattern = 1'b0,
     /// TCDM (OBI) window; every address outside it decodes to ToSoC, i.e. AXI
     parameter logic [63:0] TcdmStart = 64'h0000_0000_1000_0000,
-    parameter logic [63:0] TcdmEnd   = 64'h0000_0000_1001_0000
+    parameter logic [63:0] TcdmEnd   = 64'h0000_0000_1001_0000,
+    /// Second TCDM (OBI) window; `TcdmAliasEnd` of 0 leaves the alias rule out entirely
+    parameter logic [63:0] TcdmAliasStart = 64'h0,
+    parameter logic [63:0] TcdmAliasEnd   = 64'h0
 );
     import idma_inst64_tb_pkg::*;
 
@@ -40,9 +43,16 @@ module idma_inst64_base #(
     dma_events_t [NumChannels-1:0] events;
     logic        [NumChannels-1:0] busy;
 
+    localparam bit          AliasEnable  = (TcdmAliasEnd != 64'h0);
+    localparam int unsigned NumAddrRules = AliasEnable ? 32'd2 : 32'd1;
+
     // An all-zero rule is not a miss; cc_addr_decode reads end_addr == 0 as end of memory.
-    addr_rule_t [0:0] addr_map;
+    addr_rule_t [NumAddrRules-1:0] addr_map;
     assign addr_map[0] = '{idx: idma_pkg::TCDMDMA, start_addr: TcdmStart, end_addr: TcdmEnd};
+    if (AliasEnable) begin : gen_alias_rule
+        assign addr_map[1] = '{idx: idma_pkg::TCDMDMA, start_addr: TcdmAliasStart,
+                               end_addr: TcdmAliasEnd};
+    end
 
     idma_inst64_top #(
         .AxiDataWidth    ( AxiDataWidth    ),
@@ -52,6 +62,7 @@ module idma_inst64_base #(
         .NumAxInFlight   ( NumAxInFlight   ),
         .DMAReqFifoDepth ( DMAReqFifoDepth ),
         .NumChannels     ( NumChannels     ),
+        .NumAddrRules    ( NumAddrRules    ),
         .DMATracing      ( DMATracing      ),
         .axi_ar_chan_t   ( axi_ar_chan_t   ),
         .axi_aw_chan_t   ( axi_aw_chan_t   ),
@@ -206,6 +217,24 @@ module idma_inst64_base #(
     function automatic logic [7:0] mem_read_byte(input addr_t addr);
         if (gen_mem_ch[0].i_axi_sim_mem.mem.exists(addr)) begin
             return gen_mem_ch[0].i_axi_sim_mem.mem[addr];
+        end else begin
+            return 8'hXX;
+        end
+    endfunction
+
+    //--------------------------------------
+    // OBI memory helpers (channel 0)
+    //--------------------------------------
+    task automatic obi_mem_write_byte(
+        input addr_t addr,
+        input byte   data
+    );
+        gen_mem_ch[0].i_obi_sim_mem.mem[addr] = data;
+    endtask
+
+    function automatic logic [7:0] obi_mem_read_byte(input addr_t addr);
+        if (gen_mem_ch[0].i_obi_sim_mem.mem.exists(addr)) begin
+            return gen_mem_ch[0].i_obi_sim_mem.mem[addr];
         end else begin
             return 8'hXX;
         end
