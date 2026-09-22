@@ -650,9 +650,9 @@ idma_vcs_clean:
 # Verilator
 # --------------
 
-.PHONY: idma_verilator_clean
+.PHONY: idma_lint_clean
 
-IDMA_VLT_DIR   := $(IDMA_ROOT)/target/sim/verilator
+IDMA_LINT_DIR := $(IDMA_ROOT)/target/lint/verilator
 
 
 # Measured at 0 occurrences over the synth tops, so they gate; -Wno-fatal alone only warns
@@ -663,8 +663,9 @@ IDMA_VLT_LINT_ARGS := --lint-only -Wno-fatal --timing $(IDMA_VLT_WERROR) \
                       --unroll-count 4096 --unroll-stmts 200000
 
 
-idma_verilator_clean:
-	rm -rf $(IDMA_VLT_DIR)
+
+idma_lint_clean:
+	rm -rf $(IDMA_LINT_DIR)
 
 # inst64 gate: the only public concrete bindings of idma_inst64_top
 IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
@@ -681,18 +682,18 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:
-	mkdir -p $(IDMA_VLT_DIR)
+	mkdir -p $(IDMA_LINT_DIR)
 	@rc=0; for tb in $(IDMA_INST64_TBS); do \
 	  echo "--- elaborating $$tb ---"; \
 	  $(BENDER) script verilator $(IDMA_INST64_T) --top $$tb \
-	    > $(IDMA_VLT_DIR)/$$tb.f || { rc=1; continue; }; \
-	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/$$tb.f \
+	    > $(IDMA_LINT_DIR)/$$tb.f || { rc=1; continue; }; \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_LINT_DIR)/$$tb.f \
 	    --top-module $$tb || rc=1; \
 	done; exit $$rc
 	@for g in $(IDMA_INST64_G); do \
 	  tb=$${g%%:*}; arg=$${g#*:}; \
 	  echo "--- elaborating $$tb $$arg ---"; \
-	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/$$tb.f \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_LINT_DIR)/$$tb.f \
 	    --top-module $$tb $$arg || exit 1; \
 	done
 
@@ -719,17 +720,21 @@ idma_lint_sv:
 
 .PHONY: idma_lint_elab
 idma_lint_elab:
-	mkdir -p $(IDMA_VLT_DIR)
-	$(BENDER) script verilator -t rtl -t synth > $(IDMA_VLT_DIR)/idma_elab.f
+	mkdir -p $(IDMA_LINT_DIR)
+	$(BENDER) script verilator -t rtl -t synth > $(IDMA_LINT_DIR)/idma_elab.f
 	@rc=0; for top in $(IDMA_LINT_TOPS); do \
 	  echo "--- elaborating $$top ---"; \
-	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_VLT_DIR)/idma_elab.f \
+	  $(VERILATOR) $(IDMA_VLT_LINT_ARGS) -f $(IDMA_LINT_DIR)/idma_elab.f \
 	    --top-module $$top || rc=1; \
 	done; exit $$rc
 
 .PHONY: idma_lint_all
 idma_lint_all: idma_lint_elab idma_lint_inst64
 
+# Verilator sim
+
+include $(IDMA_ROOT)/target/sim/vlt/testbenches.mk
+include $(IDMA_ROOT)/target/sim/vlt/vlt.mk
 
 # ---------------
 # Trace
@@ -795,7 +800,7 @@ idma_nonfree_clean:
 
 .PHONY: idma_clean_all idma_clean idma_misc_clean idma_sw_clean
 
-idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_verilator_clean idma_verify_clean idma_doc_clean idma_trace_clean idma_sw_clean
+idma_clean_all idma_clean: idma_rtl_clean idma_reg_clean idma_pickle_clean idma_sim_clean idma_vcs_clean idma_lint_clean idma_vlt_clean idma_verify_clean idma_doc_clean idma_trace_clean idma_sw_clean
 
 idma_misc_clean:
 	rm -rf scripts/__pycache__

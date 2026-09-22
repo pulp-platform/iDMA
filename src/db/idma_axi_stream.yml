@@ -278,7 +278,8 @@ write_template: |
         .w_chan_first_o     ( ${w_chan_first} ),
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
-        .buffer_out_ready_o ( ${buffer_out_ready} )
+        .buffer_out_ready_o ( ${buffer_out_ready} ),
+        .buffer_out_consumed_o ( ${buffer_out_consumed} )
     );
 synth_wrapper_ports_read: |
     input  data_t                  axis_read_data_i,
