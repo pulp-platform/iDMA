@@ -36,7 +36,7 @@ module tb_idma_transpose_nd
 
   // Geometry cases (M, N, EB) swept in one elaboration: aligned + edge
   // (M or N not a multiple of NE) for int8/fp16/fp32. EB>StrbWidth cases skip.
-  localparam int unsigned NCases = 13;
+  localparam int unsigned NCases = 14;
   localparam int unsigned Cases[NCases][3] = '{
       '{8, 8, 1},
       '{16, 16, 1},
@@ -50,7 +50,19 @@ module tb_idma_transpose_nd
       '{5, 5, 2},
       '{32, 24, 1},
       '{9, 5, 4},
-      '{13, 19, 1}
+      '{13, 19, 1},
+      '{9, 5, 8}
+  };
+
+  // Whole-tile cases, all non-square so an M/N swap cannot hide
+  localparam int unsigned NTileCases = 6;
+  localparam int unsigned TileCases[NTileCases][3] = '{
+      '{5, 8, 1},
+      '{3, 6, 1},
+      '{7, 4, 1},
+      '{2, 3, 2},
+      '{3, 4, 1},
+      '{2, 3, 1}
   };
 
   // ── Types ──
@@ -96,6 +108,13 @@ module tb_idma_transpose_nd
   idma_busy_t busy;
   logic       nd_busy;
 
+  // Whole-tile cases model the inst64 path: one burst straight to the backend
+  logic      tile_mode;
+  idma_req_t tile_req;
+  logic      tile_req_valid, tile_req_ready;
+  idma_req_t be_req;
+  logic      be_req_valid, be_req_ready, be_rsp_ready;
+
   assign idma_eh_req  = '0;
   assign eh_req_valid = 1'b0;
 
@@ -121,6 +140,8 @@ module tb_idma_transpose_nd
     output transpose_req_valid;
     output transpose_req_to_midend;
     input nd_rsp_valid, nd_rsp_ready;
+    output tile_mode, tile_req, tile_req_valid;
+    input tile_req_ready, rsp_valid, be_rsp_ready;
   endclocking
 
   // ── AXI sim memory (read+write joined) ──
@@ -209,7 +230,7 @@ module tb_idma_transpose_nd
     .burst_req_valid_o(nd_burst_valid),
     .burst_req_ready_i(nd_burst_ready),
     .burst_rsp_i      (idma_rsp),
-    .burst_rsp_valid_i(rsp_valid),
+    .burst_rsp_valid_i(rsp_valid & ~tile_mode),
     .burst_rsp_ready_o(rsp_ready),
     .busy_o           (nd_busy)
   );
@@ -229,6 +250,12 @@ module tb_idma_transpose_nd
     .valid_o(req_valid),
     .ready_i(req_ready)
   );
+
+  assign be_req         = tile_mode ? tile_req : idma_req;
+  assign be_req_valid   = tile_mode ? tile_req_valid : req_valid;
+  assign req_ready      = tile_mode ? 1'b0 : be_req_ready;
+  assign tile_req_ready = tile_mode ? be_req_ready : 1'b0;
+  assign be_rsp_ready   = tile_mode ? 1'b1 : rsp_ready;
 
   // ── Backend (rw_axi) with transpose engine ──
   idma_backend_rw_axi #(
@@ -261,12 +288,12 @@ module tb_idma_transpose_nd
   ) i_idma_backend (
     .clk_i          (clk),
     .rst_ni         (rst_n),
-    .idma_req_i     (idma_req),
-    .req_valid_i    (req_valid),
-    .req_ready_o    (req_ready),
+    .idma_req_i     (be_req),
+    .req_valid_i    (be_req_valid),
+    .req_ready_o    (be_req_ready),
     .idma_rsp_o     (idma_rsp),
     .rsp_valid_o    (rsp_valid),
-    .rsp_ready_i    (rsp_ready),
+    .rsp_ready_i    (be_rsp_ready),
     .idma_eh_req_i  (idma_eh_req),
     .eh_req_valid_i (eh_req_valid),
     .eh_req_ready_o (eh_req_ready),
@@ -340,7 +367,7 @@ module tb_idma_transpose_nd
   task automatic run_case(input int unsigned m, input int unsigned n, input int unsigned eb,
                           input bit compact, output int unsigned errs);
     automatic int unsigned ne = StrbWidth / eb;  // tile side (elements)
-    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic int unsigned mode = (eb == 8) ? 3 : (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
     automatic int unsigned yt = (m + ne - 1) / ne;  // row-tiles
     automatic int unsigned nt = (n + ne - 1) / ne;  // col-tiles
     automatic int unsigned mp = yt * ne;  // padded Aᵀ row pitch (StrbWidth-aligned)
@@ -359,9 +386,9 @@ module tb_idma_transpose_nd
       for (int unsigned j = 0; j < mp; j++)
         for (int unsigned b = 0; b < eb; b++) wr_mem(db + (i * mp + j) * eb + b, 8'hCC);
 
-    // arm the AW-bounds guard for this case
-    chk_db = db;
-    chk_aw_hi = db + addr_t'(nt * ne * mp * eb);
+    // arm the AW-bounds guard; a misaligned base widens the legal window
+    chk_db = db & ~addr_t'(StrbWidth - 1);
+    chk_aw_hi = (db + addr_t'(nt * ne * mp * eb) + StrbWidth - 1) & ~addr_t'(StrbWidth - 1);
     chk_active = 1'b1;
 
     // The transpose midend derives all reps and strides from this base request.
@@ -417,42 +444,173 @@ module tb_idma_transpose_nd
         end
   endtask
 
+  // Position-coded tile byte: r<8, c<8, b<4 pack into one unique byte
+  function automatic logic [7:0] tile_byte(input int unsigned r, input int unsigned c,
+                                           input int unsigned b);
+    return 8'((r << 5) | (c << 2) | b);
+  endfunction
+
+  // One padded tile in a single burst; `diffs` counts bytes a plain copy would not change
+  task automatic run_tile_case(input int unsigned m, input int unsigned n, input int unsigned eb,
+                               input addr_t src_base, input addr_t dst_base,
+                               output int unsigned errs, output int unsigned diffs);
+    automatic int unsigned ne = StrbWidth / eb;
+    automatic int unsigned mode = (eb == 8) ? 3 : (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic idma_req_t req;
+    errs  = 0;
+    diffs = 0;
+
+    // source tile: NE rows at a StrbWidth pitch; rows >= M and cols >= N are padding
+    for (int unsigned r = 0; r < ne; r++)
+      for (int unsigned c = 0; c < ne; c++)
+        for (int unsigned b = 0; b < eb; b++)
+          wr_mem(src_base + r * StrbWidth + c * eb + b, tile_byte(r, c, b));
+
+    // sentinel-fill the destination tile; only the M x N transposed region may be written
+    for (int unsigned i = 0; i < ne; i++)
+      for (int unsigned j = 0; j < StrbWidth; j++) wr_mem(dst_base + i * StrbWidth + j, 8'hCC);
+
+    // a misaligned base lets the first AW issue aligned-down (strobe-masked)
+    chk_db = dst_base & ~addr_t'(StrbWidth - 1);
+    chk_aw_hi = (dst_base + addr_t'(ne * StrbWidth) + StrbWidth - 1) & ~addr_t'(StrbWidth - 1);
+    chk_active = 1'b1;
+
+    // one 1D request covering a whole padded tile, straight to the backend
+    req = '0;
+    req.length = tf_len_t'(ne * StrbWidth);
+    req.src_addr = src_base;
+    req.dst_addr = dst_base;
+    req.opt.src_protocol = idma_pkg::AXI;
+    req.opt.dst_protocol = idma_pkg::AXI;
+    req.opt.src.burst = axi_pkg::BURST_INCR;
+    req.opt.dst.burst = axi_pkg::BURST_INCR;
+    req.opt.beo.decouple_rw = 1'b1;
+    req.opt.beo.decouple_aw = 1'b1;
+    req.opt.compute.enable = 1'b1;
+    req.opt.compute.op = idma_pkg::COMPUTE_TRANSPOSE;
+    req.opt.compute.params.transpose.mode = 2'(mode);
+    req.opt.compute.params.transpose.tensor_m = 12'(m);
+    req.opt.compute.params.transpose.tensor_n = 12'(n);
+    req.opt.last = 1'b1;
+
+    $display("[TPT] case %0dx%0d EB=%0d (NE=%0d, %0d-beat burst, src=%0h dst=%0h)", m, n, eb, ne,
+             ne, src_base, dst_base);
+
+    @(req_rsp_cb);
+    req_rsp_cb.tile_mode <= 1'b1;
+    @(req_rsp_cb);
+    req_rsp_cb.tile_req       <= req;
+    req_rsp_cb.tile_req_valid <= 1'b1;
+    do @(req_rsp_cb); while (!req_rsp_cb.tile_req_ready);
+    req_rsp_cb.tile_req       <= '0;
+    req_rsp_cb.tile_req_valid <= 1'b0;
+
+    while (!(req_rsp_cb.rsp_valid && req_rsp_cb.be_rsp_ready)) @(req_rsp_cb);
+    repeat (20) @(req_rsp_cb);
+    req_rsp_cb.tile_mode <= 1'b0;
+    @(req_rsp_cb);
+    chk_active = 1'b0;
+
+    // data: out_T[i][j] == in[j][i], destination rows at a StrbWidth pitch
+    for (int unsigned i = 0; i < n; i++)
+      for (int unsigned j = 0; j < m; j++)
+        for (int unsigned b = 0; b < eb; b++) begin
+          automatic logic [7:0] got = rd_mem(dst_base + i * StrbWidth + j * eb + b);
+          if (got !== tile_byte(j, i, b)) begin
+            errs++;
+            if (errs <= 12)
+              $display("[TPT] MISMATCH out_T[%0d][%0d].b%0d=%02h exp %02h", i, j, b, got,
+                       tile_byte(j, i, b));
+          end
+          if (got !== tile_byte(i, j, b)) diffs++;
+        end
+    // padding elements must stay sentinel
+    for (int unsigned i = 0; i < ne; i++)
+      for (int unsigned j = 0; j < StrbWidth; j++)
+        if (i >= n || (j / eb) >= m)
+          if (rd_mem(dst_base + i * StrbWidth + j) !== 8'hCC) begin
+            errs++;
+            if (errs <= 12)
+              $display("[TPT] PADDING CLOBBERED at row=%0d byte=%0d=%02h (exp CC)", i, j,
+                       rd_mem(dst_base + i * StrbWidth + j));
+          end
+  endtask
+
   initial begin
     automatic int unsigned total = 0;
     automatic int unsigned ce;
+    automatic int unsigned cd;
+    automatic int unsigned exp_d;
     transpose_req_valid   = 1'b0;
     nd_rsp_ready          = 1'b1;
     transpose_req_from_tb = '0;
+    tile_mode             = 1'b0;
+    tile_req              = '0;
+    tile_req_valid        = 1'b0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
 
-    for (int unsigned k = 0; k < NCases; k++) begin
-      if (Cases[k][2] > StrbWidth) continue;  // element must fit the bus
-      for (int unsigned compact = 0; compact < 2; compact++) begin
-        run_case(Cases[k][0], Cases[k][1], Cases[k][2], bit'(compact), ce);
+    // Sweep aligned and sub-beat misaligned bases to reach the 2-beat-row path
+    for (int unsigned misalign = 0; misalign < 2; misalign++) begin
+      sb = 'h0000_1000 + (misalign ? 1 : 0);
+      db = 'h0000_4000 + (misalign ? 3 : 0);
+      for (int unsigned k = 0; k < NCases; k++) begin
+        if (Cases[k][2] > StrbWidth) continue;  // element must fit the bus
+        for (int unsigned compact = 0; compact < 2; compact++) begin
+          run_case(Cases[k][0], Cases[k][1], Cases[k][2], bit'(compact), ce);
+          if (ce == 0)
+            $display(
+                "[TPN] PASS: %0dx%0d EB=%0d compact=%0d misalign=%0d",
+                Cases[k][0],
+                Cases[k][1],
+                Cases[k][2],
+                compact,
+                misalign
+            );
+          else
+            $display(
+                "[TPN] FAIL: %0dx%0d EB=%0d compact=%0d misalign=%0d (%0d mismatches)",
+                Cases[k][0],
+                Cases[k][1],
+                Cases[k][2],
+                compact,
+                misalign,
+                ce
+            );
+          total += ce;
+        end
+      end
+    end
+
+    // Whole-tile shape; variants sweep a misaligned source and a 4 KiB split
+    for (int unsigned variant = 0; variant < 3; variant++) begin
+      automatic addr_t tsb = 'h0000_1000 + ((variant == 1) ? 1 : 0);
+      automatic addr_t tdb = (variant == 2) ? ('h0000_5000 - 2 * StrbWidth) : 'h0000_4000;
+      for (int unsigned k = 0; k < NTileCases; k++) begin
+        automatic int unsigned m = TileCases[k][0];
+        automatic int unsigned n = TileCases[k][1];
+        automatic int unsigned eb = TileCases[k][2];
+        if (eb > StrbWidth) continue;
+        if (m > StrbWidth / eb || n > StrbWidth / eb) continue;  // must be one tile
+        run_tile_case(m, n, eb, tsb, tdb, ce, cd);
+        // a plain copy would leave the source byte in place: only the diagonal may match
+        exp_d = (n * m - ((m < n) ? m : n)) * eb;
+        if (cd != exp_d) begin
+          ce++;
+          $display("[TPT] COPY-CHECK: %0d bytes differ from a plain copy, expected %0d", cd, exp_d);
+        end
         if (ce == 0)
-          $display(
-              "[TPN] PASS: %0dx%0d EB=%0d compact=%0d",
-              Cases[k][0],
-              Cases[k][1],
-              Cases[k][2],
-              compact
-          );
-        else
-          $display(
-              "[TPN] FAIL: %0dx%0d EB=%0d compact=%0d (%0d mismatches)",
-              Cases[k][0],
-              Cases[k][1],
-              Cases[k][2],
-              compact,
-              ce
-          );
+          $display("[TPT] PASS: %0dx%0d EB=%0d variant=%0d (%0d bytes differ from a copy)", m, n,
+                   eb, variant, cd);
+        else $display("[TPT] FAIL: %0dx%0d EB=%0d variant=%0d (%0d mismatches)", m, n, eb, variant,
+                      ce);
         total += ce;
       end
     end
 
     if (total == 0)
-      $display("[TPN] ALL PASS (%0d geometries x 2 layouts, StrbWidth=%0d)", NCases, StrbWidth);
+      $display("[TPN] ALL PASS (%0d walk x 2 alignments + %0d tile cases x 3 variants, %0d)",
+               NCases, NTileCases, StrbWidth);
     else $fatal(1, "[TPN] FAIL: %0d total mismatches", total);
     repeat (5) @(posedge clk);
     $finish();

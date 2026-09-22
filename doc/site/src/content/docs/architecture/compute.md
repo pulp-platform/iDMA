@@ -57,7 +57,7 @@ The register frontend exposes these through its `compute_cfg` register. The op e
 
 Tuning: with `transpose_full_duplex = 1` two tile banks let the engine fill one bank while draining the other (full rate, ~`1 + 1/NE` cycles per `NE`-beat tile); `0` uses a single bank at half area and half rate.
 
-Transpose does not change transfer size (input bytes == output bytes). The write side is currently single-beat: the legalizer rejects transpose transfers with `length > StrbWidth` (`ComputeTransposeSingleBeat`); tiling across a larger tensor is driven by the midend issuing single-beat strips.
+Transpose does not change transfer size, and the transport layer retires an output beat only once every logical byte lane has been consumed, so one output beat may span several bus beats. `ComputeTransposeShape` accepts a tiled-walk strip of at most one beat (the shape the midend emits) or one whole padded tile in a single burst (`length == NE * StrbWidth`, `M` and `N` at most `NE`, source at a `StrbWidth` row pitch). The tile shape additionally requires a beat-aligned destination, since a misaligned bus beat would draw from two consecutive compute beats at once; a misaligned source is fine in either shape.
 
 ## MX Quant / Dequant
 
