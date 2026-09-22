@@ -110,13 +110,11 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
-    /// Latch a transpose DMOPC and read back what the frontend decoded. The driver
-    /// sign-extends both operands from bit 31 as the RV32 core does, so a field placed
-    /// across bit 31 would be unreachable here instead of silently round-tripping.
+    /// Latch a transpose DMOPC and read back what the frontend decoded.
     task automatic check_transpose_cfg(
-        input logic [1:0]  mode,
-        input logic [11:0] tensor_m,
-        input logic [11:0] tensor_n
+        input logic [idma_inst64_compute_pkg::TpModeWidth-1:0] mode,
+        input logic [idma_pkg::TransposeDimWidth-1:0]          tensor_m,
+        input logic [idma_pkg::TransposeDimWidth-1:0]          tensor_n
     );
         idma_pkg::compute_options_t got;
         harness.drv_if.dma_set_compute(
@@ -188,11 +186,15 @@ module tb_idma_inst64_compute #(
             $finish;
         end
 
-        // Every transpose dimension must survive the RV32 operand path, not just small ones
-        check_transpose_cfg(2'd1, 12'd100,  12'd100);
-        check_transpose_cfg(2'd3, 12'd4095, 12'd4095);
-        check_transpose_cfg(2'd0, 12'd4095, 12'd1);
-        check_transpose_cfg(2'd2, 12'd1,    12'd2731);
+        // Walking ones over both dimensions; a truncated or aliased bit cannot survive this
+        for (int unsigned i = 0; i < idma_pkg::TransposeDimWidth; i++) begin
+            check_transpose_cfg(
+                idma_inst64_compute_pkg::TpModeWidth'(i),
+                idma_pkg::TransposeDimWidth'(32'd1 << i),
+                idma_pkg::TransposeDimWidth'(~(32'd1 << i))
+            );
+        end
+        check_transpose_cfg('1, '1, '1);
         if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC transpose decode errors", errors);
         $display("[TB] DMOPC transpose operands round-trip over the full %0d-bit range",
                  idma_pkg::TransposeDimWidth);

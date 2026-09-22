@@ -916,6 +916,11 @@ module idma_inst64_top #(
         $fatal(1, "idma_inst64_top: the DMOPC operand layout has a field crossing bit 31");
     end
 
+    // Overlapping DMOPC fields alias onto each other and silently corrupt the decode.
+    if (!idma_inst64_compute_pkg::LayoutDisjoint) begin : gen_compute_overlap_check
+        $fatal(1, "idma_inst64_top: the DMOPC operand layout has overlapping fields");
+    end
+
     // A compute op the RDL adds but DMOPC never encodes is unreachable, not a plain copy.
     if (!idma_inst64_compute_pkg::ComputeOpsMapped) begin : gen_compute_op_map_check
         $fatal(1, "idma_inst64_top: idma_pkg::compute_op_e value %0d has no DMOPC opcode byte",
