@@ -5,10 +5,9 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// End-to-end back-to-back transpose regression: per geometry, two transposes of
-// one source to DIFFERENT dst bases through the ND midend -> rw_axi backend ->
-// axi_sim_mem. A stale base across transfers would leave the second dst
-// untouched. Sweeps a geometry list internally (one run per bus width).
+// End-to-end back-to-back transpose regression. Sequential mixed-layout cases
+// catch stale addresses and layout state, while a queued pair reuses one compute
+// configuration to exercise overlap between consecutive transpose transfers.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -29,16 +28,23 @@ module tb_idma_transpose_b2b
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
 
   // Geometry cases (M, N, EB); EB>StrbWidth cases skip.
-  localparam int unsigned NCases = 4;
-  localparam int unsigned Cases [NCases][3] = '{ '{6, 8, 1}, '{8, 8, 1}, '{13, 19, 1}, '{5, 5, 2} };
+  localparam int unsigned NCases = 5;
+  localparam int unsigned Cross4KCase = NCases - 1;
+  localparam int unsigned Cases[NCases][3] = '{
+      '{6, 8, 1},
+      '{8, 8, 1},
+      '{13, 19, 1},
+      '{5, 5, 2},
+      '{7, 11, 1}
+  };
 
-  typedef logic [AddrWidth-1:0]  addr_t;
-  typedef logic [DataWidth-1:0]  data_t;
-  typedef logic [StrbWidth-1:0]  strb_t;
+  typedef logic [AddrWidth-1:0] addr_t;
+  typedef logic [DataWidth-1:0] data_t;
+  typedef logic [StrbWidth-1:0] strb_t;
   typedef logic [AxiIdWidth-1:0] id_t;
-  typedef logic [UserWidth-1:0]  user_t;
+  typedef logic [UserWidth-1:0] user_t;
   typedef logic [TFLenWidth-1:0] tf_len_t;
-  typedef logic [31:0]           reps_t;
+  typedef logic [31:0] reps_t;
 
   `AXI_TYPEDEF_AW_CHAN_T(axi_aw_chan_t, addr_t, id_t, user_t)
   `AXI_TYPEDEF_W_CHAN_T(axi_w_chan_t, data_t, strb_t, user_t)
@@ -52,189 +58,435 @@ module tb_idma_transpose_b2b
   `IDMA_TYPEDEF_FULL_RSP_T(idma_rsp_t, addr_t)
   `IDMA_TYPEDEF_FULL_ND_REQ_T(idma_nd_req_t, idma_req_t, reps_t, addr_t)
 
-  typedef struct packed { axi_ar_chan_t ar_chan; } axi_read_meta_channel_t;
-  typedef struct packed { axi_read_meta_channel_t axi; } read_meta_channel_t;
-  typedef struct packed { axi_aw_chan_t aw_chan; } axi_write_meta_channel_t;
-  typedef struct packed { axi_write_meta_channel_t axi; } write_meta_channel_t;
+  typedef struct packed {axi_ar_chan_t ar_chan;} axi_read_meta_channel_t;
+  typedef struct packed {axi_read_meta_channel_t axi;} read_meta_channel_t;
+  typedef struct packed {axi_aw_chan_t aw_chan;} axi_write_meta_channel_t;
+  typedef struct packed {axi_write_meta_channel_t axi;} write_meta_channel_t;
 
   logic clk, rst_n;
-  idma_req_t   idma_req;   logic req_valid, req_ready;
-  idma_rsp_t   idma_rsp;   logic rsp_valid, rsp_ready;
-  idma_eh_req_t idma_eh_req; logic eh_req_valid, eh_req_ready;
-  idma_nd_req_t nd_req;    logic nd_req_valid, nd_req_ready;
-  idma_rsp_t   nd_rsp;     logic nd_rsp_valid, nd_rsp_ready;
+  idma_req_t nd_burst_req, idma_req;
+  logic nd_burst_valid, nd_burst_ready, req_valid, req_ready;
+  idma_rsp_t idma_rsp;
+  logic rsp_valid, rsp_ready;
+  idma_eh_req_t idma_eh_req;
+  logic eh_req_valid, eh_req_ready;
+  idma_nd_req_t transpose_req, nd_req;
+  logic transpose_req_valid, transpose_req_ready, nd_req_valid, nd_req_ready;
+  idma_rsp_t nd_rsp;
+  logic nd_rsp_valid, nd_rsp_ready;
   axi_req_t axi_read_req, axi_write_req, axi_req, axi_req_mem;
   axi_rsp_t axi_read_rsp, axi_write_rsp, axi_rsp, axi_rsp_mem;
-  idma_busy_t busy; logic nd_busy;
+  idma_busy_t  busy;
+  logic        nd_busy;
+  int unsigned nd_rsp_count_q;
 
-  assign idma_eh_req = '0;
+  assign idma_eh_req  = '0;
   assign eh_req_valid = 1'b0;
 
-  clk_rst_gen #(.ClkPeriod(TCK), .RstClkCycles(1)) i_clk_rst_gen (.clk_o(clk), .rst_no(rst_n));
+  clk_rst_gen #(
+    .ClkPeriod   (TCK),
+    .RstClkCycles(1)
+  ) i_clk_rst_gen (
+    .clk_o (clk),
+    .rst_no(rst_n)
+  );
 
-  axi_rw_join #(.axi_req_t(axi_req_t), .axi_resp_t(axi_rsp_t)) i_axi_rw_join (
-    .clk_i(clk), .rst_ni(rst_n),
-    .slv_read_req_i(axi_read_req),  .slv_read_resp_o(axi_read_rsp),
-    .slv_write_req_i(axi_write_req), .slv_write_resp_o(axi_write_rsp),
-    .mst_req_o(axi_req), .mst_resp_i(axi_rsp)
+  // Keep testbench drives and samples out of the DUT's active clocking region.
+  clocking req_rsp_cb @(posedge clk);
+    default input #1step output #0;
+    input transpose_req_ready;
+    output transpose_req_valid;
+    output transpose_req;
+    input nd_rsp_valid, nd_rsp_ready;
+  endclocking
+
+  axi_rw_join #(
+    .axi_req_t (axi_req_t),
+    .axi_resp_t(axi_rsp_t)
+  ) i_axi_rw_join (
+    .clk_i           (clk),
+    .rst_ni          (rst_n),
+    .slv_read_req_i  (axi_read_req),
+    .slv_read_resp_o (axi_read_rsp),
+    .slv_write_req_i (axi_write_req),
+    .slv_write_resp_o(axi_write_rsp),
+    .mst_req_o       (axi_req),
+    .mst_resp_i      (axi_rsp)
   );
   assign axi_req_mem = axi_req;
   assign axi_rsp     = axi_rsp_mem;
 
   axi_sim_mem #(
-    .AddrWidth(AddrWidth), .DataWidth(DataWidth), .IdWidth(AxiIdWidth), .UserWidth(UserWidth),
-    .axi_req_t(axi_req_t), .axi_rsp_t(axi_rsp_t),
-    .WarnUninitialized(1'b0), .ClearErrOnAccess(1'b1), .ApplDelay(TA), .AcqDelay(TT)
+    .AddrWidth        (AddrWidth),
+    .DataWidth        (DataWidth),
+    .IdWidth          (AxiIdWidth),
+    .UserWidth        (UserWidth),
+    .axi_req_t        (axi_req_t),
+    .axi_rsp_t        (axi_rsp_t),
+    .WarnUninitialized(1'b0),
+    .ClearErrOnAccess (1'b1),
+    .ApplDelay        (TA),
+    .AcqDelay         (TT)
   ) i_axi_sim_mem (
-    .clk_i(clk), .rst_ni(rst_n), .axi_req_i(axi_req_mem), .axi_rsp_o(axi_rsp_mem),
-    .mon_r_last_o(), .mon_r_beat_count_o(), .mon_r_user_o(), .mon_r_id_o(),
-    .mon_r_data_o(), .mon_r_addr_o(), .mon_r_valid_o(),
-    .mon_w_last_o(), .mon_w_beat_count_o(), .mon_w_user_o(), .mon_w_id_o(),
-    .mon_w_data_o(), .mon_w_addr_o(), .mon_w_valid_o()
+    .clk_i             (clk),
+    .rst_ni            (rst_n),
+    .axi_req_i         (axi_req_mem),
+    .axi_rsp_o         (axi_rsp_mem),
+    .mon_r_last_o      (),
+    .mon_r_beat_count_o(),
+    .mon_r_user_o      (),
+    .mon_r_id_o        (),
+    .mon_r_data_o      (),
+    .mon_r_addr_o      (),
+    .mon_r_valid_o     (),
+    .mon_w_last_o      (),
+    .mon_w_beat_count_o(),
+    .mon_w_user_o      (),
+    .mon_w_id_o        (),
+    .mon_w_data_o      (),
+    .mon_w_addr_o      (),
+    .mon_w_valid_o     ()
+  );
+
+  // Convert the matrix dimensions and layout bit into the tiled ND walk.
+  idma_transpose_midend #(
+    .NumDim       (NumDim),
+    .StrbWidth    (StrbWidth),
+    .addr_t       (addr_t),
+    .idma_nd_req_t(idma_nd_req_t)
+  ) i_transpose_midend (
+    .nd_req_i(transpose_req),
+    .valid_i (transpose_req_valid),
+    .ready_o (transpose_req_ready),
+    .nd_req_o(nd_req),
+    .valid_o (nd_req_valid),
+    .ready_i (nd_req_ready)
   );
 
   idma_nd_midend #(
-    .NumDim(NumDim), .addr_t(addr_t), .idma_req_t(idma_req_t),
-    .idma_rsp_t(idma_rsp_t), .idma_nd_req_t(idma_nd_req_t), .RepWidths(RepWidths)
+    .NumDim       (NumDim),
+    .addr_t       (addr_t),
+    .idma_req_t   (idma_req_t),
+    .idma_rsp_t   (idma_rsp_t),
+    .idma_nd_req_t(idma_nd_req_t),
+    .RepWidths    (RepWidths)
   ) i_nd_midend (
-    .clk_i(clk), .rst_ni(rst_n),
-    .nd_req_i(nd_req), .nd_req_valid_i(nd_req_valid), .nd_req_ready_o(nd_req_ready),
-    .nd_rsp_o(nd_rsp), .nd_rsp_valid_o(nd_rsp_valid), .nd_rsp_ready_i(nd_rsp_ready),
-    .burst_req_o(idma_req), .burst_req_valid_o(req_valid), .burst_req_ready_i(req_ready),
-    .burst_rsp_i(idma_rsp), .burst_rsp_valid_i(rsp_valid), .burst_rsp_ready_o(rsp_ready),
-    .busy_o(nd_busy)
+    .clk_i            (clk),
+    .rst_ni           (rst_n),
+    .nd_req_i         (nd_req),
+    .nd_req_valid_i   (nd_req_valid),
+    .nd_req_ready_o   (nd_req_ready),
+    .nd_rsp_o         (nd_rsp),
+    .nd_rsp_valid_o   (nd_rsp_valid),
+    .nd_rsp_ready_i   (nd_rsp_ready),
+    .burst_req_o      (nd_burst_req),
+    .burst_req_valid_o(nd_burst_valid),
+    .burst_req_ready_i(nd_burst_ready),
+    .burst_rsp_i      (idma_rsp),
+    .burst_rsp_valid_i(rsp_valid),
+    .burst_rsp_ready_o(rsp_ready),
+    .busy_o           (nd_busy)
+  );
+
+  // Replay descriptors for nonexistent partial-tile rows before they reach AXI.
+  idma_transpose_req_replay #(
+    .StrbWidth (StrbWidth),
+    .idma_req_t(idma_req_t)
+  ) i_transpose_req_replay (
+    .clk_i  (clk),
+    .rst_ni (rst_n),
+    .req_i  (nd_burst_req),
+    .valid_i(nd_burst_valid),
+    .ready_o(nd_burst_ready),
+    .req_o  (idma_req),
+    .valid_o(req_valid),
+    .ready_i(req_ready)
   );
 
   idma_backend_rw_axi #(
-    .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
-    .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
-    .EnableCompute(1'b1), .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, default: '0}),
-    .ComputeTuning('1),
-    .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
-    .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0),
-    .NumAxInFlight(StrbWidth), .MemSysDepth(0),
-    .idma_req_t(idma_req_t), .idma_rsp_t(idma_rsp_t), .idma_eh_req_t(idma_eh_req_t),
-    .idma_busy_t(idma_busy_t), .axi_req_t(axi_req_t), .axi_rsp_t(axi_rsp_t),
-    .write_meta_channel_t(write_meta_channel_t), .read_meta_channel_t(read_meta_channel_t)
+    .CombinedShifter     (1'b0),
+    .DataWidth           (DataWidth),
+    .AddrWidth           (AddrWidth),
+    .AxiIdWidth          (AxiIdWidth),
+    .UserWidth           (UserWidth),
+    .TFLenWidth          (TFLenWidth),
+    .MaskInvalidData     (1'b1),
+    .BufferDepth         (3),
+    .EnableCompute       (1'b1),
+    .ComputeOps          (idma_pkg::compute_enable_t'{transpose: 1'b1, default: '0}),
+    .ComputeTuning       ('1),
+    .RAWCouplingAvail    (1'b1),
+    .HardwareLegalizer   (1'b1),
+    .RejectZeroTransfers (1'b1),
+    .ErrorCap            (idma_pkg::NO_ERROR_HANDLING),
+    .PrintFifoInfo       (1'b0),
+    .NumAxInFlight       (StrbWidth),
+    .MemSysDepth         (0),
+    .idma_req_t          (idma_req_t),
+    .idma_rsp_t          (idma_rsp_t),
+    .idma_eh_req_t       (idma_eh_req_t),
+    .idma_busy_t         (idma_busy_t),
+    .axi_req_t           (axi_req_t),
+    .axi_rsp_t           (axi_rsp_t),
+    .write_meta_channel_t(write_meta_channel_t),
+    .read_meta_channel_t (read_meta_channel_t)
   ) i_idma_backend (
-    .clk_i(clk), .rst_ni(rst_n),
-    .idma_req_i(idma_req), .req_valid_i(req_valid), .req_ready_o(req_ready),
-    .idma_rsp_o(idma_rsp), .rsp_valid_o(rsp_valid), .rsp_ready_i(rsp_ready),
-    .idma_eh_req_i(idma_eh_req), .eh_req_valid_i(eh_req_valid), .eh_req_ready_o(eh_req_ready),
-    .axi_read_req_o(axi_read_req), .axi_read_rsp_i(axi_read_rsp),
-    .axi_write_req_o(axi_write_req), .axi_write_rsp_i(axi_write_rsp), .busy_o(busy)
+    .clk_i          (clk),
+    .rst_ni         (rst_n),
+    .idma_req_i     (idma_req),
+    .req_valid_i    (req_valid),
+    .req_ready_o    (req_ready),
+    .idma_rsp_o     (idma_rsp),
+    .rsp_valid_o    (rsp_valid),
+    .rsp_ready_i    (rsp_ready),
+    .idma_eh_req_i  (idma_eh_req),
+    .eh_req_valid_i (eh_req_valid),
+    .eh_req_ready_o (eh_req_ready),
+    .axi_read_req_o (axi_read_req),
+    .axi_read_rsp_i (axi_read_rsp),
+    .axi_write_req_o(axi_write_req),
+    .axi_write_rsp_i(axi_write_rsp),
+    .busy_o         (busy)
   );
 
-  stream_watchdog #(.NumCycles(4000)) i_r_wd (
-    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_rsp.r_valid), .ready_i(axi_req.r_ready));
-  stream_watchdog #(.NumCycles(4000)) i_w_wd (
-    .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
+  stream_watchdog #(
+    .NumCycles(4000)
+  ) i_r_wd (
+    .clk_i  (clk),
+    .rst_ni (rst_n),
+    .valid_i(axi_rsp.r_valid),
+    .ready_i(axi_req.r_ready)
+  );
+  stream_watchdog #(
+    .NumCycles(4000)
+  ) i_w_wd (
+    .clk_i  (clk),
+    .rst_ni (rst_n),
+    .valid_i(axi_req.w_valid),
+    .ready_i(axi_rsp.w_ready)
+  );
 
   addr_t sb = 'h0000_1000;
 
-  task automatic wr_mem(input addr_t a, input logic [7:0] d); i_axi_sim_mem.mem[a] = d; endtask
+  task automatic wr_mem(input addr_t a, input logic [7:0] d);
+    i_axi_sim_mem.mem[a] = d;
+  endtask
   function automatic logic [7:0] rd_mem(input addr_t a);
     return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
   endfunction
 
-  // one m x n transpose of the source at sb -> dst base `db`; returns error count
-  task automatic do_transpose(input int unsigned m, input int unsigned n, input int unsigned eb,
-                              input addr_t db, output int unsigned errs);
-    automatic int unsigned ne   = StrbWidth / eb;
+  task automatic send_transpose_req(input idma_nd_req_t req);
+    @(req_rsp_cb);
+    req_rsp_cb.transpose_req       <= req;
+    req_rsp_cb.transpose_req_valid <= 1'b1;
+    do @(req_rsp_cb); while (!req_rsp_cb.transpose_req_ready);
+    req_rsp_cb.transpose_req       <= '0;
+    req_rsp_cb.transpose_req_valid <= 1'b0;
+  endtask
+
+  // Keep valid asserted between descriptors so they handshake on consecutive cycles whenever the
+  // midend is ready. Backpressure may delay either handshake but never inserts a TB-generated gap.
+  task automatic send_back_to_back_transpose_reqs(input idma_nd_req_t first_req,
+                                                  input idma_nd_req_t second_req);
+    @(req_rsp_cb);
+    req_rsp_cb.transpose_req       <= first_req;
+    req_rsp_cb.transpose_req_valid <= 1'b1;
+    do @(req_rsp_cb); while (!req_rsp_cb.transpose_req_ready);
+    req_rsp_cb.transpose_req <= second_req;
+    do @(req_rsp_cb); while (!req_rsp_cb.transpose_req_ready);
+    req_rsp_cb.transpose_req       <= '0;
+    req_rsp_cb.transpose_req_valid <= 1'b0;
+  endtask
+
+  task automatic wait_nd_rsp;
+    automatic int unsigned target_count = nd_rsp_count_q + 1;
+    while (nd_rsp_count_q < target_count) @(req_rsp_cb);
+  endtask
+
+  // Initialize one independent memory region and construct its transpose descriptor.
+  task automatic prepare_transpose(input int unsigned m, input int unsigned n,
+                                   input int unsigned eb, input bit compact, input addr_t src_base,
+                                   input addr_t dst_base, input int unsigned pattern_seed,
+                                   output idma_nd_req_t req);
+    automatic int unsigned ne = StrbWidth / eb;
     automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
-    automatic int unsigned yt   = (m + ne - 1) / ne;
-    automatic int unsigned nt   = (n + ne - 1) / ne;
-    automatic int unsigned mp   = yt * ne;
-    errs = 0;
-    // pre-fill full padded dst extent with sentinel
-    for (int unsigned i = 0; i < nt*ne; i++)
+    automatic int unsigned yt = (m + ne - 1) / ne;
+    automatic int unsigned nt = (n + ne - 1) / ne;
+    automatic int unsigned mp = yt * ne;
+
+    for (int unsigned i = 0; i < m * n * eb; i++)
+      wr_mem(src_base + i, 8'(((i + pattern_seed) * 7 + 3) & 8'hFF));
+
+    // Back the padded envelope in both modes. Bytes beyond the compact matrix
+    // become guards against stale strides or nonzero edge writes.
+    for (int unsigned i = 0; i < nt * ne; i++)
       for (int unsigned j = 0; j < mp; j++)
-        for (int unsigned b = 0; b < eb; b++)
-          wr_mem(db + (i*mp + j)*eb + b, 8'hCC);
-    nd_req = '0;
-    nd_req.burst_req.length   = tf_len_t'(ne*eb);
-    nd_req.burst_req.src_addr = sb;
-    nd_req.burst_req.dst_addr = db;
-    nd_req.burst_req.opt.src_protocol = idma_pkg::AXI;
-    nd_req.burst_req.opt.dst_protocol = idma_pkg::AXI;
-    nd_req.burst_req.opt.src.burst    = axi_pkg::BURST_INCR;
-    nd_req.burst_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    nd_req.burst_req.opt.beo.decouple_rw = 1'b1;
-    nd_req.burst_req.opt.beo.decouple_aw = 1'b1;
-    nd_req.burst_req.opt.compute.enable                    = 1'b1;
-    nd_req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;
-    nd_req.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
-    nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
-    nd_req.burst_req.opt.last         = 1'b1;
-    nd_req.d_req[0].reps        = reps_t'(ne);
-    nd_req.d_req[0].src_strides = addr_t'(int'(n*eb));
-    nd_req.d_req[0].dst_strides = addr_t'(int'(mp*eb));
-    nd_req.d_req[1].reps        = reps_t'(yt);
-    nd_req.d_req[1].src_strides = addr_t'(int'(n*eb));
-    nd_req.d_req[1].dst_strides = addr_t'(int'(ne*eb) - int'((ne-1)*mp*eb));
-    nd_req.d_req[2].reps        = reps_t'(nt);
-    nd_req.d_req[2].src_strides = addr_t'(int'(ne*eb) - int'((yt*ne-1)*n*eb));
-    nd_req.d_req[2].dst_strides = addr_t'(int'(mp*eb) - int'((yt-1)*ne*eb));
-    nd_req_valid = 1'b1;
-    do @(posedge clk); while (!nd_req_ready);   // drop valid the cycle accept is seen (compliant)
-    nd_req_valid = 1'b0;
-    nd_req = '0;
-    while (!(nd_rsp_valid && nd_rsp_ready)) @(posedge clk);
-    repeat (20) @(posedge clk);
-    // data + padding checks
+        for (int unsigned b = 0; b < eb; b++) wr_mem(dst_base + (i * mp + j) * eb + b, 8'hCC);
+
+    req                                                 = '0;
+    req.burst_req.src_addr                              = src_base;
+    req.burst_req.dst_addr                              = dst_base;
+    req.burst_req.opt.src_protocol                      = idma_pkg::AXI;
+    req.burst_req.opt.dst_protocol                      = idma_pkg::AXI;
+    req.burst_req.opt.src.burst                         = axi_pkg::BURST_INCR;
+    req.burst_req.opt.dst.burst                         = axi_pkg::BURST_INCR;
+    req.burst_req.opt.beo.decouple_rw                   = 1'b1;
+    req.burst_req.opt.beo.decouple_aw                   = 1'b1;
+    req.burst_req.opt.compute.enable                    = 1'b1;
+    req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;
+    req.burst_req.opt.compute.params.transpose.compact  = compact;
+    req.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
+    req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
+    req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
+    req.burst_req.opt.last                              = 1'b1;
+  endtask
+
+  // Check transposed data and verify that edge padding remains untouched.
+  task automatic check_transpose(input int unsigned m, input int unsigned n, input int unsigned eb,
+                                 input bit compact, input addr_t src_base, input addr_t dst_base,
+                                 output int unsigned errs);
+    automatic int unsigned ne = StrbWidth / eb;
+    automatic int unsigned yt = (m + ne - 1) / ne;
+    automatic int unsigned nt = (n + ne - 1) / ne;
+    automatic int unsigned mp = yt * ne;
+    automatic int unsigned dp = compact ? m : mp;
+    errs = 0;
+
+    // Check data at either compact or padded destination row pitch.
     for (int unsigned c = 0; c < n; c++)
       for (int unsigned r = 0; r < m; r++)
         for (int unsigned b = 0; b < eb; b++)
-          if (rd_mem(db + (c*mp + r)*eb + b) !== rd_mem(sb + (r*n + c)*eb + b)) begin
+          if (rd_mem(
+                  dst_base + (c * dp + r) * eb + b
+              ) !== rd_mem(
+                  src_base + (r * n + c) * eb + b
+              )) begin
             errs++;
             if (errs <= 8)
-              $display("[B2BT] @db=%0h MISMATCH out_T[%0d][%0d].b%0d", db, c, r, b);
+              $display("[B2BT] @db=%0h MISMATCH out_T[%0d][%0d].b%0d", dst_base, c, r, b);
           end
-    for (int unsigned i = 0; i < nt*ne; i++)
-      for (int unsigned j = 0; j < mp; j++)
-        if (i >= n || j >= m)
-          for (int unsigned b = 0; b < eb; b++)
-            if (rd_mem(db + (i*mp + j)*eb + b) !== 8'hCC) begin
-              errs++;
-              if (errs <= 8)
-                $display("[B2BT] @db=%0h PADDING CLOBBERED row=%0d col=%0d", db, i, j);
-            end
+    // Padded holes or the tail after a compact matrix must remain untouched.
+    for (int unsigned byte_idx = 0; byte_idx < nt * ne * mp * eb; byte_idx++)
+      if (byte_idx >= n * dp * eb ||
+          (!compact && ((byte_idx / eb) / mp >= n || (byte_idx / eb) % mp >= m)))
+        if (rd_mem(dst_base + byte_idx) !== 8'hCC) begin
+          errs++;
+          if (errs <= 8)
+            $display(
+                "[B2BT] @db=%0h UNUSED DESTINATION BYTE CLOBBERED at +0x%0h", dst_base, byte_idx
+            );
+        end
   endtask
 
+  // One complete, sequential transpose used by the existing layout-transition cases.
+  task automatic do_transpose(input int unsigned m, input int unsigned n, input int unsigned eb,
+                              input bit compact, input addr_t src_base, input addr_t dst_base,
+                              ref int unsigned errs);
+    automatic idma_nd_req_t req;
+    prepare_transpose(m, n, eb, compact, src_base, dst_base, 0, req);
+    send_transpose_req(req);
+    wait_nd_rsp();
+    repeat (20) @(posedge clk);
+    check_transpose(m, n, eb, compact, src_base, dst_base, errs);
+  endtask
+
+  // Queue two descriptors with identical compute options before waiting for either completion.
+  // Different options are deliberately serialized by the backend configuration interlock; equal
+  // options are allowed to overlap and exercise the transpose engine's transfer boundary.
+  task automatic run_queued_transposes(ref int unsigned errs);
+    localparam int unsigned M0 = 37, N0 = 29, EB0 = 1;
+    localparam int unsigned M1 = M0, N1 = N0, EB1 = EB0;
+    localparam bit Compact0 = 1'b0, Compact1 = Compact0;
+    automatic addr_t src0 = 'h0001_0000;
+    automatic addr_t src1 = 'h0001_8000;
+    automatic addr_t dst0 = 'h0002_0000;
+    automatic addr_t dst1 = 'h0002_8000;
+    automatic idma_nd_req_t req0, req1;
+    automatic int unsigned rsp_count_before, err0, err1;
+
+    prepare_transpose(M0, N0, EB0, Compact0, src0, dst0, 11, req0);
+    prepare_transpose(M1, N1, EB1, Compact1, src1, dst1, 97, req1);
+
+    rsp_count_before = nd_rsp_count_q;
+    fork
+      send_back_to_back_transpose_reqs(req0, req1);
+      begin
+        // The ND input handshake retires only after its final generated burst. Instead, identify
+        // transfer 2 by its independent source base and observe its first backend request.
+        do @(posedge clk); while (!(req_valid && req_ready && idma_req.src_addr == src1));
+        assert (nd_rsp_count_q == rsp_count_before && !(nd_rsp_valid && nd_rsp_ready))
+        else $fatal(1, "[B2BT] first transpose completed before second reached the backend");
+      end
+    join
+
+    while (nd_rsp_count_q < rsp_count_before + 2) @(req_rsp_cb);
+    repeat (20) @(posedge clk);
+    check_transpose(M0, N0, EB0, Compact0, src0, dst0, err0);
+    check_transpose(M1, N1, EB1, Compact1, src1, dst1, err1);
+    errs = err0 + err1;
+  endtask
+
+  // Responses are always accepted, so retain their handshakes for tests that submit multiple
+  // descriptors before they begin waiting for completion.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      nd_rsp_count_q <= '0;
+    end else if (nd_rsp_valid && nd_rsp_ready) begin
+      nd_rsp_count_q <= nd_rsp_count_q + 1;
+    end
+  end
+
   initial begin
-    automatic int unsigned total = 0, e1, e2;
-    automatic addr_t db1 = 'h0000_4000;
-    automatic addr_t db2 = 'h0000_8000;   // DIFFERENT base — a stale-addr bug misplaces xfer 2
+    automatic int unsigned total = 0, e1, e2, queued_errors;
+    automatic addr_t db1;
+    automatic addr_t db2 = 'h0000_8000;  // DIFFERENT base — a stale-addr bug misplaces xfer 2
     automatic int unsigned m, n, eb;
-    nd_req_valid = 1'b0; nd_rsp_ready = 1'b1; nd_req = '0;
+    automatic bit first_compact;
+    transpose_req_valid = 1'b0;
+    nd_rsp_ready        = 1'b1;
+    transpose_req       = '0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
 
     for (int unsigned k = 0; k < NCases; k++) begin
-      m = Cases[k][0]; n = Cases[k][1]; eb = Cases[k][2];
+      m  = Cases[k][0];
+      n  = Cases[k][1];
+      eb = Cases[k][2];
       if (eb > StrbWidth) continue;
-      // (re)init source for this geometry
-      for (int unsigned r = 0; r < m; r++)
-        for (int unsigned c = 0; c < n; c++)
-          for (int unsigned b = 0; b < eb; b++)
-            wr_mem(sb + (r*n + c)*eb + b, 8'((( (r*n+c)*eb + b )*7 + 3) & 8'hFF));
-      $display("[B2BT] %0dx%0d EB=%0d: xfer1 -> db=%0h, xfer2 -> db=%0h", m, n, eb, db1, db2);
-      do_transpose(m, n, eb, db1, e1);
-      do_transpose(m, n, eb, db2, e2);   // back-to-back, distinct base
+      // The final case starts two bytes below a 4 KiB boundary. Its first logical output beat
+      // therefore crosses 0x5000 for every tested StrbWidth and must be split by the legalizer.
+      db1           = (k == Cross4KCase) ? 'h0000_4ffe : 'h0000_4000;
+      // Alternate the order so both padded->compact and compact->padded
+      // transitions are covered while retaining distinct destination bases. Force compact mode
+      // for the boundary-crossing transfer to exercise partial transpose-output strobes as well.
+      first_compact = (k == Cross4KCase) ? 1'b1 : bit'(k & 1);
+      $display("[B2BT] %0dx%0d EB=%0d: compact=%0d -> db=%0h, compact=%0d -> db=%0h", m, n, eb,
+               first_compact, db1, !first_compact, db2);
+      do_transpose(m, n, eb, first_compact, sb, db1, e1);
+      do_transpose(m, n, eb, !first_compact, sb, db2, e2);
       if (e1 == 0 && e2 == 0)
-        $display("[B2BT] PASS: %0dx%0d EB=%0d both back-to-back transposes correct", m, n, eb);
-      else
-        $display("[B2BT] FAIL: %0dx%0d EB=%0d xfer1=%0d xfer2=%0d", m, n, eb, e1, e2);
+        $display("[B2BT] PASS: %0dx%0d EB=%0d both layouts correct back-to-back", m, n, eb);
+      else $display("[B2BT] FAIL: %0dx%0d EB=%0d xfer1=%0d xfer2=%0d", m, n, eb, e1, e2);
       total += e1 + e2;
     end
 
-    if (total == 0) $display("[B2BT] ALL PASS (%0d cases, StrbWidth=%0d)", NCases, StrbWidth);
-    else            $fatal(1, "[B2BT] FAIL: %0d total mismatches", total);
+    $display("[B2BT] Launching true queued back-to-back transposes");
+    run_queued_transposes(queued_errors);
+    if (queued_errors == 0)
+      $display("[B2BT] PASS: overlapping transfers with shared geometry completed correctly");
+    else $display("[B2BT] FAIL: queued transfers produced %0d mismatches", queued_errors);
+    total += queued_errors;
+
+    if (total == 0)
+      $display("[B2BT] ALL PASS (%0d mixed-layout cases, StrbWidth=%0d)", NCases, StrbWidth);
+    else $fatal(1, "[B2BT] FAIL: %0d total mismatches", total);
     repeat (5) @(posedge clk);
     $finish();
   end
 
-  initial begin #50_000_000; $fatal(1, "[B2BT] timeout"); end
+  initial begin
+    #50_000_000;
+    $fatal(1, "[B2BT] timeout");
+  end
 
 endmodule
