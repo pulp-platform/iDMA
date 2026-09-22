@@ -28,13 +28,14 @@ module tb_idma_transpose_b2b
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
 
   // Geometry cases (M, N, EB); EB>StrbWidth cases skip.
-  localparam int unsigned NCases = 5;
+  localparam int unsigned NCases = 6;
   localparam int unsigned Cross4KCase = NCases - 1;
   localparam int unsigned Cases[NCases][3] = '{
       '{6, 8, 1},
       '{8, 8, 1},
       '{13, 19, 1},
       '{5, 5, 2},
+      '{9, 5, 8},
       '{7, 11, 1}
   };
 
@@ -309,7 +310,7 @@ module tb_idma_transpose_b2b
                                    input addr_t dst_base, input int unsigned pattern_seed,
                                    output idma_nd_req_t req);
     automatic int unsigned ne = StrbWidth / eb;
-    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    automatic int unsigned mode = (eb == 8) ? 3 : (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
     automatic int unsigned yt = (m + ne - 1) / ne;
     automatic int unsigned nt = (n + ne - 1) / ne;
     automatic int unsigned mp = yt * ne;
