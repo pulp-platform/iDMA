@@ -11,6 +11,8 @@
     enum = next(e for e in enums if e["name"] == "compute_op")
     width = enum["width"]
     name_w = max(len(m["name"]) for m in enum["choices"]) + len("COMPUTE_")
+    span = 1 << width
+    mask = sum(1 << m["value"] for m in enum["choices"])
 %>\
 /// Compute operation selector
 typedef enum logic [${width - 1}:0] {
@@ -18,3 +20,6 @@ typedef enum logic [${width - 1}:0] {
     ${("COMPUTE_" + m["name"]).ljust(name_w)} = ${width}'d${m["value"]}${"," if not loop.last else " "} // ${m["desc"]}
 % endfor
 } compute_op_e;
+
+/// One bit per declared `compute_op_e` encoding
+localparam logic [${span - 1}:0] ComputeOpValid = ${span}'h${format(mask, '0%dx' % ((span + 3) // 4))};

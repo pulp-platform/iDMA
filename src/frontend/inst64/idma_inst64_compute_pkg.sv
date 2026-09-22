@@ -64,16 +64,13 @@ package idma_inst64_compute_pkg;
     function automatic int unsigned first_unmapped_op();
         logic [NumComputeOpValues-1:0] reached;
         idma_pkg::compute_options_t    cmp;
-        idma_pkg::compute_op_e         op;
         reached = '0;
         for (int unsigned b = 0; b < NumOpcodes; b++) begin
             cmp = opc_decode(64'(b));
             reached[cmp.op] = 1'b1;
         end
-        op = op.first();
-        for (int unsigned i = 0; i < op.num(); i++) begin
-            if (!reached[op]) return 32'(op);
-            op = op.next();
+        for (int unsigned v = 0; v < NumComputeOpValues; v++) begin
+            if (idma_pkg::ComputeOpValid[v] & ~reached[v]) return v;
         end
         return NumComputeOpValues;
     endfunction
