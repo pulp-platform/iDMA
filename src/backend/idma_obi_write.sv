@@ -70,7 +70,9 @@ module idma_obi_write #(
     /// Valid from buffer
     input  strb_t buffer_out_valid_i,
     /// Ready to buffer
-    output strb_t buffer_out_ready_o
+    output strb_t buffer_out_ready_o,
+    /// External write-strobe mask (ANDed into be); tie to '1 when unused
+    input  strb_t mask_ext_i
 );
     // corresponds to the strobe: the write aligned data that is currently valid in the buffer
     strb_t mask_out;
@@ -95,7 +97,7 @@ module idma_obi_write #(
 
     assign mask_out = ('1 << w_dp_req_i.offset) &
         ((w_dp_req_i.tailer != '0) ? ('1 >> (StrbWidth - w_dp_req_i.tailer))
-        : '1);
+        : '1) & mask_ext_i;
 
     //--------------------------------------
     // Write control
