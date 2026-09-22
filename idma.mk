@@ -94,6 +94,7 @@ IDMA_FULL_TB    := $(IDMA_RTL_DIR)/tb_idma_generated.sv
 IDMA_GEN        := $(IDMA_UTIL_DIR)/gen_idma.py
 IDMA_GEN_SRC    := $(IDMA_UTIL_DIR)/mario/backend.py \
 				   $(IDMA_UTIL_DIR)/mario/database.py \
+				   $(IDMA_UTIL_DIR)/mario/dmopc.py \
 				   $(IDMA_UTIL_DIR)/mario/frontend.py \
 				   $(IDMA_UTIL_DIR)/mario/legalizer.py \
 				   $(IDMA_UTIL_DIR)/mario/synth.py \
@@ -109,6 +110,8 @@ IDMA_DB_FILES   := $(IDMA_DB_DIR)/idma_axi.yml \
                    $(IDMA_DB_DIR)/idma_init.yml \
                    $(IDMA_DB_DIR)/idma_obi.yml \
                    $(IDMA_DB_DIR)/idma_tilelink.yml
+# Not a transport protocol; the DMOPC contract has its own renderings
+IDMA_DMOPC_DB   := $(IDMA_DB_DIR)/idma_dmopc.yml
 IDMA_RTL_FILES  := $(IDMA_RTL_DIR)/idma_transport_layer \
 				   $(IDMA_RTL_DIR)/idma_legalizer \
 				   $(IDMA_RTL_DIR)/idma_backend \
@@ -139,6 +142,9 @@ $(IDMA_VSIM_DIR)/wave/backend_%.do: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_RTL_DIR)/
 
 IDMA_INC_DIR    := $(IDMA_RTL_DIR)/include/idma
 IDMA_INC_TPL    := $(IDMA_ROOT)/src/include/idma/tpl
+IDMA_SW_TPL     := $(IDMA_ROOT)/src/sw/tpl
+# The DMOPC SW header ships with the RTL contract, so the RTL flow builds and cleans it
+IDMA_DMOPC_SW   := $(IDMA_SW_DIR)/idma_compute.h
 
 # The id-independent tracer helpers; a pure function of their own template
 $(IDMA_INC_DIR)/tracer.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/tracer.svh.tpl
@@ -155,7 +161,18 @@ $(IDMA_INC_DIR)/compute.svh: $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl $
 	$(PEAKRDL) raw-header $(IDMA_ROOT)/src/frontend/reg/idma_reg.rdl \
 	  --template $(IDMA_ROOT)/src/frontend/reg/tpl/compute.svh.tpl -o $@
 
+# The DMOPC decode contract; the SW header below is the same database rendered to C
+$(IDMA_INC_DIR)/dmopc.svh: $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_INC_TPL)/dmopc.svh.tpl \
+                           $(IDMA_DMOPC_DB)
+	mkdir -p $(@D)
+	$(call idma_gen,dmopc,$(IDMA_INC_TPL)/dmopc.svh.tpl,$(IDMA_DMOPC_DB),,,$@)
+
+$(IDMA_DMOPC_SW): $(IDMA_GEN) $(IDMA_GEN_SRC) $(IDMA_SW_TPL)/idma_compute.h.tpl $(IDMA_DMOPC_DB)
+	mkdir -p $(@D)
+	$(call idma_gen,dmopc,$(IDMA_SW_TPL)/idma_compute.h.tpl,$(IDMA_DMOPC_DB),,,$@)
+
 idma_rtl_clean:
+	rm -f  $(IDMA_DMOPC_SW)
 	rm -f  $(IDMA_RTL_DIR)/Bender.yml
 	rm -f  $(IDMA_RTL_DIR)/*.sv
 	rm -f  $(IDMA_VSIM_DIR)/wave/*.do
@@ -165,6 +182,7 @@ idma_rtl_clean:
 IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/tracer.svh
 IDMA_INCLUDE_ALL += $(foreach Y,$(IDMA_TRACER_IDS),$(IDMA_INC_DIR)/tracer_$Y.svh)
 IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/compute.svh
+IDMA_INCLUDE_ALL += $(IDMA_INC_DIR)/dmopc.svh
 
 IDMA_RTL_ALL     += $(foreach X,$(IDMA_RTL_FILES),$(foreach Y,$(IDMA_BACKEND_IDS),$X_$Y.sv))
 IDMA_TB_ALL      += $(foreach Y,$(IDMA_BACKEND_IDS),$(IDMA_RTL_DIR)/tb_idma_backend_$Y.sv)
@@ -291,6 +309,9 @@ IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_regs_unpa
 
 # C headers with the "raw-header" plugin
 IDMA_SW_ALL      += $(foreach Y,$(IDMA_FE_REGS),$(IDMA_SW_DIR)/idma_$Y_raw_regs.h)
+
+# C header of the DMOPC contract, rendered by MARIO from src/db/idma_dmopc.yml
+IDMA_SW_ALL      += $(IDMA_DMOPC_SW)
 
 # ---------------
 # RTL assembly
@@ -803,7 +824,7 @@ idma_doc_all: idma_doc_site
 idma_pickle_all: $(IDMA_PICKLE_ALL)
 
 idma_hw_all: $(IDMA_FULL_RTL) $(IDMA_INCLUDE_ALL) $(IDMA_FULL_TB) \
-             $(IDMA_WAVE_ALL)
+             $(IDMA_WAVE_ALL) $(IDMA_DMOPC_SW)
 
 idma_sw_all: $(IDMA_SW_ALL)
 

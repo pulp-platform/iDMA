@@ -1,0 +1,65 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+# Single source of the DMOPC contract; the decode package and target/sw/idma_compute.h
+prefix: "dmopc"
+opcode_width: 8
+operand_width: 64
+# The field holding the opcode byte
+opcode_field: "opc_byte"
+
+# The DMOPC operands an instruction carries; the value is the `acc_req_t` field
+operands:
+  rs1: "arga"
+  rs2: "argb"
+
+# Operand fields; `width` is a SystemVerilog expression resolved in the decode package
+fields:
+  - name: "opc_byte"
+    operand: "rs1"
+    lsb: 0
+    width: "OpcodeWidth"
+  - name: "tp_mode"
+    operand: "rs1"
+    lsb: 16
+    width: "TpModeWidth"
+  # The transpose dimensions need 24 bits, so they ride `rs2` rather than straddling `rs1`
+  - name: "tp_tensor_m"
+    operand: "rs2"
+    lsb: 0
+    width: "idma_pkg::TransposeDimWidth"
+  - name: "tp_tensor_n"
+    operand: "rs2"
+    lsb: 12
+    width: "idma_pkg::TransposeDimWidth"
+
+# `op` names an `idma_pkg::compute_op_e` member; `enable` false decodes to a plain copy
+opcodes:
+  - name: "passthrough"
+    byte: 0x08
+    op: "none"
+    enable: false
+  - name: "mx_quant"
+    byte: 0x20
+    op: "mxquant"
+  - name: "mx_dequant"
+    byte: 0x21
+    op: "mxdequant"
+  - name: "mx_quant_fp16"
+    byte: 0x22
+    op: "mxquant_fp16"
+  - name: "mx_dequant_fp16"
+    byte: 0x23
+    op: "mxdequant_fp16"
+  - name: "transpose"
+    byte: 0x50
+    op: "transpose"
+    # `compute_options_t.params` member fed by each operand field
+    params:
+      "transpose.mode": "tp_mode"
+      "transpose.tensor_m": "tp_tensor_m"
+      "transpose.tensor_n": "tp_tensor_n"

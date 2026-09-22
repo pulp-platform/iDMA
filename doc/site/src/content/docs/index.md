@@ -66,7 +66,7 @@ iDMA uses the MARIO generator to produce protocol-specific RTL from templates an
 
 Key locations:
 
-- `src/db/*.yml` - protocol capability databases
+- `src/db/*.yml` - protocol capability databases, plus the DMOPC contract (`idma_dmopc.yml`)
 - `src/backend/tpl/` - backend templates
 - `src/frontend/reg/tpl/` - register frontend templates
 - `util/gen_idma.py` - generator entry point

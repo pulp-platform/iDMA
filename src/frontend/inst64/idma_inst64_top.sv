@@ -908,7 +908,9 @@ module idma_inst64_top #(
     `ASSERT_INIT(CheckAxiUserField, AxiUserWidth <= 64);
     // Every latched DMOPC byte must decode; an unknown byte silently falls back to a copy.
     `ASSERT_NEVER(DmopcUnknownOpcode,
-                  idma_fe_dmopc & ~idma_inst64_compute_pkg::opc_known(acc_req_i.data_arga[7:0]),
+                  idma_fe_dmopc & ~idma_inst64_compute_pkg::opc_known(
+                      acc_req_i.data_arga[idma_inst64_compute_pkg::Rs1OpcByteLsb +:
+                                          idma_inst64_compute_pkg::Rs1OpcByteWidth]),
                   clk_i, !rst_ni)
 
     // A DMOPC field crossing bit 31 is unreachable from an RV32 core that sign-extends rs1/rs2.
