@@ -11,8 +11,9 @@
     opc_w = max(len(o['sv']) for o in opcodes)
     args = ', '.join(f'logic [{operand_width-1}:0] {s}' for s in operands.values())
     def call(opc):
-        zeros = [f'{operand_width}\'b0'] * (len(operands) - 1)
-        return ', '.join([f'{operand_width}\'({opc})'] + zeros)
+        vals = [f'{operand_width}\'b0'] * len(operands)
+        vals[list(operands).index(opcode_field['operand'])] = f'{operand_width}\'({opc})'
+        return ', '.join(vals)
     known = [o for o in opcodes if not o['enable']]
     pairs = [p for fl in operand_fields.values() for p in zip(fl, fl[1:])]
     layout = ', '.join(f'`{o}` is `data_{s}`' for o, s in operands.items())

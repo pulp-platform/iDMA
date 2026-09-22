@@ -55,9 +55,11 @@ def _context(db: dict) -> dict:
             if key not in by_key:
                 raise ValueError(f'opcode {opcode["name"]}: unknown field {key}')
             params.append({'target': target, 'field': by_key[key]})
+        if params and not opcode.get('enable', True):
+            raise ValueError(f'opcode {opcode["name"]}: params need enable')
         byte = int(opcode['byte'])
-        if byte >= (1 << opcode_width):
-            raise ValueError(f'opcode {opcode["name"]}: byte {byte:#x} exceeds the opcode width')
+        if not 0 <= byte < (1 << opcode_width):
+            raise ValueError(f'opcode {opcode["name"]}: byte {byte:#x} outside the opcode width')
         opcodes.append({
             'sv': 'Opc' + _camel(opcode['name']),
             'c': opcode['name'].upper(),

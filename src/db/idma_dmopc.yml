@@ -5,8 +5,7 @@
 # Authors:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-# Single source of the DMOPC contract: the SystemVerilog decode package and the SW
-# header target/sw/idma_compute.h are both generated from this file.
+# Single source of the DMOPC contract; the decode package and target/sw/idma_compute.h
 prefix: "dmopc"
 opcode_width: 8
 operand_width: 64
@@ -38,8 +37,7 @@ fields:
     lsb: 12
     width: "idma_pkg::TransposeDimWidth"
 
-# Opcode bytes; `op` names an `idma_pkg::compute_op_e` member, the gaps are reserved for
-# ops not implemented in this backend family. `enable` false decodes to a plain copy.
+# `op` names an `idma_pkg::compute_op_e` member; `enable` false decodes to a plain copy
 opcodes:
   - name: "passthrough"
     byte: 0x08
