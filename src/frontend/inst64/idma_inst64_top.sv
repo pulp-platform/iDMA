@@ -866,7 +866,8 @@ module idma_inst64_top #(
     // DMOPC persists across transfers until the next DMOPC; reset is a plain copy
     assign idma_fe_dmopc = acc_req_valid_i & acc_req_ready_o &
                            (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMOPC);
-    `FFL(idma_fe_compute_q, idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga),
+    `FFL(idma_fe_compute_q,
+         idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
          idma_fe_dmopc, '0)
 
 
@@ -909,6 +910,16 @@ module idma_inst64_top #(
     `ASSERT_NEVER(DmopcUnknownOpcode,
                   idma_fe_dmopc & ~idma_inst64_compute_pkg::opc_known(acc_req_i.data_arga[7:0]),
                   clk_i, !rst_ni)
+
+    // A DMOPC field crossing bit 31 is unreachable from an RV32 core that sign-extends rs1/rs2.
+    if (!idma_inst64_compute_pkg::LayoutRv32Safe) begin : gen_compute_layout_check
+        $fatal(1, "idma_inst64_top: the DMOPC operand layout has a field crossing bit 31");
+    end
+
+    // Overlapping DMOPC fields alias onto each other and silently corrupt the decode.
+    if (!idma_inst64_compute_pkg::LayoutDisjoint) begin : gen_compute_overlap_check
+        $fatal(1, "idma_inst64_top: the DMOPC operand layout has overlapping fields");
+    end
 
     // A compute op the RDL adds but DMOPC never encodes is unreachable, not a plain copy.
     if (!idma_inst64_compute_pkg::ComputeOpsMapped) begin : gen_compute_op_map_check

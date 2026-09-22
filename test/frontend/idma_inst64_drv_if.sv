@@ -157,9 +157,10 @@ interface idma_inst64_drv_if #(
                   {{(64-(AxiAddrWidth-32)){1'b0}}, addr[AxiAddrWidth-1:32]});
     endtask
 
-    /// DMOPC; `rs1` carries the compute opcode byte and its operands
-    task automatic dma_set_compute(input logic [63:0] opcode);
-        acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMOPC), opcode, 64'b0);
+    /// DMOPC; both operands are sign-extended from bit 31 as an RV32 core drives them.
+    task automatic dma_set_compute(input logic [31:0] opcode, input logic [31:0] params = 32'b0);
+        acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMOPC),
+                  {{32{opcode[31]}}, opcode}, {{32{params[31]}}, params});
     endtask
 
     task automatic dma_set_strides(

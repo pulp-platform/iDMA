@@ -110,6 +110,40 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
+    /// Latch a transpose DMOPC and read back what the frontend decoded.
+    task automatic check_transpose_cfg(
+        input logic [idma_inst64_compute_pkg::TpModeWidth-1:0] mode,
+        input logic [idma_pkg::TransposeDimWidth-1:0]          tensor_m,
+        input logic [idma_pkg::TransposeDimWidth-1:0]          tensor_n
+    );
+        idma_pkg::compute_options_t got;
+        harness.drv_if.dma_set_compute(
+            32'(idma_inst64_compute_pkg::OpcTranspose) |
+                (32'(mode) << idma_inst64_compute_pkg::Rs1TpModeLsb),
+            (32'(tensor_m) << idma_inst64_compute_pkg::Rs2TpTensorMLsb) |
+                (32'(tensor_n) << idma_inst64_compute_pkg::Rs2TpTensorNLsb));
+        repeat (4) @(posedge harness.clk);
+        got = harness.i_dut.idma_fe_compute_q;
+        if (!got.enable || got.op !== idma_pkg::COMPUTE_TRANSPOSE) begin
+            $error("DMOPC transpose did not latch: enable=%0b op=%0d", got.enable, got.op);
+            errors++;
+        end
+        if (got.params.transpose.mode !== mode) begin
+            $error("transpose mode: expected %0d, got %0d", mode, got.params.transpose.mode);
+            errors++;
+        end
+        if (got.params.transpose.tensor_m !== tensor_m) begin
+            $error("transpose tensor_m: expected %0d, got %0d",
+                   tensor_m, got.params.transpose.tensor_m);
+            errors++;
+        end
+        if (got.params.transpose.tensor_n !== tensor_n) begin
+            $error("transpose tensor_n: expected %0d, got %0d",
+                   tensor_n, got.params.transpose.tensor_n);
+            errors++;
+        end
+    endtask
+
     task automatic check_copy_payload();
         logic [7:0] actual;
         logic [7:0] expected;
@@ -145,12 +179,25 @@ module tb_idma_inst64_compute #(
         if (NegCase != 32'd0) begin
             $display("[TB] inst64 DMOPC negative case %0d", NegCase);
             // 0x7f decodes to nothing; the frontend must flag it, not fall back silently
-            harness.drv_if.dma_set_compute(64'h7f);
+            harness.drv_if.dma_set_compute(32'h7f);
             repeat (20) @(posedge harness.clk);
             // the caller greps the transcript for the guard name, as tb_idma_mxneg does
             $display("[TB] DMOPC 0x7f issued");
             $finish;
         end
+
+        // Walking ones over both dimensions; a truncated or aliased bit cannot survive this
+        for (int unsigned i = 0; i < idma_pkg::TransposeDimWidth; i++) begin
+            check_transpose_cfg(
+                idma_inst64_compute_pkg::TpModeWidth'(i),
+                idma_pkg::TransposeDimWidth'(32'd1 << i),
+                idma_pkg::TransposeDimWidth'(~(32'd1 << i))
+            );
+        end
+        check_transpose_cfg('1, '1, '1);
+        if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC transpose decode errors", errors);
+        $display("[TB] DMOPC transpose operands round-trip over the full %0d-bit range",
+                 idma_pkg::TransposeDimWidth);
 
         $display("[TB] inst64 DMOPC mxquant (EnableCompute=%0d, EnableTcdmObi=%0d): %0d B -> %0d B",
                  EnableCompute, EnableTcdmObi, SrcBytes, QuantBytes);
@@ -160,7 +207,7 @@ module tb_idma_inst64_compute #(
 
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_before);
 
-        harness.drv_if.dma_set_compute(64'(idma_inst64_compute_pkg::OpcMxQuant));
+        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
         // DMOPC only latches state; it must not launch a transfer of its own
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_opc);
         if (next_id_opc !== next_id_before) begin
@@ -185,7 +232,7 @@ module tb_idma_inst64_compute #(
         end
 
         // Back to a plain copy: the latched op must not leak into the next transfer
-        harness.drv_if.dma_set_compute(64'(idma_inst64_compute_pkg::OpcPassthrough));
+        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));
         harness.drv_if.dma_set_dest(CopyAddr);
         harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, copy_id);
         harness.drv_if.dma_wait(copy_id, 3'd0);

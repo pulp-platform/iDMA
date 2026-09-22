@@ -26,7 +26,7 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMSTR` | `rs1` = src_stride, `rs2` = dst_stride | Set 2D strides |
 | `DMREP` | `rs1` = repetitions | Set 2D repetition count |
 | `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
-| `DMOPC` | `rs1` = {transpose operands, opcode byte} | Select the on-the-fly compute op applied by every following `DMCPY`/`DMCPYI`. Requires `EnableCompute`; `DMINIT` transfers stay plain memsets |
+| `DMOPC` | `rs1` = {mode, opcode byte}, `rs2` = op parameters | Select the on-the-fly compute op applied by every following `DMCPY`/`DMCPYI`. Requires `EnableCompute`; `DMINIT` transfers stay plain memsets |
 
 **Compute opcode byte** (`DMOPC`, `rs1[7:0]`, decoded in `idma_inst64_compute_pkg`):
 
@@ -37,9 +37,11 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `0x21` | MX dequantize, FP32 destination |
 | `0x22` | MX quantize, FP16 source |
 | `0x23` | MX dequantize, FP16 destination |
-| `0x50` | Tiled transpose; `rs1[17:16]` is the element-size mode, `rs1[29:18]` `tensor_m`, `rs1[41:30]` `tensor_n` |
+| `0x50` | Tiled transpose; `rs1[17:16]` is the element-size mode, `rs2[11:0]` `tensor_m`, `rs2[23:12]` `tensor_n` |
 
 The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` is not yet allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
+
+The host core is RV32, so it sign-extends `rs1` and `rs2` into the upper half of the 64-bit accelerator bus. No `DMOPC` field may cross bit 31 of its operand; that is why the 24 bits of transpose dimensions ride `rs2` instead of extending `rs1` past its top. `idma_inst64_top` fails elaboration on a layout that violates it (`LayoutRv32Safe`).
 
 The size-changing MX ops require AXI on both the source and the destination (`ComputeMxSrcProtocol` / `ComputeMxDstProtocol` in the legalizer), so they are only reachable for endpoints that decode outside the TCDM window. Transpose drives a per-beat write strobe that only `idma_axi_write` honours, so an OBI destination drops the edge-tile masking.
 
