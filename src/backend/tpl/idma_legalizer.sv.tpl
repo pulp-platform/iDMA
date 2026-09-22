@@ -746,9 +746,7 @@ ${database[protocol]['legalizer_write_data_path']}
     // compute retires on the per-beat write pulse; TileLink writes retire per burst
     `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.dst_protocol == idma_pkg::TILELINK)), clk_i, !rst_ni)
-    // transpose shapes: a tiled-walk strip (<= one beat) or one whole padded NE x NE tile.
-    // A multi-beat burst needs a beat-aligned destination: the write shifter rotates, so a
-    // misaligned bus beat would straddle two compute beats, which the datapath cannot serve.
+    // A tiled-walk strip, or one whole padded tile to a beat-aligned destination
     `ASSERT_NEVER(ComputeTransposeShape, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &
                   (req_i.length > StrbWidth) &

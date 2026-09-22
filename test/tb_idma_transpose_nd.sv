@@ -54,8 +54,7 @@ module tb_idma_transpose_nd
       '{9, 5, 8}
   };
 
-  // Whole-tile cases: M, N <= NE, issued as ONE multi-beat burst (no tiled walk).
-  // All non-square, so an M/N swap cannot hide; skipped when they exceed NE.
+  // Whole-tile cases, all non-square so an M/N swap cannot hide
   localparam int unsigned NTileCases = 6;
   localparam int unsigned TileCases[NTileCases][3] = '{
       '{5, 8, 1},
@@ -109,8 +108,7 @@ module tb_idma_transpose_nd
   idma_busy_t busy;
   logic       nd_busy;
 
-  // Whole-tile cases model the inst64 path: one multi-beat burst issued straight
-  // to the backend, bypassing the tiled walk (both midends and the replay stage).
+  // Whole-tile cases model the inst64 path: one burst straight to the backend
   logic      tile_mode;
   idma_req_t tile_req;
   logic      tile_req_valid, tile_req_ready;
@@ -388,9 +386,7 @@ module tb_idma_transpose_nd
       for (int unsigned j = 0; j < mp; j++)
         for (int unsigned b = 0; b < eb; b++) wr_mem(db + (i * mp + j) * eb + b, 8'hCC);
 
-    // arm the AW-bounds guard for this case. A misaligned base lets the DMA
-    // issue AWs down to the aligned-down address (strobe-masked partial beat),
-    // so the legal window spans [aligndown(db), alignup(db+size)).
+    // arm the AW-bounds guard; a misaligned base widens the legal window
     chk_db = db & ~addr_t'(StrbWidth - 1);
     chk_aw_hi = (db + addr_t'(nt * ne * mp * eb) + StrbWidth - 1) & ~addr_t'(StrbWidth - 1);
     chk_active = 1'b1;
@@ -454,8 +450,7 @@ module tb_idma_transpose_nd
     return 8'((r << 5) | (c << 2) | b);
   endfunction
 
-  // Transpose one padded NE x NE tile in a single multi-beat burst (M, N <= NE).
-  // `diffs` counts checked bytes that differ from what a plain copy would have left.
+  // One padded tile in a single burst; `diffs` counts bytes a plain copy would not change
   task automatic run_tile_case(input int unsigned m, input int unsigned n, input int unsigned eb,
                                input addr_t src_base, input addr_t dst_base,
                                output int unsigned errs, output int unsigned diffs);
@@ -555,8 +550,7 @@ module tb_idma_transpose_nd
     @(posedge rst_n);
     repeat (5) @(posedge clk);
 
-    // Sweep aligned and misaligned (sub-beat) src/dst bases so the transpose
-    // exercises the offset write/read path (2-beat rows) as well.
+    // Sweep aligned and sub-beat misaligned bases to reach the 2-beat-row path
     for (int unsigned misalign = 0; misalign < 2; misalign++) begin
       sb = 'h0000_1000 + (misalign ? 1 : 0);
       db = 'h0000_4000 + (misalign ? 3 : 0);
@@ -588,9 +582,7 @@ module tb_idma_transpose_nd
       end
     end
 
-    // Whole-tile shape: one multi-beat burst per tile. The destination must stay
-    // beat-aligned (ComputeTransposeShape), so the variants sweep a misaligned
-    // source and a beat-aligned destination that splits on a 4 KiB boundary.
+    // Whole-tile shape; variants sweep a misaligned source and a 4 KiB split
     for (int unsigned variant = 0; variant < 3; variant++) begin
       automatic addr_t tsb = 'h0000_1000 + ((variant == 1) ? 1 : 0);
       automatic addr_t tdb = (variant == 2) ? ('h0000_5000 - 2 * StrbWidth) : 'h0000_4000;
