@@ -28,7 +28,9 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
 | `DMOPC` | `rs1` = {mode, opcode byte}, `rs2` = op parameters | Select the on-the-fly compute op applied by every following `DMCPY`/`DMCPYI`. Requires `EnableCompute`; `DMINIT` transfers stay plain memsets |
 
-**Compute opcode byte** (`DMOPC`, `rs1[7:0]`, decoded in `idma_inst64_compute_pkg`):
+**Compute opcode byte** (`DMOPC`, `rs1[7:0]`). The bytes and the operand field positions live in
+`src/db/idma_dmopc.yml`; MARIO renders them into `idma_inst64_compute_pkg` and into the SW header
+`target/sw/idma_compute.h`, so hardware and software cannot disagree:
 
 | Byte | Operation |
 |------|-----------|
