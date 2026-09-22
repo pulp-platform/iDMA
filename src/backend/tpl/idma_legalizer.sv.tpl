@@ -697,6 +697,16 @@ ${database[protocol]['legalizer_write_data_path']}
     //--------------------------------------
     // Assertions
     //--------------------------------------
+    // transpose tile geometry of the presented request (the engine saturates mode at OffsetWidth)
+    logic [31:0] tp_num_elem, tp_tile_bytes;
+    always_comb begin : proc_transpose_shape
+        automatic int unsigned eff_mode;
+        eff_mode = (req_i.opt.compute.params.transpose.mode > OffsetWidth) ?
+                   OffsetWidth : req_i.opt.compute.params.transpose.mode;
+        tp_num_elem   = 32'(StrbWidth) >> eff_mode;
+        tp_tile_bytes = tp_num_elem << OffsetWidth;
+    end
+
     // only support the decomposition of incremental bursts
     `ASSERT_NEVER(OnlyIncrementalBurstsSRC, (ready_o & valid_i &
                   req_i.opt.src.burst != axi_pkg::BURST_INCR), clk_i, !rst_ni)
@@ -736,10 +746,14 @@ ${database[protocol]['legalizer_write_data_path']}
     // compute retires on the per-beat write pulse; TileLink writes retire per burst
     `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.dst_protocol == idma_pkg::TILELINK)), clk_i, !rst_ni)
-    // NOT IMPLEMENTED: multi-beat transpose write bursts (midend strips are single-beat)
-    `ASSERT_NEVER(ComputeTransposeSingleBeat, (ready_o & valid_i & req_i.opt.compute.enable &
+    // transpose shapes: a tiled-walk strip (<= one beat) or one whole padded NE x NE tile
+    `ASSERT_NEVER(ComputeTransposeShape, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &
-                  (req_i.length > StrbWidth)), clk_i, !rst_ni)
+                  (req_i.length > StrbWidth) &
+                  ~((64'(req_i.length) == 64'(tp_tile_bytes)) &
+                    (req_i.opt.compute.params.transpose.tensor_m <= tp_num_elem) &
+                    (req_i.opt.compute.params.transpose.tensor_n <= tp_num_elem))),
+                  clk_i, !rst_ni)
     // NOT IMPLEMENTED: size-changing compute is validated on AXI src/dst only (TODO: OBI)
     `ASSERT_NEVER(ComputeMxSrcProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
                   (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=

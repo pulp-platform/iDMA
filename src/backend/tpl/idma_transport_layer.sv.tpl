@@ -279,6 +279,11 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if one_write_port:
     assign w_dp_ready_o = w_dp_req_ready;
 % endif
+% if compute_eligible:
+    // one pulse per accepted write beat (burst position agnostic, fires on fully masked beats)
+    logic w_beat_done;
+    assign w_beat_done = w_chan_valid_o & w_chan_ready_o;
+% endif
 
     //--------------------------------------
     // Read Ports
@@ -405,7 +410,7 @@ ${rendered_read_ports[read_port]}
             .data_o       ( cmp_data_o          ),
             .strb_o       ( cmp_strb_o          ),
             .lane_valid_o ( cmp_lane_valid      ),
-            .ready_i      ( w_dp_req_ready      ),
+            .ready_i      ( w_beat_done         ),
             .lane_ready_i ( buffer_out_ready_shifted )
         );
 

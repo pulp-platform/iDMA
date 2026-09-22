@@ -42,6 +42,13 @@ module tb_idma_transpose_nd
     '{32, 24, 1}, '{ 9,  5, 4}, '{13, 19, 1}
   };
 
+  // Whole-tile cases: M, N <= NE, issued as ONE multi-beat burst (no tiled walk).
+  // All non-square, so an M/N swap cannot hide; skipped when they exceed NE.
+  localparam int unsigned NTileCases = 6;
+  localparam int unsigned TileCases [NTileCases][3] = '{
+    '{5, 8, 1}, '{3, 6, 1}, '{7, 4, 1}, '{2, 3, 2}, '{3, 4, 1}, '{2, 3, 1}
+  };
+
   // ── Types ──
   typedef logic [AddrWidth-1:0]   addr_t;
   typedef logic [DataWidth-1:0]   data_t;
@@ -263,9 +270,98 @@ module tb_idma_transpose_nd
           end
   endtask
 
+  // Position-coded tile byte: r<8, c<8, b<4 pack into one unique byte
+  function automatic logic [7:0] tile_byte(input int unsigned r, input int unsigned c,
+                                           input int unsigned b);
+    return 8'((r << 5) | (c << 2) | b);
+  endfunction
+
+  // Transpose one padded NE x NE tile in a single multi-beat burst (M, N <= NE).
+  // `diffs` counts checked bytes that differ from what a plain copy would have left.
+  task automatic run_tile_case(input int unsigned m, input int unsigned n, input int unsigned eb,
+                               output int unsigned errs, output int unsigned diffs);
+    automatic int unsigned ne   = StrbWidth / eb;
+    automatic int unsigned mode = (eb == 4) ? 2 : (eb == 2) ? 1 : 0;
+    errs = 0; diffs = 0;
+
+    // source tile: NE rows at a StrbWidth pitch; rows >= M and cols >= N are padding
+    for (int unsigned r = 0; r < ne; r++)
+      for (int unsigned c = 0; c < ne; c++)
+        for (int unsigned b = 0; b < eb; b++)
+          wr_mem(sb + r*StrbWidth + c*eb + b, tile_byte(r, c, b));
+
+    // sentinel-fill the destination tile; only the M x N transposed region may be written
+    for (int unsigned i = 0; i < ne; i++)
+      for (int unsigned j = 0; j < StrbWidth; j++)
+        wr_mem(db + i*StrbWidth + j, 8'hCC);
+
+    chk_db    = db;
+    chk_aw_hi = db + addr_t'(ne*StrbWidth);
+    chk_active = 1'b1;
+
+    // one 1D request of a whole padded tile: all ND dimensions neutral
+    nd_req = '0;
+    nd_req.burst_req.length   = tf_len_t'(ne*StrbWidth);
+    nd_req.burst_req.src_addr = sb;
+    nd_req.burst_req.dst_addr = db;
+    nd_req.burst_req.opt.src_protocol = idma_pkg::AXI;
+    nd_req.burst_req.opt.dst_protocol = idma_pkg::AXI;
+    nd_req.burst_req.opt.src.burst    = axi_pkg::BURST_INCR;
+    nd_req.burst_req.opt.dst.burst    = axi_pkg::BURST_INCR;
+    nd_req.burst_req.opt.beo.decouple_rw = 1'b1;
+    nd_req.burst_req.opt.beo.decouple_aw = 1'b1;
+    nd_req.burst_req.opt.compute.enable                    = 1'b1;
+    nd_req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;
+    nd_req.burst_req.opt.compute.params.transpose.mode     = 2'(mode);
+    nd_req.burst_req.opt.compute.params.transpose.tensor_m = 12'(m);
+    nd_req.burst_req.opt.compute.params.transpose.tensor_n = 12'(n);
+    nd_req.burst_req.opt.last = 1'b1;
+    for (int unsigned d = 0; d < NumDim-1; d++) begin
+      nd_req.d_req[d].reps        = reps_t'(1);
+      nd_req.d_req[d].src_strides = '0;
+      nd_req.d_req[d].dst_strides = '0;
+    end
+
+    $display("[TPT] case %0dx%0d EB=%0d (NE=%0d, %0d-beat burst)", m, n, eb, ne, ne);
+    nd_req_valid = 1'b1;
+    do @(posedge clk); while (!nd_req_ready);
+    nd_req_valid = 1'b0;
+    nd_req = '0;
+
+    while (!(nd_rsp_valid && nd_rsp_ready)) @(posedge clk);
+    repeat (20) @(posedge clk);
+    chk_active = 1'b0;
+
+    // data: out_T[i][j] == in[j][i], destination rows at a StrbWidth pitch
+    for (int unsigned i = 0; i < n; i++)
+      for (int unsigned j = 0; j < m; j++)
+        for (int unsigned b = 0; b < eb; b++) begin
+          automatic logic [7:0] got = rd_mem(db + i*StrbWidth + j*eb + b);
+          if (got !== tile_byte(j, i, b)) begin
+            errs++;
+            if (errs <= 12)
+              $display("[TPT] MISMATCH out_T[%0d][%0d].b%0d=%02h exp %02h", i, j, b, got,
+                       tile_byte(j, i, b));
+          end
+          if (got !== tile_byte(i, j, b)) diffs++;
+        end
+    // padding elements must stay sentinel
+    for (int unsigned i = 0; i < ne; i++)
+      for (int unsigned j = 0; j < StrbWidth; j++)
+        if (i >= n || (j / eb) >= m)
+          if (rd_mem(db + i*StrbWidth + j) !== 8'hCC) begin
+            errs++;
+            if (errs <= 12)
+              $display("[TPT] PADDING CLOBBERED at row=%0d byte=%0d=%02h (exp CC)", i, j,
+                       rd_mem(db + i*StrbWidth + j));
+          end
+  endtask
+
   initial begin
     automatic int unsigned total = 0;
     automatic int unsigned ce;
+    automatic int unsigned cd;
+    automatic int unsigned exp_d;
     nd_req_valid = 1'b0; nd_rsp_ready = 1'b1; nd_req = '0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
@@ -279,7 +375,27 @@ module tb_idma_transpose_nd
       total += ce;
     end
 
-    if (total == 0) $display("[TPN] ALL PASS (%0d cases, StrbWidth=%0d)", NCases, StrbWidth);
+    for (int unsigned k = 0; k < NTileCases; k++) begin
+      automatic int unsigned m  = TileCases[k][0];
+      automatic int unsigned n  = TileCases[k][1];
+      automatic int unsigned eb = TileCases[k][2];
+      if (eb > StrbWidth) continue;
+      if (m > StrbWidth/eb || n > StrbWidth/eb) continue;   // must be one tile
+      run_tile_case(m, n, eb, ce, cd);
+      // a plain copy would leave the source byte in place: only the diagonal may match
+      exp_d = (n*m - ((m < n) ? m : n)) * eb;
+      if (cd != exp_d) begin
+        ce++;
+        $display("[TPT] COPY-CHECK: %0d bytes differ from a plain copy, expected %0d", cd, exp_d);
+      end
+      if (ce == 0) $display("[TPT] PASS: %0dx%0d EB=%0d (%0d bytes differ from a copy)",
+                            m, n, eb, cd);
+      else         $display("[TPT] FAIL: %0dx%0d EB=%0d (%0d mismatches)", m, n, eb, ce);
+      total += ce;
+    end
+
+    if (total == 0) $display("[TPN] ALL PASS (%0d walk + %0d tile cases, StrbWidth=%0d)",
+                             NCases, NTileCases, StrbWidth);
     else            $fatal(1, "[TPN] FAIL: %0d total mismatches", total);
     repeat (5) @(posedge clk);
     $finish();
