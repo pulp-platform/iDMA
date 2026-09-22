@@ -104,6 +104,9 @@ module tb_idma_mxneg
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       13: issue(Src, Dst, 64, idma_pkg::COMPUTE_MXQUANT_FP16,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      // whole-tile length, but a misaligned destination the write shifter cannot serve
+      14: issue(Src, Dst + 1, StrbWidth * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
+                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 
