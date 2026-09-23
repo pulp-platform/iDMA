@@ -5,9 +5,11 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// Snitch accelerator-bus driver for `idma_inst64_top`, covering the inst64 ISA
-/// (DMSRC/DMDST/DMSTR/DMREP/DMCPY/DMCPYI/DMSTAT/DMOPC).
+/// Snitch accelerator-bus or CV-X-IF driver for `idma_inst64_top`, covering the inst64 ISA
+/// (DMSRC/DMDST/DMSTR/DMREP/DMCPY/DMCPYI/DMSTAT/DMINIT/DMOPC).
 interface idma_inst64_drv_if #(
+    /// Drive the CV-X-IF port the way Snitch does instead of the accelerator bus
+    parameter bit          Xif = 1'b0,
     /// Poll budget for `dma_wait`/`dma_wait_idle` before the wait is declared a deadlock
     parameter int unsigned MaxPolls = 32'd10000,
     /// Cycle budget for an outstanding accelerator response
@@ -36,6 +38,39 @@ interface idma_inst64_drv_if #(
     logic [63:0] last_rsp_data;
     logic        last_rsp_error;
 
+    // CV-X-IF signals
+    x_issue_req_t  x_issue_req;
+    x_issue_resp_t x_issue_resp;
+    logic          x_issue_valid;
+    logic          x_issue_ready;
+    x_register_t   x_register;
+    logic          x_register_valid;
+    logic          x_register_ready;
+    x_commit_t     x_commit;
+    logic          x_commit_valid;
+    x_result_t     x_result;
+    logic          x_result_valid;
+    logic          x_result_ready;
+
+    // CV-X-IF knobs: commit latency (0 as Snitch), kill, rs_valid delay, result stalls
+    int unsigned   xif_commit_delay;
+    bit            xif_kill;
+    int unsigned   xif_rs_delay;
+    bit            xif_res_backpressure;
+    bit            xif_res_hold;
+
+    // CV-X-IF observations of the last issue, and running totals
+    logic            last_accept;
+    logic            last_writeback;
+    int unsigned     last_issue_wait;
+    longint unsigned last_issue_cycle;
+    longint unsigned xif_result_cycle;
+    longint unsigned acc_rsp_cycle;
+    int unsigned     xif_accepted;
+    int unsigned     xif_rejected;
+    int unsigned     xif_killed;
+    int unsigned     xif_results;
+
     longint unsigned cycle_counter;
     longint unsigned dma_start_cycle;
     longint unsigned dma_end_cycle;
@@ -58,6 +93,24 @@ interface idma_inst64_drv_if #(
         dma_start_cycle = '0;
         dma_end_cycle   = '0;
         dma_cycles      = '0;
+        x_issue_valid        = 1'b0;
+        x_register_valid     = 1'b0;
+        x_issue_req          = '0;
+        x_register           = '0;
+        xif_commit_delay     = '0;
+        xif_kill             = 1'b0;
+        xif_rs_delay         = '0;
+        xif_res_backpressure = 1'b0;
+        xif_res_hold         = 1'b0;
+        last_accept          = 1'b0;
+        last_writeback       = 1'b0;
+        last_issue_wait      = '0;
+        last_issue_cycle     = '0;
+        xif_result_cycle     = '0;
+        xif_accepted         = '0;
+        xif_rejected         = '0;
+        xif_killed           = '0;
+        xif_results          = '0;
     end
 
     //--------------------------------------
@@ -73,8 +126,184 @@ interface idma_inst64_drv_if #(
             // typed pattern: verilator rejects a bare assignment pattern as a call argument
             rsp_queue.push_back(
                 acc_rsp_item_t'{id: acc_res.id, data: acc_res.data, error: acc_res.error});
+            acc_rsp_cycle <= cycle_counter;
         end
     end
+
+    //--------------------------------------
+    // CV-X-IF model of Snitch
+    //--------------------------------------
+    // In-flight accepted instructions: writeback and committed flags, by id
+    logic [1:0] xif_inflight [xif_id_t];
+    xif_id_t    xif_id_counter;
+
+    typedef struct {
+        longint unsigned due;
+        xif_id_t         id;
+        bit              kill;
+    } xif_commit_item_t;
+    xif_commit_item_t xif_commit_queue [$];
+
+    logic      xif_commit_drv_valid;
+    x_commit_t xif_commit_drv;
+    logic      xif_stall_rand;
+
+    initial begin
+        xif_id_counter       = '0;
+        xif_commit_drv_valid = 1'b0;
+        xif_commit_drv       = '0;
+        xif_stall_rand       = 1'b0;
+    end
+
+    // Delay 0 commits combinationally in the issue handshake, exactly as snitch.sv does
+    always_comb begin : proc_xif_commit
+        if (xif_commit_delay == 0) begin
+            x_commit_valid       = x_issue_valid & x_issue_ready;
+            x_commit             = '0;
+            x_commit.hartid      = x_issue_req.hartid;
+            x_commit.id          = x_issue_req.id;
+            x_commit.commit_kill = xif_kill;
+        end else begin
+            x_commit_valid = xif_commit_drv_valid;
+            x_commit       = xif_commit_drv;
+        end
+    end
+
+    // Snitch always takes a result without writeback; one with writeback may be stalled
+    assign x_result_ready = !x_result.we ||
+                            !((xif_res_backpressure && xif_stall_rand) || xif_res_hold);
+
+    always @(posedge clk) begin : proc_xif_commit_drv
+        #(ApplDelay);
+        xif_stall_rand = $urandom_range(0, 1);
+        xif_commit_drv_valid = 1'b0;
+        if (xif_commit_queue.size() != 0 && xif_commit_queue[0].due <= cycle_counter) begin
+            automatic xif_commit_item_t item = xif_commit_queue.pop_front();
+            xif_commit_drv             = '0;
+            xif_commit_drv.id          = item.id;
+            xif_commit_drv.commit_kill = item.kill;
+            xif_commit_drv_valid       = 1'b1;
+            if (xif_inflight.exists(item.id)) begin
+                if (item.kill) begin
+                    xif_inflight.delete(item.id);
+                    xif_killed++;
+                end else begin
+                    xif_inflight[item.id][1] = 1'b1;
+                end
+            end
+        end
+    end
+
+    // Each result must match an accepted, committed instruction exactly once
+    always @(posedge clk) begin : proc_capture_result
+        if (rst_n && x_result_valid && x_result_ready) begin
+            if (!xif_inflight.exists(x_result.id)) begin
+                $fatal(1, "[DRV] XIF result for id %0d that is not in flight", x_result.id);
+            end
+            if (!xif_inflight[x_result.id][1]) begin
+                $fatal(1, "[DRV] XIF result for id %0d before its commit", x_result.id);
+            end
+            if (x_result.we !== xif_inflight[x_result.id][0]) begin
+                $fatal(1, "[DRV] XIF result we=%0b for id %0d, issue said writeback=%0b",
+                       x_result.we, x_result.id, xif_inflight[x_result.id][0]);
+            end
+            xif_inflight.delete(x_result.id);
+            xif_results++;
+            xif_result_cycle = cycle_counter;
+            if (x_result.we) begin
+                rsp_queue.push_back(acc_rsp_item_t'{id: 32'(x_result.id),
+                                                    data: 64'(x_result.data), error: 1'b0});
+            end
+        end
+    end
+
+    /// Cycle of the last response or result handshake
+    function automatic longint unsigned last_result_cycle();
+        return Xif ? xif_result_cycle : acc_rsp_cycle;
+    endfunction
+
+    function automatic int unsigned xif_pending();
+        return xif_inflight.num();
+    endfunction
+
+    // A rejected DMA instruction stands in for Snitch's illegal-instruction trap
+    function automatic bit expects_rsp(input logic [31:0] instr);
+        return (instr ==? idma_inst64_snitch_pkg::DMCPY)   ||
+               (instr ==? idma_inst64_snitch_pkg::DMCPYI)  ||
+               (instr ==? idma_inst64_snitch_pkg::DMSTAT)  ||
+               (instr ==? idma_inst64_snitch_pkg::DMSTATI) ||
+               (instr ==? idma_inst64_snitch_pkg::DMINIT);
+    endfunction
+
+    /// Issue one instruction; register and issue share the handshake, as with Snitch
+    task automatic xif_issue(
+        input logic [31:0] instr,
+        input logic [31:0] rs1,
+        input logic [31:0] rs2
+    );
+        int unsigned waited;
+        xif_id_t     id;
+        @(posedge clk);
+        #(ApplDelay);
+        id                     = xif_id_counter;
+        last_req_id            = 32'(id);
+        x_issue_req            = '0;
+        x_issue_req.instr      = instr;
+        x_issue_req.id         = id;
+        x_register             = '0;
+        x_register.id          = id;
+        x_register.rs          = {32'b0, rs2, rs1};
+        x_register.rs_valid    = (xif_rs_delay == 0) ? 3'b111 : 3'b000;
+        x_issue_valid          = 1'b1;
+        x_register_valid       = 1'b1;
+        waited                 = 0;
+
+        #(AcqDelay - ApplDelay);
+        while (!x_issue_ready) begin
+            @(posedge clk);
+            #(ApplDelay);
+            waited++;
+            if (waited >= xif_rs_delay) x_register.rs_valid = 3'b111;
+            #(AcqDelay - ApplDelay);
+            if (waited > RspTimeoutCycles) begin
+                $fatal(1, "[DRV] XIF issue of %08h not ready within %0d cycles", instr, waited);
+            end
+        end
+        // Snitch completes issue and register together, so the readys must agree
+        if (x_register_ready !== x_issue_resp.accept) begin
+            $fatal(1, "[DRV] register_ready %0b disagrees with accept %0b for %08h",
+                   x_register_ready, x_issue_resp.accept, instr);
+        end
+        last_accept      = x_issue_resp.accept;
+        last_writeback   = x_issue_resp.writeback;
+        last_issue_wait  = waited;
+        last_issue_cycle = cycle_counter;
+        xif_id_counter   = xif_id_counter + 1;
+        if (x_issue_resp.accept) begin
+            xif_accepted++;
+            if (xif_commit_delay == 0) begin
+                if (xif_kill) xif_killed++;
+                else xif_inflight[id] = {1'b1, x_issue_resp.writeback};
+            end else begin
+                xif_inflight[id] = {1'b0, x_issue_resp.writeback};
+            end
+        end else begin
+            xif_rejected++;
+            if (expects_rsp(instr)) begin
+                rsp_queue.push_back(acc_rsp_item_t'{id: 32'(id), data: '0, error: 1'b1});
+            end
+        end
+        // Snitch commits every issue, rejected ones included
+        if (xif_commit_delay != 0) begin
+            xif_commit_queue.push_back(xif_commit_item_t'{
+                due: cycle_counter + xif_commit_delay, id: id, kill: xif_kill});
+        end
+
+        @(posedge clk);
+        #(ApplDelay);
+        x_issue_valid    = 1'b0;
+        x_register_valid = 1'b0;
+    endtask
 
     function automatic int unsigned rsp_pending();
         return rsp_queue.size();
@@ -89,6 +318,10 @@ interface idma_inst64_drv_if #(
         input logic [63:0] data_arga,
         input logic [63:0] data_argb
     );
+        if (Xif) begin
+            xif_issue(data_op, data_arga[31:0], data_argb[31:0]);
+            return;
+        end
         @(posedge clk);
         #(ApplDelay);
         last_req_id       = req_id_counter;
@@ -104,6 +337,7 @@ interface idma_inst64_drv_if #(
             @(posedge clk);
             #(AcqDelay);
         end
+        last_issue_cycle = cycle_counter;
 
         @(posedge clk);
         #(ApplDelay);
@@ -163,12 +397,13 @@ interface idma_inst64_drv_if #(
                   {{32{opcode[31]}}, opcode}, {{32{params[31]}}, params});
     endtask
 
+    /// DMSTR; both strides are sign-extended from bit 31 as an RV32 core drives them.
     task automatic dma_set_strides(
         input logic [31:0] src_stride,
         input logic [31:0] dst_stride
     );
         acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMSTR),
-                  {32'b0, src_stride}, {32'b0, dst_stride});
+                  {{32{src_stride[31]}}, src_stride}, {{32{dst_stride[31]}}, dst_stride});
     endtask
 
     task automatic dma_set_reps(input logic [31:0] reps);

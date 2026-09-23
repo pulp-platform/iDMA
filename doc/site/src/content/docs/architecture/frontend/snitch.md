@@ -64,6 +64,29 @@ The size-changing MX ops require AXI on both the source and the destination (`Co
 - Bit 1: Enable 2D mode (use previously set strides/reps). If 2D mode is enabled but `DMSTR`/`DMREP` were not called since the last transfer, the previously set stride and repetition values are reused. On reset, these default to zero
 - Bits 4:2: Channel select - `$clog2(NumChannels)` bits wide, remaining upper bits are zero-extended. For the common single-channel case (`NumChannels=1`), these bits are unused and only bit 1 (2D enable) matters
 
+## CV-X-IF Port
+
+With `FrontendIf = idma_inst64_snitch_pkg::FrontendXif`, `idma_inst64_top` takes instructions over
+the CORE-V eXtension Interface instead of the accelerator bus: the issue, register, commit, and
+result subset Snitch implements, with coupled issue and register (`X_ISSUE_REGISTER_SPLIT = 0`)
+and 32-bit registers. The `x_*_t` structs are type parameters, so iDMA gains no dependency. Both
+ports feed the same decoder, so the midend and backend do not see which one is in use.
+
+- **Accept** depends on the instruction word and the build only: an inst64 encoding is accepted
+  unless it is `DMOPC` without `EnableCompute`, `DMINIT` without `EnableTcdmObi`, or carries a
+  channel immediate at or above `NumChannels`. Anything else is rejected with `issue_ready` high
+  in the same cycle, so a foreign instruction never stalls another coprocessor.
+- `register_read` and `writeback` come from the generated attribute table. Issue waits for the
+  `rs_valid` bits the instruction reads, and for a free commit buffer.
+- **Commit**: only committed instructions reach the decoder, so a killed one changes no state and
+  launches nothing. An instruction committed in its issue cycle (Snitch) bypasses the one-entry
+  commit buffer and adds no cycle; a later commit parks it there.
+- **Result**: one per accepted, committed instruction; `we` with the transfer id, status value,
+  or memset id for `DMCPY`/`DMCPYI`/`DMINIT`/`DMSTAT`/`DMSTATI`, `we = 0` for the configuration
+  instructions. The result leaves through a spill register.
+- Whether a `DMOPC` opcode byte is supported depends on `rs1`, so it cannot decide accept; an
+  unsupported byte still fires `DmopcUnknownOpcode`.
+
 ## Parameters
 
 For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are standard. Increase `NumChannels` only if you need independent DMA channels on separate address spaces.
@@ -80,6 +103,7 @@ For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are 
 | `NumAddrRules` | Number of decode rules `addr_map_i` carries (default: 1). Set it to 2 for a cluster with a TCDM alias region, more for further TCDM windows; every rule must name a real window, an all-zero rule decodes as end of memory and not as a miss |
 | `EnableTcdmObi` | Instantiate the TCDM (OBI) manager port and the INIT memset port (default: 1). Set to 0 for an integration without a TCDM port: the backend becomes AXI-only, `addr_map_i` and `NumAddrRules` are ignored, every address routes to AXI, and `DMINIT` is answered with an error response |
 | `DMATracing` | Enable DMA trace file generation for debugging |
+| `FrontendIf` | Core-side port, `FrontendAcc` (default, the Snitch accelerator bus) or `FrontendXif` (CV-X-IF); the unused port's outputs are tied off. `x_issue_req_t`, `x_issue_resp_t`, `x_register_t`, `x_commit_t`, `x_result_t` type the CV-X-IF port |
 | `EnableCompute` | Elaborate the backend on-the-fly compute datapath (default: 0). With it off, a `DMOPC` that selects a real op fires the legalizer's `ComputeOpUnsupported` guard instead of silently copying. Setting it also switches the backend to the split shifter pair (`CombinedShifter` follows `!EnableCompute`), which the compute datapath requires |
 | `ComputeOps` | Per-op `idma_pkg::compute_enable_t` feature mask; only the ops it names are elaborated (default: all) |
 | `ComputeTuning` | `idma_pkg::compute_tuning_t` implementation knobs of the compute engines (default: all) |

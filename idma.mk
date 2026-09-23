@@ -527,6 +527,41 @@ idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute
 		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true
 	cd $(IDMA_VSIM_DIR); grep -q "DmopcUnknownOpcode" inst64_compute_neg.log
 
+# One inst64 run gated on its transcript; $1 top, $2 log name, $3 vsim arguments
+define idma_run_inst64
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc $3 $1 -logfile $2.log \
+		-do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" $2.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" $2.log
+endef
+
+# CV-X-IF port: copies and protocol cases, then the same copies over the accelerator bus
+.PHONY: idma_sim_tb_idma_inst64_xif
+idma_sim_tb_idma_inst64_xif: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_xif.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_xif.tcl; quit"
+	$(call idma_run_inst64,tb_idma_inst64_xif,inst64_xif,)
+	$(call idma_run_inst64,tb_idma_inst64_xif,inst64_xif_acc,-gFrontendXif=0)
+
+# The accelerator-bus regressions above, replayed over the CV-X-IF port
+.PHONY: idma_sim_tb_idma_inst64_xif_regress
+idma_sim_tb_idma_inst64_xif_regress: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_axi_copy.tcl \
+                                     $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_alias_copy.tcl \
+                                     $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_copy.tcl \
+                                     $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_axi_copy.tcl; quit"
+	$(call idma_run_inst64,tb_idma_inst64_axi_copy,inst64_xif_axi_copy,-gFrontendXif=1)
+	$(call idma_run_inst64,tb_idma_inst64_axi_copy,inst64_xif_axi_only,-gFrontendXif=1 -gEnableTcdmObi=0)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_alias_copy.tcl; quit"
+	$(call idma_run_inst64,tb_idma_inst64_alias_copy,inst64_xif_alias_copy,-gFrontendXif=1)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_tcdm_copy.tcl; quit"
+	$(call idma_run_inst64,tb_idma_inst64_tcdm_copy,inst64_xif_tcdm_copy,-gFrontendXif=1)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	$(call idma_run_inst64,tb_idma_inst64_compute,inst64_xif_compute,-gFrontendXif=1)
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gFrontendXif=1 -gNegCase=1 \
+		tb_idma_inst64_compute -logfile inst64_xif_compute_neg.log -do "run -all; quit" || true
+	cd $(IDMA_VSIM_DIR); grep -q "DmopcUnknownOpcode" inst64_xif_compute_neg.log
+
 .PHONY: idma_sim_tb_idma_transpose_b2b
 idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -694,7 +729,7 @@ idma_lint_clean:
 
 # inst64 gate: the only public concrete bindings of idma_inst64_top
 IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
-                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute
+                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute tb_idma_inst64_xif
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
 
@@ -703,7 +738,10 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_axi_copy:-GDMATracing=1 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
-                    tb_idma_inst64_compute:-GEnableTcdmObi=1
+                    tb_idma_inst64_compute:-GEnableTcdmObi=1 \
+                    tb_idma_inst64_compute:-GFrontendXif=1 \
+                    tb_idma_inst64_axi_copy:-GFrontendXif=1 \
+                    tb_idma_inst64_xif:-GFrontendXif=0
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:

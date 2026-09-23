@@ -16,7 +16,9 @@ module tb_idma_inst64_compute #(
     parameter bit          EnableTcdmObi = 1'b0,
     /// 0 runs the compute test; 1 latches an undecodable DMOPC byte
     parameter int unsigned NegCase       = 32'd0,
-    parameter int unsigned DMATracing    = idma_inst64_tb_pkg::DMATracing
+    parameter int unsigned DMATracing    = idma_inst64_tb_pkg::DMATracing,
+    /// Drive the CV-X-IF port instead of the accelerator bus
+    parameter bit          FrontendXif   = 1'b0
 );
     import idma_inst64_tb_pkg::*;
 
@@ -28,7 +30,8 @@ module tb_idma_inst64_compute #(
     idma_inst64_base #(
         .EnableCompute ( EnableCompute ),
         .EnableTcdmObi ( EnableTcdmObi ),
-        .DMATracing    ( DMATracing    )
+        .DMATracing    ( DMATracing    ),
+        .FrontendXif   ( FrontendXif   )
     ) harness ();
 
     localparam int unsigned TimeoutCycles = 32'd200000;

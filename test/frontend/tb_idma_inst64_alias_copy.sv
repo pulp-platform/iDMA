@@ -9,7 +9,10 @@
 /// second TCDM window (the alias region every real integration enables) reaches the OBI
 /// leg, that the primary window still does, and that an unmapped address still falls back
 /// to AXI.
-module tb_idma_inst64_alias_copy;
+module tb_idma_inst64_alias_copy #(
+    /// Drive the CV-X-IF port instead of the accelerator bus
+    parameter bit FrontendXif = 1'b0
+);
     import idma_inst64_tb_pkg::*;
 
     localparam logic [63:0] TcdmStart      = 64'h0000_0000_1000_0000;
@@ -21,7 +24,8 @@ module tb_idma_inst64_alias_copy;
         .TcdmStart     ( TcdmStart      ),
         .TcdmEnd       ( TcdmEnd        ),
         .TcdmAliasStart( TcdmAliasStart ),
-        .TcdmAliasEnd  ( TcdmAliasEnd   )
+        .TcdmAliasEnd  ( TcdmAliasEnd   ),
+        .FrontendXif   ( FrontendXif    )
     ) harness ();
 
     localparam int unsigned TimeoutCycles = 32'd200000;
