@@ -23,6 +23,8 @@
 /* Operand field positions; ${', '.join(f'{o} is {s}' for o, s in operands.items())} */
 % for f in fields:
 #define ${('IDMA_DMOPC_' + f['c'] + '_SHIFT').ljust(fld_w)} ${f['lsb']}
+#define ${('IDMA_DMOPC_' + f['c'] + '_WIDTH').ljust(fld_w)} ${f['width']}
+#define ${('IDMA_DMOPC_' + f['c'] + '_MASK').ljust(fld_w)} 0x${f['mask']}u
 % endfor
 
 #endif  /* IDMA_COMPUTE_H_ */

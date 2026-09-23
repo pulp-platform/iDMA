@@ -29,20 +29,29 @@ def _context(db: dict) -> dict:
     opcode_width = int(db['opcode_width'])
     operands = db['operands']
 
+    operand_width = int(db['operand_width'])
+
     # fields: the SystemVerilog and C names are derived, the layout comes from the database
     fields = []
     for field in db['fields']:
         operand = field['operand']
         if operand not in operands:
             raise ValueError(f'field {field["name"]}: unknown operand {operand}')
+        lsb, width = int(field['lsb']), int(field['width'])
+        if width <= 0:
+            raise ValueError(f'field {field["name"]}: width {width} is not positive')
+        if lsb + width > operand_width:
+            raise ValueError(f'field {field["name"]}: runs past the {operand_width} b operand')
         fields.append({
             'key': field['name'],
             'sv': _camel(operand) + _camel(field['name']),
             'c': f'{operand.upper()}_{field["name"].upper()}',
             'operand': operand,
             'signal': operands[operand],
-            'lsb': int(field['lsb']),
-            'width': field['width']
+            'lsb': lsb,
+            'width': width,
+            'sv_width': field.get('sv_width'),
+            'mask': format((1 << width) - 1, 'x')
         })
     _unique([f['key'] for f in fields], 'field')
     by_key = {f['key']: f for f in fields}
@@ -78,10 +87,12 @@ def _context(db: dict) -> dict:
 
     if db['opcode_field'] not in by_key:
         raise ValueError(f'unknown opcode field {db["opcode_field"]}')
+    if by_key[db['opcode_field']]['width'] != opcode_width:
+        raise ValueError(f'opcode field {db["opcode_field"]}: width is not {opcode_width}')
 
     return {
         'opcode_width': opcode_width,
-        'operand_width': int(db['operand_width']),
+        'operand_width': operand_width,
         'opcode_field': by_key[db['opcode_field']],
         'operands': operands,
         'fields': fields,
