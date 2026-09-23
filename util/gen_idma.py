@@ -23,9 +23,10 @@ from mario.testbench import render_testbench
 from mario.frontend import render_reg_hjson, render_reg_top
 from mario.tracer import render_tracer, render_tracer_common
 from mario.dmopc import render_dmopc
+from mario.inst64 import render_inst64
 
 GENABLE_ENTITIES = ['transport', 'legalizer', 'backend', 'vsim_wave', 'testbench', 'synth_wrapper',
-    'reg_top', 'reg_hjson', 'tracer', 'tracer_common', 'dmopc']
+    'reg_top', 'reg_hjson', 'tracer', 'tracer_common', 'dmopc', 'inst64']
 
 EPILOG = '''
 The iDMA configuration ID is composed of a underscore-separated list of specifiers and protocols.
@@ -80,6 +81,8 @@ def main():
         print(render_tracer_common(args.tpl))
     elif args.entity == 'dmopc':
         print(render_dmopc(protocol_db['dmopc'], args.tpl))
+    elif args.entity == 'inst64':
+        print(render_inst64(protocol_db, args.tpl))
     else:
         return 1
 

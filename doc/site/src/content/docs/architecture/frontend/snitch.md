@@ -13,6 +13,12 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 
 A DMA transfer requires three steps: (1) set the source and destination addresses (`DMSRC`, `DMDST`), (2) launch the transfer with a length and config (`DMCPY`/`DMCPYI`), (3) poll for completion (`DMSTAT`/`DMSTATI`). Optional instructions set 2D parameters (`DMSTR`, `DMREP`) and AXI user fields (`DMUSER`).
 
+The encodings live in one database, `src/db/idma_inst64.yml`. MARIO renders it into the
+`idma_inst64_snitch_pkg` encodings and per-instruction attribute table (`idma/inst64.svh`), the C
+header `target/sw/idma_inst64.h` (match/mask values and `.insn` inline-asm templates), and the
+riscv-opcodes extension file `target/sw/rv_xdma`. `DMOPC` takes its operand layout from
+`src/db/idma_dmopc.yml` rather than restating it.
+
 All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` - `rd` receives the transfer ID, `rs1` provides the length.
 
 | Instruction | Operands | Description |
@@ -41,7 +47,7 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `0x23` | MX dequantize, FP16 destination |
 | `0x50` | Tiled transpose; `rs1[17:16]` is the element-size mode, `rs2[11:0]` `tensor_m`, `rs2[23:12]` `tensor_n` |
 
-The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` is not yet allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
+The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` sits at funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
 
 The host core is RV32, so it sign-extends `rs1` and `rs2` into the upper half of the 64-bit accelerator bus. No `DMOPC` field may cross bit 31 of its operand; that is why the 24 bits of transpose dimensions ride `rs2` instead of extending `rs1` past its top. `idma_inst64_top` fails elaboration on a layout that violates it (`LayoutRv32Safe`).
 
