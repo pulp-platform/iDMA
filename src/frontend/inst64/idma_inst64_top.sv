@@ -918,6 +918,11 @@ module idma_inst64_top #(
         $fatal(1, "idma_inst64_top: the DMOPC operand layout has a field crossing bit 31");
     end
 
+    // A DMOPC field narrower than the type it carries truncates; target/sw ships these widths.
+    if (!idma_inst64_compute_pkg::LayoutWidthsDeclared) begin : gen_compute_width_check
+        $fatal(1, "idma_inst64_top: the DMOPC operand layout does not match the RTL field widths");
+    end
+
     // Overlapping DMOPC fields alias onto each other and silently corrupt the decode.
     if (!idma_inst64_compute_pkg::LayoutDisjoint) begin : gen_compute_overlap_check
         $fatal(1, "idma_inst64_top: the DMOPC operand layout has overlapping fields");

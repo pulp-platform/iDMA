@@ -30,7 +30,13 @@ localparam logic [OpcodeWidth-1:0] ${o['sv'].ljust(opc_w)} = ${opcode_width}'h${
 /// DMOPC operand layout; ${layout}
 % for f in fields:
 localparam int unsigned ${(f['sv'] + 'Lsb').ljust(name_width)} = 32'd${f['lsb']};
-localparam int unsigned ${(f['sv'] + 'Width').ljust(name_width)} = ${f['width']};
+localparam int unsigned ${(f['sv'] + 'Width').ljust(name_width)} = 32'd${f['width']};
+% endfor
+
+/// The RTL types the layout is cut for; a widened type needs the database widened with it
+localparam bit LayoutWidthsDeclared =
+% for f in [f for f in fields if f['sv_width']]:
+    (${f['sv']}Width == ${f['sv_width']})${' &&' if not loop.last else ';'}
 % endfor
 
 /// An RV32 core sign-extends the operands into their upper half; no field may cross it

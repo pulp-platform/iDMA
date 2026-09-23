@@ -17,25 +17,29 @@ operands:
   rs1: "arga"
   rs2: "argb"
 
-# Operand fields; `width` is a SystemVerilog expression resolved in the decode package
+# Operand fields; `width` is the wire contract, `sv_width` the RTL type it must keep matching
 fields:
   - name: "opc_byte"
     operand: "rs1"
     lsb: 0
-    width: "OpcodeWidth"
+    width: 8
+    sv_width: "OpcodeWidth"
   - name: "tp_mode"
     operand: "rs1"
     lsb: 16
-    width: "TpModeWidth"
+    width: 2
+    sv_width: "TpModeWidth"
   # The transpose dimensions need 24 bits, so they ride `rs2` rather than straddling `rs1`
   - name: "tp_tensor_m"
     operand: "rs2"
     lsb: 0
-    width: "idma_pkg::TransposeDimWidth"
+    width: 12
+    sv_width: "idma_pkg::TransposeDimWidth"
   - name: "tp_tensor_n"
     operand: "rs2"
     lsb: 12
-    width: "idma_pkg::TransposeDimWidth"
+    width: 12
+    sv_width: "idma_pkg::TransposeDimWidth"
 
 # `op` names an `idma_pkg::compute_op_e` member; `enable` false decodes to a plain copy
 opcodes:
