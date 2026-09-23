@@ -40,7 +40,7 @@ Compute (`EnableCompute`) applies only on compute-eligible backends (AXI or OBI 
 - Size-changing MX is validated on AXI source/destination only; OBI is not yet supported. TileLink is not a valid compute write destination.
 - Transpose is size-preserving but restricted to single-beat writes.
 
-Transpose throughput is `1 + 1/NE` cycles per `NE`-beat tile, where `NE = StrbWidth / element_bytes`. `ComputeTuning.transpose_full_duplex = 0` halves both area and rate by using a single tile bank. Unselected `ComputeOps` are not synthesized, so build only the ops you use.
+Transpose throughput is one beat per cycle once the first `NE`-beat tile is filled, where `NE = StrbWidth / element_bytes`, also across back-to-back requests with the same compute config. A changed config (`mode`, `M`, `N` or op) drains the backend first, so a stream of per-tile requests with alternating geometry runs at about half rate or less. `ComputeTuning.transpose_full_duplex = 0` halves both area and rate by using a single tile bank. Unselected `ComputeOps` are not synthesized, so build only the ops you use.
 
 ## Register Frontend Config Bus
 

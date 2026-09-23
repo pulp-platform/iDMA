@@ -11,7 +11,7 @@
 //
 // Contract: input padded to full tiles, fed (col-tile, row-tile, row) order;
 // out_T[nt*NE+k][rt*NE+r] = in[rt*NE+r][nt*NE+k]. strb_o masks partial edge tiles.
-// Throughput: 1 + 1/NE cycles per NE-beat tile (one handoff bubble per tile).
+// Throughput: one beat per cycle with two banks, also across back-to-back matrices; half with one.
 
 module idma_otf_transpose #(
   /// Byte lanes per beat (= DataWidth/8)
@@ -49,9 +49,7 @@ module idma_otf_transpose #(
   initial assert (StrbWidth >= 2 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_transpose: StrbWidth (%0d) must be a power of two >= 2", StrbWidth);
 
-  // Latch one transfer's geometry on its first input beat.  Once its final tile has been filled,
-  // input is blocked until that tile drains; geometry from a following request can therefore not
-  // affect an in-flight transpose.
+  // Fill-side geometry: latched on a matrix's first beat, released once its final tile is filled
   logic                geometry_valid_q;
   logic [1:0]          transp_mode_q;
   logic [DimWidth-1:0] tensor_size_m_q, tensor_size_n_q;
@@ -62,12 +60,12 @@ module idma_otf_transpose #(
   assign active_tensor_size_m = geometry_valid_q ? tensor_size_m_q : tensor_size_m_i;
   assign active_tensor_size_n = geometry_valid_q ? tensor_size_n_q : tensor_size_n_i;
 
-  // geometry: NE is a power of two, so only shifts and AND-masks
+  // fill-side geometry: NE is a power of two, so only shifts and AND-masks
   logic [1:0]       eff_mode;         // element-size mode, saturated at LaneW
   logic [LaneW:0]   ne_m1;            // NE-1
   logic [3:0]       log2_ne;          // log2(NE) = LaneW - eff_mode
   logic [DimWidth-1:0] y_tiles, n_tiles; // row-tiles, col-tiles
-  logic [LaneW:0]   leftover_rows, leftover_cols;  // M%NE, N%NE (run-global)
+  logic [LaneW:0]   leftover_rows, leftover_cols;  // M%NE, N%NE
 
   // saturate at LaneW: out-of-contract mode (E>StrbWidth) degrades to NE=1
   assign eff_mode      = (active_transp_mode > LaneW) ? LaneW[1:0] : active_transp_mode;
@@ -90,60 +88,52 @@ module idma_otf_transpose #(
   assign in_hs  = valid_i   & ready_o;
   assign out_hs = valid_int & ready_int;
 
-  // full_q[b]: bank b holds a complete tile. Producer sets on fill-complete,
-  // consumer clears on drain-complete.
+  // full_q[b]: bank b holds a complete tile; set on fill, cleared on drain
   logic [NumBanks-1:0] full_q;
   logic             wr_bank, rd_bank;
   logic [LaneW-1:0] wr_cnt, rd_cnt;   // intra-tile beat index (write / read)
   logic             wr_last, rd_last;
 
-  assign wr_last = (wr_cnt == ne_m1[LaneW-1:0]);
-  assign rd_last = (rd_cnt == ne_m1[LaneW-1:0]);
+  // per-bank tile descriptor, captured at fill-complete; the drain uses only this
+  logic [1:0]       bank_mode_q [NumBanks];  // saturated element-size mode
+  logic [LaneW-1:0] bank_rows_q [NumBanks];  // valid rows of an edge tile, 0: all
+  logic [LaneW-1:0] bank_cols_q [NumBanks];  // valid cols of an edge tile, 0: all
 
-  logic input_blocked_q;
-  assign ready_o   = ~full_q[wr_bank] & ~input_blocked_q;
+  logic [1:0]       rd_mode;
+  logic [LaneW:0]   rd_ne_m1;
+  assign rd_mode  = bank_mode_q[rd_bank];
+  assign rd_ne_m1 = (1 << (LaneW - rd_mode)) - 1;
+
+  assign wr_last = (wr_cnt == ne_m1[LaneW-1:0]);
+  assign rd_last = (rd_cnt == rd_ne_m1[LaneW-1:0]);
+
+  assign ready_o   = ~full_q[wr_bank];
   assign valid_int =  full_q[rd_bank];
 
-  // tile walkers (col-tile outer, row-tile inner); drain trails fill by up to one tile
-  logic [DimWidth-1:0] rtw, ntw;   // write walker: row-tile, col-tile
-  logic [DimWidth-1:0] rtr, ntr;   // read  walker: row-tile, col-tile
+  // fill walker (col-tile outer, row-tile inner); wraps to the next matrix without a barrier
+  logic [DimWidth-1:0] rtw, ntw;   // row-tile, col-tile
 
   logic last_y_tile_w, last_n_tile_w;  // edge flags of the tile being filled
   assign last_y_tile_w = (rtw == y_tiles - 1);
   assign last_n_tile_w = (ntw == n_tiles - 1);
 
-  logic last_y_tile_r, last_n_tile_r;  // edge flags of the tile being drained
-  assign last_y_tile_r = (rtr == y_tiles - 1);
-  assign last_n_tile_r = (ntr == n_tiles - 1);
-
-  // per-bank edge flags, captured at fill-complete, consumed by the drain strobe
-  logic shadow_last_y [NumBanks];
-  logic shadow_last_n [NumBanks];
-
   // fill-/drain-complete events
-  logic fill_done, fill_exec_done, drain_done, exec_done;
+  logic fill_done, fill_exec_done, drain_done;
   assign fill_done      = in_hs & wr_last;
   assign fill_exec_done = fill_done & last_y_tile_w & last_n_tile_w;
   assign drain_done     = out_hs & rd_last;
-  // transfer done once the final tile drains
-  assign exec_done  = drain_done & last_y_tile_r & last_n_tile_r;
 
-  // Serialize complete transfers while retaining tile-level ping-pong operation within a transfer.
-  // The geometry input may switch to the next descriptor after the final fill, but ready_o remains
-  // low and the latched geometry remains active until the final tile has left the tile banks.
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       geometry_valid_q <= 1'b0;
       transp_mode_q    <= '0;
       tensor_size_m_q  <= '0;
       tensor_size_n_q  <= '0;
-      input_blocked_q  <= 1'b0;
     end else if (clear_i) begin
       geometry_valid_q <= 1'b0;
       transp_mode_q    <= '0;
       tensor_size_m_q  <= '0;
       tensor_size_n_q  <= '0;
-      input_blocked_q  <= 1'b0;
     end else begin
       if (in_hs && !geometry_valid_q) begin
         geometry_valid_q <= 1'b1;
@@ -151,11 +141,7 @@ module idma_otf_transpose #(
         tensor_size_m_q  <= tensor_size_m_i;
         tensor_size_n_q  <= tensor_size_n_i;
       end
-      if (fill_exec_done) input_blocked_q <= 1'b1;
-      if (exec_done) begin
-        geometry_valid_q <= 1'b0;
-        input_blocked_q  <= 1'b0;
-      end
+      if (fill_exec_done) geometry_valid_q <= 1'b0;
     end
   end
 
@@ -170,17 +156,19 @@ module idma_otf_transpose #(
       rtw              <= '0;
       ntw              <= '0;
       for (int b = 0; b < NumBanks; b++) begin
-        shadow_last_y[b] <= 1'b0;
-        shadow_last_n[b] <= 1'b0;
+        bank_mode_q[b] <= '0;
+        bank_rows_q[b] <= '0;
+        bank_cols_q[b] <= '0;
       end
-    end else if (clear_i || exec_done) begin
+    end else if (clear_i) begin
       wr_cnt           <= '0;
       wr_bank          <= 1'b0;
       rtw              <= '0;
       ntw              <= '0;
       for (int b = 0; b < NumBanks; b++) begin
-        shadow_last_y[b] <= 1'b0;
-        shadow_last_n[b] <= 1'b0;
+        bank_mode_q[b] <= '0;
+        bank_rows_q[b] <= '0;
+        bank_cols_q[b] <= '0;
       end
     end else begin
       if (in_hs) begin
@@ -188,10 +176,14 @@ module idma_otf_transpose #(
         wr_cnt <= wr_last ? '0 : (wr_cnt + 1'b1);
       end
       if (fill_done) begin
-        shadow_last_y[wr_bank] <= last_y_tile_w;
-        shadow_last_n[wr_bank] <= last_n_tile_w;
+        bank_mode_q[wr_bank] <= eff_mode;
+        bank_rows_q[wr_bank] <= last_y_tile_w ? leftover_rows[LaneW-1:0] : '0;
+        bank_cols_q[wr_bank] <= last_n_tile_w ? leftover_cols[LaneW-1:0] : '0;
         wr_bank <= FullDuplex ? ~wr_bank : 1'b0;
-        if (rtw == y_tiles - 1) begin
+        if (fill_exec_done) begin
+          rtw <= '0;
+          ntw <= '0;
+        end else if (last_y_tile_w) begin
           rtw <= '0;
           ntw <= ntw + 1'b1;
         end else begin
@@ -206,25 +198,15 @@ module idma_otf_transpose #(
     if (!rst_ni) begin
       rd_cnt  <= '0;
       rd_bank <= 1'b0;
-      rtr     <= '0;
-      ntr     <= '0;
-    end else if (clear_i || exec_done) begin
+    end else if (clear_i) begin
       rd_cnt  <= '0;
       rd_bank <= 1'b0;
-      rtr     <= '0;
-      ntr     <= '0;
     end else begin
       if (out_hs) begin
         rd_cnt <= rd_last ? '0 : (rd_cnt + 1'b1);
       end
       if (drain_done) begin
         rd_bank <= FullDuplex ? ~rd_bank : 1'b0;
-        if (rtr == y_tiles - 1) begin
-          rtr <= '0;
-          ntr <= ntr + 1'b1;
-        end else begin
-          rtr <= rtr + 1'b1;
-        end
       end
     end
   end
@@ -241,40 +223,29 @@ module idma_otf_transpose #(
     end
   end
 
-  // transposed readout: byte p (element e=p>>logE, byte b=p&(E-1)) reads
-  // tile_q[rd_bank][e][rd_cnt*E + b]
+  // Byte p reads tile_q[rd_bank][p>>logE][rd_cnt*E + (p&(E-1))]
   always_comb begin
     for (int p = 0; p < StrbWidth; p++) begin
-      automatic int unsigned e   = p >> eff_mode;
-      automatic int unsigned b   = p & ((1 << eff_mode) - 1);
-      automatic int unsigned col = (rd_cnt << eff_mode) | b;
+      automatic int unsigned e   = p >> rd_mode;
+      automatic int unsigned b   = p & ((1 << rd_mode) - 1);
+      automatic int unsigned col = (rd_cnt << rd_mode) | b;
       data_int[p] = tile_q[rd_bank][e][col];
     end
   end
 
-  // output strobe: element-granular edge masking from the drain-side shadow flags
+  // output strobe: element-granular edge masking from the drained bank's descriptor
   always_comb begin
     logic [StrbWidth-1:0] em;  // per-element valid (only low NE bits meaningful)
-    logic ly, ln;
-    ly = shadow_last_y[rd_bank];
-    ln = shadow_last_n[rd_bank];
-    for (int e = 0; e < StrbWidth; e++) begin
-      logic v;
-      if ((ly && leftover_rows != 0) && (ln && leftover_cols != 0))
-        v = (rd_cnt < leftover_cols) && (e < leftover_rows);
-      else if (ly && leftover_rows != 0)
-        v = (e < leftover_rows);
-      else if (ln && leftover_cols != 0)
-        v = (rd_cnt < leftover_cols);
-      else
-        v = 1'b1;
-      em[e] = v;
-    end
+    logic [LaneW-1:0]     rows, cols;
+    rows = bank_rows_q[rd_bank];
+    cols = bank_cols_q[rd_bank];
+    for (int e = 0; e < StrbWidth; e++)
+      em[e] = ((rows == '0) || (e < rows)) && ((cols == '0) || (rd_cnt < cols));
     for (int p = 0; p < StrbWidth; p++)
-      strb_int[p] = em[p >> eff_mode];
+      strb_int[p] = em[p >> rd_mode];
   end
 
-  // output register; not cleared by exec_done so the final beat is held until accepted
+  // output register; the final beat of a matrix is held until accepted
   assign ready_int = ~valid_o | ready_i;
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -293,15 +264,10 @@ module idma_otf_transpose #(
   end
 
 `ifndef SYNTHESIS
-  // The final drain is only legal after the final fill has closed the input side.
+  // Fill and drain advance through the banks in the same order
   assert property (@(posedge clk_i) disable iff (!rst_ni || clear_i)
-      exec_done |-> input_blocked_q)
-  else $error("idma_otf_transpose: final tile drained without an active transfer barrier");
-
-  // Once the final tile is buffered, no beat from the next descriptor may enter this transfer.
-  assert property (@(posedge clk_i) disable iff (!rst_ni || clear_i)
-      input_blocked_q |-> !in_hs)
-  else $error("idma_otf_transpose: accepted input while waiting for the final tile to drain");
+      !FullDuplex || ((wr_bank ^ rd_bank) == (^full_q)))
+  else $error("idma_otf_transpose: fill and drain bank pointers out of order");
 `endif
 
 endmodule : idma_otf_transpose
