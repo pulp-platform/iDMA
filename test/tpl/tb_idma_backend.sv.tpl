@@ -973,6 +973,20 @@ axi_rsp_mem       )
     end
 
 
+    // an error armed by err_job lies in a bus word bus_job accesses
+    function automatic bit err_aliases (tb_dma_job_t err_job, tb_dma_job_t bus_job);
+        foreach (err_job.err_addr[e]) begin
+            automatic longint unsigned lo = err_job.err_is_read[e] ? bus_job.src_addr :
+                                                                       bus_job.dst_addr;
+            automatic longint unsigned hi = lo + bus_job.length;
+            lo = lo / StrbWidth * StrbWidth;
+            hi = (hi + StrbWidth - 1) / StrbWidth * StrbWidth;
+            if (err_job.err_addr[e] >= lo && err_job.err_addr[e] < hi)
+                return 1'b1;
+        end
+        return 1'b0;
+    endfunction
+
     //--------------------------------------
     // Launch Transfers
     //--------------------------------------
@@ -1040,6 +1054,17 @@ axi_rsp_mem       )
                         end
                     end
                     $display("Resolved!");
+                end
+            end
+            // errors are one-shot and keyed by address: no in-flight job may take another's
+            begin
+                automatic bit alias_err = 1'b1;
+                while (alias_err) begin
+                    alias_err = 1'b0;
+                    // launched but unacked jobs lead rsp_jobs; the last of them is this one
+                    for (int unsigned j = 0; j + req_jobs.size() + 1 < rsp_jobs.size(); j++)
+                        alias_err |= err_aliases(now, rsp_jobs[j]) | err_aliases(rsp_jobs[j], now);
+                    if (alias_err) @(posedge clk);
                 end
             end
             // print job to terminal

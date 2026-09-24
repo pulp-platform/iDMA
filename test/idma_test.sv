@@ -50,6 +50,7 @@ package idma_test;
         addr_t                  err_addr    [$];
         logic                   err_is_read [$];
         idma_pkg::idma_eh_req_t err_action  [$];
+        bit                     err_handled [$];
 
         // format string for pretty printing
         string format = {
@@ -78,6 +79,7 @@ package idma_test;
             err_addr     = {};
             err_is_read  = {};
             err_action   = {};
+            err_handled  = {};
         endfunction
 
         // helper function: nicely format a hex output
