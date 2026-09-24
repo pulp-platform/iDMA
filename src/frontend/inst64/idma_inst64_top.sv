@@ -482,7 +482,8 @@ module idma_inst64_top #(
 
         // we are always ready to accept responses
         assign idma_nd_rsp_ready [c] = 1'b1;
-        assign issue_id [c] = idma_nd_req_valid[c] & idma_nd_req_ready[c];
+        // allocate on push: DMCPY returns next_id in the same cycle the request is queued
+        assign issue_id [c] = idma_fe_req_valid[c] & idma_fe_req_ready[c];
         assign retire_id[c] = idma_nd_rsp_valid[c] & idma_nd_rsp_ready[c];
     end
 
@@ -906,6 +907,20 @@ module idma_inst64_top #(
     //--------------------------------------
     // The DMUSER field op-code supports axi user field width only up to 64 Bits.
     `ASSERT_INIT(CheckAxiUserField, AxiUserWidth <= 64);
+
+`ifndef SYNTHESIS
+    // Every queued or in-flight request holds exactly one id in (completed_id, next_id)
+    for (genvar c = 0; c < NumChannels; c++) begin : gen_tf_id_check
+        logic   fe_push;
+        tf_id_t inflight_q;
+        assign fe_push = idma_fe_req_valid[c] & idma_fe_req_ready[c];
+        `FF(inflight_q, inflight_q + tf_id_t'(fe_push) - tf_id_t'(retire_id[c]), '0)
+        // the guard skips the id wraparound window
+        `ASSERT(TfIdMatchesInflight, (next_id[c] > completed_id[c]) |->
+                (next_id[c] - completed_id[c] - tf_id_t'(1) == inflight_q), clk_i, !rst_ni)
+    end
+`endif
+
     // Every latched DMOPC byte must decode; an unknown byte silently falls back to a copy.
     `ASSERT_NEVER(DmopcUnknownOpcode,
                   idma_fe_dmopc & ~idma_inst64_compute_pkg::opc_known(

@@ -504,6 +504,19 @@ idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute
 		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true
 	cd $(IDMA_VSIM_DIR); grep -q "DmopcUnknownOpcode" inst64_compute_neg.log
 
+# Queued DMCPYs must return the id they later retire at, per channel and queue depth
+.PHONY: idma_sim_tb_idma_inst64_txid
+idma_sim_tb_idma_inst64_txid: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_txid.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_txid.tcl; quit"
+	# one run per NumChannels x DMAReqFifoDepth, each gated on its own transcript
+	cd $(IDMA_VSIM_DIR); for cfg in 1:2 1:3 1:8 2:2 2:8; do \
+	  ch=$${cfg%%:*}; dp=$${cfg#*:}; log=inst64_txid_$${ch}_$${dp}.log; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gNumChannels=$$ch -gDMAReqFifoDepth=$$dp \
+	    tb_idma_inst64_txid -logfile $$log -do "run -all; quit"; \
+	  ! grep -qE "Error:|Fatal:" $$log || exit 1; \
+	  grep -q "TEST PASSED" $$log || exit 1; \
+	done
+
 .PHONY: idma_sim_tb_idma_transpose_b2b
 idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -683,7 +696,7 @@ idma_lint_clean:
 
 # inst64 gate: the only public concrete bindings of idma_inst64_top
 IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
-                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute
+                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute tb_idma_inst64_txid
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
 
@@ -692,7 +705,8 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_axi_copy:-GDMATracing=1 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
-                    tb_idma_inst64_compute:-GEnableTcdmObi=1
+                    tb_idma_inst64_compute:-GEnableTcdmObi=1 \
+                    tb_idma_inst64_txid:-GNumChannels=2
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:

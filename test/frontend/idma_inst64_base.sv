@@ -9,6 +9,10 @@
 /// one AXI plus one OBI simulation memory per channel.
 module idma_inst64_base #(
     parameter int unsigned DMATracing = idma_inst64_tb_pkg::DMATracing,
+    /// DUT channels; each gets its own AXI and OBI memory
+    parameter int unsigned NumChannels = idma_inst64_tb_pkg::NumChannels,
+    /// Per-channel request queue depth in front of the ND midend
+    parameter int unsigned DMAReqFifoDepth = idma_inst64_tb_pkg::DMAReqFifoDepth,
     /// Stall the AXI R source and W sink in antiphase, see `gen_stall` below
     parameter bit          StallPattern = 1'b0,
     /// Instantiate the TCDM (OBI) port and its memory; 0 selects the AXI-only topology
