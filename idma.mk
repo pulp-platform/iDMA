@@ -423,11 +423,12 @@ idma_sim_tb_idma_otf_transpose:
 	cd $(IDMA_OTF_TP_DIR); $(VLIB) work
 	cd $(IDMA_OTF_TP_DIR); $(VLOG) -sv $(IDMA_OTF_TP_DPI)
 	cd $(IDMA_OTF_TP_DIR); $(VLOG) -sv -svinputport=compat -timescale "1ns/1fs" $(IDMA_OTF_TP_RTL) $(IDMA_OTF_TP_TB)
-	# the TB sweeps the geometry list internally; one run per StrbWidth x FullDuplex
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=1 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=8  -gFullDuplex=0 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=1 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
-	cd $(IDMA_OTF_TP_DIR); $(VSIM) -c -t 1ps -gStrbWidth=64 -gFullDuplex=0 tb_idma_otf_transpose +BP=1 -do "run -all; quit"
+	# One run per StrbWidth x FullDuplex; Questa does not propagate $$fatal, so gate on the transcript
+	cd $(IDMA_OTF_TP_DIR); for c in "8 1" "8 0" "64 1" "64 0"; do set -- $$c; \
+	  $(VSIM) -c -t 1ps -gStrbWidth=$$1 -gFullDuplex=$$2 tb_idma_otf_transpose +BP=1 \
+	    -do "run -all; quit"; \
+	  if grep -qE "Error:|Fatal:" transcript || ! grep -q "ALL PASS" transcript; then exit 1; fi; \
+	done
 
 # Multi-tile transpose: ND midend to rw_axi backend to axi_sim_mem
 .PHONY: idma_sim_tb_idma_transpose_nd
@@ -509,6 +510,18 @@ idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	# the TB sweeps the geometry list internally; one run per bus width
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_b2b -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_b2b -do "run -all; quit"
+
+# Back-to-back single-tile transposes on a FullDuplex=0 and =1 backend; full duplex must overlap
+.PHONY: idma_sim_tb_idma_transpose_tiles
+idma_sim_tb_idma_transpose_tiles: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	cd $(IDMA_VSIM_DIR); set -e; for dw in 32 64 512; do \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=$$dw tb_idma_transpose_tiles \
+	    -logfile transpose_tiles_$$dw.log -do "run -all; quit"; \
+	  if grep -qE "Error:|Fatal:" transpose_tiles_$$dw.log; then exit 1; fi; \
+	  grep -q "ALL PASS" transpose_tiles_$$dw.log; \
+	done
 
 # MX sim over data widths; $(3) tags the log, $(4) adds elaboration parameters
 define idma_run_mx_sim

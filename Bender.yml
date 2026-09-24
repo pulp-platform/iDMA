@@ -141,6 +141,7 @@ sources:
       - test/tb_idma_otf_transpose.sv
       - test/tb_idma_transpose_nd.sv
       - test/tb_idma_transpose_b2b.sv
+      - test/tb_idma_transpose_tiles.sv
       - test/tb_idma_mxquant.sv
       - test/tb_idma_mxroundtrip.sv
       - test/tb_idma_mxrand.sv

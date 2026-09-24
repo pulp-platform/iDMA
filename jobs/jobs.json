@@ -499,6 +499,22 @@
             ]
         }
     },
+    "transpose_tiles" : {
+        "jobs" : {
+        },
+        "params" : {
+        },
+        "testbench" : "tb_idma_transpose_tiles",
+        "verify" : {
+            "dpi" : "idma_mxquant_dpi",
+            "token" : "[TILES] ALL PASS",
+            "legs" : [
+                { "tag" : "transpose_tiles_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "transpose_tiles_64", "params" : { "DataWidth" : 64 } },
+                { "tag" : "transpose_tiles_512", "params" : { "DataWidth" : 512 } }
+            ]
+        }
+    },
     "transpose_midend" : {
         "jobs" : {
         },
