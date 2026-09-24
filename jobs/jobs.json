@@ -75,6 +75,35 @@
         "testbench": "tb_idma_backend_rw_axi",
         "synth_top": "idma_backend_synth_rw_axi"
     },
+    "rw_axi_deep" : {
+        "jobs" : {
+            "simple"          : "backend_rw_axi/simple.txt",
+            "error_simple"    : "backend_rw_axi/error_simple.txt",
+            "error_mixed"     : "backend_rw_axi/error_mixed.txt"
+        },
+        "params" : {
+            "DataWidth"           : 32,
+            "AddrWidth"           : 32,
+            "UserWidth"           : 1,
+            "AxiIdWidth"          : 12,
+            "NumAxInFlight"       : 16,
+            "BufferDepth"         : 3,
+            "TFLenWidth"          : 32,
+            "MemSysDepth"         : 0,
+            "CombinedShifter"     : 1,
+            "MaskInvalidData"     : 1,
+            "RAWCouplingAvail"    : 1,
+            "HardwareLegalizer"   : 1,
+            "RejectZeroTransfers" : 1,
+            "ErrorHandling"       : 1
+        },
+        "tb_params" : {
+            "AXI_IdealMemory"     : 1
+        },
+        "proc_id" : "rw_axi",
+        "testbench": "tb_idma_backend_rw_axi",
+        "synth_top": "idma_backend_synth_rw_axi"
+    },
     "r_axi_w_obi" : {
         "jobs" : {
             "simple"          : "backend_r_axi_w_obi/simple.txt",
