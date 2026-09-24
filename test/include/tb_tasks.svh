@@ -275,6 +275,28 @@
         end
     endtask
 
+    // the first error of a kind in the page of the burst at burst_addr; rehit allows handled ones
+    function automatic bit find_err (
+        tb_dma_job_t  job,
+        bit           is_read,
+        addr_t        burst_addr,
+        bit           rehit,
+        output int    idx
+    );
+        longint unsigned page, lo, hi;
+        page = longint'(is_read ? job.max_src_len : job.max_dst_len) * StrbWidth;
+        page = (page == '0 || page > 'd4096) ? 'd4096 : page;
+        lo   = burst_addr / StrbWidth * StrbWidth;
+        hi   = burst_addr / page * page + page;
+        foreach (job.err_addr[e])
+            if ((rehit || !job.err_handled[e]) && job.err_is_read[e] == is_read &&
+                job.err_addr[e] >= lo && job.err_addr[e] < hi) begin
+                idx = e;
+                return 1'b1;
+            end
+        return 1'b0;
+    endfunction
+
     // acknowledge a transfer, handle the errors (in order)
     task automatic ack_tf_handle_err (
         ref tb_dma_job_t now_r
@@ -285,16 +307,27 @@
         idma_pkg::err_type_t err_type;
         axi_pkg::resp_t      cause;
         addr_t               burst_addr;
-        int                  err_idx [$];
+        tb_dma_job_t         owner;
+        int                  idx;
         // multiple errors can happen -> once one occurs handle it after checking the list
         while (1) begin
             drv.wait_tf(cause, err_type, burst_addr, error, last);
             // if bus error occurs
             if (error & (err_type == idma_pkg::BUS_READ | err_type == idma_pkg::BUS_WRITE)
                       & ErrorCap == idma_pkg::ERROR_HANDLING) begin
-                err_idx = now_r.err_addr.find_first_index with (item == burst_addr);
+                // a younger launched job may report first: rsp_jobs leads with those
+                owner = null;
+                for (int rehit = 0; rehit < 2; rehit++)
+                    for (int unsigned j = 0; j + req_jobs.size() < rsp_jobs.size(); j++)
+                        if (owner == null && find_err(rsp_jobs[j],
+                                err_type == idma_pkg::BUS_READ, burst_addr, rehit, idx))
+                            owner = rsp_jobs[j];
+                if (owner == null)
+                    $fatal(1, "Job %0d: bus error at burst 0x%h matches no armed error",
+                           now_r.id, burst_addr);
+                owner.err_handled[idx] = 1'b1;
                 // handle it
-                drv.handle_error(now_r.err_action[err_idx[0]]);
+                drv.handle_error(owner.err_action[idx]);
             // if transfer length zero happens:
             end else if (error & err_type == idma_pkg::BACKEND) begin
                 break;
@@ -302,6 +335,9 @@
                 break;
             end
         end
+        // the sim memory keeps an error armed if r_ready was low when its beat was applied
+        foreach (now_r.err_addr[e])
+            set_error_mem(now_r.err_addr[e], now_r.err_is_read[e], axi_pkg::RESP_OKAY);
     endtask
 
     // initialize a memory region with random data in both memories
@@ -441,6 +477,7 @@
 
                 // error address
                 now.err_addr.push_back(err_addr);
+                now.err_handled.push_back(1'b0);
             end
             jobs.push_back(now);
         end
