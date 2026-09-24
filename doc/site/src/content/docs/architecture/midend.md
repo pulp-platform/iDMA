@@ -7,7 +7,7 @@ description: The midend decomposes multi-dimensional and round-trip transfers in
 
 The midend sits between the frontend and backend. It accepts N-dimensional or round-trip transfer descriptors and decomposes them into a stream of 1D requests that the backend can execute. The midend is **optional** - for systems that only need 1D transfers, the frontend can drive the backend directly. **Use the ND midend** when your transfers are 2D or higher (e.g., tiling a matrix, copying framebuffer rows with stride). **Skip the midend** (connect frontend directly to backend) when all your transfers are 1D contiguous copies - the midend adds latency and area for no benefit in this case. See the [System Integration](../guides/system-integration/) guide for wiring examples showing how the midend connects to the frontend and backend.
 
-Five midend variants are available:
+Six midend variants are available:
 
 | Variant | Module | Purpose |
 |---------|--------|---------|
@@ -16,6 +16,7 @@ Five midend variants are available:
 | **MP_DIST** | `idma_mp_dist_midend` | Distribute transfers across multiple backends by address |
 | **MP_SPLIT** | `idma_mp_split_midend` | Split transfers at region boundaries for a single backend |
 | **Transpose** | `idma_transpose_midend` | Expand a transpose-compute request into a tiled ND walk |
+| **Gather** | `idma_gather_midend` | Expand an indexed request into one transfer per index read from memory |
 
 ## ND Midend
 
@@ -94,6 +95,29 @@ The expander derives the tiling from the transpose parameters carried in the req
 | `addr_t` | Address type |
 | `idma_nd_req_t` | ND request type (input and output) |
 
+## Gather Midend
+
+The gather midend (`idma_gather_midend`) implements indexed gathers, e.g. collecting scattered KV-cache rows or embedding vectors into a packed buffer. It sits in front of the ND midend and takes an `idma_gather_req_t`: an ND request plus `gather` options (`enable`, `idx_width`, `idx_addr`), defined by `IDMA_TYPEDEF_GATHER_OPT_T` and `IDMA_TYPEDEF_GATHER_REQ_T`. Requests without `gather.enable` pass through unchanged. An enabled request reads `d_req[0].reps` indices from the index stream and emits one 1D request per index:
+
+```
+src_addr[i] = src_addr + idx[i] * d_req[0].src_strides
+dst_addr[i] = dst_addr + i      * d_req[0].dst_strides
+length      = length
+```
+
+The source stride is the row size of the source matrix and must be a power of two, so the offset is a shift and no multiplier is needed. The index stream is fetched over a plain request/grant port (`idx_req_o`, `idx_addr_o`, `idx_gnt_i`, `idx_rvalid_i`, `idx_rdata_i`) in `IdxDataWidth`-bit words that each hold several indices; responses return in order and are never back-pressured, since a credit counter only issues a read when its word can be buffered. With the index stream buffered ahead, the midend emits one request per cycle.
+
+The ND midend answers every emitted request with one response. The gather midend counts them against a bookkeeping FIFO and returns a single response per gather request, carrying the first error of the gather if one occurred. A gather with zero indices, a source stride that is not a power of two, or a misaligned index base is rejected with an `ND_MIDEND` error response in request order, without moving data.
+
+### Gather Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `NumDim` | ND dimensions of the request; the gather uses dimension 2 (`d_req[0]`) |
+| `IdxDataWidth` | Width of one index-stream read; a power of two of at least 64 bits |
+| `NumIdxOutstanding` | Index words in flight or buffered at the same time; size it to the index-memory latency |
+| `NumXferOutstanding` | Requests whose response is still pending at the same time |
+
 ## RT Midend
 
 The RT midend (`idma_rt_midend`) supports event-driven periodic transfers. It is designed for periodic data movement - sensor sampling at fixed intervals, display buffer refresh, or ring-buffer rotation. Each event channel triggers its pre-configured transfer when its countdown reaches zero, without CPU intervention.
@@ -164,3 +188,4 @@ The split midend (`idma_mp_split_midend`) serializes a transfer that spans multi
 - `src/midend/idma_mp_dist_midend.sv` - Distributed multicore midend
 - `src/midend/idma_mp_split_midend.sv` - Split multicore midend
 - `src/midend/idma_transpose_midend.sv` - Transpose geometry expander
+- `src/midend/idma_gather_midend.sv` - Indexed gather expander

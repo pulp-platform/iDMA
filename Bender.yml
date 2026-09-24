@@ -66,6 +66,7 @@ sources:
   - target: rtl
     files:
       # Level 0
+      - src/midend/idma_gather_midend.sv
       - src/midend/idma_mp_dist_midend.sv
       - src/midend/idma_mp_split_midend.sv
       - src/midend/idma_nd_midend.sv
@@ -126,6 +127,7 @@ sources:
       - test/frontend/tb_idma_reg_frontend.sv
       - test/future/idma_tb_per2axi.sv
       - test/future/TLToAXI4.v
+      - test/midend/tb_idma_gather_midend.sv
       - test/midend/tb_idma_nd_midend.sv
       - test/midend/tb_idma_nd_midend_b2b.sv
       - test/midend/tb_idma_rt_midend.sv
