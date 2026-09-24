@@ -27,6 +27,10 @@ module idma_inst64_top #(
     parameter bit          EnableCompute   = 1'b0,
     parameter idma_pkg::compute_enable_t ComputeOps    = '1,
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
+    /// Elaborate the indexed gather (`DMIDX`) and its index-stream port
+    parameter bit          EnableGather      = 1'b0,
+    /// Index words the gather may have in flight or buffered per channel
+    parameter int unsigned NumIdxOutstanding = 32'd2,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -52,6 +56,9 @@ module idma_inst64_top #(
     // OBI interconnect
     output obi_req_t    [NumChannels-1:0] obi_req_o,
     input  obi_res_t    [NumChannels-1:0] obi_res_i,
+    // OBI index-stream port of the indexed gather, tied off when EnableGather is 0
+    output obi_req_t    [NumChannels-1:0] idx_obi_req_o,
+    input  obi_res_t    [NumChannels-1:0] idx_obi_res_i,
     // debug output
     output logic        [NumChannels-1:0] busy_o,
     // accelerator interface
@@ -103,6 +110,10 @@ module idma_inst64_top #(
     // iDMA ND
     `IDMA_TYPEDEF_D_REQ_T(idma_d_req_t, reps_t, strides_t)
     `IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)
+
+    // iDMA indexed gather
+    `IDMA_TYPEDEF_GATHER_OPT_T(idma_gather_opt_t, addr_t)
+    `IDMA_TYPEDEF_GATHER_REQ_T(idma_gather_req_t, idma_nd_req_t, idma_gather_opt_t)
 
     // AXI meta channels
     typedef struct packed {
@@ -184,6 +195,8 @@ module idma_inst64_top #(
     // frontend state
     idma_pkg::compute_options_t idma_fe_compute_q;
     logic                       idma_fe_dmopc;
+    idma_gather_opt_t           idma_fe_gather_q, idma_fe_gather_d, idma_fe_gather;
+    logic                       idma_fe_dmidx;
     logic [1:0] idma_fe_cfg;
     logic [1:0] idma_fe_init_cfg;
     logic [1:0] idma_fe_status;
@@ -193,6 +206,7 @@ module idma_inst64_top #(
     // busy signals
     idma_pkg::idma_busy_t [NumChannels-1:0] idma_busy;
     logic                 [NumChannels-1:0] idma_nd_busy;
+    logic                 [NumChannels-1:0] idma_gather_busy;
 
     // counter signals
     logic   [NumChannels-1:0] issue_id;
@@ -412,7 +426,8 @@ module idma_inst64_top #(
         end
 
         // Keep the channel busy until the iDMA backend or midend are busy, or until there's at least one AXI B response to be received.
-        assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c] | (aw_inflight_q != '0);
+        assign busy_o[c] = (|idma_busy[c]) | idma_nd_busy[c] | idma_gather_busy[c] |
+                           (aw_inflight_q != '0);
     end
 
 
@@ -445,23 +460,112 @@ module idma_inst64_top #(
             .busy_o            ( idma_nd_busy      [c] )
         );
 
-        cc_stream_fifo_optimal_wrap #(
-            .Depth     ( DMAReqFifoDepth ),
-            .data_t    ( idma_nd_req_t   ),
-            .PrintInfo ( 1'b0            )
-        ) i_stream_fifo_optimal_wrap (
-            .clk_i,
-            .rst_ni,
-            .clr_i      ( 1'b0                  ),
-            .flush_i    ( 1'b0                  ),
-            .usage_o    ( /* NC */              ),
-            .data_i     ( idma_fe_req           ),
-            .valid_i    ( idma_fe_req_valid [c] ),
-            .ready_o    ( idma_fe_req_ready [c] ),
-            .data_o     ( idma_nd_req       [c] ),
-            .valid_o    ( idma_nd_req_valid [c] ),
-            .ready_i    ( idma_nd_req_ready [c] )
-        );
+        if (EnableGather) begin : gen_gather
+            idma_gather_req_t fe_gather_req, gather_req;
+            logic             gather_req_valid, gather_req_ready;
+            idma_rsp_t        gather_rsp;
+            logic             gather_rsp_valid;
+            logic             idx_req, idx_gnt, idx_rvalid;
+            addr_t            idx_addr;
+            data_t            idx_rdata;
+
+            assign fe_gather_req = '{nd_req: idma_fe_req, gather: idma_fe_gather};
+
+            cc_stream_fifo_optimal_wrap #(
+                .Depth     ( DMAReqFifoDepth   ),
+                .data_t    ( idma_gather_req_t ),
+                .PrintInfo ( 1'b0              )
+            ) i_stream_fifo_optimal_wrap (
+                .clk_i,
+                .rst_ni,
+                .clr_i      ( 1'b0                  ),
+                .flush_i    ( 1'b0                  ),
+                .usage_o    ( /* NC */              ),
+                .data_i     ( fe_gather_req         ),
+                .valid_i    ( idma_fe_req_valid [c] ),
+                .ready_o    ( idma_fe_req_ready [c] ),
+                .data_o     ( gather_req            ),
+                .valid_o    ( gather_req_valid      ),
+                .ready_i    ( gather_req_ready      )
+            );
+
+            idma_gather_midend #(
+                .NumDim             ( NumDim            ),
+                .IdxDataWidth       ( AxiDataWidth      ),
+                .NumIdxOutstanding  ( NumIdxOutstanding ),
+                .NumXferOutstanding ( DMAReqFifoDepth   ),
+                .addr_t             ( addr_t            ),
+                .idma_rsp_t         ( idma_rsp_t        ),
+                .idma_nd_req_t      ( idma_nd_req_t     ),
+                .idma_gather_req_t  ( idma_gather_req_t )
+            ) i_idma_gather_midend (
+                .clk_i,
+                .rst_ni,
+                .gather_req_i       ( gather_req            ),
+                .gather_req_valid_i ( gather_req_valid      ),
+                .gather_req_ready_o ( gather_req_ready      ),
+                .gather_rsp_o       ( gather_rsp            ),
+                .gather_rsp_valid_o ( gather_rsp_valid      ),
+                .gather_rsp_ready_i ( 1'b1                  ),
+                .nd_req_o           ( idma_nd_req       [c] ),
+                .nd_req_valid_o     ( idma_nd_req_valid [c] ),
+                .nd_req_ready_i     ( idma_nd_req_ready [c] ),
+                .nd_rsp_i           ( idma_nd_rsp       [c] ),
+                .nd_rsp_valid_i     ( idma_nd_rsp_valid [c] ),
+                .nd_rsp_ready_o     ( idma_nd_rsp_ready [c] ),
+                .idx_req_o          ( idx_req               ),
+                .idx_addr_o         ( idx_addr              ),
+                .idx_gnt_i          ( idx_gnt               ),
+                .idx_rvalid_i       ( idx_rvalid            ),
+                .idx_rdata_i        ( idx_rdata             ),
+                .busy_o             ( idma_gather_busy  [c] )
+            );
+
+            // read-only OBI manager for the index stream; responses are never back-pressured
+            always_comb begin : proc_idx_obi
+                idx_obi_req_o[c]         = '0;
+                idx_obi_req_o[c].req     = idx_req;
+                idx_obi_req_o[c].rready  = 1'b1;
+                idx_obi_req_o[c].a.addr  = idx_addr;
+                idx_obi_req_o[c].a.we    = 1'b0;
+                idx_obi_req_o[c].a.be    = '1;
+            end
+            assign idx_gnt    = idx_obi_res_i[c].gnt;
+            assign idx_rvalid = idx_obi_res_i[c].rvalid;
+            assign idx_rdata  = idx_obi_res_i[c].r.rdata;
+
+            // A gather holds the FIFO head until its last index, so allocate the id on push
+            // (the id DMCPY returns); one retire per request, the midend merges the responses
+            assign issue_id [c] = idma_fe_req_valid[c] & idma_fe_req_ready[c];
+            assign retire_id[c] = gather_rsp_valid;
+        end else begin : gen_no_gather
+            cc_stream_fifo_optimal_wrap #(
+                .Depth     ( DMAReqFifoDepth ),
+                .data_t    ( idma_nd_req_t   ),
+                .PrintInfo ( 1'b0            )
+            ) i_stream_fifo_optimal_wrap (
+                .clk_i,
+                .rst_ni,
+                .clr_i      ( 1'b0                  ),
+                .flush_i    ( 1'b0                  ),
+                .usage_o    ( /* NC */              ),
+                .data_i     ( idma_fe_req           ),
+                .valid_i    ( idma_fe_req_valid [c] ),
+                .ready_o    ( idma_fe_req_ready [c] ),
+                .data_o     ( idma_nd_req       [c] ),
+                .valid_o    ( idma_nd_req_valid [c] ),
+                .ready_i    ( idma_nd_req_ready [c] )
+            );
+
+            // No index port in this configuration, so terminate it.
+            assign idx_obi_req_o[c]    = '0;
+            assign idma_gather_busy[c] = 1'b0;
+
+            // we are always ready to accept responses
+            assign idma_nd_rsp_ready[c] = 1'b1;
+            assign issue_id [c] = idma_nd_req_valid[c] & idma_nd_req_ready[c];
+            assign retire_id[c] = idma_nd_rsp_valid[c] & idma_nd_rsp_ready[c];
+        end
     end
 
 
@@ -479,11 +583,6 @@ module idma_inst64_top #(
             .next_o      ( next_id      [c] ),
             .completed_o ( completed_id [c] )
         );
-
-        // we are always ready to accept responses
-        assign idma_nd_rsp_ready [c] = 1'b1;
-        assign issue_id [c] = idma_nd_req_valid[c] & idma_nd_req_ready[c];
-        assign retire_id[c] = idma_nd_rsp_valid[c] & idma_nd_rsp_ready[c];
     end
 
 
@@ -809,6 +908,13 @@ module idma_inst64_top #(
                     dma_op_name     = "DMOPC";
                 end
 
+                // latch the indexed-gather configuration, registered below
+                idma_inst64_snitch_pkg::DMIDX : begin
+                    acc_req_ready_o = 1'b1;
+                    is_dma_op       = 1'b1;
+                    dma_op_name     = "DMIDX";
+                end
+
                 default:;
             endcase
         end
@@ -848,12 +954,19 @@ module idma_inst64_top #(
         endcase
     end
 
-    // twod handling
+    // A latched gather applies to copies only; a memset stays a plain memset
+    always_comb begin : gen_gather_select
+        idma_fe_gather        = idma_fe_gather_q;
+        idma_fe_gather.enable = EnableGather & idma_fe_gather_q.enable &
+                                (idma_fe_req_d.burst_req.opt.src_protocol != idma_pkg::INIT);
+    end
+
+    // twod handling; a gather takes its index count from the repetitions
     assign idma_fe_twod = idma_fe_cfg[1];
     always_comb begin : gen_twod_bypass
         // default: pass-through
         idma_fe_req = idma_fe_req_d;
-        if (!idma_fe_twod) begin
+        if (!idma_fe_twod && !idma_fe_gather.enable) begin
             idma_fe_req.d_req[0].reps = 'd1;
         end
     end
@@ -869,6 +982,19 @@ module idma_inst64_top #(
     `FFL(idma_fe_compute_q,
          idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
          idma_fe_dmopc, '0)
+
+    // DMIDX persists across transfers until the next DMIDX; reset is a plain copy.
+    // rs1 is the index base (zero-extended from 32 bits, so an RV32 core cannot sign-extend
+    // it), rs2[0] arms the gather and rs2[2:1] selects the index width (8/16/32/64 bit).
+    assign idma_fe_dmidx = acc_req_valid_i & acc_req_ready_o &
+                           (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMIDX);
+    always_comb begin : proc_dmidx_decode
+        idma_fe_gather_d           = '0;
+        idma_fe_gather_d.enable    = acc_req_i.data_argb[0];
+        idma_fe_gather_d.idx_width = acc_req_i.data_argb[2:1];
+        idma_fe_gather_d.idx_addr  = addr_t'(acc_req_i.data_arga[31:0]);
+    end
+    `FFL(idma_fe_gather_q, idma_fe_gather_d, idma_fe_dmidx, '0)
 
 
     //--------------------------------------
@@ -906,6 +1032,11 @@ module idma_inst64_top #(
     //--------------------------------------
     // The DMUSER field op-code supports axi user field width only up to 64 Bits.
     `ASSERT_INIT(CheckAxiUserField, AxiUserWidth <= 64);
+    // The gather reads the index stream in data-width words, each holding one 64-bit index
+    `ASSERT_INIT(CheckGatherDataWidth, !EnableGather || AxiDataWidth >= 64);
+    // Arming a gather without the gather hardware would silently degrade to a plain copy
+    `ASSERT_NEVER(DmidxWithoutGather,
+                  idma_fe_dmidx & acc_req_i.data_argb[0] & !EnableGather, clk_i, !rst_ni)
     // Every latched DMOPC byte must decode; an unknown byte silently falls back to a copy.
     `ASSERT_NEVER(DmopcUnknownOpcode,
                   idma_fe_dmopc & ~idma_inst64_compute_pkg::opc_known(

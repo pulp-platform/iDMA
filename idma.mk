@@ -489,6 +489,19 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_tcdm_copy.log
 
 # DMOPC mxquant against the DPI-C golden, plus the unknown-opcode guard
+.PHONY: idma_sim_tb_idma_inst64_gather
+idma_sim_tb_idma_inst64_gather: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_gather.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_gather.tcl; quit"
+	# AXI-only with a single index word in flight, then the TCDM topology
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumIdxOutstanding=1 \
+		tb_idma_inst64_gather -logfile inst64_gather_axi.log -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=1 \
+		tb_idma_inst64_gather -logfile inst64_gather_tcdm.log -do "run -all; quit"
+	# Questa does not propagate $$fatal to the exit code; gate on the transcript
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_gather_axi.log inst64_gather_tcdm.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_gather_axi.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_gather_tcdm.log
+
 .PHONY: idma_sim_tb_idma_inst64_compute
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
@@ -670,7 +683,8 @@ idma_lint_clean:
 
 # inst64 gate: the only public concrete bindings of idma_inst64_top
 IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
-                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute
+                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute \
+                    tb_idma_inst64_gather
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
 
@@ -679,7 +693,8 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_axi_copy:-GDMATracing=1 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
-                    tb_idma_inst64_compute:-GEnableTcdmObi=1
+                    tb_idma_inst64_compute:-GEnableTcdmObi=1 \
+                    tb_idma_inst64_gather:-GEnableTcdmObi=1
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:

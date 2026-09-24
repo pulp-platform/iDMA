@@ -499,6 +499,23 @@
             ]
         }
     },
+    "gather_midend" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 64
+        },
+        "testbench" : "tb_idma_gather_midend",
+        "verify" : {
+            "token" : "[GATHER] ALL PASS",
+            "legs" : [
+                { "tag" : "gather_midend_64_1", "params" : { "IdxDataWidth" : 64, "NumIdxOutstanding" : 1 } },
+                { "tag" : "gather_midend_64_4", "params" : { "IdxDataWidth" : 64, "NumIdxOutstanding" : 4 } },
+                { "tag" : "gather_midend_512_2", "params" : { "IdxDataWidth" : 512, "NumIdxOutstanding" : 2 } },
+                { "tag" : "gather_midend_512_4_perf", "params" : { "IdxDataWidth" : 512, "NumIdxOutstanding" : 4 }, "plusargs" : ["+PERF=1"] }
+            ]
+        }
+    },
     "transpose_midend" : {
         "jobs" : {
         },

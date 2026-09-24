@@ -99,6 +99,36 @@
     `IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA Indexed-Gather Options Struct
+// - `enable`:    expand the carried ND request as an indexed gather
+// - `idx_width`: index element width, 0/1/2/3 -> 8/16/32/64 bit
+// - `idx_addr`:  byte address of the first index, aligned to the index element width
+//
+// Usage Example:
+// `IDMA_TYPEDEF_GATHER_OPT_T(idma_gather_opt_t, addr_t)
+`define IDMA_TYPEDEF_GATHER_OPT_T(idma_gather_opt_t, axi_addr_t)          \
+    typedef struct packed {                                              \
+        logic       enable;                                              \
+        logic [1:0] idx_width;                                           \
+        axi_addr_t  idx_addr;                                            \
+    } idma_gather_opt_t;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// iDMA Indexed-Gather Request Struct
+//
+// Usage Example:
+// `IDMA_TYPEDEF_GATHER_REQ_T(idma_gather_req_t, idma_nd_req_t, idma_gather_opt_t)
+`define IDMA_TYPEDEF_GATHER_REQ_T(idma_gather_req_t, idma_nd_req_t, idma_gather_opt_t) \
+    typedef struct packed {                                                          \
+        idma_nd_req_t     nd_req;                                                    \
+        idma_gather_opt_t gather;                                                    \
+    } idma_gather_req_t;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // iDMA INIT channel structs; the *_STRUCT variants are anonymous, for a localparam type list
 // `IDMA_TYPEDEF_INIT_ALL(init, AddrWidth, DataWidth, StrbWidth, AxiIdWidth)

@@ -11,7 +11,7 @@ The Snitch frontend (`idma_inst64_top`) is tightly coupled to the Snitch RISC-V 
 
 ## Xdma Instruction Set
 
-A DMA transfer requires three steps: (1) set the source and destination addresses (`DMSRC`, `DMDST`), (2) launch the transfer with a length and config (`DMCPY`/`DMCPYI`), (3) poll for completion (`DMSTAT`/`DMSTATI`). Optional instructions set 2D parameters (`DMSTR`, `DMREP`) and AXI user fields (`DMUSER`).
+A DMA transfer requires three steps: (1) set the source and destination addresses (`DMSRC`, `DMDST`), (2) launch the transfer with a length and config (`DMCPY`/`DMCPYI`), (3) poll for completion (`DMSTAT`/`DMSTATI`). Optional instructions set 2D parameters (`DMSTR`, `DMREP`), AXI user fields (`DMUSER`), the on-the-fly compute op (`DMOPC`) and an indexed gather (`DMIDX`).
 
 All DMA instructions that return a value write to `rd` (destination register). The assembly syntax is `DMCPYI rd, rs1, imm` - `rd` receives the transfer ID, `rs1` provides the length.
 
@@ -27,6 +27,7 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMREP` | `rs1` = repetitions | Set 2D repetition count |
 | `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
 | `DMOPC` | `rs1` = {mode, opcode byte}, `rs2` = op parameters | Select the on-the-fly compute op applied by every following `DMCPY`/`DMCPYI`. Requires `EnableCompute`; `DMINIT` transfers stay plain memsets |
+| `DMIDX` | `rs1` = index base, `rs2` = {index width, arm} | Arm an indexed gather for every following `DMCPY`/`DMCPYI`, see [Indexed Gather](#indexed-gather). Requires `EnableGather`; `DMINIT` transfers stay plain memsets |
 
 **Compute opcode byte** (`DMOPC`, `rs1[7:0]`). The bytes and the operand field positions live in
 `src/db/idma_dmopc.yml`; MARIO renders them into `idma_inst64_compute_pkg` and into the SW header
@@ -46,6 +47,39 @@ The latched op persists until the next `DMOPC` and resets to passthrough. An und
 The host core is RV32, so it sign-extends `rs1` and `rs2` into the upper half of the 64-bit accelerator bus. No `DMOPC` field may cross bit 31 of its operand; that is why the 24 bits of transpose dimensions ride `rs2` instead of extending `rs1` past its top. `idma_inst64_top` fails elaboration on a layout that violates it (`LayoutRv32Safe`).
 
 The size-changing MX ops require AXI on both the source and the destination (`ComputeMxSrcProtocol` / `ComputeMxDstProtocol` in the legalizer), so they are only reachable for endpoints that decode outside the TCDM window. Transpose drives a per-beat write strobe that only `idma_axi_write` honours, so an OBI destination drops the edge-tile masking.
+
+### Indexed Gather
+
+`DMIDX` turns the following copies into gathers: the `DMREP` repetitions become the number of
+indices `G`, and the `i`-th row is copied from the source address plus `idx[i]` source strides
+to the destination address plus `i` destination strides, with the `DMCPY` length per row:
+
+```
+src[i] = src + idx[i] * src_stride      (i = 0 .. G-1)
+dst[i] = dst + i      * dst_stride
+```
+
+`rs1[31:0]` is the byte address of `idx[0]`, zero-extended so an RV32 core cannot sign-extend
+it; `rs2[0]` arms (1) or disarms (0) the gather and `rs2[2:1]` selects 8/16/32/64-bit unsigned
+indices. The setting persists until the next `DMIDX` and resets to disarmed; the 2D config
+bit is not needed. The index stream is read through the `idx_obi_req_o` / `idx_obi_res_i`
+port in `AxiDataWidth` words, independently of the address decode, so it may sit in the TCDM
+or anywhere else that port reaches. `src_stride` must be a power of two (the row size of the
+source matrix), `G` must be non-zero and the index base aligned to the index width; otherwise
+the transfer retires with an `ND_MIDEND` error and moves no data. One transfer ID covers the
+whole gather. With `EnableGather` set, transfer IDs are allocated when a request enters the
+channel FIFO, so a copy queued behind a long gather receives the next ID. `DMIDX` is not yet
+allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0b`, the slot after
+`DMOPC`. Arming a gather while `EnableGather` is 0 fires the `DmidxWithoutGather` assertion.
+
+```asm
+DMIDX   a0, a1          # index base = a0, a1 = (width << 1) | 1
+DMSRC   a2, zero        # source matrix
+DMDST   a3, zero        # packed destination
+DMSTR   a4, a5          # src_stride = row pitch (power of two), dst_stride
+DMREP   a6              # G = number of indices
+DMCPYI  t0, a7, 0b000   # t0 = transfer_id, a7 = bytes per row
+```
 
 **Status select values** (`DMSTAT`/`DMSTATI`):
 - `0`: Completed transfer ID - compare against the ID returned by `DMCPY` to check if a specific transfer has finished
@@ -77,6 +111,8 @@ For most Snitch cluster integrations, `NumChannels=1` and `NumAxInFlight=3` are 
 | `EnableCompute` | Elaborate the backend on-the-fly compute datapath (default: 0). With it off, a `DMOPC` that selects a real op fires the legalizer's `ComputeOpUnsupported` guard instead of silently copying. Setting it also switches the backend to the split shifter pair (`CombinedShifter` follows `!EnableCompute`), which the compute datapath requires |
 | `ComputeOps` | Per-op `idma_pkg::compute_enable_t` feature mask; only the ops it names are elaborated (default: all) |
 | `ComputeTuning` | `idma_pkg::compute_tuning_t` implementation knobs of the compute engines (default: all) |
+| `EnableGather` | Elaborate the indexed gather midend and its index-stream OBI port (default: 0). With it off the port is tied off and the channel is unchanged |
+| `NumIdxOutstanding` | Index words the gather keeps in flight or buffered per channel (default: 2). Size it to the index-memory latency; one word already covers several indices |
 
 ## Programming Sequence
 
@@ -111,6 +147,8 @@ Show DMSRC/DMDST setup, DMSTR/DMREP for ND, DMCPY launch, DMSTAT polling.
 
 The `idma_inst64_top` module instantiates `NumChannels` independent backends, each paired with an ND midend (`NumDim=2`, `BufferDepth=3`). The frontend instruction decoder fills an `idma_nd_req_t` struct from the instruction stream and routes it to the selected channel's request FIFO. A per-channel transfer ID generator tracks issue and retire events. Each backend produces separate AXI read and write manager ports. The `axi_rw_join` module merges them into a single AXI manager port for connection to the SoC interconnect.
 
+With `EnableGather`, a gather midend sits between the request FIFO and the ND midend of every channel. It expands an armed request into one 1D request per index and merges their responses, so the ID generator retires once per `DMCPY`; other requests pass through unchanged.
+
 When `NumChannels > 1`, each channel has its own independent backend and ND midend. The channel is selected via the config field in `DMCPY`/`DMCPYI` (bits 4:2). Channels operate independently - one can be busy while another accepts new transfers. The AXI ports from all channels are merged via `axi_rw_join`, so they share bus bandwidth.
 
 ## Source Files
@@ -118,3 +156,4 @@ When `NumChannels > 1`, each channel has its own independent backend and ND mide
 - `src/frontend/inst64/idma_inst64_top.sv` - Top-level module
 - `src/frontend/inst64/idma_inst64_snitch_pkg.sv` - Instruction encodings
 - `src/frontend/inst64/idma_inst64_events.sv` - Performance event counters
+- `src/midend/idma_gather_midend.sv` - Indexed gather expansion (`EnableGather`)
