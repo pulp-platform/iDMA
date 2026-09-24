@@ -5,6 +5,44 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## 0.7.1 - 2026-09-24
+
+### Added
+- Add the DMOPC on-the-fly compute path to the inst64 frontend
+  [#234](https://github.com/pulp-platform/iDMA/pull/234), with the opcode bytes, operand layout and
+  field widths generated from one database for the RTL and `target/sw/idma_compute.h`
+  [#236](https://github.com/pulp-platform/iDMA/pull/236),
+  [#237](https://github.com/pulp-platform/iDMA/pull/237),
+  [#238](https://github.com/pulp-platform/iDMA/pull/238),
+  [#242](https://github.com/pulp-platform/iDMA/pull/242).
+- Make the inst64 TCDM and OBI topology a parameter
+  [#233](https://github.com/pulp-platform/iDMA/pull/233).
+- Drive the inst64 buffer stall events [#230](https://github.com/pulp-platform/iDMA/pull/230).
+
+### Changed
+- Replace the inst64 `TCDMAliasEnable` parameter with a `NumAddrRules` capacity parameter
+  [#231](https://github.com/pulp-platform/iDMA/pull/231).
+- Overlap back-to-back transpose tiles in full duplex
+  [#243](https://github.com/pulp-platform/iDMA/pull/243), and accept a whole transpose tile in one
+  multi-beat burst [#241](https://github.com/pulp-platform/iDMA/pull/241).
+- Reduce the mxquant max and popcount as trees
+  [#225](https://github.com/pulp-platform/iDMA/pull/225).
+- Drop the unreachable INIT write path from inst64
+  [#218](https://github.com/pulp-platform/iDMA/pull/218), and own the INIT channel typedefs in iDMA
+  [#229](https://github.com/pulp-platform/iDMA/pull/229).
+
+### Fixed
+- Allocate inst64 transfer ids on request push, so queued DMCPYs no longer share an id
+  [#245](https://github.com/pulp-platform/iDMA/pull/245).
+- Hold the zero-length rejection until it is accepted
+  [#247](https://github.com/pulp-platform/iDMA/pull/247).
+- Make the transpose read-safe and produce compact matrices
+  [#240](https://github.com/pulp-platform/iDMA/pull/240).
+- Hold testbench job launches that alias an armed error address
+  [#246](https://github.com/pulp-platform/iDMA/pull/246), share the MX goldens through one header
+  [#219](https://github.com/pulp-platform/iDMA/pull/219), and run the desc64 register generation
+  once under `make -j` [#220](https://github.com/pulp-platform/iDMA/pull/220).
+
 ## 0.7.0 - 2026-08-19
 
 ### Added
