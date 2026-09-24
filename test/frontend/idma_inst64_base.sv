@@ -15,6 +15,10 @@ module idma_inst64_base #(
     parameter bit          EnableTcdmObi = 1'b1,
     /// Elaborate the backend on-the-fly compute datapath
     parameter bit          EnableCompute = 1'b0,
+    /// Elaborate the indexed gather and its index-stream memory
+    parameter bit          EnableGather = 1'b0,
+    /// Index words the gather may have in flight or buffered
+    parameter int unsigned NumIdxOutstanding = 32'd2,
     /// TCDM (OBI) window; every address outside it decodes to ToSoC, i.e. AXI
     parameter logic [63:0] TcdmStart = idma_inst64_tb_pkg::TcdmStart,
     parameter logic [63:0] TcdmEnd   = idma_inst64_tb_pkg::TcdmEnd,
@@ -44,6 +48,8 @@ module idma_inst64_base #(
     axi_resp_t   [NumChannels-1:0] axi_res;
     obi_req_t    [NumChannels-1:0] obi_req;
     obi_res_t    [NumChannels-1:0] obi_res;
+    obi_req_t    [NumChannels-1:0] idx_obi_req;
+    obi_res_t    [NumChannels-1:0] idx_obi_res;
     dma_events_t [NumChannels-1:0] events;
     logic        [NumChannels-1:0] busy;
 
@@ -70,6 +76,8 @@ module idma_inst64_base #(
         .EnableTcdmObi   ( EnableTcdmObi   ),
         .DMATracing      ( DMATracing      ),
         .EnableCompute   ( EnableCompute   ),
+        .EnableGather      ( EnableGather      ),
+        .NumIdxOutstanding ( NumIdxOutstanding ),
         .axi_ar_chan_t   ( axi_ar_chan_t   ),
         .axi_aw_chan_t   ( axi_aw_chan_t   ),
         .axi_req_t       ( axi_req_t       ),
@@ -93,6 +101,8 @@ module idma_inst64_base #(
         .axi_res_i       ( axi_res              ),
         .obi_req_o       ( obi_req              ),
         .obi_res_i       ( obi_res              ),
+        .idx_obi_req_o   ( idx_obi_req          ),
+        .idx_obi_res_i   ( idx_obi_res          ),
         .busy_o          ( busy                 ),
         .acc_req_i       ( drv_if.acc_req       ),
         .acc_req_valid_i ( drv_if.acc_req_valid ),
@@ -202,6 +212,33 @@ module idma_inst64_base #(
         end else begin : gen_no_obi_mem
             assign obi_res[c] = '0;
         end
+
+        // The index stream has a memory of its own, reached only through the index port
+        if (EnableGather) begin : gen_idx_mem
+            obi_sim_mem #(
+                .ObiCfg            ( ObiCfg       ),
+                .obi_req_t         ( obi_req_t    ),
+                .obi_rsp_t         ( obi_res_t    ),
+                .obi_r_chan_t      ( obi_r_chan_t ),
+                .WarnUninitialized ( 1'b0         ),
+                .ClearErrOnAccess  ( 1'b1         ),
+                .ApplDelay         ( ApplDelay    ),
+                .AcqDelay          ( AcqDelay     )
+            ) i_idx_sim_mem (
+                .clk_i       ( clk            ),
+                .rst_ni      ( rst_n          ),
+                .obi_req_i   ( idx_obi_req[c] ),
+                .obi_rsp_o   ( idx_obi_res[c] ),
+                .mon_valid_o ( /* NC */       ),
+                .mon_we_o    ( /* NC */       ),
+                .mon_addr_o  ( /* NC */       ),
+                .mon_wdata_o ( /* NC */       ),
+                .mon_be_o    ( /* NC */       ),
+                .mon_id_o    ( /* NC */       )
+            );
+        end else begin : gen_no_idx_mem
+            assign idx_obi_res[c] = '0;
+        end
     end
 
     //--------------------------------------
@@ -251,6 +288,37 @@ module idma_inst64_base #(
                 return 8'hXX;
             end
         endfunction
+    end else begin : gen_obi_access
+        // Same names in the AXI-only topology, so a testbench elaborates in both
+        task automatic obi_mem_write_byte(
+            input addr_t addr,
+            input byte   data
+        );
+            $fatal(1, "obi_mem_write_byte: no TCDM (OBI) memory at EnableTcdmObi = 0");
+        endtask
+
+        function automatic logic [7:0] obi_mem_read_byte(input addr_t addr);
+            return 8'hXX;
+        endfunction
+    end
+
+    //--------------------------------------
+    // Index memory helpers (channel 0)
+    //--------------------------------------
+    if (EnableGather) begin : gen_idx_access
+        task automatic idx_mem_write_byte(
+            input addr_t addr,
+            input byte   data
+        );
+            gen_mem_ch[0].gen_idx_mem.i_idx_sim_mem.mem[addr] = data;
+        endtask
+    end else begin : gen_idx_access
+        task automatic idx_mem_write_byte(
+            input addr_t addr,
+            input byte   data
+        );
+            $fatal(1, "idx_mem_write_byte: no index memory at EnableGather = 0");
+        endtask
     end
 
 endmodule

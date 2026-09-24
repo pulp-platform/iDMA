@@ -6,7 +6,7 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 /// Snitch accelerator-bus driver for `idma_inst64_top`, covering the inst64 ISA
-/// (DMSRC/DMDST/DMSTR/DMREP/DMCPY/DMCPYI/DMSTAT/DMOPC).
+/// (DMSRC/DMDST/DMSTR/DMREP/DMCPY/DMCPYI/DMSTAT/DMOPC/DMIDX).
 interface idma_inst64_drv_if #(
     /// Poll budget for `dma_wait`/`dma_wait_idle` before the wait is declared a deadlock
     parameter int unsigned MaxPolls = 32'd10000,
@@ -161,6 +161,16 @@ interface idma_inst64_drv_if #(
     task automatic dma_set_compute(input logic [31:0] opcode, input logic [31:0] params = 32'b0);
         acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMOPC),
                   {{32{opcode[31]}}, opcode}, {{32{params[31]}}, params});
+    endtask
+
+    /// DMIDX; rs1 = index base (low 32 bits), rs2[0] = arm, rs2[2:1] = index width
+    task automatic dma_set_index(
+        input logic [31:0] idx_addr,
+        input logic [1:0]  idx_width,
+        input logic        enable
+    );
+        acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMIDX),
+                  {32'b0, idx_addr}, {61'b0, idx_width, enable});
     endtask
 
     task automatic dma_set_strides(
