@@ -239,7 +239,7 @@ idma_verify_sim_%: idma_verify_toolchain
 # ---------------
 
 IDMA_GEN_FILES := $(IDMA_RTL_ALL) $(IDMA_TB_ALL) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) \
-                  $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL) $(IDMA_DMOPC_SW)
+                  $(IDMA_INCLUDE_ALL) $(IDMA_WAVE_ALL) $(IDMA_DMOPC_SW) $(IDMA_INST64_SW)
 
 # Not verification; no zero-git-diff form, target/rtl is gitignored here
 idma_verify_codegen:

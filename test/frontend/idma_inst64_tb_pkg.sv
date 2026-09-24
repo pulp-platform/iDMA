@@ -82,6 +82,39 @@ package idma_inst64_tb_pkg;
         logic        error;
     } acc_res_t;
 
+    // CV-X-IF subset as Snitch declares it (hw/snitch/include/cv_x_if/typedef.svh)
+    localparam int unsigned XifIdWidth = 32'd4;
+    typedef logic [XifIdWidth-1:0] xif_id_t;
+
+    typedef struct packed {
+        logic [31:0] instr;
+        logic [31:0] hartid;
+        xif_id_t     id;
+    } x_issue_req_t;
+    typedef struct packed {
+        logic       accept;
+        logic       writeback;
+        logic [2:0] register_read;
+    } x_issue_resp_t;
+    typedef struct packed {
+        logic [31:0]      hartid;
+        xif_id_t          id;
+        logic [2:0][31:0] rs;
+        logic [2:0]       rs_valid;
+    } x_register_t;
+    typedef struct packed {
+        logic [31:0] hartid;
+        xif_id_t     id;
+        logic        commit_kill;
+    } x_commit_t;
+    typedef struct packed {
+        logic [31:0] hartid;
+        xif_id_t     id;
+        logic [31:0] data;
+        logic [4:0]  rd;
+        logic        we;
+    } x_result_t;
+
     // The exported type, so the testbench cannot drift from the snitch_cluster contract
     `IDMA_TYPEDEF_EVENTS_T(dma_events_t, AxiDataWidth)
 

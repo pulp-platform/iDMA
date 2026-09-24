@@ -9,10 +9,16 @@
 /// Stages an AXI buffer through the TCDM window and back, so OBI write and read
 /// beats both flow, and memsets the window through the INIT port. Every check
 /// reads the AXI memory, so a lost or corrupted OBI beat fails the compare.
-module tb_idma_inst64_tcdm_copy;
+module tb_idma_inst64_tcdm_copy #(
+    /// Drive the CV-X-IF port instead of the accelerator bus
+    parameter bit FrontendXif = 1'b0
+);
     import idma_inst64_tb_pkg::*;
 
-    idma_inst64_base #(.EnableTcdmObi(1'b1)) harness ();
+    idma_inst64_base #(
+        .EnableTcdmObi ( 1'b1        ),
+        .FrontendXif   ( FrontendXif )
+    ) harness ();
 
     localparam int unsigned CopySize     = 32'd1024;
     localparam int unsigned BytesPerBeat = AxiDataWidth / 32'd8;

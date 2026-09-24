@@ -20,7 +20,9 @@ module idma_inst64_base #(
     parameter logic [63:0] TcdmEnd   = idma_inst64_tb_pkg::TcdmEnd,
     /// Second TCDM (OBI) window; `TcdmAliasEnd` of 0 leaves the alias rule out entirely
     parameter logic [63:0] TcdmAliasStart = 64'h0,
-    parameter logic [63:0] TcdmAliasEnd   = 64'h0
+    parameter logic [63:0] TcdmAliasEnd   = 64'h0,
+    /// Drive the CV-X-IF port instead of the accelerator bus
+    parameter bit          FrontendXif    = 1'b0
 );
     import idma_inst64_tb_pkg::*;
 
@@ -35,7 +37,9 @@ module idma_inst64_base #(
         .rst_no( rst_n )
     );
 
-    idma_inst64_drv_if drv_if (
+    idma_inst64_drv_if #(
+        .Xif  ( FrontendXif )
+    ) drv_if (
         .clk  ( clk   ),
         .rst_n( rst_n )
     );
@@ -70,6 +74,8 @@ module idma_inst64_base #(
         .EnableTcdmObi   ( EnableTcdmObi   ),
         .DMATracing      ( DMATracing      ),
         .EnableCompute   ( EnableCompute   ),
+        .FrontendIf      ( FrontendXif ? idma_inst64_snitch_pkg::FrontendXif :
+                                         idma_inst64_snitch_pkg::FrontendAcc ),
         .axi_ar_chan_t   ( axi_ar_chan_t   ),
         .axi_aw_chan_t   ( axi_aw_chan_t   ),
         .axi_req_t       ( axi_req_t       ),
@@ -84,6 +90,11 @@ module idma_inst64_base #(
         .obi_res_t       ( obi_res_t       ),
         .acc_req_t       ( acc_req_t       ),
         .acc_res_t       ( acc_res_t       ),
+        .x_issue_req_t   ( x_issue_req_t   ),
+        .x_issue_resp_t  ( x_issue_resp_t  ),
+        .x_register_t    ( x_register_t    ),
+        .x_commit_t      ( x_commit_t      ),
+        .x_result_t      ( x_result_t      ),
         .dma_events_t    ( dma_events_t    ),
         .addr_rule_t     ( addr_rule_t     )
     ) i_dut (
@@ -100,6 +111,18 @@ module idma_inst64_base #(
         .acc_res_o       ( drv_if.acc_res       ),
         .acc_res_valid_o ( drv_if.acc_res_valid ),
         .acc_res_ready_i ( drv_if.acc_res_ready ),
+        .x_issue_req_i      ( drv_if.x_issue_req      ),
+        .x_issue_resp_o     ( drv_if.x_issue_resp     ),
+        .x_issue_valid_i    ( drv_if.x_issue_valid    ),
+        .x_issue_ready_o    ( drv_if.x_issue_ready    ),
+        .x_register_i       ( drv_if.x_register       ),
+        .x_register_valid_i ( drv_if.x_register_valid ),
+        .x_register_ready_o ( drv_if.x_register_ready ),
+        .x_commit_i         ( drv_if.x_commit         ),
+        .x_commit_valid_i   ( drv_if.x_commit_valid   ),
+        .x_result_o         ( drv_if.x_result         ),
+        .x_result_valid_o   ( drv_if.x_result_valid   ),
+        .x_result_ready_i   ( drv_if.x_result_ready   ),
         .hart_id_i       ( 32'h0                ),
         .events_o        ( events               ),
         .addr_map_i      ( addr_map             )

@@ -13,7 +13,9 @@
 module tb_idma_inst64_axi_copy #(
     /// Topology under test; 0 drops the TCDM (OBI) port and routes every address to AXI
     parameter bit          EnableTcdmObi = 1'b1,
-    parameter int unsigned DMATracing    = idma_inst64_tb_pkg::DMATracing
+    parameter int unsigned DMATracing    = idma_inst64_tb_pkg::DMATracing,
+    /// Drive the CV-X-IF port instead of the accelerator bus
+    parameter bit          FrontendXif   = 1'b0
 );
     import idma_inst64_tb_pkg::*;
 
@@ -21,7 +23,8 @@ module tb_idma_inst64_axi_copy #(
     idma_inst64_base #(
         .StallPattern  ( 1'b1          ),
         .EnableTcdmObi ( EnableTcdmObi ),
-        .DMATracing    ( DMATracing    )
+        .DMATracing    ( DMATracing    ),
+        .FrontendXif   ( FrontendXif   )
     ) harness ();
 
     localparam int unsigned TimeoutCycles  = 32'd200000;

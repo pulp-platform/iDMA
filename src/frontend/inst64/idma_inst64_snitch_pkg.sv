@@ -4,21 +4,20 @@
 
 // Authors:
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
+// - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// Instruction decoding for `inst64` in the context of snitch. This content was copied from the
-/// generated risc-v opcodes file: `snitch/src/riscv_instr.sv`.
+/// Instruction encodings and per-instruction attributes of the `inst64` frontend.
 package idma_inst64_snitch_pkg;
 
-  localparam logic [31:0] DMSRC              = 32'b0000000??????????000000000101011;
-  localparam logic [31:0] DMDST              = 32'b0000001??????????000000000101011;
-  localparam logic [31:0] DMCPYI             = 32'b0000010??????????000?????0101011;
-  localparam logic [31:0] DMCPY              = 32'b0000011??????????000?????0101011;
-  localparam logic [31:0] DMSTATI            = 32'b0000100?????00000000?????0101011;
-  localparam logic [31:0] DMSTAT             = 32'b0000101?????00000000?????0101011;
-  localparam logic [31:0] DMSTR              = 32'b0000110??????????000000000101011;
-  localparam logic [31:0] DMREP              = 32'b000011100000?????000000000101011;
-  localparam logic [31:0] DMUSER             = 32'b0001000??????????000000000101011;
-  localparam logic [31:0] DMINIT             = 32'b0001001??????????000?????0101011;
-  localparam logic [31:0] DMOPC              = 32'b0001010??????????000000000101011;
+    // Encodings and attribute table; generated from src/db/idma_inst64.yml
+    `include "idma/inst64.svh"
+
+    /// Core-side port of `idma_inst64_top`
+    typedef enum logic {
+        /// Snitch accelerator bus (`acc_req`/`acc_res`)
+        FrontendAcc,
+        /// CORE-V eXtension Interface: issue, register, commit, and result
+        FrontendXif
+    } frontend_if_e;
 
 endpackage

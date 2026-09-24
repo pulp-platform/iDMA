@@ -1,0 +1,87 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Solderpad Hardware License, Version 0.51, see LICENSE for details.
+# SPDX-License-Identifier: SHL-0.51
+
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+# Single source of the inst64 instruction encodings; SV package, attribute table, C, riscv-opcodes
+prefix: "inst64"
+description: "Asynchronous Data Movement extension"
+note: "overlaps with rv32_xpulppostmod"
+
+# Every instruction is an R-type on custom-1 with funct3 0
+opcode: 0x2b
+funct3: 0
+
+# The 5-bit immediate some instructions carry in the rs2 slot
+imm5:
+  lsb: 20
+  fields:
+    - name: "cfg"
+      lsb: 0
+      width: 2
+    - name: "chan"
+      lsb: 2
+      width: 3
+
+# `kind` is config, launch or status; absent slots encode as zero; `requires` names a build option
+instructions:
+  - name: "dmsrc"
+    funct7: 0
+    kind: "config"
+    rs1: "source address [31:0]"
+    rs2: "source address [63:32]"
+  - name: "dmdst"
+    funct7: 1
+    kind: "config"
+    rs1: "destination address [31:0]"
+    rs2: "destination address [63:32]"
+  - name: "dmcpyi"
+    funct7: 2
+    kind: "launch"
+    rd: "transfer id"
+    rs1: "length in bytes"
+    imm5: "cfg (bit 1 is 2D), chan"
+  - name: "dmcpy"
+    funct7: 3
+    kind: "launch"
+    rd: "transfer id"
+    rs1: "length in bytes"
+    rs2: "cfg in [1:0], chan in [4:2]"
+  - name: "dmstati"
+    funct7: 4
+    kind: "status"
+    rd: "status value"
+    imm5: "cfg is the status select, chan"
+  - name: "dmstat"
+    funct7: 5
+    kind: "status"
+    rd: "status value"
+    rs2: "status select in [1:0], chan in [4:2]"
+  - name: "dmstr"
+    funct7: 6
+    kind: "config"
+    rs1: "source stride"
+    rs2: "destination stride"
+  - name: "dmrep"
+    funct7: 7
+    kind: "config"
+    rs1: "repetitions"
+  - name: "dmuser"
+    funct7: 8
+    kind: "config"
+    rs1: "AXI user [31:0]"
+    rs2: "AXI user [63:32]"
+  - name: "dminit"
+    funct7: 9
+    kind: "launch"
+    rd: "transfer id"
+    rs1: "length in bytes"
+    imm5: "cfg fills zero, ones, or the DMSRC pattern; chan"
+    requires: "init"
+  - name: "dmopc"
+    funct7: 10
+    kind: "config"
+    operands: "dmopc"
+    requires: "compute"

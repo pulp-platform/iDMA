@@ -12,7 +12,7 @@
 `include "idma/tracer_rw_axi.svh"
 
 /// Implements the tightly-coupled frontend. This module can directly be connected
-/// to an accelerator bus in the snitch system
+/// to an accelerator bus in the snitch system, or to a CV-X-IF coprocessor port
 module idma_inst64_top #(
     parameter int unsigned AxiDataWidth    = 32'd0,
     parameter int unsigned AxiAddrWidth    = 32'd0,
@@ -27,6 +27,9 @@ module idma_inst64_top #(
     parameter bit          EnableCompute   = 1'b0,
     parameter idma_pkg::compute_enable_t ComputeOps    = '1,
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
+    /// Core-side port; the other one is ignored
+    parameter idma_inst64_snitch_pkg::frontend_if_e FrontendIf =
+        idma_inst64_snitch_pkg::FrontendAcc,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -41,6 +44,11 @@ module idma_inst64_top #(
     parameter type         obi_res_t       = logic,
     parameter type         acc_req_t       = logic,
     parameter type         acc_res_t       = logic,
+    parameter type         x_issue_req_t   = logic,
+    parameter type         x_issue_resp_t  = logic,
+    parameter type         x_register_t    = logic,
+    parameter type         x_commit_t      = logic,
+    parameter type         x_result_t      = logic,
     parameter type         dma_events_t    = logic,
     parameter type         addr_rule_t     = axi_pkg::xbar_rule_64_t
 ) (
@@ -62,6 +70,19 @@ module idma_inst64_top #(
     output acc_res_t                      acc_res_o,
     output logic                          acc_res_valid_o,
     input  logic                          acc_res_ready_i,
+    // CV-X-IF coprocessor port
+    input  x_issue_req_t                  x_issue_req_i,
+    output x_issue_resp_t                 x_issue_resp_o,
+    input  logic                          x_issue_valid_i,
+    output logic                          x_issue_ready_o,
+    input  x_register_t                   x_register_i,
+    input  logic                          x_register_valid_i,
+    output logic                          x_register_ready_o,
+    input  x_commit_t                     x_commit_i,
+    input  logic                          x_commit_valid_i,
+    output x_result_t                     x_result_o,
+    output logic                          x_result_valid_o,
+    input  logic                          x_result_ready_i,
     // hart id of the frankensnitch
     input  logic [31:0]                   hart_id_i,
     // performance output
@@ -200,10 +221,24 @@ module idma_inst64_top #(
     tf_id_t [NumChannels-1:0] next_id;
     tf_id_t [NumChannels-1:0] completed_id;
 
-    // accelerator bus decoupled signals
-    acc_res_t acc_res;
-    logic     acc_res_valid;
-    logic     acc_res_ready;
+    // decoder request and response, fed by the accelerator bus or the CV-X-IF port
+    typedef struct packed {
+        logic [31:0] data_op;
+        logic [63:0] data_arga;
+        logic [63:0] data_argb;
+    } dec_req_t;
+
+    typedef struct packed {
+        logic [63:0] data;
+        logic        error;
+    } dec_rsp_t;
+
+    dec_req_t dec_req;
+    logic     dec_req_valid;
+    logic     dec_req_ready;
+    dec_rsp_t dec_rsp;
+    logic     dec_rsp_valid;
+    logic     dec_rsp_ready;
 
     // decoder signals
     localparam int unsigned NoIndices = 1;
@@ -513,22 +548,84 @@ module idma_inst64_top #(
 
 
     //--------------------------------------
-    // Spill register for response channel
+    // Core-side port
     //--------------------------------------
-    // the response path needs to be decoupled
-    cc_spill_register #(
-        .data_t       ( acc_res_t )
-    ) i_spill_register (
-        .clk_i,
-        .rst_ni,
-        .clr_i   ( 1'b0            ),
-        .valid_i ( acc_res_valid   ),
-        .ready_o ( acc_res_ready   ),
-        .data_i  ( acc_res         ),
-        .valid_o ( acc_res_valid_o ),
-        .ready_i ( acc_res_ready_i ),
-        .data_o  ( acc_res_o       )
-    );
+    if (FrontendIf == idma_inst64_snitch_pkg::FrontendAcc) begin : gen_acc
+        acc_res_t acc_res;
+
+        assign dec_req.data_op   = acc_req_i.data_op;
+        assign dec_req.data_arga = acc_req_i.data_arga;
+        assign dec_req.data_argb = acc_req_i.data_argb;
+        assign dec_req_valid     = acc_req_valid_i;
+        assign acc_req_ready_o   = dec_req_ready;
+
+        // the response answers the request of the same cycle, so it carries its id
+        always_comb begin : proc_acc_res
+            acc_res       = '0;
+            acc_res.id    = acc_req_i.id;
+            acc_res.data  = dec_rsp.data;
+            acc_res.error = dec_rsp.error;
+        end
+
+        // the response path needs to be decoupled
+        cc_spill_register #(
+            .data_t       ( acc_res_t )
+        ) i_spill_register (
+            .clk_i,
+            .rst_ni,
+            .clr_i   ( 1'b0            ),
+            .valid_i ( dec_rsp_valid   ),
+            .ready_o ( dec_rsp_ready   ),
+            .data_i  ( acc_res         ),
+            .valid_o ( acc_res_valid_o ),
+            .ready_i ( acc_res_ready_i ),
+            .data_o  ( acc_res_o       )
+        );
+
+        assign x_issue_resp_o     = '0;
+        assign x_issue_ready_o    = 1'b0;
+        assign x_register_ready_o = 1'b0;
+        assign x_result_o         = '0;
+        assign x_result_valid_o   = 1'b0;
+    end else begin : gen_xif
+        idma_inst64_xif #(
+            .NumChannels    ( NumChannels    ),
+            .EnableCompute  ( EnableCompute  ),
+            .EnableInit     ( EnableTcdmObi  ),
+            .x_issue_req_t  ( x_issue_req_t  ),
+            .x_issue_resp_t ( x_issue_resp_t ),
+            .x_register_t   ( x_register_t   ),
+            .x_commit_t     ( x_commit_t     ),
+            .x_result_t     ( x_result_t     ),
+            .dec_req_t      ( dec_req_t      ),
+            .dec_rsp_t      ( dec_rsp_t      )
+        ) i_idma_inst64_xif (
+            .clk_i,
+            .rst_ni,
+            .x_issue_req_i,
+            .x_issue_resp_o,
+            .x_issue_valid_i,
+            .x_issue_ready_o,
+            .x_register_i,
+            .x_register_valid_i,
+            .x_register_ready_o,
+            .x_commit_i,
+            .x_commit_valid_i,
+            .x_result_o,
+            .x_result_valid_o,
+            .x_result_ready_i,
+            .dec_req_o       ( dec_req       ),
+            .dec_req_valid_o ( dec_req_valid ),
+            .dec_req_ready_i ( dec_req_ready ),
+            .dec_rsp_i       ( dec_rsp       ),
+            .dec_rsp_valid_i ( dec_rsp_valid ),
+            .dec_rsp_ready_o ( dec_rsp_ready )
+        );
+
+        assign acc_req_ready_o = 1'b0;
+        assign acc_res_o       = '0;
+        assign acc_res_valid_o = 1'b0;
+    end
 
     // Address Decode
     if (EnableTcdmObi) begin : gen_tcdm_decode
@@ -577,10 +674,10 @@ module idma_inst64_top #(
 
     // Helper to avoid parsing the user field inside the always comb block
     if(AxiUserWidth > 32) begin : gen_parseUser64bit
-        assign decoded_user[31:0] = acc_req_i.data_arga[31:0];
-        assign decoded_user[AxiUserWidth-1:32] = acc_req_i.data_argb[AxiUserWidth-33:0];
+        assign decoded_user[31:0] = dec_req.data_arga[31:0];
+        assign decoded_user[AxiUserWidth-1:32] = dec_req.data_argb[AxiUserWidth-33:0];
     end else begin : gen_parseUser32bit
-        assign decoded_user[AxiUserWidth-1:0] = acc_req_i.data_arga[AxiUserWidth-1:0];
+        assign decoded_user[AxiUserWidth-1:0] = dec_req.data_arga[AxiUserWidth-1:0];
     end
 
     always_comb begin : proc_fe_inst_decode
@@ -618,36 +715,36 @@ module idma_inst64_top #(
 
         // default handshaking
         idma_fe_req_valid =  '0;
-        acc_req_ready_o   = 1'b0;
-        acc_res_valid     = 1'b0;
+        dec_req_ready     = 1'b0;
+        dec_rsp_valid     = 1'b0;
 
-        // defaults accelerator bus
-        acc_res       = '0;
-        acc_res.error = 1'b1;
+        // defaults decoder response
+        dec_rsp       = '0;
+        dec_rsp.error = 1'b1;
 
         // debug signal for simulation / wave
         is_dma_op        = 1'b0;
         dma_op_name      = "Invalid";
 
         // decode
-        if (acc_req_valid_i) begin
-            unique casez (acc_req_i.data_op)
+        if (dec_req_valid) begin
+            unique casez (dec_req.data_op)
                 // manipulate the source register
                 idma_inst64_snitch_pkg::DMSRC : begin
-                    idma_fe_req_d.burst_req.src_addr[31:0] = acc_req_i.data_arga[31:0];
+                    idma_fe_req_d.burst_req.src_addr[31:0] = dec_req.data_arga[31:0];
                     idma_fe_req_d.burst_req.src_addr[AxiAddrWidth-1:32] =
-                        acc_req_i.data_argb[AxiAddrWidth-1-32:0];
-                    acc_req_ready_o = 1'b1;
+                        dec_req.data_argb[AxiAddrWidth-1-32:0];
+                    dec_req_ready   = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMSRC";
                 end
 
                 // manipulate the destination register
                 idma_inst64_snitch_pkg::DMDST : begin
-                    idma_fe_req_d.burst_req.dst_addr[31:0] = acc_req_i.data_arga[31:0];
+                    idma_fe_req_d.burst_req.dst_addr[31:0] = dec_req.data_arga[31:0];
                     idma_fe_req_d.burst_req.dst_addr[AxiAddrWidth-1:32] =
-                        acc_req_i.data_argb[AxiAddrWidth-1-32:0];
-                    acc_req_ready_o = 1'b1;
+                        dec_req.data_argb[AxiAddrWidth-1-32:0];
+                    dec_req_ready   = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMDST";
                 end
@@ -656,14 +753,14 @@ module idma_inst64_top #(
                 idma_inst64_snitch_pkg::DMCPYI,
                 idma_inst64_snitch_pkg::DMCPY : begin
                     // Parse the transfer parameters from the register or immediate.
-                    unique casez (acc_req_i.data_op)
+                    unique casez (dec_req.data_op)
                         idma_inst64_snitch_pkg::DMCPYI : begin
-                            idma_fe_cfg      = acc_req_i.data_op[21:20];
-                            idma_fe_sel_chan = acc_req_i.data_op[24:22];
+                            idma_fe_cfg      = dec_req.data_op[21:20];
+                            idma_fe_sel_chan = dec_req.data_op[24:22];
                         end
                         idma_inst64_snitch_pkg::DMCPY : begin
-                            idma_fe_cfg      = acc_req_i.data_argb[1:0];
-                            idma_fe_sel_chan = acc_req_i.data_argb[4:2];
+                            idma_fe_cfg      = dec_req.data_argb[1:0];
+                            idma_fe_sel_chan = dec_req.data_argb[4:2];
                         end
                         default:;
                     endcase
@@ -671,7 +768,7 @@ module idma_inst64_top #(
                     dma_op_name = "DMCPY";
                     is_dma_op   = 1'b1;
                     idma_fe_req_d.burst_req.opt.axi_id = idma_fe_sel_chan;
-                    idma_fe_req_d.burst_req.length = acc_req_i.data_arga;
+                    idma_fe_req_d.burst_req.length = dec_req.data_arga;
 
                     // Perform the following sequence:
                     // 1. wait for acc response channel to be ready (pready)
@@ -679,14 +776,13 @@ module idma_inst64_top #(
                     // 3. wait for twod transfer to be accepted (ready)
                     // 4. send acc response (pvalid)
                     // 5. acknowledge acc request (qready)
-                    if (acc_res_ready) begin
+                    if (dec_rsp_ready) begin
                         idma_fe_req_valid[idma_fe_sel_chan] = 1'b1;
                         if (idma_fe_req_ready[idma_fe_sel_chan]) begin
-                            acc_res.id      = acc_req_i.id;
-                            acc_res.data    = next_id[idma_fe_sel_chan];
-                            acc_res.error   = 1'b0;
-                            acc_res_valid   = 1'b1;
-                            acc_req_ready_o = idma_fe_req_ready[idma_fe_sel_chan];
+                            dec_rsp.data    = next_id[idma_fe_sel_chan];
+                            dec_rsp.error   = 1'b0;
+                            dec_rsp_valid   = 1'b1;
+                            dec_req_ready   = idma_fe_req_ready[idma_fe_sel_chan];
                         end
                     end
                 end
@@ -694,14 +790,14 @@ module idma_inst64_top #(
                 // use init for memset
                 idma_inst64_snitch_pkg::DMINIT : begin
                     // Parse the transfer parameters from the immediate.
-                    idma_fe_init_cfg   = acc_req_i.data_op[21:20];
-                    idma_fe_sel_chan   = acc_req_i.data_op[24:22];
+                    idma_fe_init_cfg   = dec_req.data_op[21:20];
+                    idma_fe_sel_chan   = dec_req.data_op[24:22];
 
 
                     dma_op_name = "DMINIT";
                     is_dma_op   = 1'b1;
                     idma_fe_req_d.burst_req.opt.axi_id       = idma_fe_sel_chan;
-                    idma_fe_req_d.burst_req.length           = acc_req_i.data_arga;
+                    idma_fe_req_d.burst_req.length           = dec_req.data_arga;
                     idma_fe_req_d.burst_req.opt.src_protocol = idma_pkg::INIT;
                     idma_fe_req_d.burst_req.opt.compute      = '0;
 
@@ -720,21 +816,19 @@ module idma_inst64_top #(
                     // 4. send acc response (pvalid)
                     // 5. acknowledge acc request (qready)
                     if (EnableTcdmObi) begin
-                        if (acc_res_ready) begin
+                        if (dec_rsp_ready) begin
                             idma_fe_req_valid[idma_fe_sel_chan] = 1'b1;
                             if (idma_fe_req_ready[idma_fe_sel_chan]) begin
-                                acc_res.id      = acc_req_i.id;
-                                acc_res.data    = next_id[idma_fe_sel_chan];
-                                acc_res.error   = 1'b0;
-                                acc_res_valid   = 1'b1;
-                                acc_req_ready_o = idma_fe_req_ready[idma_fe_sel_chan];
+                                dec_rsp.data    = next_id[idma_fe_sel_chan];
+                                dec_rsp.error   = 1'b0;
+                                dec_rsp_valid   = 1'b1;
+                                dec_req_ready   = idma_fe_req_ready[idma_fe_sel_chan];
                             end
                         end
-                    end else if (acc_res_ready) begin
+                    end else if (dec_rsp_ready) begin
                         // No INIT read port here; retire the memset with the default error.
-                        acc_res.id      = acc_req_i.id;
-                        acc_res_valid   = 1'b1;
-                        acc_req_ready_o = 1'b1;
+                        dec_rsp_valid   = 1'b1;
+                        dec_req_ready   = 1'b1;
                     end
                 end
 
@@ -742,14 +836,14 @@ module idma_inst64_top #(
                 idma_inst64_snitch_pkg::DMSTATI,
                 idma_inst64_snitch_pkg::DMSTAT: begin
                     // Parse the status index from the register or immediate.
-                    unique casez (acc_req_i.data_op)
+                    unique casez (dec_req.data_op)
                         idma_inst64_snitch_pkg::DMSTATI : begin
-                            idma_fe_status   = acc_req_i.data_op[21:20];
-                            idma_fe_sel_chan = acc_req_i.data_op[24:22];
+                            idma_fe_status   = dec_req.data_op[21:20];
+                            idma_fe_sel_chan = dec_req.data_op[24:22];
                         end
                         idma_inst64_snitch_pkg::DMSTAT : begin
-                            idma_fe_status   = acc_req_i.data_argb[1:0];
-                            idma_fe_sel_chan = acc_req_i.data_argb[4:2];
+                            idma_fe_status   = dec_req.data_argb[1:0];
+                            idma_fe_sel_chan = dec_req.data_argb[4:2];
                         end
                         default:;
                     endcase
@@ -757,38 +851,37 @@ module idma_inst64_top #(
                     is_dma_op   = 1'b1;
 
                     // Compose the response
-                    acc_res.id    = acc_req_i.id;
-                    acc_res.error = 1'b0;
+                    dec_rsp.error = 1'b0;
                     case (idma_fe_status)
-                        2'b00 : acc_res.data = completed_id[idma_fe_sel_chan];
-                        2'b01 : acc_res.data = next_id[idma_fe_sel_chan];
-                        2'b10 : acc_res.data = {{{8'd63}{1'b0}}, busy_o[idma_fe_sel_chan]};
-                        2'b11 : acc_res.data = {{{8'd63}{1'b0}},
+                        2'b00 : dec_rsp.data = completed_id[idma_fe_sel_chan];
+                        2'b01 : dec_rsp.data = next_id[idma_fe_sel_chan];
+                        2'b10 : dec_rsp.data = {{{8'd63}{1'b0}}, busy_o[idma_fe_sel_chan]};
+                        2'b11 : dec_rsp.data = {{{8'd63}{1'b0}},
                                                 !idma_fe_req_ready[idma_fe_sel_chan]};
                         default:;
                     endcase
 
                     // Wait for acc response channel to become ready, then ack the
                     // request.
-                    if (acc_res_ready) begin
-                        acc_res_valid   = 1'b1;
-                        acc_req_ready_o = 1'b1;
+                    if (dec_rsp_ready) begin
+                        dec_rsp_valid   = 1'b1;
+                        dec_req_ready   = 1'b1;
                     end
                 end
 
                 // manipulate the strides
                 idma_inst64_snitch_pkg::DMSTR : begin
-                    idma_fe_req_d.d_req[0].src_strides = acc_req_i.data_arga;
-                    idma_fe_req_d.d_req[0].dst_strides = acc_req_i.data_argb;
-                    acc_req_ready_o = 1'b1;
+                    idma_fe_req_d.d_req[0].src_strides = dec_req.data_arga;
+                    idma_fe_req_d.d_req[0].dst_strides = dec_req.data_argb;
+                    dec_req_ready   = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMSTR";
                 end
 
                 // manipulate the repetitions
                 idma_inst64_snitch_pkg::DMREP : begin
-                    idma_fe_req_d.d_req[0].reps = acc_req_i.data_arga;
-                    acc_req_ready_o = 1'b1;
+                    idma_fe_req_d.d_req[0].reps = dec_req.data_arga;
+                    dec_req_ready   = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMREP";
                 end
@@ -797,14 +890,14 @@ module idma_inst64_top #(
                 idma_inst64_snitch_pkg::DMUSER : begin
                     // Assign the user bits according to the size of AxiUserWidth
                     idma_fe_req_d.burst_req.user = decoded_user;
-                    acc_req_ready_o = 1'b1;
+                    dec_req_ready   = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMUSER";
                 end
 
                 // latch the on-the-fly compute configuration, registered below
                 idma_inst64_snitch_pkg::DMOPC : begin
-                    acc_req_ready_o = 1'b1;
+                    dec_req_ready   = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMOPC";
                 end
@@ -864,10 +957,10 @@ module idma_inst64_top #(
     `FF(idma_fe_req_q, idma_fe_req_d, '0)
 
     // DMOPC persists across transfers until the next DMOPC; reset is a plain copy
-    assign idma_fe_dmopc = acc_req_valid_i & acc_req_ready_o &
-                           (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMOPC);
+    assign idma_fe_dmopc = dec_req_valid & dec_req_ready &
+                           (dec_req.data_op ==? idma_inst64_snitch_pkg::DMOPC);
     `FFL(idma_fe_compute_q,
-         idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
+         idma_inst64_compute_pkg::opc_decode(dec_req.data_arga, dec_req.data_argb),
          idma_fe_dmopc, '0)
 
 
@@ -909,9 +1002,18 @@ module idma_inst64_top #(
     // Every latched DMOPC byte must decode; an unknown byte silently falls back to a copy.
     `ASSERT_NEVER(DmopcUnknownOpcode,
                   idma_fe_dmopc & ~idma_inst64_compute_pkg::opc_known(
-                      acc_req_i.data_arga[idma_inst64_compute_pkg::Rs1OpcByteLsb +:
+                      dec_req.data_arga[idma_inst64_compute_pkg::Rs1OpcByteLsb +:
                                           idma_inst64_compute_pkg::Rs1OpcByteWidth]),
                   clk_i, !rst_ni)
+
+    // A channel select past NumChannels addresses no channel and hangs the request.
+    `ASSERT_NEVER(InstChanOutOfRange, dec_req_valid & (32'(idma_fe_sel_chan) >= NumChannels),
+                  clk_i, !rst_ni)
+    // Configuration only moves on a decoder request, so a killed XIF instruction leaves no trace.
+    `ASSERT(FeStateOnlyOnRequest, !dec_req_valid |=> $stable({idma_fe_compute_q,
+            idma_fe_req_q.burst_req.src_addr, idma_fe_req_q.burst_req.dst_addr,
+            idma_fe_req_q.burst_req.length, idma_fe_req_q.burst_req.user,
+            idma_fe_req_q.d_req}), clk_i, !rst_ni)
 
     // A DMOPC field crossing bit 31 is unreachable from an RV32 core that sign-extends rs1/rs2.
     if (!idma_inst64_compute_pkg::LayoutRv32Safe) begin : gen_compute_layout_check
