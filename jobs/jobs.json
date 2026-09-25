@@ -614,9 +614,16 @@
         "elab_compute" : [
             { "width" : 64, "ops" : 15, "tuning" : 1 },
             { "width" : 512, "ops" : 15, "tuning" : 1 },
+            { "width" : 512, "ops" : 15, "tuning" : 0 },
             { "width" : 64, "ops" : 8, "tuning" : 0 },
+            { "width" : 512, "ops" : 8, "tuning" : 0 },
+            { "width" : 64, "ops" : 8, "tuning" : 1 },
+            { "width" : 512, "ops" : 8, "tuning" : 1 },
+            { "width" : 64, "ops" : 7, "tuning" : 1 },
+            { "width" : 512, "ops" : 7, "tuning" : 1 },
             { "width" : 64, "ops" : 6, "tuning" : 1 }
         ],
+        "elab_compute_params" : { "CombinedShifter" : 0, "ErrorHandling" : 0 },
         "elab_shared_tops" : [
             "idma_desc64_synth", "idma_nd_midend_synth",
             "idma_mp_midend_synth", "idma_rt_midend_synth"

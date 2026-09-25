@@ -128,6 +128,11 @@ module idma_backend_synth_${name_uniqueifier} #(
     input  logic                   req_src_reduce_len_i,
     input  logic                   req_dst_reduce_len_i,
     input  logic                   req_last_i,
+% if compute_eligible:
+    input  logic                   req_compute_enable_i,
+    input  idma_pkg::compute_op_e  req_compute_op_i,
+    input  idma_pkg::compute_params_t req_compute_params_i,
+% endif
 
     output logic                   rsp_valid_o,
     input  logic                   rsp_ready_i,
@@ -409,6 +414,13 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.opt.beo.decouple_rw    = req_decouple_rw_i;
     assign idma_req.opt.beo.decouple_aw    = req_decouple_aw_i;
     assign idma_req.opt.last               = req_last_i;
+% if compute_eligible:
+    assign idma_req.opt.compute.enable     = req_compute_enable_i;
+    assign idma_req.opt.compute.op         = req_compute_op_i;
+    assign idma_req.opt.compute.params     = req_compute_params_i;
+% else:
+    assign idma_req.opt.compute            = '0;
+% endif
 
     assign rsp_cause_o      = idma_rsp.pld.cause;
     assign rsp_err_type_o   = idma_rsp.pld.err_type;

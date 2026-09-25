@@ -109,6 +109,8 @@ def main():
     par.add_argument('--compute', default='', metavar='WIDTH:OPS:TUNING',
                      help='space-separated compute-enabled configurations; empty '
                           'disables the sweep. Skipped for tops without the parameters')
+    par.add_argument('--compute-param', action='append', default=[], metavar='NAME=VALUE',
+                     help='parameter every compute-enabled configuration overrides')
     args = par.parse_args()
 
     # The database is the source when supplied; the flags stay for one-off runs.
@@ -121,6 +123,9 @@ def main():
         if db.get('elab_compute'):
             args.compute = ' '.join('{}:{}:{}'.format(c['width'], c['ops'], c['tuning'])
                                     for c in db['elab_compute'])
+        if db.get('elab_compute_params'):
+            args.compute_param = ['{}={}'.format(k, v)
+                                  for k, v in db['elab_compute_params'].items()]
 
     patterns = args.source or ['target/rtl/*.sv', 'src/**/*.sv', 'test/**/*.sv']
     sources = []
@@ -194,6 +199,11 @@ def main():
             for pos, name in enumerate(reversed(ops_fields)):
                 if name in real_ops:
                     real_mask |= 1 << pos
+            overrides = dict(p.split('=', 1) for p in args.compute_param)
+            undeclared = sorted(set(overrides) - declared)
+            if undeclared:
+                raise SystemExit('error: module {} does not declare compute override(s) '
+                                 '{}'.format(args.top, ', '.join(undeclared)))
             for spec in computes:
                 fields = spec.split(':')
                 if len(fields) != 3:
@@ -222,6 +232,7 @@ def main():
                                      'the configuration elaborates nothing'.format(
                                          spec, ops, ', '.join(real_ops)))
                 cfg = dict(base)
+                cfg.update(overrides)
                 if 'DataWidth' in declared:
                     cfg['DataWidth'] = width
                 cfg['EnableCompute'] = 1
