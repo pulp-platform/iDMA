@@ -148,9 +148,6 @@ module idma_otf_transpose #(
   // producer (input) side
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      for (int b = 0; b < NumBanks; b++)
-        for (int r = 0; r < StrbWidth; r++)
-          tile_q[b][r] <= '0;
       wr_cnt           <= '0;
       wr_bank          <= 1'b0;
       rtw              <= '0;
@@ -172,7 +169,6 @@ module idma_otf_transpose #(
       end
     end else begin
       if (in_hs) begin
-        tile_q[wr_bank][wr_cnt] <= data_i;
         wr_cnt <= wr_last ? '0 : (wr_cnt + 1'b1);
       end
       if (fill_done) begin
@@ -190,6 +186,15 @@ module idma_otf_transpose #(
           rtw <= rtw + 1'b1;
         end
       end
+    end
+  end
+
+  // tile banks
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      for (int b = 0; b < NumBanks; b++) tile_q[b] <= '{default: '0};
+    end else if (in_hs && !clear_i) begin
+      tile_q[wr_bank][wr_cnt] <= data_i;
     end
   end
 
@@ -223,14 +228,24 @@ module idma_otf_transpose #(
     end
   end
 
-  // Byte p reads tile_q[rd_bank][p>>logE][rd_cnt*E + (p&(E-1))]
-  always_comb begin
-    for (int p = 0; p < StrbWidth; p++) begin
-      automatic int unsigned e   = p >> rd_mode;
-      automatic int unsigned b   = p & ((1 << rd_mode) - 1);
-      automatic int unsigned col = (rd_cnt << rd_mode) | b;
-      data_int[p] = tile_q[rd_bank][e][col];
+  // Byte p reads tile_q[rd_bank][p>>logE][rd_cnt*E + (p&(E-1))]; the row is constant per mode
+  logic [StrbWidth-1:0][7:0] rd_tile [StrbWidth];
+  for (genvar r = 0; r < StrbWidth; r++) begin : gen_rd_row
+    assign rd_tile[r] = tile_q[rd_bank][r];
+  end
+
+  for (genvar p = 0; p < StrbWidth; p++) begin : gen_rd_byte
+    logic [3:0][7:0] cand;
+    for (genvar m = 0; m < 4; m++) begin : gen_rd_mode
+      if (m <= LaneW) begin : gen_cand
+        logic [LaneW+2:0] col;
+        assign col     = ((LaneW+3)'(rd_cnt) << m) | (LaneW+3)'(p & ((1 << m) - 1));
+        assign cand[m] = rd_tile[p >> m][col];
+      end else begin : gen_no_cand
+        assign cand[m] = '0;
+      end
     end
+    assign data_int[p] = cand[rd_mode];
   end
 
   // output strobe: element-granular edge masking from the drained bank's descriptor
