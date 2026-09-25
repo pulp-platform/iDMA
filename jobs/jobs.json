@@ -484,10 +484,9 @@
             "legs" : [
                 { "tag" : "mxroundtrip_32", "params" : { "DataWidth" : 32 } },
                 { "tag" : "mxroundtrip_64", "params" : { "DataWidth" : 64 } },
-                { "tag" : "mxroundtrip_256", "params" : { "DataWidth" : 256 } }
-            ],
-            "exclude" : [
-                { "values" : [512, 1024], "why" : "heap abort during model construction, see #196" }
+                { "tag" : "mxroundtrip_256", "params" : { "DataWidth" : 256 } },
+                { "tag" : "mxroundtrip_512", "params" : { "DataWidth" : 512 } },
+                { "tag" : "mxroundtrip_1024", "params" : { "DataWidth" : 1024, "QuantFp16" : 0 } }
             ]
         }
     },

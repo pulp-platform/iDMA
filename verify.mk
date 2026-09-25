@@ -205,6 +205,11 @@ IDMA_VLT_CXX        = $(shell for c in g++-14 g++-13 g++-13.2.0 g++-12 g++; do \
                         command -v $$c >/dev/null 2>&1 && { echo $$c; break; }; done)
 IDMA_VLT_CXX_MAJOR  = $(shell $(IDMA_VLT_CXX) -dumpversion 2>/dev/null | cut -d. -f1)
 
+# ccache < 4 leaves Verilator's precompiled header out of its hash and reuses objects across legs
+IDMA_VLT_OBJCACHE   = $(shell v=$$(ccache --version 2>/dev/null | \
+                        sed -n '1s/^ccache version \([0-9]*\).*/\1/p'); \
+                        test "$${v:-0}" -ge 4 && echo ccache)
+
 # Fail here; the symptom otherwise is a SIGSEGV with an empty log
 .PHONY: idma_verify_toolchain
 idma_verify_toolchain:
@@ -215,7 +220,7 @@ idma_verify_toolchain:
 	  exit 1; }
 
 IDMA_VERIFY_RUN     = VERILATOR="$(VERILATOR)" \
-                      IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) $(IDMA_VLT_MAKEFLAGS)" \
+                      IDMA_VLT_MAKEFLAGS="CXX=$(IDMA_VLT_CXX) LINK=$(IDMA_VLT_CXX) OBJCACHE=$(IDMA_VLT_OBJCACHE) $(IDMA_VLT_MAKEFLAGS)" \
                       $(PYTHON) $(IDMA_UTIL_DIR)/run_verify.py --vlt-dir $(IDMA_LINT_DIR)
 
 $(IDMA_LINT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(IDMA_INCLUDE_ALL)
