@@ -31,8 +31,10 @@ module idma_otf_mxdequant
   output logic                      busy_o
 );
 
+  // pragma translate_off
   initial assert (StrbWidth >= 4 && StrbWidth <= 128 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_mxdequant: StrbWidth (%0d) must be a power of two in [4,128]", StrbWidth);
+  // pragma translate_on
 
   // FP16 is illegal above StrbWidth 64 (legalizer ComputeMxFp16Width), so gate it off
   localparam bit          Fp16Dn  = Fp16En && (StrbWidth <= 64);

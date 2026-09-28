@@ -46,8 +46,10 @@ module idma_otf_transpose #(
 );
 
   // StrbWidth must be a power of two >= 2 so LaneW>=1 and the shift geometry holds
+  // pragma translate_off
   initial assert (StrbWidth >= 2 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_transpose: StrbWidth (%0d) must be a power of two >= 2", StrbWidth);
+  // pragma translate_on
 
   // Fill-side geometry: latched on a matrix's first beat, released once its final tile is filled
   logic                geometry_valid_q;
@@ -279,11 +281,11 @@ module idma_otf_transpose #(
     end
   end
 
-`ifndef SYNTHESIS
+  // pragma translate_off
   // Fill and drain advance through the banks in the same order
   assert property (@(posedge clk_i) disable iff (!rst_ni || clear_i)
       !FullDuplex || ((wr_bank ^ rd_bank) == (^full_q)))
   else $error("idma_otf_transpose: fill and drain bank pointers out of order");
-`endif
+  // pragma translate_on
 
 endmodule : idma_otf_transpose
