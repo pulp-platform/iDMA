@@ -78,7 +78,7 @@ module idma_otf_transpose #(
   assign leftover_cols = active_tensor_size_n & ne_m1;
 
   // FF tile banks (ping-pong when FullDuplex), E=1 worst case (StrbWidth x StrbWidth B)
-  logic [StrbWidth-1:0][7:0] tile_q [NumBanks][StrbWidth];
+  logic [NumBanks-1:0][StrbWidth-1:0][StrbWidth-1:0][7:0] tile_q;
 
   // internal output + handshakes
   logic [StrbWidth-1:0][7:0] data_int;
@@ -192,7 +192,8 @@ module idma_otf_transpose #(
   // tile banks
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      for (int b = 0; b < NumBanks; b++) tile_q[b] <= '{default: '0};
+      for (int b = 0; b < NumBanks; b++)
+        for (int r = 0; r < StrbWidth; r++) tile_q[b][r] <= '0;
     end else if (in_hs && !clear_i) begin
       tile_q[wr_bank][wr_cnt] <= data_i;
     end
@@ -229,7 +230,7 @@ module idma_otf_transpose #(
   end
 
   // Byte p reads tile_q[rd_bank][p>>logE][rd_cnt*E + (p&(E-1))]; the row is constant per mode
-  logic [StrbWidth-1:0][7:0] rd_tile [StrbWidth];
+  logic [StrbWidth-1:0][StrbWidth-1:0][7:0] rd_tile;
   for (genvar r = 0; r < StrbWidth; r++) begin : gen_rd_row
     assign rd_tile[r] = tile_q[rd_bank][r];
   end

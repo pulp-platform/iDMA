@@ -168,7 +168,7 @@ module idma_otf_mxdequant
   // write: rotate the block by wr_off; enables select insert-length ring positions
   logic [PtrW-1:0]    wr_ptr;
   logic [XBW-1:0]     wr_off;
-  logic [XB-1:0][7:0] wrot [XBW+1];
+  logic [XBW:0][XB-1:0][7:0] wrot;
   logic [BufSize-1:0] wren;
   assign wr_ptr    = rd_q + occ_q[PtrW-1:0];
   assign wr_off    = wr_ptr[XBW-1:0];
@@ -183,7 +183,7 @@ module idma_otf_mxdequant
   end
 
   // read: log-stage rotator at rd_q; DC prunes it to the StrbWidth funnel
-  logic [BufSize-1:0][7:0] rrot [PtrW+1];
+  logic [PtrW:0][BufSize-1:0][7:0] rrot;
   assign rrot[PtrW] = pack_q;
   for (genvar b = 0; b < PtrW; b++) begin : gen_rrot
     for (genvar i = 0; i < BufSize; i++) begin : gen_rrot_byte
