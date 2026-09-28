@@ -79,7 +79,7 @@ module idma_otf_transpose #(
   assign leftover_rows = active_tensor_size_m & ne_m1;
   assign leftover_cols = active_tensor_size_n & ne_m1;
 
-  // FF tile banks (ping-pong when FullDuplex), E=1 worst case (StrbWidth x StrbWidth B)
+  // Packed FF tile banks, read by column in one cycle so never a RAM; ping-pong when FullDuplex
   logic [NumBanks-1:0][StrbWidth-1:0][StrbWidth-1:0][7:0] tile_q;
 
   // internal output + handshakes
