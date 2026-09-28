@@ -137,13 +137,13 @@ module idma_otf_transpose #(
       tensor_size_m_q  <= '0;
       tensor_size_n_q  <= '0;
     end else begin
+      if (fill_exec_done)                  geometry_valid_q <= 1'b0;
+      else if (in_hs && !geometry_valid_q) geometry_valid_q <= 1'b1;
       if (in_hs && !geometry_valid_q) begin
-        geometry_valid_q <= 1'b1;
         transp_mode_q    <= transp_mode_i;
         tensor_size_m_q  <= tensor_size_m_i;
         tensor_size_n_q  <= tensor_size_n_i;
       end
-      if (fill_exec_done) geometry_valid_q <= 1'b0;
     end
   end
 
