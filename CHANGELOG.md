@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## 0.7.2 - 2026-09-29
+
+### Fixed
+- Drive the compute request fields in the backend synthesis wrappers, so synthesis keeps the
+  compute datapath, and elaborate only legal compute configurations
+  [#249](https://github.com/pulp-platform/iDMA/pull/249). The wrappers gain `req_compute_*_i`
+  input ports for compute-enabled variants.
+- Select the transpose read mux per element size, which makes the engine much smaller at wide
+  buses [#249](https://github.com/pulp-platform/iDMA/pull/249).
+- Make the compute engines lint-clean for synthesis, with packed large arrays and the parameter
+  checks under `translate_off` [#252](https://github.com/pulp-platform/iDMA/pull/252).
+- Build the Verilator simulations correctly with a ccache older than 4, and restore the 512 and
+  1024-bit mxroundtrip legs [#250](https://github.com/pulp-platform/iDMA/pull/250).
+
 ## 0.7.1 - 2026-09-24
 
 ### Added
