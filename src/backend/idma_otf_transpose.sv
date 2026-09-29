@@ -46,8 +46,10 @@ module idma_otf_transpose #(
 );
 
   // StrbWidth must be a power of two >= 2 so LaneW>=1 and the shift geometry holds
+  // pragma translate_off
   initial assert (StrbWidth >= 2 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_transpose: StrbWidth (%0d) must be a power of two >= 2", StrbWidth);
+  // pragma translate_on
 
   // Fill-side geometry: latched on a matrix's first beat, released once its final tile is filled
   logic                geometry_valid_q;
@@ -77,8 +79,8 @@ module idma_otf_transpose #(
   assign leftover_rows = active_tensor_size_m & ne_m1;
   assign leftover_cols = active_tensor_size_n & ne_m1;
 
-  // FF tile banks (ping-pong when FullDuplex), E=1 worst case (StrbWidth x StrbWidth B)
-  logic [StrbWidth-1:0][7:0] tile_q [NumBanks][StrbWidth];
+  // Packed FF tile banks, read by column in one cycle so never a RAM; ping-pong when FullDuplex
+  logic [NumBanks-1:0][StrbWidth-1:0][StrbWidth-1:0][7:0] tile_q;
 
   // internal output + handshakes
   logic [StrbWidth-1:0][7:0] data_int;
@@ -135,13 +137,13 @@ module idma_otf_transpose #(
       tensor_size_m_q  <= '0;
       tensor_size_n_q  <= '0;
     end else begin
+      if (fill_exec_done)                  geometry_valid_q <= 1'b0;
+      else if (in_hs && !geometry_valid_q) geometry_valid_q <= 1'b1;
       if (in_hs && !geometry_valid_q) begin
-        geometry_valid_q <= 1'b1;
         transp_mode_q    <= transp_mode_i;
         tensor_size_m_q  <= tensor_size_m_i;
         tensor_size_n_q  <= tensor_size_n_i;
       end
-      if (fill_exec_done) geometry_valid_q <= 1'b0;
     end
   end
 
@@ -192,7 +194,8 @@ module idma_otf_transpose #(
   // tile banks
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      for (int b = 0; b < NumBanks; b++) tile_q[b] <= '{default: '0};
+      for (int b = 0; b < NumBanks; b++)
+        for (int r = 0; r < StrbWidth; r++) tile_q[b][r] <= '0;
     end else if (in_hs && !clear_i) begin
       tile_q[wr_bank][wr_cnt] <= data_i;
     end
@@ -229,7 +232,7 @@ module idma_otf_transpose #(
   end
 
   // Byte p reads tile_q[rd_bank][p>>logE][rd_cnt*E + (p&(E-1))]; the row is constant per mode
-  logic [StrbWidth-1:0][7:0] rd_tile [StrbWidth];
+  logic [StrbWidth-1:0][StrbWidth-1:0][7:0] rd_tile;
   for (genvar r = 0; r < StrbWidth; r++) begin : gen_rd_row
     assign rd_tile[r] = tile_q[rd_bank][r];
   end
@@ -278,11 +281,11 @@ module idma_otf_transpose #(
     end
   end
 
-`ifndef SYNTHESIS
+  // pragma translate_off
   // Fill and drain advance through the banks in the same order
   assert property (@(posedge clk_i) disable iff (!rst_ni || clear_i)
       !FullDuplex || ((wr_bank ^ rd_bank) == (^full_q)))
   else $error("idma_otf_transpose: fill and drain bank pointers out of order");
-`endif
+  // pragma translate_on
 
 endmodule : idma_otf_transpose

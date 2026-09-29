@@ -31,8 +31,10 @@ module idma_otf_mxdequant
   output logic                      busy_o
 );
 
+  // pragma translate_off
   initial assert (StrbWidth >= 4 && StrbWidth <= 128 && (StrbWidth & (StrbWidth-1)) == 0) else
       $fatal(1, "idma_otf_mxdequant: StrbWidth (%0d) must be a power of two in [4,128]", StrbWidth);
+  // pragma translate_on
 
   // FP16 is illegal above StrbWidth 64 (legalizer ComputeMxFp16Width), so gate it off
   localparam bit          Fp16Dn  = Fp16En && (StrbWidth <= 64);
@@ -168,7 +170,7 @@ module idma_otf_mxdequant
   // write: rotate the block by wr_off; enables select insert-length ring positions
   logic [PtrW-1:0]    wr_ptr;
   logic [XBW-1:0]     wr_off;
-  logic [XB-1:0][7:0] wrot [XBW+1];
+  logic [XBW:0][XB-1:0][7:0] wrot;
   logic [BufSize-1:0] wren;
   assign wr_ptr    = rd_q + occ_q[PtrW-1:0];
   assign wr_off    = wr_ptr[XBW-1:0];
@@ -183,7 +185,7 @@ module idma_otf_mxdequant
   end
 
   // read: log-stage rotator at rd_q; DC prunes it to the StrbWidth funnel
-  logic [BufSize-1:0][7:0] rrot [PtrW+1];
+  logic [PtrW:0][BufSize-1:0][7:0] rrot;
   assign rrot[PtrW] = pack_q;
   for (genvar b = 0; b < PtrW; b++) begin : gen_rrot
     for (genvar i = 0; i < BufSize; i++) begin : gen_rrot_byte
