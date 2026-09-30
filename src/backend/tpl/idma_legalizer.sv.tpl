@@ -767,15 +767,17 @@ ${database[protocol]['legalizer_write_data_path']}
                   (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &
                   !(req_i.opt.dst_protocol inside {idma_pkg::AXI, idma_pkg::OBI})),
                   clk_i, !rst_ni)
-    // NOT IMPLEMENTED: size-changing compute is validated on AXI src/dst only (TODO: OBI)
+    // NOT IMPLEMENTED: size-changing compute is validated on AXI and OBI src/dst only
     `ASSERT_NEVER(ComputeMxSrcProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
                   (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
                    idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
-                  (req_i.opt.src_protocol != idma_pkg::AXI)), clk_i, !rst_ni)
+                  !(req_i.opt.src_protocol inside {idma_pkg::AXI, idma_pkg::OBI})),
+                  clk_i, !rst_ni)
     `ASSERT_NEVER(ComputeMxDstProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
                   (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
                    idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
-                  (req_i.opt.dst_protocol != idma_pkg::AXI)), clk_i, !rst_ni)
+                  !(req_i.opt.dst_protocol inside {idma_pkg::AXI, idma_pkg::OBI})),
+                  clk_i, !rst_ni)
 % if compute_eligible:
     // the requested op must be elaborated in this configuration
     `ASSERT_NEVER(ComputeOpUnsupported, (ready_o & valid_i & req_i.opt.compute.enable &

@@ -651,6 +651,8 @@
             { "top" : "tb_idma_rt_midend", "why" : "fails under --assert on cc_rr_arb_tree lock" },
             { "top" : "tb_idma_transpose_obi",
               "why" : "verilator only: obi_sim_mem sits in the obi test target; Questa runs it" },
+            { "top" : "tb_idma_mx_obi",
+              "why" : "verilator only: obi_sim_mem sits in the obi test target; Questa runs it" },
             { "top" : "the directed backend job runs", "why" : "verilator cannot drive the class-based stimulus" }
         ]
     }
