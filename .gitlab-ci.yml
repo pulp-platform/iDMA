@@ -22,8 +22,26 @@ init:
     - uv sync --locked
     - source .venv/bin/activate
   script:
-    - make idma_nonfree_init
-    - make idma_nonfree_ci
+    - |
+      internal=true
+      if [ "$CI_PIPELINE_SOURCE" = push ] && [ -n "$CI_COMMIT_BRANCH" ] &&
+         [ "$CI_COMMIT_BRANCH" != devel ] && [ "$CI_COMMIT_BRANCH" != master ]; then
+        deepen=--unshallow
+        [ "$(git rev-parse --is-shallow-repository)" = true ] || deepen=
+        if git fetch -q ${deepen:+"$deepen"} origin +refs/heads/devel:refs/remotes/origin/devel \
+             "+refs/heads/$CI_COMMIT_BRANCH:refs/remotes/origin/$CI_COMMIT_BRANCH"; then
+          internal=$(git show origin/devel:util/ci-internal-needed.sh |
+            bash -s -- origin/devel HEAD) || internal=true
+        fi
+      fi
+      if [ "$internal" = false ]; then
+        echo "Only docs or unrelated files changed; skipping the internal CI"
+        mkdir -p nonfree/ci
+        printf 'skip: {variables: {GIT_STRATEGY: none}, script: echo skipped}\n' > nonfree/ci/ci.yml
+      else
+        make idma_nonfree_init
+        make idma_nonfree_ci
+      fi
   artifacts:
       paths:
         - nonfree/ci/ci.yml
