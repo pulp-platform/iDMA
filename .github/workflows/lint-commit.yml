@@ -1,0 +1,32 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Paul Scheffler <paulsc@iis.ee.ethz.ch>
+# - Thomas Benz <tbenz@iis.ee.ethz.ch>
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+name: lint-commit
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  lint-commit:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        uses: actions/checkout@v5
+      -
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      -
+        name: Lint commits
+        run: uv run --locked python3 util/lint-commits.py HEAD

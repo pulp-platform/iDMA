@@ -27,6 +27,12 @@ jobs:
     uses: ./.github/workflows/lint.yml
     secrets: inherit
 
+  # PRs lint their title instead (lint-pr.yml); nothing waits on this
+  lint-commit:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/lint-commit.yml
+    secrets: inherit
+
   warm-toolchain:
     uses: ./.github/workflows/warm-toolchain.yml
     secrets: inherit

@@ -1,0 +1,51 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Authors:
+# - Daniel Keller <dankeller@iis.ee.ethz.ch>
+
+# PRs are squash-merged: the title becomes the devel subject, the PR author the squash author
+name: lint-pr
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches-ignore:
+      - '__deploy__**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  lint-title:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        uses: actions/checkout@v5
+      -
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      -
+        name: Lint PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >-
+          uv run --locked python3 util/lint-commits.py
+          --title="$PR_TITLE" --pr-number "$PR_NUMBER"
+      -
+        name: Check the squash author email
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if [ -z "$(gh api "users/$PR_AUTHOR" --jq '.email // empty')" ]; then
+            echo "::warning::@$PR_AUTHOR has no public email; the squash may get a no-reply author"
+          fi

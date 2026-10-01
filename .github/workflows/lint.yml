@@ -100,21 +100,6 @@ jobs:
           file_or_dir: Bender.yml src/db/*.yml
           config_file: .github/yamllint-conf.yml
 
-  lint-commit:
-    runs-on: ubuntu-latest
-    steps:
-      -
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      -
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      -
-        name: Lint commits
-        run: uv run --locked python3 util/lint-commits.py HEAD
-
   lint-author:
     runs-on: ubuntu-latest
     steps:
