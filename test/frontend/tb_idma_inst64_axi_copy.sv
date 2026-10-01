@@ -47,6 +47,7 @@ module tb_idma_inst64_axi_copy #(
     int unsigned bytes_checked = 0;
     int unsigned axi_ar_beats = 0;
     int unsigned axi_aw_beats = 0;
+    int unsigned axi_r_beats  = 0;
 
     //--------------------------------------
     // DUT event cross-check
@@ -163,6 +164,7 @@ module tb_idma_inst64_axi_copy #(
         if (harness.rst_n) begin
             if (harness.axi_req[0].ar_valid && harness.axi_res[0].ar_ready) axi_ar_beats++;
             if (harness.axi_req[0].aw_valid && harness.axi_res[0].aw_ready) axi_aw_beats++;
+            if (harness.axi_req[0].r_ready  && harness.axi_res[0].r_valid)  axi_r_beats++;
             if (ev.ar_done) begin
                 ev_ar_beats++;
                 ev_ar_len_seen  <= ev.ar_len;
@@ -188,6 +190,12 @@ module tb_idma_inst64_axi_copy #(
     a_no_obi_traffic : assert property (
         @(posedge harness.clk) disable iff (!harness.rst_n) !harness.obi_req[0].req
     ) else $fatal(1, "OBI leg requested during an AXI-to-AXI transfer: bad protocol decode");
+
+    // AXI-only: a data-less AW holds the shared slave's W order and can deadlock it
+    a_aw_after_r : assert property (
+        @(posedge harness.clk) disable iff (!harness.rst_n || EnableTcdmObi)
+        harness.axi_req[0].aw_valid |-> axi_r_beats != 0
+    ) else $fatal(1, "AW issued before any read data: RAW coupling is off");
 
     task automatic seed_memories();
         for (int i = 0; i < CopyPadBytes; i++) begin

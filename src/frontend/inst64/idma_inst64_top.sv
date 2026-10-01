@@ -288,7 +288,7 @@ module idma_inst64_top #(
                 .EnableCompute        ( EnableCompute                 ),
                 .ComputeOps           ( ComputeOps                    ),
                 .ComputeTuning        ( ComputeTuning                 ),
-                .RAWCouplingAvail     ( 1'b0                          ),
+                .RAWCouplingAvail     ( 1'b1                          ),
                 .MaskInvalidData      ( 1'b0                          ),
                 .HardwareLegalizer    ( 1'b1                          ),
                 .RejectZeroTransfers  ( 1'b1                          ),
