@@ -497,7 +497,7 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_tcdm_copy.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_tcdm_copy.log
 
-# DMOPC mxquant against the DPI-C golden, plus the unknown-opcode guard
+# DMOPC MX and transpose against the golden, on both topologies, plus the unknown-opcode guard
 .PHONY: idma_sim_tb_idma_inst64_compute
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
@@ -507,6 +507,10 @@ idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute
 	# Questa does not propagate $$fatal to the exit code; gate on the transcript
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute.log
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=0 tb_idma_inst64_compute \
+		-logfile inst64_compute_axi_only.log -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute_axi_only.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute_axi_only.log
 	# the guard must fire; a silent fallback to a plain copy would pass the run above
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=1 \
 		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true
@@ -720,7 +724,7 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_axi_copy:-GDMATracing=1 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
-                    tb_idma_inst64_compute:-GEnableTcdmObi=1 \
+                    tb_idma_inst64_compute:-GEnableTcdmObi=0 \
                     tb_idma_inst64_txid:-GNumChannels=2
 
 .PHONY: idma_lint_inst64
