@@ -15,10 +15,9 @@ files=$(git diff --name-only --no-renames "$1...$2") || { echo true; exit 0; }
 
 while IFS= read -r f; do
     case "$f" in
-        doc/* | *.md | CODEOWNERS | LICENSE | LICENSE.* | .github/ISSUE_TEMPLATE/* | \
-        util/lint-*.py | scripts/list-* | \
-        .github/workflows/docs.yml | .github/workflows/promote-to-master.yml | \
-        .github/workflows/prune-deploy-branches.yml | .github/workflows/retarget-to-devel.yml) ;;
+        .github/workflows/gitlab-ci.yml) echo true; exit 0 ;;
+        doc/* | *.md | CODEOWNERS | LICENSE | LICENSE.* | .github/* | .gitlint | \
+        .pre-commit-config.yaml | util/lint-*.py | util/list-*.py | scripts/list-*) ;;
         *) echo true; exit 0 ;;
     esac
 done <<< "$files"
