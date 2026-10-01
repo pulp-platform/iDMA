@@ -62,41 +62,42 @@ def lint_commit_author(commit):
     return success
 
 
-def lint_commit_message(commit):
+def lint_summary(summary, commit=None, suffix=''):
     """
-    Checks the commit messages to conform to our standards.
+    Checks a summary line (commit subject or PR title) against our standards.
+    `suffix` is appended at merge time (e.g. " (#NN)") and counts towards the length.
     """
     success = True
-    lines = commit.message.splitlines()
 
     # Check length of summary line.
-    summary_line_len = len(lines[0])
+    summary_line_len = len(summary + suffix)
     if summary_line_len > COMMIT_MSG_MAX_SUMMARY_LEN:
         error(
-            "The summary line in the commit message is %d characters long; "
+            "The summary line%s is %d characters long; "
             "only %d characters are allowed." %
-            (summary_line_len, COMMIT_MSG_MAX_SUMMARY_LEN), commit)
+            (" (with \"%s\" appended)" % suffix if suffix else "",
+             summary_line_len, COMMIT_MSG_MAX_SUMMARY_LEN), commit)
         success = False
 
     # Check that summary line does not end with a period
-    if lines[0].endswith('.'):
+    if summary.endswith('.'):
         error("The summary line must not end with a period.", commit)
         success = False
 
     # Check that we don't have any fixups.
-    if lines[0].startswith('fixup!'):
+    if summary.startswith('fixup!'):
         error("Fixup commits are not allowed. Please resolve by rebasing.",
               commit)
         success = False
 
     # Try to determine whether we got an area prefix in the commit message:
-    summary_line_split = lines[0].split(':')
+    summary_line_split = summary.split(':')
     summary_line_split_len = len(summary_line_split)
 
     # We didn't get an area prefix, so just make sure the message started with a
     # capital letter.
     if summary_line_split_len == 1:
-        if not re.match(r'[A-Z]', lines[0]):
+        if not re.match(r'[A-Z]', summary):
             error("The summary line must start with a capital letter.", commit)
             success = False
     # The user specified an area on which she worked.
@@ -120,6 +121,19 @@ def lint_commit_message(commit):
     else:
         error("Only one colon is allowed to specify the area of changes.",
               commit)
+        success = False
+
+    return success
+
+
+def lint_commit_message(commit):
+    """
+    Checks the commit messages to conform to our standards.
+    """
+    success = True
+    lines = commit.message.splitlines()
+
+    if not lint_summary(lines[0], commit):
         success = False
 
     # Check for an empty line separating the summary line from the long
@@ -177,16 +191,40 @@ def main():
                         required=False,
                         action="store_true",
                         help='do not check commits with more than one parent')
+    parser.add_argument('--title',
+                        required=False,
+                        help=('lint this PR title as the squash-merge summary line '
+                              'instead of a commit range'))
+    parser.add_argument('--pr-number',
+                        type=int,
+                        required=False,
+                        help='with --title, count the " (#N)" squash suffix towards the length')
     parser.add_argument('commit_range',
                         metavar='commit-range',
+                        nargs='?',
                         help=('commit range to check '
                               '(must be understood by git log)'))
     args = parser.parse_args()
+
+    if (args.title is None) == (args.commit_range is None):
+        parser.error('give exactly one of --title or commit-range')
+    if args.title is None and args.pr_number is not None:
+        parser.error('--pr-number requires --title')
 
     error_msg_prefix = args.error_msg_prefix
     warning_msg_prefix = args.warning_msg_prefix
 
     lint_successful = True
+
+    if args.title is not None:
+        print("Checking title \"%s\"" % args.title)
+        suffix = ' (#%d)' % args.pr_number if args.pr_number is not None else ''
+        if not lint_summary(args.title, suffix=suffix):
+            lint_successful = False
+        if not lint_successful:
+            error('Title lint failed.')
+            sys.exit(1)
+        return
 
     repo = Repo()
     commits = repo.iter_commits(args.commit_range)
