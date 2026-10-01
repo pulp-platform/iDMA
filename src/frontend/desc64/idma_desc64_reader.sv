@@ -156,6 +156,9 @@ end else if (DataWidth == 32) begin : gen_32_data_path
             fetch_counter_d                    = 3'b0;
         end
     end
+
+    `FF(descriptor_data_q, descriptor_data_d, 224'b0)
+    `FF(fetch_counter_q, fetch_counter_d, 3'b0)
 end
 
 idma_desc64_reshaper #(
