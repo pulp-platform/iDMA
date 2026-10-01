@@ -37,7 +37,7 @@ init:
       if [ "$internal" = false ]; then
         echo "Only docs or unrelated files changed; skipping the internal CI"
         mkdir -p nonfree/ci
-        printf 'skip:\n  script: echo skipped\n' > nonfree/ci/ci.yml
+        printf 'skip: {variables: {GIT_STRATEGY: none}, script: echo skipped}\n' > nonfree/ci/ci.yml
       else
         make idma_nonfree_init
         make idma_nonfree_ci

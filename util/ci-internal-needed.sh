@@ -6,9 +6,7 @@
 # Authors:
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-# Usage: ci-internal-needed.sh <base> <head>
-# Prints false iff every file changed in <base>...<head> is irrelevant to the internal CI.
-# Any error prints true.
+# Usage: ci-internal-needed.sh <base> <head>; prints false iff no change matters, else true
 
 set -o pipefail
 
