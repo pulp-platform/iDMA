@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## 0.7.3 - 2026-10-01
+
+### Fixed
+- Couple the inst64 AW to its read data in the AXI-only topology, as in 0.6.5. Without it, AWs
+  go out before any read data and can deadlock against remote writes into the TCDM
+  [#256](https://github.com/pulp-platform/iDMA/pull/256).
+- Register the descriptor data and fetch counter in the 32-bit data path of the desc64 reader
+  [#255](https://github.com/pulp-platform/iDMA/pull/255).
+- Drop the parentheses after `$time` in the generated tracer
+  [#254](https://github.com/pulp-platform/iDMA/pull/254).
+
+### Changed
+- Lint the PR title, which becomes the squash subject, instead of the head commit
+  [#257](https://github.com/pulp-platform/iDMA/pull/257).
+- Skip the internal CI for PRs that only change docs or GitHub-only files
+  [#258](https://github.com/pulp-platform/iDMA/pull/258).
+
 ## 0.7.2 - 2026-09-29
 
 ### Fixed
