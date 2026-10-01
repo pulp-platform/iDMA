@@ -69,7 +69,7 @@ TRACER_BODY = '''
                     "print_fifo_info"    : __backend_inst``.PrintFifoInfo <%text>\\</%text>
                 }; <%text>\\</%text>
                 meta = '{ <%text>\\</%text>
-                    "time" : $time() <%text>\\</%text>
+                    "time" : $time <%text>\\</%text>
                 }; <%text>\\</%text>
                 backend = '{ <%text>\\</%text>
                     "req_valid"  : __backend_inst``.req_valid_i, <%text>\\</%text>
