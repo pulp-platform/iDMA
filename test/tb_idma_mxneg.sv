@@ -55,6 +55,7 @@ module tb_idma_mxneg
   );
 
   logic [1:0] layout = idma_pkg::MX_LAYOUT_INLINE;
+  idma_pkg::mx_elem_e neg_elem = idma_pkg::MX_E5M2;
 
   task automatic issue(input addr_t src, input addr_t dst, input int unsigned L,
                        input idma_pkg::compute_op_e op,
@@ -72,7 +73,10 @@ module tb_idma_mxneg
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = (op != idma_pkg::COMPUTE_NONE);
     idma_req.opt.compute.op      = op;
-    if (idma_pkg::compute_op_is_mx(op)) idma_req.opt.compute.params.mx.layout = layout;
+    if (idma_pkg::compute_op_is_mx(op)) begin
+      idma_req.opt.compute.params.mx.layout   = layout;
+      idma_req.opt.compute.params.mx.elem_fmt = neg_elem;
+    end
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -120,6 +124,10 @@ module tb_idma_mxneg
       17: begin
         layout = idma_pkg::MX_LAYOUT_PLANAR;
         issue(Src, Dst, 48, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      end
+      18: begin
+        neg_elem = idma_pkg::MX_E2M1;
+        issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       end
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase

@@ -880,6 +880,12 @@ ${database[protocol]['legalizer_write_data_path']}
     `ASSERT_NEVER(ComputeMxFp16Width, (ready_o & valid_i & req_i.opt.compute.enable &
                   (idma_pkg::compute_op_fmt(req_i.opt.compute.op) == idma_pkg::MX_FMT_FP16) &
                   (StrbWidth > 64)), clk_i, !rst_ni)
+    // E2M1 and the reserved MX element format are not elaborated
+    `ASSERT_NEVER(ComputeMxElemFmt, (ready_o & valid_i & req_i.opt.compute.enable &
+                  idma_pkg::compute_op_is_mx(req_i.opt.compute.op) &
+                  ~(req_i.opt.compute.params.mx.elem_fmt inside {idma_pkg::MX_E5M2,
+                                                                 idma_pkg::MX_E4M3})),
+                  clk_i, !rst_ni)
     // inline mxdequant input must additionally be beat-aligned (33k % StrbWidth == 0)
     `ASSERT_NEVER(ComputeMxdequantBeatAligned, (ready_o & valid_i & req_i.opt.compute.enable &
                   ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) |

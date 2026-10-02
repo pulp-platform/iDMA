@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   and `rceil`. The legalizer interleaves data bursts and per-group scale bursts on the write side
   (quant) and scale-first reads on the read side (dequant); `tb_idma_mxplanar` checks both
   layouts end to end.
+- MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by
+  `mx_options_t.elem_fmt` (E4M3: max normal 448 = `0x7E`, NaN `0x7F`, no Inf); a poisoned E4M3
+  block has `0x7F` elements.
+- Per-transfer RCEIL scale rounding (`mx_options_t.rceil`): the shared exponent is
+  `ceil(log2(amax / max_normal))` instead of `floor(log2(amax)) - emax`, so the block max never
+  saturates. FLOOR (OCP MX v1.0) stays the default.
 
 ### Fixed
 - MX quant of FP32 subnormal inputs dropped the leading zeros (implicit 1), e.g. 32 x 2^-127

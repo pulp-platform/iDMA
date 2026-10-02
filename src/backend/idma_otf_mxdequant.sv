@@ -6,11 +6,11 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 // On-the-fly MX dequantizer, beat-granular and never stalling: inline 33B blocks
-// ([1B E8M0 scale][32B E5M2]) or planar 32B data blocks are accepted whole beats into the
-// input buffer (IB), extracted one output beat at a time (D0) and expanded to FP16 or FP32 (D1)
-// into the output queue (OQd). A planar scale beat lands in the scale register (SR); each data
-// beat copies its blocks' scale bytes from it into its IB entry. Input pops and output pushes
-// are credit-checked from flops.
+// ([1B E8M0 scale][32B E5M2 or E4M3]) or planar 32B data blocks are accepted whole beats into
+// the input buffer (IB), extracted one output beat at a time (D0) and expanded to FP16 or FP32
+// (D1) into the output queue (OQd). A planar scale beat lands in the scale register (SR); each
+// data beat copies its blocks' scale bytes from it into its IB entry. Input pops and output
+// pushes are credit-checked from flops.
 module idma_otf_mxdequant
   import idma_float_pkg::*;
 #(
@@ -53,9 +53,9 @@ module idma_otf_mxdequant
   localparam int unsigned NSc    = (StrbWidth > DatB) ? StrbWidth / DatB : 1;
   localparam int unsigned SlB    = idma_pkg::MxScaleSlotBytes;
 
-  // IB: whole input beats, each with its destination format, layout and scale bytes
+  // IB: whole input beats, each with its destination and element format, layout and scale bytes
   logic [NIB-1:0][StrbWidth-1:0][7:0] ib_q;
-  logic [NIB-1:0]                     ib_fp16_q, ib_pl_q, ib_half_q;
+  logic [NIB-1:0]                     ib_fp16_q, ib_e4m3_q, ib_pl_q, ib_half_q;
   logic [NIB-1:0][NSc-1:0][7:0]       ib_sc_q;
   // planar: scale register, data byte counter within the scale line, scale sub-beat pointer
   logic [SlB-1:0][7:0]                sr_q;
@@ -70,7 +70,7 @@ module idma_otf_mxdequant
   logic [SubW-1:0]                    sub_q;
 
   // D0 stage register
-  logic                               d0_v_q, d0_fp16_q;
+  logic                               d0_v_q, d0_fp16_q, d0_e4m3_q;
   logic [7:0]                         d0_sc_q;
   logic [NL-1:0][7:0]                 d0_el_q;
 
@@ -155,12 +155,14 @@ module idma_otf_mxdequant
     if (dpop) begin
       ib_q[ib_wr_q]      <= data_i;
       ib_fp16_q[ib_wr_q] <= Fp16Dn & (tag_i.fmt == idma_pkg::MX_FMT_FP16);
+      ib_e4m3_q[ib_wr_q] <= tag_i.elem_fmt == idma_pkg::MX_E4M3;
       ib_pl_q[ib_wr_q]   <= pl;
       ib_half_q[ib_wr_q] <= pl & tag_i.half;
       for (int k = 0; k < NSc; k++) ib_sc_q[ib_wr_q][k] <= sr_q[dk_q[10:5] + 6'(k)];
     end
     if (issue) begin
       d0_fp16_q <= fmt16;
+      d0_e4m3_q <= ib_e4m3_q[ib_hd_q];
       if (pl_hd)      d0_sc_q <= ib_sc_q[ib_hd_q][(NSc > 1) ? 32'(off_q) / DatB : 0];
       else if (first) d0_sc_q <= ext[0];
       for (int i = 0; i < NL; i++) d0_el_q[i] <= (first & ~pl_hd) ? ext[i+1] : ext[i];
@@ -171,7 +173,7 @@ module idma_otf_mxdequant
   logic [NL-1:0][31:0]       d1_lane;
   logic [StrbWidth-1:0][7:0] d1_beat;
   for (genvar i = 0; i < NL; i++) begin : gen_d1_lane
-    assign d1_lane[i] = e5m2_dequant_lane(d0_el_q[i], d0_sc_q, (i >= NL32) | d0_fp16_q);
+    assign d1_lane[i] = mx_dequant_lane(d0_el_q[i], d0_sc_q, (i >= NL32) | d0_fp16_q, d0_e4m3_q);
   end
   always_comb begin
     d1_beat = '0;

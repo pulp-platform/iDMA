@@ -37,3 +37,11 @@ void gm_mxquant(int num_blocks)        { mx_quant_fp16(gm_in, gm_out, (uint32_t)
 void gm_mxquant_fp32(int num_blocks)   { mx_quant_fp32(gm_in, gm_out, (uint32_t)num_blocks); }
 void gm_mxdequant_fp16(int num_blocks) { mx_dequant_fp16(gm_in, gm_out, (uint32_t)num_blocks); }
 void gm_mxdequant(int num_blocks)      { mx_dequant_fp32(gm_in, gm_out, (uint32_t)num_blocks); }
+void gm_mxquant_cfg(int num_blocks, int fp16, int elem, int rceil, int poison_dis) {
+  if (fp16) mx_quant_fp16_cfg(gm_in, gm_out, (uint32_t)num_blocks, elem, rceil, poison_dis);
+  else      mx_quant_fp32_cfg(gm_in, gm_out, (uint32_t)num_blocks, elem, rceil, poison_dis);
+}
+void gm_mxdequant_cfg(int num_blocks, int fp16, int elem) {
+  if (fp16) mx_dequant_fp16_cfg(gm_in, gm_out, (uint32_t)num_blocks, elem);
+  else      mx_dequant_fp32_cfg(gm_in, gm_out, (uint32_t)num_blocks, elem);
+}

@@ -559,6 +559,8 @@ idma_sim_tb_idma_mxroundtrip: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
 	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,fp16_,-gQuantFp16=1)
 	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024,fp32_,-gQuantFp16=0)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,e4m3_fp16_,-gQuantFp16=1 -gElemFmt=1)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024,e4m3_fp32_,-gQuantFp16=0 -gElemFmt=1)
 
 .PHONY: idma_sim_tb_idma_mxplanar
 idma_sim_tb_idma_mxplanar: $(IDMA_VSIM_DIR)/compile.tcl
@@ -600,7 +602,8 @@ idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	         "10 ComputeTransposeShape 64 1 1" "11 ComputeMxdequantLengthFits 64 1 1" \
 	         "12 ComputeMxFp16Width 1024 1 1" "13 not.elaborated 64 1 0" \
 	         "14 ComputeTransposeShape 64 1 1" "15 ComputeMxLayout 64 1 1" \
-	         "16 ComputeMxPlanarWidth 1024 1 0" "17 ComputeSizeAligned 64 1 1"; do \
+	         "16 ComputeMxPlanarWidth 1024 1 0" "17 ComputeSizeAligned 64 1 1" \
+	         "18 ComputeMxElemFmt 64 1 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \

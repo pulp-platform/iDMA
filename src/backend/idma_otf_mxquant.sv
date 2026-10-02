@@ -5,12 +5,13 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// On-the-fly MX quantizer: FP32 or FP16 input beats to inline [1 B E8M0 scale][32 B E5M2] blocks
-/// or, planar and grouped, to 32 B data blocks followed per scale group by one scale chunk, emitted
-/// as whole output beats. Four never-stalling stages: Q0 unpack and partial max, Q1 block scale and
-/// exponent distances, Q2 element lanes, Q3 insert into the data queue (OQ) and the scale queue
-/// (SQ). A beat is accepted only while the queues hold credit for what its block opens. A block
-/// holding an Inf or NaN is poisoned (0xFF scale, canonical NaN elements) unless its tag disables it.
+/// On-the-fly MX quantizer: FP32 or FP16 input beats to inline [1 B E8M0 scale][32 B E5M2 or
+/// E4M3] blocks or, planar and grouped, to 32 B data blocks followed per scale group by one scale
+/// chunk, emitted as whole output beats. Four never-stalling stages: Q0 unpack and partial max, Q1
+/// block scale and exponent distances, Q2 element lanes, Q3 insert into the data queue (OQ) and the
+/// scale queue (SQ). A beat is accepted only while the queues hold credit for what its block opens.
+/// A block holding an Inf or NaN is poisoned (0xFF scale, canonical NaN elements) unless its tag
+/// disables it; the tag also selects the element format and FLOOR or RCEIL scale rounding.
 module idma_otf_mxquant
   import idma_float_pkg::*;
 #(
@@ -121,14 +122,17 @@ module idma_otf_mxquant
                (!(gfst_d & (pl_d | xb_d)) || (sfree_d != '0)));
   end
 
+  // block max operand: {floor(log2|v|), significand above max normal}
+  typedef logic signed [9:0] mkey_t;
+
   mx_lane_t          un16 [E16];
   mx_lane_t          un32 [E32];
   mx_lane_t          ln   [MxBlockSize];
   mx_lane_t          lane_q [MxBlockSize];
-  logic signed [8:0] pmax_d [NumGrp];
-  logic signed [8:0] pmax_q [NumGrp];
+  mkey_t             pmax_d [NumGrp];
+  mkey_t             pmax_q [NumGrp];
   logic [NumGrp-1:0] pspec_d, pspec_q;
-  logic              v0_q, pdis0_q, last0_q, pl0_q, g320_q, gend0_q;
+  logic              v0_q, pdis0_q, last0_q, pl0_q, g320_q, gend0_q, e4m3_0q, rceil0_q;
   logic [5:0]        a0_q;
 
   always_comb begin
@@ -142,9 +146,12 @@ module idma_otf_mxquant
       else      ln[i] = (PhW'(i / E32) == phase_q) ? un32[i % E32] : lane_q[i];
     end
     for (int g = 0; g < NumGrp; g++) begin
-      logic signed [8:0] a, b;
-      a = (ln[4*g].key   > ln[4*g+1].key) ? ln[4*g].key   : ln[4*g+1].key;
-      b = (ln[4*g+2].key > ln[4*g+3].key) ? ln[4*g+2].key : ln[4*g+3].key;
+      mkey_t k [4];
+      mkey_t a, b;
+      for (int j = 0; j < 4; j++)
+        k[j] = {ln[4*g+j].key, mx_sig_big(ln[4*g+j].sig, ln[4*g+j].sticky)};
+      a = (k[0] > k[1]) ? k[0] : k[1];
+      b = (k[2] > k[3]) ? k[2] : k[3];
       pmax_d[g]  = (a > b) ? a : b;
       pspec_d[g] = 1'b0;
       for (int j = 0; j < 4; j++) pspec_d[g] |= ln[4*g+j].cls inside {MX_INF, MX_NAN};
@@ -154,42 +161,47 @@ module idma_otf_mxquant
   always_ff @(posedge clk_i) begin
     if (pop) lane_q <= ln;
     if (pop && blk_done) begin
-      pmax_q  <= pmax_d;
-      pspec_q <= pspec_d;
-      pdis0_q <= tag_i.poison_dis;
-      last0_q <= tag_i.last;
-      pl0_q   <= pl;
-      g320_q  <= tag_i.group == idma_pkg::MX_GROUP_G32;
-      gend0_q <= gend;
-      a0_q    <= a_q;
+      pmax_q   <= pmax_d;
+      pspec_q  <= pspec_d;
+      pdis0_q  <= tag_i.poison_dis;
+      last0_q  <= tag_i.last;
+      pl0_q    <= pl;
+      g320_q   <= tag_i.group == idma_pkg::MX_GROUP_G32;
+      gend0_q  <= gend;
+      a0_q     <= a_q;
+      e4m3_0q  <= tag_i.elem_fmt == idma_pkg::MX_E4M3;
+      rceil0_q <= tag_i.rceil;
     end
   end
 
   //--------------------------------------
   // Q1: block scale, exponent distances
   //--------------------------------------
-  logic signed [8:0] bmax, se15;
-  logic              poison1_d;
+  logic signed [8:0] bmax, sem, emin;
+  logic              poison1_d, bump1_d;
   logic [7:0]        scale1_d;
   mx_qlane_t         ql1_d [MxBlockSize];
   mx_qlane_t         ql1_q [MxBlockSize];
   logic [7:0]        scale1_q;
-  logic              v1_q, poison1_q, last1_q, pl1_q, g321_q, gend1_q;
+  logic              v1_q, poison1_q, last1_q, pl1_q, g321_q, gend1_q, e4m3_1q, bump1_q;
   logic [5:0]        a1_q;
 
   always_comb begin
-    logic signed [8:0] m [NumGrp];
+    mkey_t m [NumGrp];
     for (int g = 0; g < NumGrp; g++) m[g] = pmax_q[g];
     for (int s = NumGrp / 2; s > 0; s = s / 2)
       for (int g = 0; g < s; g++) m[g] = (m[g] > m[g+s]) ? m[g] : m[g+s];
-    bmax = m[0];
-    // E8M0 shared exponent bmax - emax, clamped below at -127; se15 = shared exponent + emax
-    se15      = (bmax < -9'sd112) ? -9'sd112 : bmax;
+    bmax = m[0][9:1];
+    // E8M0 shared exponent bmax - emax clamped below at -127, plus the RCEIL bump; sem = shared
+    // exponent + emax, so the lane gaps are format independent
+    emin      = e4m3_0q ? -9'sd119 : -9'sd112;
+    sem       = (bmax < emin) ? emin : bmax;
+    bump1_d   = rceil0_q & m[0][0] & (bmax >= emin);
     poison1_d = (|pspec_q) & ~pdis0_q;
-    scale1_d  = poison1_d ? E8m0Nan : 8'(se15 + 9'sd112);
+    scale1_d  = poison1_d ? E8m0Nan : 8'(sem - emin) + 8'(bump1_d);
     for (int i = 0; i < MxBlockSize; i++) begin
       logic signed [9:0] d;
-      d = 10'(se15) - 10'(lane_q[i].key);
+      d = 10'(sem) - 10'(lane_q[i].key);
       ql1_d[i].sign   = lane_q[i].sign;
       ql1_d[i].cls    = lane_q[i].cls;
       ql1_d[i].gap    = (d > 10'sd63) ? 6'd63 : d[5:0];
@@ -207,6 +219,8 @@ module idma_otf_mxquant
     g321_q    <= g320_q;
     gend1_q   <= gend0_q;
     a1_q      <= a0_q;
+    e4m3_1q   <= e4m3_0q;
+    bump1_q   <= bump1_d;
   end
 
   //--------------------------------------
@@ -218,8 +232,14 @@ module idma_otf_mxquant
 
   always_comb begin
     blk_d[0] = scale1_q;
-    for (int i = 0; i < MxBlockSize; i++)
-      blk_d[i+1] = poison1_q ? E5m2Nan : mx_e5m2_quant(ql1_q[i]);
+    for (int i = 0; i < MxBlockSize; i++) begin
+      mx_qlane_t l;
+      l     = ql1_q[i];
+      l.gap = l.gap + 6'(bump1_q & (l.gap != 6'd63));
+      if (poison1_q)    blk_d[i+1] = e4m3_1q ? E4m3Nan : E5m2Nan;
+      else if (e4m3_1q) blk_d[i+1] = mx_e4m3_quant(l);
+      else              blk_d[i+1] = mx_e5m2_quant(l);
+    end
   end
 
   always_ff @(posedge clk_i) begin

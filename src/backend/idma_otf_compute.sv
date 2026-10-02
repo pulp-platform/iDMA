@@ -204,6 +204,10 @@ module idma_otf_compute #(
     assert (idma_pkg::compute_op_supported(ComputeEnable, compute_i.op))
       else $fatal(1, "idma_otf_compute: compute op %0d not elaborated (ComputeEnable)",
                   compute_i.op);
+  // E2M1 is not elaborated
+  always @(posedge clk_i) if (rst_ni && mx_valid_i)
+    assert (tag.elem_fmt inside {idma_pkg::MX_E5M2, idma_pkg::MX_E4M3})
+      else $fatal(1, "idma_otf_compute: MX element format %0d not elaborated", tag.elem_fmt);
   // the tag FIFO holds the tag of the lane-0 head whenever an MX beat is at the head
   always @(posedge clk_i) if (rst_ni && mx_valid_i)
     assert (tag_valid && tag.mx)
