@@ -29,13 +29,17 @@ package idma_float_pkg;
   localparam int Fp32Bias   = fp_bias(Fp32ExpBits);
   localparam int Fp16Bias   = fp_bias(Fp16ExpBits);
 
-  function automatic int decode_signed_scale(input logic [7:0] scale);
-    if (scale < 128) return int'(scale);
-    else return int'(scale) - 256;
+  // OCP MX v1.0 E8M0 block scale: X = 2^(E - 127), E in [0, 254], 0xFF = NaN
+  localparam int         E8m0Bias   = 127;
+  localparam int         E8m0ExpMax = 127;
+  localparam int         E8m0ExpMin = -127;
+  localparam logic [7:0] E8m0Nan    = 8'hFF;
+
+  function automatic int decode_e8m0_scale(input logic [7:0] scale);
+    return int'(scale) - E8m0Bias;
   endfunction
 
-  // Inf/NaN lanes are excluded from the scan; the scale saturates instead of wrapping
-  // TODO: signed 2's-complement scale, not OCP E8M0 (unsigned bias-127); internal only for now.
+  // Inf/NaN lanes are excluded from the scan; the shared exponent clamps to the E8M0 range
   function automatic logic [7:0] compute_block_scale_with_bias(
       input logic [31:0] fp32_bits[MxBlockSize], input int bias);
     logic [7:0] max_exp;
@@ -48,9 +52,9 @@ package idma_float_pkg;
         exp_tree[i] = (exp_tree[i] > exp_tree[i+s]) ? exp_tree[i] : exp_tree[i+s];
     max_exp = exp_tree[0];
     scale = int'(max_exp) - Fp32Bias - bias;
-    if (scale < -128) scale = -128;
-    else if (scale > 127) scale = 127;
-    return 8'(scale);
+    if (scale < E8m0ExpMin) scale = E8m0ExpMin;
+    else if (scale > E8m0ExpMax) scale = E8m0ExpMax;
+    return 8'(scale + E8m0Bias);
   endfunction
 
   // RNE FP32 -> E5M2 with full subnormal support. The split normal/subnormal
@@ -87,7 +91,7 @@ package idma_float_pkg;
     end else if (exp_is_max && !mant_is_zero) begin
       return {sign, 5'h1F, 2'd1};  // NaN
     end else if (exp_is_max) begin
-      return {sign, 5'h1E, 2'd3};  // Inf
+      return {sign, 5'h1E, 2'd3};  // Inf saturates (OCP FP8 SAT)
     end
 
     unbiased   = int'(expf) - Fp32Bias;
@@ -207,7 +211,7 @@ package idma_float_pkg;
     return {sign, rounded[10] ? {5'd1, 10'd0} : {5'd0, rounded[9:0]}};
   endfunction
 
-  // MXFP8 (E5M2) -> FP32 dequantization with the decoded block scale applied.
+  // MXFP8 (E5M2) -> FP32 with the decoded block scale applied; the caller handles the NaN scale
   function automatic logic [31:0] mxfp8_byte_to_fp32_prescaled(input logic [7:0] byte_val,
                                                                input int scaled);
     logic        sign;

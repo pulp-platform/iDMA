@@ -114,7 +114,7 @@ module idma_otf_mxquant
   end
 
   // in-module reimplementation of fp32_to_mxfp8_byte_prescaled: bit-exact, with
-  // proven-bound narrowing (scaled_exp in [-255,256] -> 10b signed) and the
+  // proven-bound narrowing (scaled_exp in [-254,254] -> 10b signed) and the
   // subnormal shifter reduced to its 3 reachable amounts (sh in {22,23,24})
   function automatic logic [7:0] q_e5m2(input logic [31:0] f, input logic signed [7:0] dec_scale);
     logic               sign;
@@ -191,7 +191,7 @@ module idma_otf_mxquant
   logic [7:0]        qbyte [MxBlockSize];
   always_comb begin
     blk_scale = compute_block_scale_with_bias(blk_elem, E5m2Bias);
-    dec_scale = signed'(blk_scale);
+    dec_scale = signed'(blk_scale - 8'(E8m0Bias));
     for (int i = 0; i < MxBlockSize; i++)
       qbyte[i] = q_e5m2(blk_elem[i], dec_scale);
   end

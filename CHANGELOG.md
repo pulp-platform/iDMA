@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Changed
+- **Breaking:** the MX block scale byte is now OCP E8M0 (unsigned, bias 127, `0xFF` = NaN)
+  instead of two's complement; the shared exponent clamps to [-127, 127] and a `0xFF` scale
+  dequantizes to NaN. MX blocks written by earlier versions decode differently
+  [#259](https://github.com/pulp-platform/iDMA/issues/259).
+
 ## 0.7.3 - 2026-10-01
 
 ### Fixed
