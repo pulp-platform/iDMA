@@ -242,6 +242,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
+    // write-shifter output before the compute write-source select
+    byte_t [StrbWidth-1:0] wr_beat;
+    strb_t                 wr_beat_valid, wr_beat_mask;
+    logic                  cmp_busy;
 
 % if not one_read_port:
     // Read multiplexed signals
@@ -394,10 +398,20 @@ ${rendered_read_ports[read_port]}
         strb_t                 cmp_consumed_d, cmp_consumed_q;
         strb_t                 cmp_consumed_this_cycle;
 
+        logic                  cmp_mx_head, cmp_mx_pop, cmp_w_mx;
+        idma_pkg::mx_tag_t     cmp_tag;
+
+        // the MX tag rides with each beat pushed into the dataflow element
+        always_comb begin
+            cmp_tag      = r_dp_req_i.mx;
+            cmp_tag.last = r_dp_req_i.mx.last & r_dp_ready_o;
+        end
+
         idma_otf_compute #(
             .StrbWidth           ( StrbWidth          ),
             .ComputeEnable       ( ComputeOps         ),
-            .ComputeTuning       ( ComputeTuning      )
+            .ComputeTuning       ( ComputeTuning      ),
+            .BufferDepth         ( BufferDepth        )
         ) i_idma_otf_compute (
             .clk_i,
             .rst_ni,
@@ -412,7 +426,20 @@ ${rendered_read_ports[read_port]}
             .beat_valid_o ( cmp_beat_valid      ),
             .beat_ready_i ( cmp_beat_ready      ),
             .lane_valid_o ( cmp_lane_valid      ),
-            .lane_ready_i ( buffer_out_ready_shifted )
+            .lane_ready_i ( buffer_out_ready_shifted ),
+            .tag_i        ( cmp_tag                                   ),
+            .tag_push_i   ( r_dp_req_i.mx.quant & (|buffer_in_valid)  ),
+            .mx_head_o    ( cmp_mx_head         ),
+            .mx_pop_o     ( cmp_mx_pop          ),
+            .w_data_i     ( wr_beat             ),
+            .w_valid_i    ( wr_beat_valid       ),
+            .w_mask_i     ( wr_beat_mask        ),
+            .w_data_o     ( buffer_out_shifted       ),
+            .w_valid_o    ( buffer_out_valid_shifted ),
+            .w_mask_o     ( mask_ext_shifted         ),
+            .w_mx_o       ( cmp_w_mx            ),
+            .w_pop_i      ( |buffer_out_ready   ),
+            .busy_o       ( cmp_busy            )
         );
 
         // Transpose produces atomic beats, but the legalizer may split one beat into multiple
@@ -435,22 +462,33 @@ ${rendered_read_ports[read_port]}
         assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
         assign wr_valid          = cmp_active ? cmp_lane_valid : buffer_out_valid;
         assign wr_strb           = cmp_active ? cmp_strb_o : '1;
-        assign dataflow_ready_in = cmp_active ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}}
-                                              : buffer_out_ready_shifted;
+        assign dataflow_ready_in = cmp_mx_head ? {StrbWidth{cmp_mx_pop}} :
+                                   cmp_active  ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}} :
+                                   cmp_w_mx    ? '0 : buffer_out_ready_shifted;
 
         `ASSERT(ComputeConsumeValid, cmp_consumed_this_cycle != '0 |-> cmp_beat_valid, clk_i, !rst_ni, "Write datapath consumed bytes without a valid atomic compute result")
         `ASSERT(ComputeBeatAllLanesValid, cmp_beat_valid |-> &cmp_lane_valid, clk_i, !rst_ni, "Scalar compute beat handshake requires all output lanes to be valid")
+        `ASSERT(ComputeMxWholeBeat, r_dp_req_i.mx.quant & (|buffer_in_valid) |-> &buffer_in_valid, clk_i, !rst_ni, "MX quant beats enter the dataflow element whole")
+        `ASSERT(ComputeMxNoShift, cmp_w_mx |-> w_dp_req_i.shift == '0, clk_i, !rst_ni, "MX quant output bypasses the write shifter")
     end else begin : gen_no_compute
-        assign wr_data           = buffer_out;
-        assign wr_valid          = buffer_out_valid;
-        assign wr_strb           = '1;
-        assign dataflow_ready_in = buffer_out_ready_shifted;
+        assign wr_data                  = buffer_out;
+        assign wr_valid                 = buffer_out_valid;
+        assign wr_strb                  = '1;
+        assign dataflow_ready_in        = buffer_out_ready_shifted;
+        assign buffer_out_shifted       = wr_beat;
+        assign buffer_out_valid_shifted = wr_beat_valid;
+        assign mask_ext_shifted         = wr_beat_mask;
+        assign cmp_busy                 = 1'b0;
     end
 % else:
-    assign wr_data           = buffer_out;
-    assign wr_valid          = buffer_out_valid;
-    assign wr_strb           = '1;
-    assign dataflow_ready_in = buffer_out_ready_shifted;
+    assign wr_data                  = buffer_out;
+    assign wr_valid                 = buffer_out_valid;
+    assign wr_strb                  = '1;
+    assign dataflow_ready_in        = buffer_out_ready_shifted;
+    assign buffer_out_shifted       = wr_beat;
+    assign buffer_out_valid_shifted = wr_beat_valid;
+    assign mask_ext_shifted         = wr_beat_mask;
+    assign cmp_busy                 = 1'b0;
 % endif
 
     //--------------------------------------
@@ -458,9 +496,9 @@ ${rendered_read_ports[read_port]}
     //--------------------------------------
 
     assign buffer_out_tmp           = {wr_data, wr_data} >> (w_dp_req_i.shift*8);
-    assign buffer_out_shifted       = buffer_out_tmp[$bits(buffer_out_shifted)/8-1:0];
-    assign buffer_out_valid_shifted = strb_t'({wr_valid, wr_valid} >>   w_dp_req_i.shift);
-    assign mask_ext_shifted         = strb_t'({wr_strb, wr_strb} >>   w_dp_req_i.shift);
+    assign wr_beat                  = buffer_out_tmp[$bits(wr_beat)/8-1:0];
+    assign wr_beat_valid            = strb_t'({wr_valid, wr_valid} >>   w_dp_req_i.shift);
+    assign wr_beat_mask             = strb_t'({wr_strb, wr_strb} >>   w_dp_req_i.shift);
     assign buffer_out_ready_shifted = strb_t'({buffer_out_ready, buffer_out_ready} >> - w_dp_req_i.shift);
     assign buffer_out_consumed_shifted =
         strb_t'({buffer_out_consumed, buffer_out_consumed} >> -w_dp_req_i.shift);
@@ -657,6 +695,6 @@ ${rendered_write_ports[write_port]}
     //--------------------------------------
     assign r_dp_busy_o   = r_dp_valid_i;
     assign w_dp_busy_o   = w_dp_valid_i | w_dp_ready_o;
-    assign buffer_busy_o = |buffer_out_valid;
+    assign buffer_busy_o = |buffer_out_valid | cmp_busy;
 
 endmodule

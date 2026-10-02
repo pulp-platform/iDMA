@@ -194,6 +194,27 @@ package idma_pkg;
         endcase
     endfunction
 
+    /// Per-beat MX sideband of the read datapath request and the dataflow element; `last` marks
+    /// the last burst (request) or beat (dataflow element) of the transfer
+    typedef struct packed {
+        logic    quant;
+        mx_fmt_e fmt;
+        logic    poison_dis;
+        logic    last;
+    } mx_tag_t;
+
+    /// MX sideband of a transfer; zero unless it is an elaborated MX quant op
+    function automatic mx_tag_t mx_tag(compute_enable_t ena, compute_options_t c, logic last);
+        mx_tag_t t;
+        t            = '0;
+        t.quant      = c.enable & (c.op inside {COMPUTE_MXQUANT, COMPUTE_MXQUANT_FP16}) &
+                       compute_op_supported(ena, c.op);
+        t.fmt        = t.quant ? compute_op_fmt(c.op) : MX_FMT_FP32;
+        t.poison_dis = t.quant & c.params.mx.poison_dis;
+        t.last       = t.quant & last;
+        return t;
+    endfunction
+
     /// Supported Protocols
     /// - `AXI`: Full AXI
     /// - `AXILITE`: AXI Lite

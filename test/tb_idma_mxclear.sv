@@ -5,17 +5,16 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Unit negtest for the MX sub-units' overlap guard: feeds one beat so the unit
+// Unit negtest for the MX dequant overlap guard: feeds one beat so the unit
 // holds a partial in-flight block, then asserts clear_i. The clear-with-in-flight
 // $fatal must fire. The backend serializes transfers, so this state is not
-// reachable black-box; the guard is exercised here directly. Quant=1 drives
-// idma_otf_mxquant, Quant=0 idma_otf_mxdequant. The runner greps for the message.
+// reachable black-box; the guard is exercised here directly. The runner greps for
+// the message. The quantizer has no transfer-boundary clear (beats carry their tag).
 
 `timescale 1ns/1ps
 
 module tb_idma_mxclear #(
-  parameter int unsigned StrbWidth = 32'd8,
-  parameter bit          Quant     = 1'b1
+  parameter int unsigned StrbWidth = 32'd8
 );
 
   logic clk = 1'b0, rst_n = 1'b0, clear = 1'b0;
@@ -28,19 +27,11 @@ module tb_idma_mxclear #(
   logic [StrbWidth-1:0]      lane_ready_i;
   logic                      busy_o;
 
-  if (Quant) begin : g_quant
-    idma_otf_mxquant #(.StrbWidth(StrbWidth), .Fp16En(1'b0)) i_dut (
-      .clk_i(clk), .rst_ni(rst_n), .clear_i(clear), .src_fmt_i(idma_pkg::MX_FMT_FP32),
-      .data_i(data_i), .valid_i(valid_i), .ready_o(ready_o),
-      .data_o(data_o), .lane_valid_o(lane_valid_o), .lane_ready_i(lane_ready_i), .busy_o(busy_o)
-    );
-  end else begin : g_dequant
-    idma_otf_mxdequant #(.StrbWidth(StrbWidth), .Fp16En(1'b0)) i_dut (
-      .clk_i(clk), .rst_ni(rst_n), .clear_i(clear), .dst_fmt_i(idma_pkg::MX_FMT_FP32),
-      .data_i(data_i), .valid_i(valid_i), .ready_o(ready_o),
-      .data_o(data_o), .lane_valid_o(lane_valid_o), .lane_ready_i(lane_ready_i), .busy_o(busy_o)
-    );
-  end
+  idma_otf_mxdequant #(.StrbWidth(StrbWidth), .Fp16En(1'b0)) i_dut (
+    .clk_i(clk), .rst_ni(rst_n), .clear_i(clear), .dst_fmt_i(idma_pkg::MX_FMT_FP32),
+    .data_i(data_i), .valid_i(valid_i), .ready_o(ready_o),
+    .data_o(data_o), .lane_valid_o(lane_valid_o), .lane_ready_i(lane_ready_i), .busy_o(busy_o)
+  );
 
   initial begin
     data_i = '0; valid_i = 1'b0; clear = 1'b0; lane_ready_i = '0;

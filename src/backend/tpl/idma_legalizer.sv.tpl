@@ -568,7 +568,12 @@ ${database[protocol]['legalizer_read_meta_channel']}
         tailer:       OffsetWidth'(r_num_bytes + r_addr_offset),
         shift:        opt_tf_q.read_shift,
         decouple_aw:  opt_tf_q.decouple_aw,
+% if compute_eligible:
+        is_single:    r_num_bytes <= StrbWidth,
+        mx:           EnableCompute ? idma_pkg::mx_tag(ComputeOps, opt_tf_q.compute, r_done) : '0
+% else:
         is_single:    r_num_bytes <= StrbWidth
+% endif
     };
 
     // Write meta channel and data path

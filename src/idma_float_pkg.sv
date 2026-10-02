@@ -41,32 +41,6 @@ package idma_float_pkg;
     return int'(scale) - E8m0Bias;
   endfunction
 
-  // Inf/NaN lanes are excluded from the scan; the shared exponent clamps to the E8M0 range
-  function automatic logic [7:0] compute_block_scale_with_bias(
-      input logic [31:0] fp32_bits[MxBlockSize], input int bias);
-    logic [7:0] max_exp;
-    logic [7:0] exp_tree [MxBlockSize];
-    int         scale;
-    for (int i = 0; i < MxBlockSize; i++)
-      exp_tree[i] = (fp32_bits[i][30:23] == 8'hFF) ? 8'd0 : fp32_bits[i][30:23];
-    for (int s = MxBlockSize/2; s > 0; s = s/2)
-      for (int i = 0; i < s; i++)
-        exp_tree[i] = (exp_tree[i] > exp_tree[i+s]) ? exp_tree[i] : exp_tree[i+s];
-    max_exp = exp_tree[0];
-    scale = int'(max_exp) - Fp32Bias - bias;
-    if (scale < E8m0ExpMin) scale = E8m0ExpMin;
-    else if (scale > E8m0ExpMax) scale = E8m0ExpMax;
-    return 8'(scale + E8m0Bias);
-  endfunction
-
-  // any Inf/NaN lane poisons the block
-  function automatic logic block_has_special(input logic [31:0] fp32_bits[MxBlockSize]);
-    logic special;
-    special = 1'b0;
-    for (int i = 0; i < MxBlockSize; i++) special |= (fp32_bits[i][30:23] == 8'hFF);
-    return special;
-  endfunction
-
   // RNE FP32 -> E5M2 with exact subnormal inputs and outputs. The split normal/subnormal
   // bands are load-bearing: merging them halves the smallest-normal band and
   // flushes all subnormals to zero. Do not merge.
@@ -148,48 +122,6 @@ package idma_float_pkg;
       else if (sub_kept < 4'd4)  return {sign, 5'd0, sub_kept[1:0]};
       else                       return {sign, 5'd1, 2'd0};
     end
-  endfunction
-
-  // Exact FP16 (E5M10) -> FP32 widen (lossless).
-  function automatic logic [31:0] fp16_bits_to_fp32(input logic [15:0] fp16_bits);
-    logic       sign;
-    logic [4:0] exp16;
-    logic [9:0] man16;
-    logic [7:0] exp32;
-    logic [22:0] man32;
-    logic [3:0] lz;
-    logic [9:0] man_norm;
-
-    sign  = fp16_bits[15];
-    exp16 = fp16_bits[14:10];
-    man16 = fp16_bits[9:0];
-
-    if (exp16 == 5'h1F) begin
-      if (man16 == 10'd0) return {sign, 8'hFF, 23'd0};
-      else                return {sign, 8'hFF, 1'b1, man16, 12'd0};
-    end
-    if (exp16 == 5'd0 && man16 == 10'd0) return {sign, 31'd0};
-    if (exp16 == 5'd0) begin
-      casez (man16)
-        10'b1?????????: lz = 4'd0;
-        10'b01????????: lz = 4'd1;
-        10'b001???????: lz = 4'd2;
-        10'b0001??????: lz = 4'd3;
-        10'b00001?????: lz = 4'd4;
-        10'b000001????: lz = 4'd5;
-        10'b0000001???: lz = 4'd6;
-        10'b00000001??: lz = 4'd7;
-        10'b000000001?: lz = 4'd8;
-        default:        lz = 4'd9;
-      endcase
-      exp32    = 8'((Fp32Bias - Fp16Bias) - int'(lz));
-      man_norm = man16 << (lz + 4'd1);
-      man32    = {man_norm, 13'd0};
-      return {sign, exp32, man32};
-    end
-    exp32 = 8'(int'(exp16) + (Fp32Bias - Fp16Bias));
-    man32 = {man16, 13'd0};
-    return {sign, exp32, man32};
   endfunction
 
   // IEEE FP32 -> FP16 narrowing: RNE, overflow saturates to +-Inf, NaN keeps a payload bit
@@ -304,81 +236,92 @@ package idma_float_pkg;
     return {f[31], 8'd0, m1, m0, g, st | rem, 1'b1, f[17:6], 6'(-lz)};
   endfunction
 
-  // fp32_to_mxfp8_byte_prescaled on fp32_sub_norm words: scaled_exp in [-276, 254] fits 10 b,
-  // the subnormal shifter keeps its 3 reachable amounts (sh in {22,23,24})
-  function automatic logic [7:0] e5m2_lane(input logic [31:0] f,
-                                           input logic signed [7:0] dec_scale);
-    logic               sign;
-    logic [7:0]         expf;
-    logic [22:0]        manf;
-    logic signed [9:0]  exp_s, sc_s, scaled_exp;
-    logic [23:0]        full_mant;
-    logic [3:0]         rounded;
-    logic               guard, sticky, roundup, carry;
-    logic [5:0]         oexp;
-    logic [4:0]         mexp;
-    logic [1:0]         mmant;
-    logic [3:0]         sub_kept;
-    logic               sub_guard, sub_stky;
+  // quantizer input lane: floor(log2|v|) (MxKeyNone unless finite non-zero), the 3 bits after
+  // the leading one and a sticky over the rest
+  typedef enum logic [1:0] { MX_ZERO, MX_FIN, MX_INF, MX_NAN } mx_cls_e;
+  typedef struct packed {
+    logic              sign;
+    mx_cls_e           cls;
+    logic signed [8:0] key;
+    logic [2:0]        sig;
+    logic              sticky;
+  } mx_lane_t;
 
-    sign = f[31]; expf = f[30:23]; manf = f[22:0];
-    if (expf == 8'd0 && manf == 23'd0) return {sign, 5'd0, 2'd0};
-    if (expf == 8'hFF && manf != 23'd0) return {sign, 5'h1F, 2'd1};
-    if (expf == 8'hFF)                  return {sign, 5'h1E, 2'd3};
+  // quantizer element lane: `gap` = binades below the block's element emax, saturated
+  typedef struct packed {
+    logic       sign;
+    mx_cls_e    cls;
+    logic [5:0] gap;
+    logic [2:0] sig;
+    logic       sticky;
+  } mx_qlane_t;
 
-    if (expf == 8'd0) begin
-      exp_s     = 10'(signed'(manf[5:0]));
-      full_mant = {1'b1, manf[22:19], 19'd0};
+  localparam logic signed [8:0] MxKeyNone = -9'sd256;
+
+  function automatic mx_lane_t mx_unpack_fp16(input logic [15:0] h);
+    mx_lane_t   l;
+    logic [3:0] lz;
+    logic [9:0] mm;
+    l.sign = h[15]; l.cls = MX_FIN; l.key = MxKeyNone; l.sig = '0; l.sticky = 1'b0;
+    lz = 4'd9;
+    for (int i = 0; i < 10; i++) if (h[i]) lz = 4'(9 - i);
+    mm = h[9:0] << (lz + 4'd1);
+    if (h[14:10] == 5'h1F) begin
+      l.cls = (h[9:0] != '0) ? MX_NAN : MX_INF;
+    end else if (h[14:0] == '0) begin
+      l.cls = MX_ZERO;
+    end else if (h[14:10] != '0) begin
+      l.key = signed'({4'd0, h[14:10]}) - 9'sd15; l.sig = h[9:7]; l.sticky = |h[6:0];
     end else begin
-      exp_s     = signed'({2'b00, expf});
-      full_mant = {1'b1, manf};
+      l.key = -9'sd15 - signed'({5'd0, lz}); l.sig = mm[9:7]; l.sticky = |mm[6:0];
     end
-    sc_s       = signed'({{2{dec_scale[7]}}, dec_scale});
-    scaled_exp = exp_s - 10'sd127 - sc_s;
+    return l;
+  endfunction
 
-    if (scaled_exp > 10'sd15) return {sign, 5'h1E, 2'd3};
-
-    if (scaled_exp >= -10'sd14) begin
-      rounded = {1'b0, full_mant[23:21]};
-      guard   = full_mant[20];
-      sticky  = (full_mant[19:0] != 20'd0);
-      roundup = guard && (rounded[0] || sticky);
-      if (roundup) rounded = rounded + 4'd1;
-      carry = rounded[3];
-      oexp  = 6'(scaled_exp + 10'sd15) + 6'(carry);
-      mmant = rounded[1:0];
-      if (oexp > 6'd30) begin
-        mexp  = 5'd30;
-        mmant = 2'd3;
-      end else begin
-        mexp = oexp[4:0];
-      end
-      return {sign, mexp, mmant};
+  function automatic mx_lane_t mx_unpack_fp32(input logic [31:0] f);
+    mx_lane_t    l;
+    logic [31:0] n;
+    l.sign = f[31]; l.cls = MX_FIN; l.key = MxKeyNone; l.sig = '0; l.sticky = 1'b0;
+    n = fp32_sub_norm(f);
+    if (f[30:23] == 8'hFF) begin
+      l.cls = (f[22:0] != '0) ? MX_NAN : MX_INF;
+    end else if (f[30:0] == '0) begin
+      l.cls = MX_ZERO;
+    end else if (f[30:23] != '0) begin
+      l.key = signed'({1'b0, f[30:23]}) - 9'sd127; l.sig = f[22:20]; l.sticky = |f[19:0];
+    end else begin
+      l.key = 9'(signed'(n[5:0])) - 9'sd127; l.sig = n[22:20]; l.sticky = n[19];
     end
+    return l;
+  endfunction
 
-    if (scaled_exp < -10'sd17) return {sign, 5'd0, 2'd0};
-    // scaled_exp in {-15,-16,-17} <=> low bits {01,00,11}; sh_amt {22,23,24}
-    case (scaled_exp[1:0])
-      2'b01: begin
-        sub_kept  = {2'b00, full_mant[23:22]};
-        sub_guard = full_mant[21];
-        sub_stky  = (full_mant[20:0] != 21'd0);
-      end
-      2'b00: begin
-        sub_kept  = {3'b000, full_mant[23]};
-        sub_guard = full_mant[22];
-        sub_stky  = (full_mant[21:0] != 22'd0);
-      end
-      default: begin
-        sub_kept  = 4'd0;
-        sub_guard = full_mant[23];
-        sub_stky  = (full_mant[22:0] != 23'd0);
-      end
+  // E5M2 element: RNE, element subnormals, saturation to max normal; Inf/NaN lanes only reach
+  // here with poisoning disabled
+  function automatic logic [7:0] mx_e5m2_quant(input mx_qlane_t l);
+    logic [3:0] r;
+    logic [4:0] e;
+    logic [2:0] k;
+    logic       up, up_sub;
+    up     = l.sig[0] & (l.sig[1] | l.sticky);
+    up_sub = l.sig[1] & (l.sig[2] | l.sig[0] | l.sticky);
+    unique case (l.cls)
+      MX_ZERO: return {l.sign, 7'h00};
+      MX_INF:  return {l.sign, 7'h7B};
+      MX_NAN:  return {l.sign, E5m2Nan[6:0]};
+      default: ;
     endcase
-    if (sub_guard && (sub_kept[0] || sub_stky)) sub_kept = sub_kept + 4'd1;
-    if (sub_kept == 4'd0)     return {sign, 5'd0, 2'd0};
-    else if (sub_kept < 4'd4) return {sign, 5'd0, sub_kept[1:0]};
-    else                      return {sign, 5'd1, 2'd0};
+    if (l.gap <= 6'd29) begin
+      r = {2'b01, l.sig[2:1]} + {3'd0, up};
+      e = 5'(6'd30 - l.gap) + {4'd0, r[3]};
+      return (e == 5'd31) ? {l.sign, 7'h7B} : {l.sign, e, r[1:0]};
+    end
+    unique case (l.gap)
+      6'd30:   k = {2'b01, l.sig[2]} + {2'd0, up_sub};
+      6'd31:   k = {1'b0, l.sig[2], ~l.sig[2]};
+      6'd32:   k = {2'd0, |{l.sig, l.sticky}};
+      default: k = 3'd0;
+    endcase
+    return {l.sign, 4'd0, k};
   endfunction
 
   // E5M2 x E8M0 -> FP32 (exact: IEEE subnormals, overflow to Inf) or FP16 ([15:0], RNE) from one

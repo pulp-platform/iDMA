@@ -212,6 +212,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// - `shift`: The amount the data needs to be shifted
     /// - `decouple_aw`: If the transfer has the AW decoupled from the R
     /// - `is_single`: Is this transfer just one beat long? `(len == 0)`
+% if compute_eligible:
+    /// - `mx`: MX quant sideband of the burst's beats (`last`: last burst of the transfer)
+% endif
     typedef struct packed {
         idma_pkg::protocol_e  src_protocol;
         idma_pkg::multihead_t src_head;  // ignored unless multi-head (one head: tied 0)
@@ -220,6 +223,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         offset_t              shift;
         logic                 decouple_aw;
         logic                 is_single;
+% if compute_eligible:
+        idma_pkg::mx_tag_t    mx;
+% endif
     } r_dp_req_t;
 
     /// The datapath read response type provides feedback from the read part of the datapath:
@@ -563,7 +569,13 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0]),
             shift:        OffsetWidth'(idma_req_i.src_addr[OffsetWidth-1:0]),
             decouple_aw:  idma_req_i.opt.beo.decouple_aw,
+% if compute_eligible:
+            is_single:    len == '0,
+            mx:           EnableCompute ? idma_pkg::mx_tag(ComputeOps, idma_req_i.opt.compute, 1'b1)
+                                        : '0
+% else:
             is_single:    len == '0
+% endif
         };
 
         // assemble write datapath request

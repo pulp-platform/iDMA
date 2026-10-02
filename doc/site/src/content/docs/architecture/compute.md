@@ -63,10 +63,11 @@ Transpose does not change transfer size, and the transport layer retires an outp
 
 The MX ops implement OCP microscaling (MX) format conversion in blocks of `MxBlockElems = 32` elements. A compressed MX block is `MxBlockBytes = 33` B: one OCP E8M0 block scale byte followed by 32 MXFP8 (E5M2) element bytes. The uncompressed forms are FP32 (`4 * 32 = 128` B) or FP16 (`2 * 32 = 64` B) per block.
 
-- **Quantize** (`idma_otf_mxquant`): gathers a 32-element block from the input beats (FP32 4 B/elem, or FP16 2 B/elem widened to FP32), computes the block scale from the maximum element exponent (the shared exponent clamps to the E8M0 range), casts each element to E5M2 with round-to-nearest-even and exact FP16/FP32 subnormal inputs and E5M2 subnormal outputs, and emits the packed 33 B block.
+- **Quantize** (`idma_otf_mxquant`): a four-stage pipeline on whole beats. Q0 unpacks the FP32 (4 B/elem) or FP16 (2 B/elem, natively) elements of a beat into the block's lane register and takes a partial exponent maximum; Q1 computes the block scale from the maximum element exponent (the shared exponent clamps to the E8M0 range) and each lane's exponent distance to it; Q2 casts the 32 elements to E5M2 with round-to-nearest-even, exact FP16/FP32 subnormal inputs and E5M2 subnormal outputs; Q3 writes the 33 B block at its byte offset into an output queue of whole destination beats.
+- The quantizer never stalls once a beat is in: a beat leaves the dataflow element only while the output queue holds credit for the entries its block opens, and the credit check is registered. Each quant beat carries a tag through the dataflow element (`r_dp_req_t.mx`: format, poison disable, last beat of the transfer), so the engine closes the transfer's last output beat without a transfer-boundary clear. The write side takes the queue head after the write shifter whenever the current write burst is an MX quant burst and pops it on the write beat handshake.
 - **Dequantize** (`idma_otf_mxdequant`): expands each 33 B MX block back to FP32 (128 B) or FP16 (64 B), applying the decoded block scale per element.
 
-The FP cast primitives (FP32 <-> MXFP8 E5M2, FP16 <-> FP32 widen/narrow, block-scale computation) live in the `idma_float_pkg` package.
+The FP cast primitives (quantizer lane unpack and E5M2 element rounding, E5M2 -> FP32/FP16 expansion) live in the `idma_float_pkg` package.
 
 :::note[E8M0 block scale]
 The scale byte `E` is OCP MX v1.0 E8M0: the block scale is `2^(E - 127)`, `E` in 0..254, and `0xFF` is NaN. Quantize sets the shared exponent to the block's largest finite FP32 exponent minus the E5M2 emax (15), clamped to [-127, 127]; an all-zero block gets `E = 0`. A block holding an Inf or NaN is poisoned: its scale is `0xFF` and every element the canonical E5M2 NaN `0x7D`. The per-transfer `mx_options_t.poison_dis` bit (register `mx_cfg.mx_poison_dis`, DMOPC `rs1[18]` on the quant opcodes) keeps such a block finite instead: the scale comes from the finite lanes, NaN quantizes to E5M2 NaN and Inf saturates to the E5M2 max normal. Dequantize turns every element of a `0xFF`-scale block into NaN and is exact: results below the FP32 min normal become FP32 subnormals, results above the FP32 max become Inf.
@@ -94,10 +95,10 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 
 ## Source Files
 
-- `src/backend/idma_otf_compute.sv` - per-transfer op dispatcher
+- `src/backend/idma_otf_compute.sv` - op dispatcher, MX beat-tag FIFO and write-source select
 - `src/backend/idma_otf_transpose.sv` - tiled transpose engine
 - `src/backend/idma_otf_mxquant.sv`, `src/backend/idma_otf_mxdequant.sv` - MX pack/expand
-- `src/idma_float_pkg.sv` - FP32/FP16 <-> MXFP8 cast math and block scale
+- `src/idma_float_pkg.sv` - FP32/FP16 <-> MXFP8 cast math
 - `src/idma_pkg.sv` - `compute_options_t`, `compute_op_e`, `compute_enable_t`, MX block geometry
 - `src/backend/tpl/idma_legalizer.sv.tpl` - size-changing length calc and compute constraints
 - `src/backend/tpl/idma_transport_layer.sv.tpl` - engine instantiation (`gen_compute`)

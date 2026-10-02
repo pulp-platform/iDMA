@@ -5,15 +5,19 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// On-the-fly compute dispatcher: routes one op per transfer to its sub-unit.
-/// A config change drains the engine before the next transfer starts.
+/// On-the-fly compute dispatcher. MX quant runs on whole beats: its beats carry a tag through the
+/// dataflow element, are popped on the quantizer's registered credit, and the write side takes
+/// its output beats after the write shifter. Transpose and MX dequant run on the per-transfer
+/// config latch; a config change drains the engine before the next transfer starts.
 module idma_otf_compute #(
   /// Byte lanes per beat (= DataWidth/8)
   parameter int unsigned StrbWidth       = 32'd8,
   /// Compile-time per-op feature enables
   parameter idma_pkg::compute_enable_t ComputeEnable = '0,
   /// Implementation tuning knobs
-  parameter idma_pkg::compute_tuning_t ComputeTuning = '1
+  parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
+  /// Depth of the dataflow element (entries of the beat-tag FIFO)
+  parameter int unsigned BufferDepth     = 32'd3
 ) (
   input  logic clk_i,
   input  logic rst_ni,
@@ -37,7 +41,25 @@ module idma_otf_compute #(
   input  logic                      beat_ready_i,
   /// Lane-wise output handshake used by compute engines with packed output data
   output logic [StrbWidth-1:0]      lane_valid_o,
-  input  logic [StrbWidth-1:0]      lane_ready_i
+  input  logic [StrbWidth-1:0]      lane_ready_i,
+
+  /// Tag of the beat pushed into the dataflow element
+  input  idma_pkg::mx_tag_t         tag_i,
+  input  logic                      tag_push_i,
+  /// The dataflow head is an MX quant beat; it is popped by `mx_pop_o`
+  output logic                      mx_head_o,
+  output logic                      mx_pop_o,
+  /// Write-shifter output; the current write burst reads the quant queue when `w_mx_o`
+  input  logic [StrbWidth-1:0][7:0] w_data_i,
+  input  logic [StrbWidth-1:0]      w_valid_i,
+  input  logic [StrbWidth-1:0]      w_mask_i,
+  output logic [StrbWidth-1:0][7:0] w_data_o,
+  output logic [StrbWidth-1:0]      w_valid_o,
+  output logic [StrbWidth-1:0]      w_mask_o,
+  output logic                      w_mx_o,
+  /// A write beat of the current burst was accepted
+  input  logic                      w_pop_i,
+  output logic                      busy_o
 );
 
   // config latch with first-beat bypass
@@ -60,7 +82,7 @@ module idma_otf_compute #(
                                                             idma_pkg::COMPUTE_MXDEQUANT_FP16});
   assign mx_fmt        = idma_pkg::compute_op_fmt(eff_compute.op);
 
-  assign active_o = op_legal;
+  assign active_o = op_legal & ~sel_mxquant;
 
   // transpose sub-unit
   logic [StrbWidth-1:0][7:0] tp_data;
@@ -91,33 +113,64 @@ module idma_otf_compute #(
     assign tp_data = '0; assign tp_strb = '0; assign tp_valid = 1'b0; assign tp_in_ready = 1'b0;
   end
 
-  // MX-quant sub-unit
-  logic [StrbWidth-1:0][7:0] mx_data;
-  logic [StrbWidth-1:0]      mx_lane_valid;
-  logic                      mx_in_ready, mx_busy;
+  // MX-quant sub-unit: whole beats, tagged in the dataflow element
+  logic                      mq_head, mq_valid, mq_ready, mq_busy;
+  logic [StrbWidth-1:0][7:0] mq_data;
+  idma_pkg::mx_tag_t         mq_tag;
 
   if (ComputeEnable.mxquant) begin : gen_mxquant
+    logic tag_ready;
+    cc_passthrough_stream_fifo #(
+      .Depth  ( BufferDepth        ),
+      .data_t ( idma_pkg::mx_tag_t )
+    ) i_tag_fifo (
+      .clk_i,
+      .rst_ni,
+      .clr_i   ( 1'b0       ),
+      .flush_i ( 1'b0       ),
+      .data_i  ( tag_i      ),
+      .valid_i ( tag_push_i ),
+      .ready_o ( tag_ready  ),
+      .data_o  ( mq_tag     ),
+      .valid_o ( mq_head    ),
+      .ready_i ( mx_pop_o   )
+    );
+
     idma_otf_mxquant #(
       .StrbWidth ( StrbWidth            ),
       .Fp16En    ( ComputeEnable.mxfp16 )
     ) i_idma_otf_mxquant (
       .clk_i,
       .rst_ni,
-      .clear_i      ( ~sel_mxquant          ),
-      .src_fmt_i    ( mx_fmt                ),
-      .poison_dis_i ( eff_compute.params.mx.poison_dis ),
-      .data_i       ( data_i                ),
-      .valid_i      ( valid_i & sel_mxquant ),
-      .ready_o      ( mx_in_ready           ),
-      .data_o       ( mx_data               ),
-      .lane_valid_o ( mx_lane_valid         ),
-      .lane_ready_i ( lane_ready_i & {StrbWidth{sel_mxquant}} ),
-      .busy_o       ( mx_busy               )
+      .data_i  ( data_i              ),
+      .tag_i   ( mq_tag              ),
+      .valid_i ( mq_head & valid_i   ),
+      .ready_o ( mq_ready            ),
+      .data_o  ( mq_data             ),
+      .valid_o ( mq_valid            ),
+      .ready_i ( w_mx_o & w_pop_i    ),
+      .busy_o  ( mq_busy             )
     );
+
+    // pragma translate_off
+    // the tag FIFO mirrors the dataflow element: a tagged push always finds room
+    always @(posedge clk_i) if (rst_ni && tag_push_i)
+      assert (tag_ready) else $fatal(1, "idma_otf_compute: beat-tag FIFO overflow");
+    // pragma translate_on
   end else begin : gen_no_mxquant
-    assign mx_data = '0; assign mx_lane_valid = '0; assign mx_in_ready = 1'b0;
-    assign mx_busy = 1'b0;
+    assign mq_head = 1'b0; assign mq_tag = '0; assign mq_ready = 1'b0; assign mq_data = '0;
+    assign mq_valid = 1'b0; assign mq_busy = 1'b0;
   end
+
+  assign mx_head_o = mq_head;
+  assign mx_pop_o  = mq_head & valid_i & mq_ready;
+  assign w_mx_o    = cfg_valid_i & compute_i.enable & ComputeEnable.mxquant &
+                     (compute_i.op inside {idma_pkg::COMPUTE_MXQUANT,
+                                           idma_pkg::COMPUTE_MXQUANT_FP16});
+  assign w_data_o  = w_mx_o ? mq_data : w_data_i;
+  assign w_valid_o = w_mx_o ? {StrbWidth{mq_valid}} : w_valid_i;
+  assign w_mask_o  = w_mx_o ? '1 : w_mask_i;
+  assign busy_o    = mq_busy;
 
   // MX-dequant sub-unit
   logic [StrbWidth-1:0][7:0] dq_data;
@@ -162,13 +215,6 @@ module idma_otf_compute #(
           lane_valid_o = {StrbWidth{tp_valid}};
           in_ready_o   = tp_in_ready;
         end
-        idma_pkg::COMPUTE_MXQUANT,
-        idma_pkg::COMPUTE_MXQUANT_FP16: begin
-          data_o       = mx_data;
-          strb_o       = '1;
-          lane_valid_o = mx_lane_valid;
-          in_ready_o   = mx_in_ready;
-        end
         idma_pkg::COMPUTE_MXDEQUANT,
         idma_pkg::COMPUTE_MXDEQUANT_FP16: begin
           data_o       = dq_data;
@@ -189,7 +235,7 @@ module idma_otf_compute #(
                   compute_i.op);
   // backstop: the backend request interlock must never let a differing config in while busy
   always @(posedge clk_i) if (rst_ni && cfg_valid_i && (compute_i != latched_q))
-    assert (!(mx_busy || dq_busy))
+    assert (!dq_busy)
       else $fatal(1, "idma_otf_compute: compute config changed while an MX unit is busy");
   // pragma translate_on
 

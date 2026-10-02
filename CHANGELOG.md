@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   restores the finite-lane behaviour.
 - MX dequant to FP32 is exact: FP32 subnormal results instead of a flush to zero, Inf instead of
   saturation.
+- The MX quantizer is a four-stage pipeline on whole beats with an output queue of destination
+  beats: quant beats are tagged in the dataflow element and popped on a registered output credit,
+  and the write side reads the queue after the write shifter. Its reg2reg paths close at 0.45 ns
+  in GF12 (1.17 ns before). The quant overlap guard of `tb_idma_mxclear` is gone with the
+  transfer-boundary clear.
 
 ### Fixed
 - MX quant of FP32 subnormal inputs dropped the leading zeros (implicit 1), e.g. 32 x 2^-127
