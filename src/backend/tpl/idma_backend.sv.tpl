@@ -482,13 +482,17 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic req_valid_leg, leg_ready;
 % if compute_eligible:
     if (EnableCompute) begin : gen_compute_cfg_gate
-        // a request whose compute config differs from the last accepted one waits
-        // until the datapath drained: its reads must not race a draining engine
+        // a transpose request, or the first request after one, whose compute config differs
+        // from the last accepted one waits until the datapath drained; MX beats carry their tag
         idma_pkg::compute_options_t cmp_cfg_q;
-        logic backend_active, cmp_cfg_stall;
+        logic backend_active, cmp_cfg_stall, cmp_cfg_tp;
         assign backend_active = busy_o.buffer_busy | busy_o.r_dp_busy | busy_o.w_dp_busy |
                                 busy_o.r_leg_busy | busy_o.w_leg_busy | busy_o.raw_coupler_busy;
-        assign cmp_cfg_stall  = req_valid & (idma_req_i.opt.compute != cmp_cfg_q) & backend_active;
+        assign cmp_cfg_tp     = (idma_req_i.opt.compute.enable &
+                                 (idma_req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE)) |
+                                (cmp_cfg_q.enable & (cmp_cfg_q.op == idma_pkg::COMPUTE_TRANSPOSE));
+        assign cmp_cfg_stall  = req_valid & cmp_cfg_tp & (idma_req_i.opt.compute != cmp_cfg_q) &
+                                backend_active;
         assign req_valid_leg  = req_valid & ~cmp_cfg_stall;
         assign req_ready_o    = leg_ready & ~cmp_cfg_stall & ~zero_len_stall;
         always_ff @(posedge clk_i or negedge rst_ni) begin

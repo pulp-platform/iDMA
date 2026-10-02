@@ -21,11 +21,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   beats. Its reg2reg paths close at 0.45 ns in GF12 (1.17 ns before).
 - MX dequant is a beat-granular pipeline (input buffer, extract, expand lanes, output queue)
   that retires one output beat per cycle.
-- Both MX engines take whole dataflow beats by a beat tag (`r_dp_req_t.mx`) kept beside the
-  dataflow element, whose byte lanes mark MX bytes, pop them on a registered credit and have no
-  transfer-boundary clear; the write side selects the burst's output queue after the write
-  shifter and pops it on the W handshake. `tb_idma_mxclear` checks the empty-queue pop guard of
-  both engines.
+- MX ops left the compute config interlock: every MX beat carries its config in a beat tag
+  (`r_dp_req_t.mx`) beside the dataflow element, whose byte lanes mark MX bytes, so transfers
+  with different MX ops and copies stream back to back without draining. Both engines pop whole
+  dataflow beats on a registered credit and have no transfer-boundary clear; the write side
+  selects the burst's output queue after the write shifter and pops it on the W handshake. The
+  interlock remains for transpose. `tb_idma_mxclear` checks the empty-queue pop guard of both
+  engines.
 
 ### Fixed
 - MX quant of FP32 subnormal inputs dropped the leading zeros (implicit 1), e.g. 32 x 2^-127
