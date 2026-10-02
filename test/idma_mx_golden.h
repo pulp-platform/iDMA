@@ -9,6 +9,7 @@
 // by the DPI-C testbench glue and by integrators' on-target tests: FP32/FP16 ->
 // MXFP8 (E5M2) quantization and MXFP8 -> FP32/FP16 dequantization; blocks are
 // [1B E8M0 scale][32B E5M2]. Pure functions over bit patterns and caller-owned buffers.
+// The scale is OCP MX v1.0 E8M0: X = 2^(E - 127), E in [0, 254], 0xFF = NaN.
 
 #pragma once
 
@@ -35,6 +36,10 @@ static inline uint32_t fp16_to_fp32_bits(uint16_t h) {
   return (sign << 31) | ((exp + (127 - 15)) << 23) | (mant << 13);
 }
 
+#define MX_E8M0_BIAS 127
+#define MX_E8M0_NAN  0xFFu
+
+// Shared exponent over the finite lanes, clamped to [-127, 127], E8M0-encoded
 static inline uint8_t block_scale_e5m2(const uint32_t *block, size_t len) {
   uint32_t max_exp = 0;
   for (size_t i = 0; i < len; ++i) {
@@ -42,9 +47,9 @@ static inline uint8_t block_scale_e5m2(const uint32_t *block, size_t len) {
     if (exp != 0xFFu && exp > max_exp) max_exp = exp;
   }
   int32_t scaled = (int32_t)max_exp - 127 - 15;
-  if (scaled < -128) scaled = -128;
+  if (scaled < -127) scaled = -127;
   else if (scaled > 127) scaled = 127;
-  return (uint8_t)(scaled & 0xFF);
+  return (uint8_t)(scaled + MX_E8M0_BIAS);
 }
 
 static inline uint8_t quantize_fp32_e5m2(uint32_t bits, int8_t scale) {
@@ -102,6 +107,12 @@ static inline uint32_t dequant_e5m2_fp32(uint8_t b, int scaled) {
   return sign_bit | ((uint32_t)fp32_exp << 23) | out_mant;
 }
 
+// Dequantize one element under an E8M0 scale; the NaN scale makes every element NaN
+static inline uint32_t dequant_e8m0_fp32(uint8_t b, uint8_t scale) {
+  if (scale == MX_E8M0_NAN) return 0x7FC00000u;
+  return dequant_e5m2_fp32(b, (int)scale - MX_E8M0_BIAS);
+}
+
 // IEEE FP32 -> FP16 narrowing, RNE; same rounding as idma_float_pkg::fp32_bits_to_fp16
 static inline uint16_t fp32_to_fp16_bits(uint32_t f) {
   uint32_t sign = (f >> 31) & 1u, exp32 = (f >> 23) & 0xFFu, man32 = f & 0x7FFFFFu;
@@ -142,7 +153,7 @@ static inline void mx_quant_fp16(const uint8_t *in, uint8_t *out, uint32_t num_b
     scale = block_scale_e5m2(blk, 32u);
     out[b*33u] = scale;
     for (uint32_t lane = 0; lane < 32u; ++lane)
-      out[b*33u + 1u + lane] = quantize_fp32_e5m2(blk[lane], (int8_t)scale);
+      out[b*33u + 1u + lane] = quantize_fp32_e5m2(blk[lane], (int8_t)(scale - MX_E8M0_BIAS));
   }
 }
 
@@ -159,16 +170,16 @@ static inline void mx_quant_fp32(const uint8_t *in, uint8_t *out, uint32_t num_b
     scale = block_scale_e5m2(blk, 32u);
     out[b*33u] = scale;
     for (uint32_t lane = 0; lane < 32u; ++lane)
-      out[b*33u + 1u + lane] = quantize_fp32_e5m2(blk[lane], (int8_t)scale);
+      out[b*33u + 1u + lane] = quantize_fp32_e5m2(blk[lane], (int8_t)(scale - MX_E8M0_BIAS));
   }
 }
 
 // Dequantize num_blocks 33B MX blocks from in into 64B FP16 blocks in out.
 static inline void mx_dequant_fp16(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
   for (uint32_t b = 0; b < num_blocks; ++b) {
-    int dec = (int)(int8_t)in[b*33u];
+    uint8_t scale = in[b*33u];
     for (uint32_t lane = 0; lane < 32u; ++lane) {
-      uint16_t h = fp32_to_fp16_bits(dequant_e5m2_fp32(in[b*33u + 1u + lane], dec));
+      uint16_t h = fp32_to_fp16_bits(dequant_e8m0_fp32(in[b*33u + 1u + lane], scale));
       out[b*64u + lane*2u]      = (uint8_t)(h & 0xFFu);
       out[b*64u + lane*2u + 1u] = (uint8_t)((uint32_t)h >> 8);
     }
@@ -178,9 +189,9 @@ static inline void mx_dequant_fp16(const uint8_t *in, uint8_t *out, uint32_t num
 // Dequantize num_blocks 33B MX blocks from in into 128B FP32 blocks in out.
 static inline void mx_dequant_fp32(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
   for (uint32_t b = 0; b < num_blocks; ++b) {
-    int dec = (int)(int8_t)in[b*33u];
+    uint8_t scale = in[b*33u];
     for (uint32_t lane = 0; lane < 32u; ++lane) {
-      uint32_t f = dequant_e5m2_fp32(in[b*33u + 1u + lane], dec);
+      uint32_t f = dequant_e8m0_fp32(in[b*33u + 1u + lane], scale);
       out[b*128u + lane*4u + 0u] = (uint8_t)(f & 0xFFu);
       out[b*128u + lane*4u + 1u] = (uint8_t)((f >> 8) & 0xFFu);
       out[b*128u + lane*4u + 2u] = (uint8_t)((f >> 16) & 0xFFu);

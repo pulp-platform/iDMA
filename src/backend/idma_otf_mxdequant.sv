@@ -123,9 +123,9 @@ module idma_otf_mxdequant
     if (valid_i && ready_o) in_cnt_d = IcW'(StrbWidth);
   end
 
-  // bit-exact local reimplementation of decode_signed_scale +
-  // mxfp8_byte_to_fp32_prescaled with proven 10-bit exponent range [-17,269]
-  function automatic logic [31:0] mx_dq(input logic [7:0] b, input logic signed [7:0] sc);
+  // bit-exact local reimplementation of decode_e8m0_scale +
+  // mxfp8_byte_to_fp32_prescaled with proven 10-bit exponent range [-16,270]
+  function automatic logic [31:0] mx_dq(input logic [7:0] b, input logic [7:0] sc);
     logic              sign;
     logic [4:0]        e5;
     logic [1:0]        m;
@@ -136,21 +136,23 @@ module idma_otf_mxdequant
     e5   = b[6:2];
     m    = b[1:0];
     base = (e5 == '0) ? (8'd111 + 8'(m[1])) : (8'd112 + 8'(e5));
-    es   = signed'({2'b00, base}) + signed'({{2{sc[7]}}, sc});
+    es   = signed'({2'b00, base}) + signed'({2'b00, sc}) - 10'(E8m0Bias);
     om   = (e5 == '0) ? {m[1] & m[0], 22'd0} : {m, 21'd0};
-    if (e5 == '0 && m == '0)  return {sign, 31'd0};
-    else if (e5 == 5'h1F)     return (m == '0) ? {sign, 8'hFF, 23'd0} : 32'h7FC00000;
-    else if (es <= 10'sd0)    return {sign, 31'd0};
-    else if (es >= 10'sd255)  return {sign, 8'hFE, 23'h7FFFFF};
-    else                      return {sign, es[7:0], om};
+    // NaN scale: every element is NaN regardless of its encoding (OCP MX v1.0 5.1)
+    if (sc == E8m0Nan)             return 32'h7FC00000;
+    else if (e5 == '0 && m == '0)  return {sign, 31'd0};
+    else if (e5 == 5'h1F)          return (m == '0) ? {sign, 8'hFF, 23'd0} : 32'h7FC00000;
+    else if (es <= 10'sd0)         return {sign, 31'd0};
+    else if (es >= 10'sd255)       return {sign, 8'hFE, 23'h7FFFFF};
+    else                           return {sign, es[7:0], om};
   endfunction
 
   logic                 fp16_act;
-  logic signed [7:0]    dec_sc;
+  logic [7:0]           dec_sc;
   logic [XB-1:0][7:0]   exp32_bytes, exp_bytes;
   logic [XB/2-1:0][7:0] exp16_bytes;
   assign fp16_act = (Fp16Dn != 1'b0) && (dst_fmt_i == idma_pkg::MX_FMT_FP16);
-  assign dec_sc   = signed'(merged[0]);
+  assign dec_sc   = merged[0];
   for (genvar e = 0; e < MxBlockSize; e++) begin : gen_exp
     logic [31:0] w;
     assign w = mx_dq(merged[e+1], dec_sc);

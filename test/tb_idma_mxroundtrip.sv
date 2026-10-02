@@ -92,12 +92,65 @@ module tb_idma_mxroundtrip
 
   localparam int unsigned QuantInBytes = QuantFp16 ? 64 : 128;
 
+  // directed E8M0 decode: X = 1, 2^-127, 2^127 and the NaN scale, against literal values
+  localparam logic [7:0]  DqScale [4] = '{8'h7F, 8'h00, 8'hFE, 8'hFF};
+  localparam logic [7:0]  DqElem  [8] = '{8'h40, 8'hC0, 8'h7B, 8'h01, 8'h7C, 8'hFD, 8'h00, 8'h80};
+  // above FP32 max saturates, below FP32 min normal flushes (both implementation-defined)
+  localparam logic [31:0] DqFp32 [4][8] = '{
+    '{32'h4000_0000, 32'hC000_0000, 32'h4760_0000, 32'h3780_0000,
+      32'h7F80_0000, 32'h7FC0_0000, 32'h0000_0000, 32'h8000_0000},
+    '{32'h0080_0000, 32'h8080_0000, 32'h07E0_0000, 32'h0000_0000,
+      32'h7F80_0000, 32'h7FC0_0000, 32'h0000_0000, 32'h8000_0000},
+    '{32'h7F7F_FFFF, 32'hFF7F_FFFF, 32'h7F7F_FFFF, 32'h7700_0000,
+      32'h7F80_0000, 32'h7FC0_0000, 32'h0000_0000, 32'h8000_0000},
+    '{default: 32'h7FC0_0000}};
+  localparam logic [15:0] DqFp16 [4][8] = '{
+    '{16'h4000, 16'hC000, 16'h7B00, 16'h0100, 16'h7C00, 16'h7E00, 16'h0000, 16'h8000},
+    '{16'h0000, 16'h8000, 16'h0000, 16'h0000, 16'h7C00, 16'h7E00, 16'h0000, 16'h8000},
+    '{16'h7C00, 16'hFC00, 16'h7C00, 16'h7C00, 16'h7C00, 16'h7E00, 16'h0000, 16'h8000},
+    '{default: 16'h7E00}};
+
+  task automatic do_dequant_directed(output int unsigned errs_lit, output int unsigned errs_gm);
+    automatic addr_t src = 'h0007_0000, dst = 'h0009_0000;
+    automatic int unsigned nb = StrbWidth, ob = QuantFp16 ? 2 : 4;
+    automatic logic [31:0] exp_w, got_w;
+    errs_lit = 0; errs_gm = 0;
+    for (int unsigned b = 0; b < nb; b++) begin
+      wr_mem(src + b*33, DqScale[b % 4]);
+      gm_load(int'(b*33), int'(DqScale[b % 4]));
+      for (int unsigned e = 0; e < 32; e++) begin
+        wr_mem(src + b*33 + 1 + e, DqElem[(e + b) % 8]);
+        gm_load(int'(b*33 + 1 + e), int'(DqElem[(e + b) % 8]));
+      end
+    end
+    for (int unsigned i = 0; i < nb*32*ob; i++) wr_mem(dst + i, 8'h5A);
+    if (QuantFp16) gm_mxdequant_fp16(int'(nb)); else gm_mxdequant(int'(nb));
+    do_xfer(src, dst, nb*33,
+            QuantFp16 ? idma_pkg::COMPUTE_MXDEQUANT_FP16 : idma_pkg::COMPUTE_MXDEQUANT);
+    for (int unsigned b = 0; b < nb; b++)
+      for (int unsigned e = 0; e < 32; e++) begin
+        exp_w = QuantFp16 ? 32'(DqFp16[b % 4][(e + b) % 8]) : DqFp32[b % 4][(e + b) % 8];
+        got_w = '0;
+        for (int unsigned k = 0; k < ob; k++)
+          got_w[k*8 +: 8] = rd_mem(dst + (b*32 + e)*ob + k);
+        if (got_w !== exp_w) begin
+          errs_lit++;
+          if (errs_lit <= 8) $display("[MXRT] E8M0 blk%0d.%0d scale %02h elem %02h = %08h exp %08h",
+            b, e, DqScale[b % 4], DqElem[(e + b) % 8], got_w, exp_w);
+        end
+        for (int unsigned k = 0; k < ob; k++)
+          if (rd_mem(dst + (b*32 + e)*ob + k) !== 8'(gm_get(int'((b*32 + e)*ob + k)))) errs_gm++;
+      end
+    $display("[MXRT] E8M0 directed dequant: %0d literal, %0d golden mismatches",
+             errs_lit, errs_gm);
+  endtask
+
   initial begin
     automatic addr_t src = 'h0001_0000, mid = 'h0003_0000, dst = 'h0005_0000;
     automatic int unsigned qL  = NumBlocks * QuantInBytes;
     automatic int unsigned mL  = NumBlocks * 33;
     automatic int unsigned dL  = NumBlocks * (QuantFp16 ? 64 : 128);
-    automatic int unsigned e1 = 0, e2 = 0;
+    automatic int unsigned e1 = 0, e2 = 0, e3 = 0, e4 = 0;
     automatic logic [15:0] h;
     automatic logic [31:0] w;
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
@@ -147,8 +200,12 @@ module tb_idma_mxroundtrip
           $display("[MXRT] dequant dst[%0d]=%02h exp %02h", i, rd_mem(dst+i), 8'(gm_get(int'(i))));
       end
 
-    if (e1 + e2 == 0) $display("[MXRT] ALL PASS (%0d blocks, StrbWidth=%0d)", NumBlocks, StrbWidth);
-    else              $fatal(1, "[MXRT] FAIL: quant=%0d dequant=%0d mismatches", e1, e2);
+    do_dequant_directed(e3, e4);
+
+    if (e1 + e2 + e3 + e4 == 0)
+      $display("[MXRT] ALL PASS (%0d blocks, StrbWidth=%0d)", NumBlocks, StrbWidth);
+    else
+      $fatal(1, "[MXRT] FAIL: quant=%0d dequant=%0d e8m0=%0d/%0d mismatches", e1, e2, e3, e4);
     repeat (5) @(posedge clk);
     $finish();
   end

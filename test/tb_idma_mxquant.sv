@@ -149,8 +149,70 @@ module tb_idma_mxquant
       end
   endtask
 
+  // OCP MX E8M0 conformance: directed FP32 blocks against hand-computed bytes (no DPI)
+  localparam int unsigned ConfBlocks = 8;
+  task automatic do_conform(input addr_t src, input addr_t dst, output int unsigned errs);
+    automatic logic [31:0] cv [ConfBlocks*32];
+    automatic logic [7:0]  cx [ConfBlocks*33];
+    errs = 0;
+    for (int unsigned e = 0; e < 32; e++) begin
+      cv[e]       = 32'h3F80_0000;                               // 1.0: X = 2^-15
+      cv[32 + e]  = (e == 1) ? 32'h8000_0000 : 32'h0000_0000;    // zeros: clamps to 2^-127
+      cv[64 + e]  = 32'h0080_0000;                               // 2^-126: clamps to 2^-127
+      cv[96 + e]  = 32'h0780_0000;                               // 2^-112: exactly 2^-127
+      cv[128 + e] = (e == 0) ? 32'h0800_0000 : 32'h0780_0000;    // 2^-111: X = 2^-126
+      cv[160 + e] = (e == 0) ? 32'h7F7F_FFFF :                   // FP32 max: X = 2^112
+                    (e == 1) ? 32'hFF7F_FFFF : 32'h7F00_0000;
+      cv[192 + e] = (e == 0) ? 32'h7F80_0000 : (e == 1) ? 32'hFF80_0000 :
+                    (e == 2) ? 32'h7FC0_0000 : (e == 3) ? 32'hFFC0_0001 :
+                    32'h3FC0_0000;                               // Inf/NaN skip the scan
+      cv[224 + e] = (e == 0) ? 32'h7F80_0000 : 32'h0000_0000;    // Inf over zeros
+    end
+    for (int unsigned e = 0; e < 32; e++) begin
+      cx[1 + e]   = 8'h78;
+      cx[34 + e]  = (e == 1) ? 8'h80 : 8'h00;
+      cx[67 + e]  = 8'h40;
+      cx[100 + e] = 8'h78;
+      cx[133 + e] = (e == 0) ? 8'h78 : 8'h74;
+      cx[166 + e] = (e == 0) ? 8'h7B : (e == 1) ? 8'hFB : 8'h78;
+      cx[199 + e] = (e == 0) ? 8'h7B : (e == 1) ? 8'hFB : (e == 2) ? 8'h7D :
+                    (e == 3) ? 8'hFD : 8'h7A;
+      cx[232 + e] = (e == 0) ? 8'h7B : 8'h00;
+    end
+    cx[0] = 8'h70; cx[33] = 8'h00; cx[66] = 8'h00; cx[99] = 8'h00;
+    cx[132] = 8'h01; cx[165] = 8'hEF; cx[198] = 8'h70; cx[231] = 8'h00;
+    for (int unsigned el = 0; el < ConfBlocks*32; el++)
+      for (int unsigned b = 0; b < 4; b++) wr_mem(src + el*4 + b, cv[el][b*8 +: 8]);
+    for (int unsigned i = 0; i < ConfBlocks*33; i++) wr_mem(dst + i, 8'hA5);
+    idma_req = '0;
+    idma_req.length   = tf_len_t'(ConfBlocks*128);
+    idma_req.src_addr = src;
+    idma_req.dst_addr = dst;
+    idma_req.opt.src_protocol = idma_pkg::AXI;
+    idma_req.opt.dst_protocol = idma_pkg::AXI;
+    idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
+    idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
+    idma_req.opt.beo.decouple_rw = 1'b1;
+    idma_req.opt.beo.decouple_aw = 1'b1;
+    idma_req.opt.compute.enable  = 1'b1;
+    idma_req.opt.compute.op      = idma_pkg::COMPUTE_MXQUANT;
+    idma_req.opt.last            = 1'b1;
+    req_valid = 1'b1;
+    do @(posedge clk); while (!req_ready);
+    req_valid = 1'b0;
+    idma_req = '0;
+    while (!(rsp_valid && rsp_ready)) @(posedge clk);
+    repeat (20) @(posedge clk);
+    for (int unsigned i = 0; i < ConfBlocks*33; i++)
+      if (rd_mem(dst + i) !== cx[i]) begin
+        errs++; if (errs <= 8) $display("[MXQ] conform dst[%0d] blk%0d.%0d = %02h exp %02h",
+          i, i/33, i%33, rd_mem(dst+i), cx[i]);
+      end
+    $display("[MXQ] E8M0 conformance: %0d mismatches", errs);
+  endtask
+
   initial begin
-    automatic int unsigned total = 0, e1, e2, e3;
+    automatic int unsigned total = 0, e1, e2, e3, e4;
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
@@ -162,7 +224,8 @@ module tb_idma_mxquant
       e1 = 0; e2 = 0;                                // FP16 quant capped at StrbWidth 64
     end
     do_mxquant_fp32('h0000_A000, 'h0000_D000, 8, e3);
-    total = e1 + e2 + e3;
+    do_conform('h0001_2000, 'h0001_4000, e4);
+    total = e1 + e2 + e3 + e4;
 
     if (total == 0) $display("[MXQ] ALL PASS (StrbWidth=%0d)", StrbWidth);
     else            $fatal(1, "[MXQ] FAIL: %0d mismatches", total);
