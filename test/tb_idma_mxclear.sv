@@ -29,7 +29,7 @@ module tb_idma_mxclear #(
     );
   end else begin : g_dequant
     idma_otf_mxdequant #(.StrbWidth(StrbWidth), .Fp16En(1'b0)) i_dut (
-      .clk_i(clk), .rst_ni(rst_n), .data_i(data_i), .valid_i(valid_i), .fp16_i(1'b0),
+      .clk_i(clk), .rst_ni(rst_n), .data_i(data_i), .valid_i(valid_i), .tag_i('0),
       .pop_o(in_pop), .data_o(data_o), .beat_valid_o(out_valid), .beat_pop_i(pop),
       .busy_o(busy)
     );

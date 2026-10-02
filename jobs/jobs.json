@@ -490,6 +490,27 @@
             ]
         }
     },
+    "mxplanar" : {
+        "jobs" : {
+        },
+        "params" : {
+            "AddrWidth"   : 32,
+            "UserWidth"   : 1,
+            "AxiIdWidth"  : 12,
+            "TFLenWidth"  : 32
+        },
+        "testbench" : "tb_idma_mxplanar",
+        "verify" : {
+            "dpi" : "idma_mxquant_dpi",
+            "token" : "[MXPL] ALL PASS",
+            "legs" : [
+                { "tag" : "mxplanar_32", "params" : { "DataWidth" : 32 } },
+                { "tag" : "mxplanar_64", "params" : { "DataWidth" : 64 } },
+                { "tag" : "mxplanar_256", "params" : { "DataWidth" : 256 } },
+                { "tag" : "mxplanar_512", "params" : { "DataWidth" : 512 } }
+            ]
+        }
+    },
     "transpose" : {
         "jobs" : {
         },

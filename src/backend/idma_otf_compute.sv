@@ -179,7 +179,7 @@ module idma_otf_compute #(
       .rst_ni,
       .data_i       ( data_i                                ),
       .valid_i      ( dq_in                                 ),
-      .fp16_i       ( tag.fmt == idma_pkg::MX_FMT_FP16      ),
+      .tag_i        ( tag                                   ),
       .pop_o        ( dq_pop                                ),
       .data_o       ( dq_data                               ),
       .beat_valid_o ( dq_valid                              ),

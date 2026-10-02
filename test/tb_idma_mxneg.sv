@@ -54,6 +54,8 @@ module tb_idma_mxneg
     .axi_write_req_o(axi_write_req), .axi_write_rsp_i(axi_write_rsp), .busy_o(busy)
   );
 
+  logic [1:0] layout = idma_pkg::MX_LAYOUT_INLINE;
+
   task automatic issue(input addr_t src, input addr_t dst, input int unsigned L,
                        input idma_pkg::compute_op_e op,
                        input idma_pkg::protocol_e src_prot, input idma_pkg::protocol_e dst_prot,
@@ -70,6 +72,7 @@ module tb_idma_mxneg
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = (op != idma_pkg::COMPUTE_NONE);
     idma_req.opt.compute.op      = op;
+    if (idma_pkg::compute_op_is_mx(op)) idma_req.opt.compute.params.mx.layout = layout;
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -106,6 +109,18 @@ module tb_idma_mxneg
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       14: issue(Src, Dst + 1, StrbWidth * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      15: begin
+        layout = 2'd3;
+        issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      end
+      16: begin
+        layout = idma_pkg::MX_LAYOUT_PLANAR;
+        issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      end
+      17: begin
+        layout = idma_pkg::MX_LAYOUT_PLANAR;
+        issue(Src, Dst, 48, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      end
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 

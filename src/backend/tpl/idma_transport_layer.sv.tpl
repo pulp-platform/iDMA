@@ -460,6 +460,7 @@ ${rendered_read_ports[read_port]}
         always_comb begin
             cmp_tag      = r_dp_req_i.mx;
             cmp_tag.last = r_dp_req_i.mx.last & r_dp_rsp_o.last;
+            cmp_tag.half = r_dp_req_i.mx.half & r_dp_rsp_o.last;
         end
         assign cmp_mx_valid = &(buffer_out_valid & buffer_out_mx);
 

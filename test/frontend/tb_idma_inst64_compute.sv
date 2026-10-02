@@ -7,7 +7,8 @@
 
 /// On-the-fly compute through the tightly-coupled `inst64` frontend. A `DMOPC` selects
 /// MX quantization, the following `DMCPY` is checked byte-exact against the DPI-C golden,
-/// and a second `DMOPC` returns the frontend to a plain copy. `NegCase` 1 proves the
+/// once inline and once to a data and a scale plane, and a last `DMOPC` returns the frontend to
+/// a plain copy. `NegCase` 1 proves the
 /// unknown-opcode guard fires instead of silently degrading to a copy.
 module tb_idma_inst64_compute #(
     /// Elaborate the backend compute datapath; 0 must fail the golden compare
@@ -41,6 +42,7 @@ module tb_idma_inst64_compute #(
     localparam int unsigned QuantBytes  = NumBlocks * BlkOutBytes;
 
     localparam int unsigned GuardBytes = 32'd64;
+    localparam int unsigned PlScaleOff = 32'd6;
     localparam logic [7:0]  Sentinel   = 8'h5A;
 
     // Outside the TCDM window in both topologies, so every endpoint decodes to AXI
@@ -164,6 +166,30 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
+    /// Planar quant: the data plane at `QuantAddr`, the scale plane `PlScaleOff` x 64 B above.
+    task automatic check_planar_payload();
+        for (int unsigned k = 0; k < NumBlocks; k++) begin
+            for (int unsigned i = 0; i < BlkOutBytes; i++) begin
+                automatic addr_t a = (i == 0) ? QuantAddr + PlScaleOff * 64 + k
+                                              : QuantAddr + k * 32 + i - 1;
+                if (harness.mem_read_byte(a) !== 8'(gm_get(int'(k * BlkOutBytes + i)))) begin
+                    if (errors < 10) $error("planar mismatch blk%0d.%0d at %0h", k, i, a);
+                    errors++;
+                end
+            end
+        end
+        for (int unsigned i = NumBlocks * 32; i < PlScaleOff * 64; i++)
+            if (harness.mem_read_byte(QuantAddr + i) !== Sentinel) begin
+                if (errors < 20) $error("planar data plane overrun at +%0d", i);
+                errors++;
+            end
+        for (int unsigned i = NumBlocks; i < GuardBytes; i++)
+            if (harness.mem_read_byte(QuantAddr + PlScaleOff * 64 + i) !== Sentinel) begin
+                if (errors < 20) $error("planar scale plane overrun at +%0d", i);
+                errors++;
+            end
+    endtask
+
     task automatic check_copy_payload();
         logic [7:0] actual;
         logic [7:0] expected;
@@ -262,6 +288,16 @@ module tb_idma_inst64_compute #(
             $fatal(1, "compare loop ran %0d times, expected %0d", bytes_checked, QuantBytes);
         end
 
+        // The same blocks to a data plane and a scale plane
+        poison_destination(QuantAddr);
+        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant) |
+            (32'(idma_pkg::MX_LAYOUT_PLANAR) << idma_inst64_compute_pkg::Rs1MxLayoutLsb),
+            32'(PlScaleOff) << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
+        harness.drv_if.dma_set_dest(QuantAddr);
+        harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, quant_id);
+        harness.drv_if.dma_wait(quant_id, 3'd0);
+        check_planar_payload();
+
         // Back to a plain copy: the latched op must not leak into the next transfer
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));
         harness.drv_if.dma_set_dest(CopyAddr);
@@ -271,8 +307,8 @@ module tb_idma_inst64_compute #(
         check_copy_payload();
 
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_after);
-        if (next_id_after !== next_id_before + 2) begin
-            $fatal(1, "next_id moved %0d -> %0d, expected exactly two transfers",
+        if (next_id_after !== next_id_before + 3) begin
+            $fatal(1, "next_id moved %0d -> %0d, expected exactly three transfers",
                    next_id_before, next_id_after);
         end
         if (harness.drv_if.rsp_pending() != 0) begin

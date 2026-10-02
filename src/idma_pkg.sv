@@ -89,30 +89,12 @@ package idma_pkg;
     localparam int unsigned MxBlockBytes     = MxBlockElems + 32'd1;
     localparam int unsigned MxFp32BlockBytes = 32'd4 * MxBlockElems;
     localparam int unsigned MxFp16BlockBytes = 32'd2 * MxBlockElems;
+    /// Data bytes of a block in the planar and grouped layouts
+    localparam int unsigned MxDataBlockBytes = MxBlockElems;
+    /// Bytes per scale group slot of the grouped layout, and the scale plane unit
+    localparam int unsigned MxScaleSlotBytes = 32'd64;
     /// Width of the signed scale plane offset (64 B units)
     localparam int unsigned MxScaleOffWidth  = 32'd20;
-
-
-    /// Per-op source:dest byte ratio; the legalizer sizes the write length from it.
-    function automatic int unsigned compute_in_bytes(compute_op_e op);
-        unique case (op)
-            COMPUTE_MXQUANT:        return MxFp32BlockBytes;
-            COMPUTE_MXQUANT_FP16:   return MxFp16BlockBytes;
-            COMPUTE_MXDEQUANT:      return MxBlockBytes;
-            COMPUTE_MXDEQUANT_FP16: return MxBlockBytes;
-            default:                return 32'd1;
-        endcase
-    endfunction
-
-    function automatic int unsigned compute_out_bytes(compute_op_e op);
-        unique case (op)
-            COMPUTE_MXQUANT:        return MxBlockBytes;
-            COMPUTE_MXQUANT_FP16:   return MxBlockBytes;
-            COMPUTE_MXDEQUANT:      return MxFp32BlockBytes;
-            COMPUTE_MXDEQUANT_FP16: return MxFp16BlockBytes;
-            default:                return 32'd1;
-        endcase
-    endfunction
 
     /// Transpose tensor dimension width (elements)
     localparam int unsigned TransposeDimWidth = 32'd12;
@@ -193,6 +175,39 @@ package idma_pkg;
                           COMPUTE_MXDEQUANT, COMPUTE_MXDEQUANT_FP16};
     endfunction
 
+    /// MX op with a separate scale plane (planar or grouped layout)?
+    function automatic logic compute_mx_planar(compute_options_t c);
+        return c.enable & compute_op_is_mx(c.op) &
+               (c.params.mx.layout inside {MX_LAYOUT_PLANAR, MX_LAYOUT_GROUPED});
+    endfunction
+
+    /// Per-plane byte ratio: bytes per block of the request length and of the written main plane;
+    /// the legalizer sizes the write length from it. A planar scale plane adds one byte per block.
+    function automatic int unsigned compute_in_bytes(compute_op_e op, logic planar);
+        unique case (op)
+            COMPUTE_MXQUANT:        return MxFp32BlockBytes;
+            COMPUTE_MXQUANT_FP16:   return MxFp16BlockBytes;
+            COMPUTE_MXDEQUANT,
+            COMPUTE_MXDEQUANT_FP16: return planar ? MxDataBlockBytes : MxBlockBytes;
+            default:                return 32'd1;
+        endcase
+    endfunction
+
+    function automatic int unsigned compute_out_bytes(compute_op_e op, logic planar);
+        unique case (op)
+            COMPUTE_MXQUANT,
+            COMPUTE_MXQUANT_FP16:   return planar ? MxDataBlockBytes : MxBlockBytes;
+            COMPUTE_MXDEQUANT:      return MxFp32BlockBytes;
+            COMPUTE_MXDEQUANT_FP16: return MxFp16BlockBytes;
+            default:                return 32'd1;
+        endcase
+    endfunction
+
+    /// Blocks per scale group of the planar and grouped layouts
+    function automatic int unsigned compute_mx_group_blocks(compute_options_t c);
+        return (c.params.mx.group == MX_GROUP_G32) ? 32'd32 : 32'd64;
+    endfunction
+
     /// Single source of truth: is `op` elaborated under this feature mask?
     function automatic logic compute_op_supported(compute_enable_t ena, compute_op_e op);
         unique case (op)
@@ -206,23 +221,33 @@ package idma_pkg;
     endfunction
 
     /// Per-beat MX sideband of the read datapath request and the dataflow element; `last` marks
-    /// the last burst (request) or beat (dataflow element) of the transfer
+    /// the last burst (request) or beat (dataflow element) of the transfer, `is_scale` a scale
+    /// plane burst, `half` a last planar data beat holding a single 32 B block
     typedef struct packed {
-        logic    mx;
-        logic    dequant;
-        mx_fmt_e fmt;
-        logic    poison_dis;
-        logic    last;
+        logic                          mx;
+        logic                          dequant;
+        mx_fmt_e                       fmt;
+        logic                          poison_dis;
+        logic [$bits(mx_layout_e)-1:0] layout;
+        logic [$bits(mx_group_e)-1:0]  group;
+        logic                          is_scale;
+        logic                          half;
+        logic                          last;
     } mx_tag_t;
 
     /// MX sideband of a transfer; zero unless it is an elaborated MX op
-    function automatic mx_tag_t mx_tag(compute_enable_t ena, compute_options_t c, logic last);
+    function automatic mx_tag_t mx_tag(compute_enable_t ena, compute_options_t c, logic is_scale,
+                                       logic half, logic last);
         mx_tag_t t;
         t            = '0;
         t.mx         = c.enable & compute_op_is_mx(c.op) & compute_op_supported(ena, c.op);
         t.dequant    = t.mx & (c.op inside {COMPUTE_MXDEQUANT, COMPUTE_MXDEQUANT_FP16});
         t.fmt        = t.mx ? compute_op_fmt(c.op) : MX_FMT_FP32;
         t.poison_dis = t.mx & ~t.dequant & c.params.mx.poison_dis;
+        t.layout     = (t.mx & compute_mx_planar(c)) ? c.params.mx.layout : MX_LAYOUT_INLINE;
+        t.group      = t.mx ? c.params.mx.group : MX_GROUP_G64;
+        t.is_scale   = t.mx & is_scale;
+        t.half       = t.mx & half;
         t.last       = t.mx & last;
         return t;
     endfunction

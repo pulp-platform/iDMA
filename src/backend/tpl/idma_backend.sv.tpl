@@ -575,8 +575,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             decouple_aw:  idma_req_i.opt.beo.decouple_aw,
 % if compute_eligible:
             is_single:    len == '0,
-            mx:           EnableCompute ? idma_pkg::mx_tag(ComputeOps, idma_req_i.opt.compute, 1'b1)
-                                        : '0
+            mx:           EnableCompute ? idma_pkg::mx_tag(ComputeOps, idma_req_i.opt.compute,
+                                                           1'b0, 1'b0, 1'b1) : '0
 % else:
             is_single:    len == '0
 % endif
