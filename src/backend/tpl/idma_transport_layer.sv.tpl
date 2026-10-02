@@ -404,7 +404,7 @@ ${rendered_read_ports[read_port]}
         // the MX tag rides with each beat pushed into the dataflow element
         always_comb begin
             cmp_tag      = r_dp_req_i.mx;
-            cmp_tag.last = r_dp_req_i.mx.last & r_dp_ready_o;
+            cmp_tag.last = r_dp_req_i.mx.last & r_dp_rsp_o.last;
         end
 
         idma_otf_compute #(
@@ -438,7 +438,7 @@ ${rendered_read_ports[read_port]}
             .w_valid_o    ( buffer_out_valid_shifted ),
             .w_mask_o     ( mask_ext_shifted         ),
             .w_mx_o       ( cmp_w_mx            ),
-            .w_pop_i      ( |buffer_out_ready   ),
+            .w_pop_i      ( w_chan_valid_o & w_chan_ready_o ),
             .busy_o       ( cmp_busy            )
         );
 
