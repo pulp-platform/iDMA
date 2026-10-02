@@ -368,6 +368,60 @@ ${rendered_read_ports[read_port]}
     // Buffer
     //--------------------------------------
 
+% if compute_eligible:
+    // compute builds: every byte lane carries a bit marking the bytes of an MX beat
+    strb_t buffer_out_mx;
+
+    if (EnableCompute) begin : gen_dataflow_mx
+        typedef struct packed {
+            logic  mx;
+            byte_t data;
+        } mx_lane_t;
+        mx_lane_t [StrbWidth-1:0] mx_lane_in, mx_lane_out;
+
+        for (genvar i = 0; i < StrbWidth; i++) begin : gen_lane
+            assign mx_lane_in[i] = '{mx: r_dp_req_i.mx.mx, data: buffer_in_shifted[i]};
+            assign buffer_out[i]    = mx_lane_out[i].data;
+            assign buffer_out_mx[i] = mx_lane_out[i].mx;
+        end
+
+        idma_dataflow_element #(
+            .BufferDepth   ( BufferDepth   ),
+            .StrbWidth     ( StrbWidth     ),
+            .PrintFifoInfo ( PrintFifoInfo ),
+            .strb_t        ( strb_t        ),
+            .byte_t        ( mx_lane_t     )
+        ) i_dataflow_element (
+            .clk_i       ( clk_i                    ),
+            .rst_ni      ( rst_ni                   ),
+            .data_i      ( mx_lane_in               ),
+            .valid_i     ( buffer_in_valid          ),
+            .ready_o     ( buffer_in_ready          ),
+            .data_o      ( mx_lane_out              ),
+            .valid_o     ( buffer_out_valid         ),
+            .ready_i     ( dataflow_ready_in        )
+        );
+    end else begin : gen_dataflow
+        assign buffer_out_mx = '0;
+
+        idma_dataflow_element #(
+            .BufferDepth   ( BufferDepth   ),
+            .StrbWidth     ( StrbWidth     ),
+            .PrintFifoInfo ( PrintFifoInfo ),
+            .strb_t        ( strb_t        ),
+            .byte_t        ( byte_t        )
+        ) i_dataflow_element (
+            .clk_i       ( clk_i                    ),
+            .rst_ni      ( rst_ni                   ),
+            .data_i      ( buffer_in_shifted        ),
+            .valid_i     ( buffer_in_valid          ),
+            .ready_o     ( buffer_in_ready          ),
+            .data_o      ( buffer_out               ),
+            .valid_o     ( buffer_out_valid         ),
+            .ready_i     ( dataflow_ready_in        )
+        );
+    end
+% else:
     idma_dataflow_element #(
         .BufferDepth   ( BufferDepth   ),
         .StrbWidth     ( StrbWidth     ),
@@ -384,6 +438,7 @@ ${rendered_read_ports[read_port]}
         .valid_o     ( buffer_out_valid         ),
         .ready_i     ( dataflow_ready_in        )
     );
+% endif
 
     //--------------------------------------
     // On-the-fly compute
@@ -398,14 +453,15 @@ ${rendered_read_ports[read_port]}
         strb_t                 cmp_consumed_d, cmp_consumed_q;
         strb_t                 cmp_consumed_this_cycle;
 
-        logic                  cmp_mx_head, cmp_mx_pop, cmp_w_mx;
+        logic                  cmp_mx_valid, cmp_mx_pop, cmp_w_mx;
         idma_pkg::mx_tag_t     cmp_tag;
 
-        // the MX tag rides with each beat pushed into the dataflow element
+        // the MX tag rides with each beat pushed into byte lane 0 of the dataflow element
         always_comb begin
             cmp_tag      = r_dp_req_i.mx;
             cmp_tag.last = r_dp_req_i.mx.last & r_dp_rsp_o.last;
         end
+        assign cmp_mx_valid = &(buffer_out_valid & buffer_out_mx);
 
         idma_otf_compute #(
             .StrbWidth           ( StrbWidth          ),
@@ -415,31 +471,31 @@ ${rendered_read_ports[read_port]}
         ) i_idma_otf_compute (
             .clk_i,
             .rst_ni,
-            .compute_i   ( w_dp_req_i.compute ),
-            .cfg_valid_i ( w_dp_valid_i        ),
-            .active_o    ( cmp_active          ),
-            .data_i      ( buffer_out          ),
-            .valid_i     ( &buffer_out_valid   ),
-            .in_ready_o  ( cmp_in_ready        ),
-            .data_o       ( cmp_data_o          ),
-            .strb_o       ( cmp_strb_o          ),
-            .beat_valid_o ( cmp_beat_valid      ),
-            .beat_ready_i ( cmp_beat_ready      ),
-            .lane_valid_o ( cmp_lane_valid      ),
-            .lane_ready_i ( buffer_out_ready_shifted ),
-            .tag_i        ( cmp_tag                                   ),
-            .tag_push_i   ( r_dp_req_i.mx.quant & (|buffer_in_valid)  ),
-            .mx_head_o    ( cmp_mx_head         ),
-            .mx_pop_o     ( cmp_mx_pop          ),
-            .w_data_i     ( wr_beat             ),
-            .w_valid_i    ( wr_beat_valid       ),
-            .w_mask_i     ( wr_beat_mask        ),
+            .compute_i    ( w_dp_req_i.compute       ),
+            .cfg_valid_i  ( w_dp_valid_i             ),
+            .active_o     ( cmp_active               ),
+            .data_i       ( buffer_out               ),
+            .valid_i      ( &buffer_out_valid        ),
+            .in_ready_o   ( cmp_in_ready             ),
+            .data_o       ( cmp_data_o               ),
+            .strb_o       ( cmp_strb_o               ),
+            .beat_valid_o ( cmp_beat_valid           ),
+            .beat_ready_i ( cmp_beat_ready           ),
+            .lane_valid_o ( cmp_lane_valid           ),
+            .tag_i        ( cmp_tag                  ),
+            .tag_push_i   ( buffer_in_valid[0]       ),
+            .tag_pop_i    ( dataflow_ready_in[0]     ),
+            .mx_valid_i   ( cmp_mx_valid             ),
+            .mx_pop_o     ( cmp_mx_pop               ),
+            .w_data_i     ( wr_beat                  ),
+            .w_valid_i    ( wr_beat_valid            ),
+            .w_mask_i     ( wr_beat_mask             ),
             .w_data_o     ( buffer_out_shifted       ),
             .w_valid_o    ( buffer_out_valid_shifted ),
             .w_mask_o     ( mask_ext_shifted         ),
-            .w_mx_o       ( cmp_w_mx            ),
-            .w_pop_i      ( w_chan_valid_o & w_chan_ready_o ),
-            .busy_o       ( cmp_busy            )
+            .w_mx_o       ( cmp_w_mx                 ),
+            .w_ready_i    ( w_dp_valid_i & w_chan_ready_o ),
+            .busy_o       ( cmp_busy                 )
         );
 
         // Transpose produces atomic beats, but the legalizer may split one beat into multiple
@@ -462,14 +518,19 @@ ${rendered_read_ports[read_port]}
         assign wr_data           = cmp_active ? cmp_data_o : buffer_out;
         assign wr_valid          = cmp_active ? cmp_lane_valid : buffer_out_valid;
         assign wr_strb           = cmp_active ? cmp_strb_o : '1;
-        assign dataflow_ready_in = cmp_mx_head ? {StrbWidth{cmp_mx_pop}} :
-                                   cmp_active  ? {StrbWidth{(&buffer_out_valid) & cmp_in_ready}} :
-                                   cmp_w_mx    ? '0 : buffer_out_ready_shifted;
+        // a lane whose head is an MX byte waits for the whole-beat MX pop
+        for (genvar i = 0; i < StrbWidth; i++) begin : gen_dataflow_ready
+            assign dataflow_ready_in[i] =
+                buffer_out_mx[i] ? cmp_mx_pop :
+                cmp_active       ? (&buffer_out_valid) & cmp_in_ready :
+                ~cmp_w_mx & buffer_out_ready_shifted[i];
+        end
 
         `ASSERT(ComputeConsumeValid, cmp_consumed_this_cycle != '0 |-> cmp_beat_valid, clk_i, !rst_ni, "Write datapath consumed bytes without a valid atomic compute result")
         `ASSERT(ComputeBeatAllLanesValid, cmp_beat_valid |-> &cmp_lane_valid, clk_i, !rst_ni, "Scalar compute beat handshake requires all output lanes to be valid")
-        `ASSERT(ComputeMxWholeBeat, r_dp_req_i.mx.quant & (|buffer_in_valid) |-> &buffer_in_valid, clk_i, !rst_ni, "MX quant beats enter the dataflow element whole")
-        `ASSERT(ComputeMxNoShift, cmp_w_mx |-> w_dp_req_i.shift == '0, clk_i, !rst_ni, "MX quant output bypasses the write shifter")
+        `ASSERT(ComputeMxWholeBeat, r_dp_req_i.mx.mx & (|buffer_in_valid) |-> &buffer_in_valid, clk_i, !rst_ni, "MX beats enter the dataflow element whole")
+        `ASSERT(ComputeMxNoShift, cmp_w_mx |-> w_dp_req_i.shift == '0, clk_i, !rst_ni, "MX output bypasses the write shifter")
+        `ASSERT(ComputeMxWPop, cmp_w_mx |-> ((buffer_out_valid_shifted[0] & w_dp_valid_i & w_chan_ready_o) == (w_chan_valid_o & w_chan_ready_o)), clk_i, !rst_ni, "MX queue pop differs from the W handshake")
     end else begin : gen_no_compute
         assign wr_data                  = buffer_out;
         assign wr_valid                 = buffer_out_valid;

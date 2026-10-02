@@ -575,9 +575,12 @@ idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
 idma_sim_tb_idma_mxclear: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); set -e; \
-	$(VSIM) -c -t 1ps -voptargs=+acc tb_idma_mxclear -do "run -all; quit" > mxclear_dequant.log 2>&1 || true; \
-	if grep -qE "clear.with.in-flight.state" mxclear_dequant.log; then echo "[MXCLR] dequant clear-guard FIRED"; \
-	else echo "[MXCLR] dequant clear-guard DID NOT FIRE (see mxclear_dequant.log)"; exit 1; fi
+	for c in "1 quant pop.of.an.empty.output.queue" "0 dequant pop.of.an.empty.output.queue"; do \
+	  set -- $$c; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gQuant=$$1 tb_idma_mxclear -do "run -all; quit" > mxclear_$$2.log 2>&1 || true; \
+	  if grep -qE "$$3" mxclear_$$2.log; then echo "[MXCLR] $$2 guard FIRED"; \
+	  else echo "[MXCLR] $$2 guard DID NOT FIRE (see mxclear_$$2.log)"; exit 1; fi; \
+	done
 
 # each case must print its guard assert; case 6 needs the op compiled out, case 4 a 1024-bit bus
 .PHONY: idma_sim_tb_idma_mxneg

@@ -213,7 +213,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// - `decouple_aw`: If the transfer has the AW decoupled from the R
     /// - `is_single`: Is this transfer just one beat long? `(len == 0)`
 % if compute_eligible:
-    /// - `mx`: MX quant sideband of the burst's beats (`last`: last burst of the transfer)
+    /// - `mx`: MX tag of the burst's beats (`last`: last burst of the transfer)
 % endif
     typedef struct packed {
         idma_pkg::protocol_e  src_protocol;

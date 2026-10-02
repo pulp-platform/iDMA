@@ -5,9 +5,10 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// On-the-fly MX dequantizer: gathers 33B MX blocks ([1B E8M0 scale][32B E5M2])
-// from the input beats and expands each to a 128B FP32 block (33B in -> 128B
-// out). Input length must be beat-aligned (33*k % StrbWidth == 0).
+// On-the-fly MX dequantizer, beat-granular and never stalling: inline 33B blocks
+// ([1B E8M0 scale][32B E5M2]) are accepted whole beats into the input buffer (IB),
+// extracted one output beat at a time (D0) and expanded to FP16 or FP32 (D1) into the
+// output queue (OQd). Input pops and output pushes are credit-checked from flops.
 module idma_otf_mxdequant
   import idma_float_pkg::*;
 #(
@@ -16,18 +17,17 @@ module idma_otf_mxdequant
 ) (
   input  logic clk_i,
   input  logic rst_ni,
-  input  logic clear_i,
-  /// Destination element format: FP16 expands 64B/block, FP32 128B/block
-  input  idma_pkg::mx_fmt_e dst_fmt_i,
 
+  /// Dataflow-element head beat tagged as dequant; `fp16_i` selects the destination format
   input  logic [StrbWidth-1:0][7:0] data_i,
   input  logic                      valid_i,
-  output logic                      ready_o,
+  input  logic                      fp16_i,
+  output logic                      pop_o,
 
+  /// Output queue head, popped on the W beat handshake
   output logic [StrbWidth-1:0][7:0] data_o,
-  output logic [StrbWidth-1:0]      lane_valid_o,
-  /// Byte lanes the write accepted this cycle; the pack pops exactly these
-  input  logic [StrbWidth-1:0]      lane_ready_i,
+  output logic                      beat_valid_o,
+  input  logic                      beat_pop_i,
   output logic                      busy_o
 );
 
@@ -37,178 +37,127 @@ module idma_otf_mxdequant
   // pragma translate_on
 
   // FP16 is illegal above StrbWidth 64 (legalizer ComputeMxFp16Width), so gate it off
-  localparam bit          Fp16Dn  = Fp16En && (StrbWidth <= 64);
-  localparam int unsigned NB      = MxCompressedBlockBytes;  // 33
-  localparam int unsigned XB      = 4 * MxBlockSize;         // 128 expanded bytes per block
-  localparam int unsigned XBW     = $clog2(XB);
-  localparam int unsigned BufSize = 2 * XB;                  // pow2 -> free circular wrap
-  localparam int unsigned PtrW    = $clog2(BufSize);
-  localparam int unsigned OccW    = PtrW + 1;
-  localparam int unsigned IcW     = $clog2(StrbWidth) + 1;
-  localparam int unsigned IW      = StrbWidth * 8;
-  localparam int unsigned TFW     = NB * 8;
-  localparam int unsigned PW      = (IW > TFW) ? IW : TFW;
+  localparam bit          Fp16Dn = Fp16En && (StrbWidth <= 64);
+  localparam int unsigned NL16   = StrbWidth / 2;
+  localparam int unsigned NL32   = StrbWidth / 4;
+  localparam int unsigned NL     = Fp16Dn ? NL16 : NL32;
+  localparam int unsigned NIB    = 3;
+  localparam int unsigned NOQ    = 3;
+  localparam int unsigned OW     = $clog2(StrbWidth);
+  localparam int unsigned SubW   = (StrbWidth < 128) ? $clog2(128 / StrbWidth) : 1;
 
-  // input staging beat + 33B block collector
-  logic [StrbWidth-1:0][7:0] in_q;
-  logic [IcW-1:0]            in_cnt_q, in_cnt_d;
-  logic [NB-1:0][7:0]        blk_q, blk_d;
-  logic [5:0]                fill_q, fill_d;
+  // IB: whole input beats, each with its destination format
+  logic [NIB-1:0][StrbWidth-1:0][7:0] ib_q;
+  logic [NIB-1:0]                     ib_fp16_q;
+  logic [1:0]                         ib_wr_q, ib_hd_q, ib_hd1;
+  logic [1:0]                         ib_cnt_q, ib_cnt_d;
+  logic                               in_ok_q;
+  logic [OW-1:0]                      off_q;
+  logic [SubW-1:0]                    sub_q;
 
-  // circular pack buffer: rd pointer + occupancy instead of a shift-down array
-  logic [BufSize-1:0][7:0] pack_q;
-  logic [PtrW-1:0]         rd_q;
-  logic [OccW-1:0]         occ_q, occ_d;
+  // D0 stage register
+  logic                               d0_v_q, d0_fp16_q;
+  logic [7:0]                         d0_sc_q;
+  logic [NL-1:0][7:0]                 d0_el_q;
 
-  logic [IcW-1:0] pop_cnt;
-  always_comb begin
-    pop_cnt = '0;
-    for (int i = 0; i < StrbWidth; i++)
-      if (lane_ready_i[i] && lane_valid_o[i]) pop_cnt += IcW'(1);
-  end
+  // OQd with its free-slot credit counter
+  logic [NOQ-1:0][StrbWidth-1:0][7:0] oq_q;
+  logic [1:0]                         oq_wr_q, oq_rd_q, oq_cnt_q, oq_free_q;
 
-  logic [PtrW-1:0] rd_a;
-  logic [OccW-1:0] occ_a;
-  assign rd_a  = rd_q + PtrW'(pop_cnt);
-  assign occ_a = occ_q - OccW'(pop_cnt);
+  function automatic logic [1:0] inc3(input logic [1:0] p);
+    return (p == 2'd2) ? 2'd0 : p + 2'd1;
+  endfunction
 
-  logic [7:0] total, rem;
-  logic [5:0] need;
-  logic       can_insert, do_expand, absorb, out_vld;
-  assign total      = 8'(fill_q) + 8'(in_cnt_q);
-  assign need       = 6'(NB) - fill_q;
-  assign rem        = total - 8'(NB);
-  assign can_insert = occ_a <= OccW'(XB);
-  assign do_expand  = (total >= 8'(NB)) && can_insert;
-  assign absorb     = (total < 8'(NB)) && (in_cnt_q != '0);
-  assign out_vld    = occ_q >= OccW'(StrbWidth);
+  assign pop_o = in_ok_q & valid_i;
 
-  assign ready_o      = (total < 8'(NB)) || (can_insert && (total < 8'(2 * NB)));
-  assign lane_valid_o = {StrbWidth{out_vld}};
-  assign busy_o       = (fill_q != '0) || (occ_q != '0) || (in_cnt_q != '0);
+  // D0 issue: the window holds the next output beat's bytes and an OQd slot is free
+  logic          fmt16, first, avail, issue, adv;
+  logic [OW+1:0] need, nxt;
+  logic [SubW-1:0] sub_last;
+  assign ib_hd1   = inc3(ib_hd_q);
+  assign fmt16    = Fp16Dn & ib_fp16_q[ib_hd_q];
+  assign first    = (sub_q == '0);
+  assign need     = (fmt16 ? (OW+2)'(NL16) : (OW+2)'(NL32)) + (OW+2)'(first);
+  assign nxt      = (OW+2)'(off_q) + need;
+  assign avail    = (ib_cnt_q >= 2'd2) | ((ib_cnt_q == 2'd1) & (nxt <= (OW+2)'(StrbWidth)));
+  assign issue    = avail & (oq_free_q != 2'd0);
+  assign adv      = issue & (nxt >= (OW+2)'(StrbWidth));
+  assign sub_last = fmt16 ? SubW'((64 / StrbWidth) - 1) : SubW'((128 / StrbWidth) - 1);
 
-  // staging tail at the consumed pointer, shifted up behind the collected bytes
-  logic [IcW-1:0] cons;
-  logic [PW-1:0]  in_pad;
-  logic [TFW-1:0] tail_flat, tail_shift, refill_flat;
-  assign cons        = IcW'(StrbWidth) - in_cnt_q;
-  assign in_pad      = PW'(in_q);
-  assign tail_flat   = TFW'(in_pad >> {cons, 3'b000});
-  assign tail_shift  = TFW'(tail_flat << {fill_q, 3'b000});
-  assign refill_flat = TFW'(in_pad >> {8'(cons) + 8'(need), 3'b000});
+  logic [2*StrbWidth-1:0][7:0] win;
+  logic [NL:0][7:0]            ext;
+  assign win = {ib_q[ib_hd1], ib_q[ib_hd_q]};
+  assign ext = (8*(NL+1))'(win >> {off_q, 3'b000});
 
-  logic [NB-1:0][7:0] merged;
-  always_comb
-    for (int j = 0; j < NB; j++)
-      merged[j] = (j < 32'(fill_q)) ? blk_q[j] : tail_shift[8*j +: 8];
-
-  always_comb begin
-    fill_d   = fill_q;
-    in_cnt_d = in_cnt_q;
-    blk_d    = blk_q;
-    if (do_expand) begin
-      blk_d = refill_flat;
-      if (rem < 8'(NB)) begin
-        fill_d   = rem[5:0];
-        in_cnt_d = '0;
-      end else begin
-        fill_d   = '0;
-        in_cnt_d = in_cnt_q - IcW'(need);
-      end
-    end else if (absorb) begin
-      blk_d    = merged;
-      fill_d   = total[5:0];
-      in_cnt_d = '0;
-    end
-    if (valid_i && ready_o) in_cnt_d = IcW'(StrbWidth);
-  end
-
-  logic                 fp16_act;
-  logic [7:0]           dec_sc;
-  logic [XB-1:0][7:0]   exp32_bytes, exp_bytes;
-  logic [XB/2-1:0][7:0] exp16_bytes;
-  assign fp16_act = (Fp16Dn != 1'b0) && (dst_fmt_i == idma_pkg::MX_FMT_FP16);
-  assign dec_sc   = merged[0];
-  for (genvar e = 0; e < MxBlockSize; e++) begin : gen_exp
-    logic [31:0] w;
-    assign w = e5m2_dequant_lane(merged[e+1], dec_sc, fp16_act);
-    assign exp32_bytes[4*e+3 : 4*e] = w;
-    assign exp16_bytes[2*e+1 : 2*e] = w[15:0];
-  end
-  assign exp_bytes = fp16_act ? {{(XB/2){8'd0}}, exp16_bytes} : exp32_bytes;
-
-  // per-block insert length: 64B (FP16) or 128B (FP32)
-  logic [OccW-1:0] blk_bytes;
-  assign blk_bytes = fp16_act ? OccW'(XB/2) : OccW'(XB);
-
-  // write: rotate the block by wr_off; enables select insert-length ring positions
-  logic [PtrW-1:0]    wr_ptr;
-  logic [XBW-1:0]     wr_off;
-  logic [XBW:0][XB-1:0][7:0] wrot;
-  logic [BufSize-1:0] wren;
-  assign wr_ptr    = rd_q + occ_q[PtrW-1:0];
-  assign wr_off    = wr_ptr[XBW-1:0];
-  assign wrot[XBW] = exp_bytes;
-  for (genvar b = 0; b < XBW; b++) begin : gen_wrot
-    for (genvar i = 0; i < XB; i++) begin : gen_wrot_byte
-      assign wrot[b][i] = wr_off[b] ? wrot[b+1][(i + XB - (1 << b)) % XB] : wrot[b+1][i];
-    end
-  end
-  for (genvar s = 0; s < BufSize; s++) begin : gen_wren
-    assign wren[s] = do_expand & (OccW'(PtrW'(s) - wr_ptr) < blk_bytes);
-  end
-
-  // read: log-stage rotator at rd_q; DC prunes it to the StrbWidth funnel
-  logic [PtrW:0][BufSize-1:0][7:0] rrot;
-  assign rrot[PtrW] = pack_q;
-  for (genvar b = 0; b < PtrW; b++) begin : gen_rrot
-    for (genvar i = 0; i < BufSize; i++) begin : gen_rrot_byte
-      assign rrot[b][i] = rd_q[b] ? rrot[b+1][(i + (1 << b)) % BufSize] : rrot[b+1][i];
-    end
-  end
-  assign data_o = out_vld ? rrot[0][StrbWidth-1:0] : '0;
-
-  assign occ_d = occ_a + (do_expand ? blk_bytes : '0);
-
-  // pragma translate_off
-  always @(posedge clk_i) if (rst_ni)
-    assert (occ_d <= OccW'(BufSize))
-      else $fatal(1, "idma_otf_mxdequant: pack-buffer overflow (StrbWidth=%0d)", StrbWidth);
-  // pragma translate_on
-
-  // pragma translate_off
-  always @(posedge clk_i) if (rst_ni)
-    assert (32'(pop_cnt) <= 32'(occ_q))
-      else $fatal(1, "idma_otf_mxdequant: pop exceeds pack occupancy");
-  // NOT IMPLEMENTED: overlapping compute transfers (a clear must never drop in-flight state)
-  always @(posedge clk_i) if (rst_ni && clear_i)
-    assert ((fill_q == '0) && (occ_q == '0) && (in_cnt_q == '0))
-      else $fatal(1, "idma_otf_mxdequant: clear with in-flight state (overlapping transfers)");
-  // pragma translate_on
+  assign ib_cnt_d = ib_cnt_q + 2'(pop_o) - 2'(adv);
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      rd_q <= '0; occ_q <= '0; fill_q <= '0; in_cnt_q <= '0;
-      blk_q <= '0; in_q <= '0;
-    end else if (clear_i) begin
-      rd_q <= '0; occ_q <= '0; fill_q <= '0; in_cnt_q <= '0;
+      ib_wr_q <= '0; ib_hd_q <= '0; ib_cnt_q <= '0; in_ok_q <= 1'b1;
+      off_q   <= '0; sub_q   <= '0; d0_v_q   <= 1'b0;
     end else begin
-      rd_q     <= rd_a;
-      occ_q    <= occ_d;
-      fill_q   <= fill_d;
-      in_cnt_q <= in_cnt_d;
-      if (do_expand || absorb) blk_q <= blk_d;
-      if (valid_i && ready_o)  in_q  <= data_i;
+      ib_cnt_q <= ib_cnt_d;
+      in_ok_q  <= ib_cnt_d < 2'(NIB);
+      d0_v_q   <= issue;
+      if (pop_o) ib_wr_q <= inc3(ib_wr_q);
+      if (adv)   ib_hd_q <= ib_hd1;
+      if (issue) begin
+        off_q <= OW'(nxt);
+        sub_q <= (sub_q == sub_last) ? '0 : sub_q + SubW'(1);
+      end
     end
   end
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      pack_q <= '0;
-    end else if (!clear_i) begin
-      for (int s = 0; s < BufSize; s++)
-        if (wren[s]) pack_q[s] <= wrot[0][s & (XB - 1)];
+  always_ff @(posedge clk_i) begin
+    if (pop_o) begin
+      ib_q[ib_wr_q]      <= data_i;
+      ib_fp16_q[ib_wr_q] <= fp16_i;
+    end
+    if (issue) begin
+      d0_fp16_q <= fmt16;
+      if (first) d0_sc_q <= ext[0];
+      for (int i = 0; i < NL; i++) d0_el_q[i] <= first ? ext[i+1] : ext[i];
     end
   end
+
+  // D1: expand lanes straight into the OQd tail entry
+  logic [NL-1:0][31:0]       d1_lane;
+  logic [StrbWidth-1:0][7:0] d1_beat;
+  for (genvar i = 0; i < NL; i++) begin : gen_d1_lane
+    assign d1_lane[i] = e5m2_dequant_lane(d0_el_q[i], d0_sc_q, (i >= NL32) | d0_fp16_q);
+  end
+  always_comb begin
+    d1_beat = '0;
+    for (int i = 0; i < NL; i++) begin
+      if (d0_fp16_q)     d1_beat[2*i +: 2] = d1_lane[i][15:0];
+      else if (i < NL32) d1_beat[4*i +: 4] = d1_lane[i];
+    end
+  end
+
+  always_ff @(posedge clk_i) if (d0_v_q) oq_q[oq_wr_q] <= d1_beat;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      oq_wr_q <= '0; oq_rd_q <= '0; oq_cnt_q <= '0; oq_free_q <= 2'(NOQ);
+    end else begin
+      if (d0_v_q)     oq_wr_q <= inc3(oq_wr_q);
+      if (beat_pop_i) oq_rd_q <= inc3(oq_rd_q);
+      oq_cnt_q  <= oq_cnt_q  + 2'(d0_v_q) - 2'(beat_pop_i);
+      oq_free_q <= oq_free_q - 2'(issue)  + 2'(beat_pop_i);
+    end
+  end
+
+  assign beat_valid_o = (oq_cnt_q != 2'd0);
+  assign data_o       = oq_q[oq_rd_q];
+  assign busy_o       = (ib_cnt_q != 2'd0) | (sub_q != '0) | d0_v_q | beat_valid_o;
+
+  // pragma translate_off
+  always @(posedge clk_i) if (rst_ni) begin
+    assert (!beat_pop_i || beat_valid_o)
+      else $fatal(1, "idma_otf_mxdequant: pop of an empty output queue");
+    assert (!d0_v_q || (oq_cnt_q != 2'(NOQ)))
+      else $fatal(1, "idma_otf_mxdequant: output queue overflow");
+  end
+  // pragma translate_on
 
 endmodule : idma_otf_mxdequant
