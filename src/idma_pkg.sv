@@ -89,6 +89,8 @@ package idma_pkg;
     localparam int unsigned MxBlockBytes     = MxBlockElems + 32'd1;
     localparam int unsigned MxFp32BlockBytes = 32'd4 * MxBlockElems;
     localparam int unsigned MxFp16BlockBytes = 32'd2 * MxBlockElems;
+    /// Width of the signed scale plane offset (64 B units)
+    localparam int unsigned MxScaleOffWidth  = 32'd20;
 
 
     /// Per-op source:dest byte ratio; the legalizer sizes the write length from it.
@@ -133,10 +135,19 @@ package idma_pkg;
         logic [TransposeDimWidth-1:0] tensor_n;
     } transpose_options_t;
 
-    /// MX options; `poison_dis` keeps Inf/NaN blocks finite instead of poisoning them
+    /// MX element format (OCP MX v1.0); E2M1 is reserved, not elaborated
+    typedef enum logic [1:0] { MX_E5M2, MX_E4M3, MX_E2M1 } mx_elem_e;
+
+    /// MX options; `poison_dis` keeps Inf/NaN blocks finite instead of poisoning them, `rceil`
+    /// rounds the block scale up, `layout` and `group` place the compressed side and `scale_off`
+    /// is the planar scale plane start relative to the compressed-side address in 64 B units
     typedef struct packed {
-        logic                                  poison_dis;
-        logic [$bits(transpose_options_t)-2:0] reserved;
+        logic                          poison_dis;
+        logic                          rceil;
+        mx_elem_e                      elem_fmt;
+        logic [$bits(mx_layout_e)-1:0] layout;
+        logic [$bits(mx_group_e)-1:0]  group;
+        logic [MxScaleOffWidth-1:0]    scale_off;
     } mx_options_t;
 
     /// Per-op compute parameter union (members must be equal width)

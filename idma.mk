@@ -214,7 +214,7 @@ log2dimension = $(shell echo $$(( $$( echo "obase=2;$$(($(1)-1))" | bc | wc -c )
 IDMA_LICENSE   := Copyright 2026 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51
 IDMA_C_HDR_LIC := // $(subst \n,\n// ,$(IDMA_LICENSE))\n
 
-$(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv:
+$(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv: $(IDMA_FE_DIR)/reg/idma_reg.rdl
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif $(IDMA_REG_CPUIF) \
 	  --module-name idma_reg$*d_reg_top \
@@ -257,7 +257,7 @@ $(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
 	$(PEAKRDL) html $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_desc64_reg
 
 # C header
-$(IDMA_SW_DIR)/idma_reg%d_regs.h :
+$(IDMA_SW_DIR)/idma_reg%d_regs.h : $(IDMA_FE_DIR)/reg/idma_reg.rdl
 	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
 	  -b ltoh --type-style hier --rename idma_reg$*d \
 	  -P SysAddrWidth=$(call regwidth,$*) \
@@ -270,7 +270,7 @@ $(IDMA_SW_DIR)/idma_reg%d_regs_unpacked.h : $(IDMA_SW_DIR)/idma_reg%d_regs.h
 	sed -e "s/__attribute__ ((__packed__)) //" $^ > $@
 
 
-$(IDMA_SW_DIR)/idma_reg%d_raw_regs.h:
+$(IDMA_SW_DIR)/idma_reg%d_raw_regs.h: $(IDMA_FE_DIR)/reg/idma_reg.rdl
 	$(PEAKRDL) raw-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
 	  --format c \
 	  --license_str="$(IDMA_LICENSE)" \

@@ -15,7 +15,7 @@
         vals[list(operands).index(opcode_field['operand'])] = f'{operand_width}\'({opc})'
         return ', '.join(vals)
     known = [o for o in opcodes if not o['enable']]
-    pairs = [p for fl in operand_fields.values() for p in zip(fl, fl[1:])]
+    pairs = disjoint_pairs
     layout = ', '.join(f'`{o}` is `data_{s}`' for o, s in operands.items())
 %>\
 
@@ -45,7 +45,7 @@ localparam bit LayoutRv32Safe =
     (${f['sv']}Lsb + ${f['sv']}Width <= 32'd32)${' &&' if not loop.last else ';'}
 % endfor
 
-/// Fields sharing an operand must not overlap
+/// Fields one opcode reads must not overlap
 localparam bit LayoutDisjoint =
 % if pairs:
 %   for lo, hi in pairs:
@@ -70,7 +70,8 @@ function automatic idma_pkg::compute_options_t opc_decode(${args});
 %     for p in o['params']:
 <%
         lhs = f"            cmp.params.{p['target']} = "
-        rhs = f"{p['field']['signal']}[{p['field']['sv']}Lsb +: {p['field']['sv']}Width];"
+        rhs = f"{p['field']['signal']}[{p['field']['sv']}Lsb +: {p['field']['sv']}Width]"
+        rhs = f"{p['field']['sv_type']}'({rhs});" if p['field']['sv_type'] else rhs + ';'
 %>\
 %       if len(lhs) + len(rhs) <= 100:
 ${lhs}${rhs}

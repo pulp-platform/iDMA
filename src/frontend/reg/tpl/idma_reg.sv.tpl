@@ -261,6 +261,16 @@ module idma_${identifier} #(
         nxt_dma_req${sep}opt.compute.params                = '0;
         nxt_dma_req${sep}opt.compute.params.mx.poison_dis  =
             dma_reg2hw[i].mx_cfg.mx_poison_dis.value;
+        nxt_dma_req${sep}opt.compute.params.mx.rceil       =
+            dma_reg2hw[i].mx_cfg.mx_rceil.value;
+        nxt_dma_req${sep}opt.compute.params.mx.elem_fmt    =
+            idma_pkg::mx_elem_e'(dma_reg2hw[i].mx_cfg.mx_elem_fmt.value);
+        nxt_dma_req${sep}opt.compute.params.mx.layout      =
+            dma_reg2hw[i].mx_cfg.mx_layout.value;
+        nxt_dma_req${sep}opt.compute.params.mx.group       =
+            dma_reg2hw[i].mx_cfg.mx_group.value;
+        nxt_dma_req${sep}opt.compute.params.mx.scale_off   =
+            dma_reg2hw[i].mx_cfg.mx_scale_off.value;
       end
 
 % if num_dim != 1:
@@ -310,6 +320,13 @@ module idma_${identifier} #(
         assign dma_hw2reg[i].done_id[c].done_id.next = '0;
     end
 
+  end
+
+  // the RDL MX fields and idma_pkg::mx_options_t must agree
+  if (($bits(dma_reg2hw[0].mx_cfg.mx_scale_off.value) != idma_pkg::MxScaleOffWidth) ||
+      ($bits(dma_reg2hw[0].mx_cfg.mx_elem_fmt.value) != $bits(idma_pkg::mx_elem_e)))
+  begin : gen_mx_cfg_check
+    $fatal(1, "idma_${identifier}: mx_cfg fields do not match idma_pkg::mx_options_t");
   end
 
   // arbitration

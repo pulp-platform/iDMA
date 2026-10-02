@@ -162,6 +162,19 @@ addrmap idma_reg #(
         mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (33B -> 64B per 32-element block)."; };
     };
 
+    // MX layout of the compressed side; idma_pkg::mx_layout_e derives from it
+    enum mx_layout {
+        inline  = 2'd0 { desc = "Inline 33 B blocks: [1 B scale][32 B elements]."; };
+        planar  = 2'd1 { desc = "Data plane at the MX address, scale plane at the MX address + 64 * mx_scale_off."; };
+        grouped = 2'd2 { desc = "Groups of G blocks: G x 32 B data, then the G scale bytes in a 64 B slot."; };
+    };
+
+    // Blocks per scale group G of the planar and grouped layouts; idma_pkg::mx_group_e derives from it
+    enum mx_group {
+        g64 = 1'd0 { desc = "G = 64 blocks (one 64 B scale beat at 512 bit)."; };
+        g32 = 1'd1 { desc = "G = 32 blocks (half a 64 B scale beat)."; };
+    };
+
     reg compute_cfg {
         name = "compute_cfg";
         desc = "Per-transfer on-the-fly compute configuration. The fields are sampled when next_id is read to launch a transfer.";
@@ -196,6 +209,23 @@ addrmap idma_reg #(
         field {
             desc = "Keep blocks holding an Inf or NaN finite instead of poisoning them (0xFF scale, NaN elements).";
         } mx_poison_dis [0:0] = 0;
+        field {
+            desc = "Round the block scale up (RCEIL) instead of down (FLOOR).";
+        } mx_rceil [1:1] = 0;
+        field {
+            desc = "MX element format (0: E5M2, 1: E4M3).";
+        } mx_elem_fmt [3:2] = 0;
+        field {
+            desc = "Layout of the compressed side (quant destination, dequant source).";
+            encode = mx_layout;
+        } mx_layout [5:4] = 0;
+        field {
+            desc = "Blocks per scale group of the planar and grouped layouts.";
+            encode = mx_group;
+        } mx_group [6:6] = 0;
+        field {
+            desc = "Planar scale plane start relative to the compressed-side address, in signed 64 B units.";
+        } mx_scale_off [31:12] = 0;
     };
 
     regfile dim {

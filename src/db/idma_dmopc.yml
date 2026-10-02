@@ -18,6 +18,7 @@ operands:
   rs2: "argb"
 
 # Operand fields; `width` is the wire contract, `sv_width` the RTL type it must keep matching
+# (`sv_type` an enum type it is also cast to)
 fields:
   - name: "opc_byte"
     operand: "rs1"
@@ -33,6 +34,31 @@ fields:
     operand: "rs1"
     lsb: 18
     width: 1
+  - name: "mx_rceil"
+    operand: "rs1"
+    lsb: 19
+    width: 1
+  - name: "mx_elem_fmt"
+    operand: "rs1"
+    lsb: 20
+    width: 2
+    sv_type: "idma_pkg::mx_elem_e"
+  - name: "mx_layout"
+    operand: "rs1"
+    lsb: 22
+    width: 2
+    sv_width: "$bits(idma_pkg::mx_layout_e)"
+  - name: "mx_group"
+    operand: "rs1"
+    lsb: 24
+    width: 1
+    sv_width: "$bits(idma_pkg::mx_group_e)"
+  # Opcodes reading disjoint field sets may share bits: the MX scale offset overlays the transpose dimensions
+  - name: "mx_scale_off"
+    operand: "rs2"
+    lsb: 0
+    width: 20
+    sv_width: "idma_pkg::MxScaleOffWidth"
   # The transpose dimensions need 24 bits, so they ride `rs2` rather than straddling `rs1`
   - name: "tp_tensor_m"
     operand: "rs2"
@@ -56,17 +82,37 @@ opcodes:
     op: "mxquant"
     params:
       "mx.poison_dis": "mx_poison_dis"
+      "mx.rceil": "mx_rceil"
+      "mx.elem_fmt": "mx_elem_fmt"
+      "mx.layout": "mx_layout"
+      "mx.group": "mx_group"
+      "mx.scale_off": "mx_scale_off"
   - name: "mx_dequant"
     byte: 0x21
     op: "mxdequant"
+    params:
+      "mx.elem_fmt": "mx_elem_fmt"
+      "mx.layout": "mx_layout"
+      "mx.group": "mx_group"
+      "mx.scale_off": "mx_scale_off"
   - name: "mx_quant_fp16"
     byte: 0x22
     op: "mxquant_fp16"
     params:
       "mx.poison_dis": "mx_poison_dis"
+      "mx.rceil": "mx_rceil"
+      "mx.elem_fmt": "mx_elem_fmt"
+      "mx.layout": "mx_layout"
+      "mx.group": "mx_group"
+      "mx.scale_off": "mx_scale_off"
   - name: "mx_dequant_fp16"
     byte: 0x23
     op: "mxdequant_fp16"
+    params:
+      "mx.elem_fmt": "mx_elem_fmt"
+      "mx.layout": "mx_layout"
+      "mx.group": "mx_group"
+      "mx.scale_off": "mx_scale_off"
   - name: "transpose"
     byte: 0x50
     op: "transpose"

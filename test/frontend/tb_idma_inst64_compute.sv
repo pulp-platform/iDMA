@@ -144,6 +144,26 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
+    /// Latch an MX DMOPC and read back the decoded MX options.
+    task automatic check_mx_cfg(input logic [7:0] opc, input idma_pkg::mx_options_t exp);
+        idma_pkg::compute_options_t got;
+        harness.drv_if.dma_set_compute(
+            32'(opc) |
+                (32'(exp.poison_dis) << idma_inst64_compute_pkg::Rs1MxPoisonDisLsb) |
+                (32'(exp.rceil)      << idma_inst64_compute_pkg::Rs1MxRceilLsb) |
+                (32'(exp.elem_fmt)   << idma_inst64_compute_pkg::Rs1MxElemFmtLsb) |
+                (32'(exp.layout)     << idma_inst64_compute_pkg::Rs1MxLayoutLsb) |
+                (32'(exp.group)      << idma_inst64_compute_pkg::Rs1MxGroupLsb),
+            32'(exp.scale_off) << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
+        repeat (4) @(posedge harness.clk);
+        got = harness.i_dut.idma_fe_compute_q;
+        if (!got.enable || got.params.mx !== exp) begin
+            $error("DMOPC 0x%02x MX options: expected %h, got %h (enable=%0b)", opc, exp,
+                   got.params.mx, got.enable);
+            errors++;
+        end
+    endtask
+
     task automatic check_copy_payload();
         logic [7:0] actual;
         logic [7:0] expected;
@@ -198,6 +218,17 @@ module tb_idma_inst64_compute #(
         if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC transpose decode errors", errors);
         $display("[TB] DMOPC transpose operands round-trip over the full %0d-bit range",
                  idma_pkg::TransposeDimWidth);
+
+        // Walking ones over every MX option bit, quant and FP16 quant opcodes
+        for (int unsigned i = 0; i < $bits(idma_pkg::mx_options_t); i++) begin
+            check_mx_cfg(8'(idma_inst64_compute_pkg::OpcMxQuant),
+                         idma_pkg::mx_options_t'(1 << i));
+            check_mx_cfg(8'(idma_inst64_compute_pkg::OpcMxQuantFp16),
+                         idma_pkg::mx_options_t'(~(1 << i)));
+        end
+        if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC MX option decode errors", errors);
+        $display("[TB] DMOPC MX options round-trip over all %0d bits",
+                 $bits(idma_pkg::mx_options_t));
 
         $display("[TB] inst64 DMOPC mxquant (EnableCompute=%0d, EnableTcdmObi=%0d): %0d B -> %0d B",
                  EnableCompute, EnableTcdmObi, SrcBytes, QuantBytes);
