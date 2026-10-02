@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   interlock remains for transpose. `tb_idma_mxclear` checks the empty-queue pop guard of both
   engines.
 
+### Added
+- MX planar and grouped layouts in one pass: `mx_options_t` (`compute_params_t.mx`, register
+  `mx_cfg`, DMOPC `rs1`/`rs2` fields generated from the same database) carries `layout`,
+  `group` (G = 64 or 32 blocks per scale beat), a signed `scale_off` in 64 B units, `elem_fmt`
+  and `rceil`. The legalizer interleaves data bursts and per-group scale bursts on the write side
+  (quant) and scale-first reads on the read side (dequant); `tb_idma_mxplanar` checks both
+  layouts end to end.
+
 ### Fixed
 - MX quant of FP32 subnormal inputs dropped the leading zeros (implicit 1), e.g. 32 x 2^-127
   quantized to 1.5 instead of 1.0.

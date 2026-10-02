@@ -73,13 +73,42 @@ The FP cast primitives (quantizer lane unpack and E5M2 element rounding, E5M2 ->
 The scale byte `E` is OCP MX v1.0 E8M0: the block scale is `2^(E - 127)`, `E` in 0..254, and `0xFF` is NaN. Quantize sets the shared exponent to the block's largest finite FP32 exponent minus the E5M2 emax (15), clamped to [-127, 127]; an all-zero block gets `E = 0`. A block holding an Inf or NaN is poisoned: its scale is `0xFF` and every element the canonical E5M2 NaN `0x7D`. The per-transfer `mx_options_t.poison_dis` bit (register `mx_cfg.mx_poison_dis`, DMOPC `rs1[18]` on the quant opcodes) keeps such a block finite instead: the scale comes from the finite lanes, NaN quantizes to E5M2 NaN and Inf saturates to the E5M2 max normal. Dequantize turns every element of a `0xFF`-scale block into NaN and is exact: results below the FP32 min normal become FP32 subnormals, results above the FP32 max become Inf.
 :::
 
+### MX Layouts
+
+`mx_options_t` (in `compute_params_t`, register `mx_cfg`, DMOPC fields on the MX opcodes) selects
+the layout of the compressed side (quant destination, dequant source):
+
+| Field | Bits | Meaning |
+|-------|------|---------|
+| `poison_dis` | 1 | keep Inf/NaN blocks finite (quant) |
+| `rceil` | 1 | round the block scale up instead of down (quant) |
+| `elem_fmt` | 2 | element format `mx_elem_e` (E5M2; E4M3 and E2M1 reserved for the element datapath) |
+| `layout` | 2 | `inline` (33 B blocks), `planar`, `grouped`; value 3 reserved (`ComputeMxLayout`) |
+| `group` | 1 | blocks per scale group G: `g64` (a full 64 B scale beat) or `g32` (half a beat, strobed) |
+| `scale_off` | 20 | planar scale plane start relative to the compressed-side address, signed, in 64 B units |
+
+- **Planar**: the data plane holds 32 B per block at the compressed-side address; the scale plane
+  holds one byte per block at `addr + 64 * scale_off`. Quant writes both in one pass: per group the
+  legalizer emits the group's data bursts, then one burst of its scale bytes, on the same AW/W
+  port. Dequant reads the group's scale beat first, then its data, whole aligned beats.
+- **Grouped**: the same streams with the scale bytes of each group in a 64 B slot right after the
+  group's data (`G * 32 + 64` B per group, `scale_off` unused).
+
+The quant engine collects the scale bytes of the open group in a scale queue (4 lines of 64 B)
+and emits them after the group's last data beat; the dequant engine holds the group's scale beat
+in a scale register and copies each data beat's scale bytes into its input-buffer entry. Planar
+and grouped layouts need `StrbWidth <= 64` (`ComputeMxPlanarWidth`).
+
 ## Size-Changing Transfers
 
 MX ops change the byte count between read and write. The legalizer computes the write length from the per-op ratio:
 
 ```
-write_length = (req.length / compute_in_bytes(op)) * compute_out_bytes(op)
+write_length = (req.length / compute_in_bytes(op, planar)) * compute_out_bytes(op, planar)
 ```
+
+The ratio is per plane: a planar or grouped transfer sizes its data plane with 32 B per block (the
+dequant `length` is the data-plane length) and adds the scale chunks per group.
 
 and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraints enforced by legalizer assertions:
 
@@ -87,7 +116,9 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 |-----------|-------------|
 | `ComputeSizeAligned` | `length` is a whole multiple of the op's input granule |
 | `ComputeSrcAligned` / `ComputeDstAligned` | src/dst addresses are beat-aligned for size-changing ops |
-| `ComputeMxdequantBeatAligned` | dequant input `length` is a multiple of `MxBlockBytes * StrbWidth` |
+| `ComputeMxdequantBeatAligned` | inline dequant input `length` is a multiple of `MxBlockBytes * StrbWidth` |
+| `ComputeMxLayout` | the MX layout is not the reserved encoding |
+| `ComputeMxPlanarWidth` | planar and grouped layouts need `StrbWidth <= 64` |
 | `ComputeMxFp16Width` | FP16 element formats require `StrbWidth <= 64` (at most one block per beat) |
 | `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
 | `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported |
