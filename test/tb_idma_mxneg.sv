@@ -94,8 +94,10 @@ module tb_idma_mxneg
       5: issue(Src, Dst, 33, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       6: issue(Src, Dst, 33 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT,
                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      7: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::OBI, idma_pkg::AXI, 1'b0);
-      8: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::OBI, 1'b0);
+      7: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI_STREAM, idma_pkg::AXI,
+               1'b0);
+      8: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI_STREAM,
+               1'b0);
       10: issue(Src, Dst, 4 * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       11: issue(Src, Dst, 32'd264 << 22, idma_pkg::COMPUTE_MXDEQUANT,
@@ -106,6 +108,8 @@ module tb_idma_mxneg
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       14: issue(Src, Dst + 1, StrbWidth * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      15: issue(Src, Dst, StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
+                idma_pkg::AXI, idma_pkg::INIT, 1'b0);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 

@@ -438,6 +438,14 @@ idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_nd -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_nd -do "run -all; quit"
 
+# OBI-destination transpose: the write strobe must mask edge tiles and padding
+.PHONY: idma_sim_tb_idma_transpose_obi
+idma_sim_tb_idma_transpose_obi: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	# the TB sweeps the geometry list internally; one run per bus width
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_obi -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_obi -do "run -all; quit"
+
 # Back-to-back: the ND midend must reload each transfer base address
 .PHONY: idma_sim_tb_idma_nd_midend_b2b
 idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
@@ -489,7 +497,7 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_tcdm_copy.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_tcdm_copy.log
 
-# DMOPC mxquant against the DPI-C golden, plus the unknown-opcode guard
+# DMOPC MX and transpose against the golden, on both topologies, plus the unknown-opcode guard
 .PHONY: idma_sim_tb_idma_inst64_compute
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
@@ -499,6 +507,10 @@ idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute
 	# Questa does not propagate $$fatal to the exit code; gate on the transcript
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute.log
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=0 tb_idma_inst64_compute \
+		-logfile inst64_compute_axi_only.log -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute_axi_only.log
+	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute_axi_only.log
 	# the guard must fire; a silent fallback to a plain copy would pass the run above
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=1 \
 		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true
@@ -560,6 +572,13 @@ idma_sim_tb_idma_mxroundtrip: $(IDMA_VSIM_DIR)/compile.tcl
 	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,fp16_,-gQuantFp16=1)
 	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024,fp32_,-gQuantFp16=0)
 
+.PHONY: idma_sim_tb_idma_mx_obi
+idma_sim_tb_idma_mx_obi: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 256 512 1024,,)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,64 512,nostall_,-gStallObi=0)
+
 .PHONY: idma_sim_tb_idma_mxrand
 idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -593,7 +612,7 @@ idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	         "7 ComputeMxSrcProtocol 64 1 1" "8 ComputeMxDstProtocol 64 1 1" \
 	         "10 ComputeTransposeShape 64 1 1" "11 ComputeMxdequantLengthFits 64 1 1" \
 	         "12 ComputeMxFp16Width 1024 1 1" "13 not.elaborated 64 1 0" \
-	         "14 ComputeTransposeShape 64 1 1"; do \
+	         "14 ComputeTransposeShape 64 1 1" "15 ComputeTransposeDstStrobe 64 1 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \
@@ -705,7 +724,7 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_axi_copy:-GDMATracing=1 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
-                    tb_idma_inst64_compute:-GEnableTcdmObi=1 \
+                    tb_idma_inst64_compute:-GEnableTcdmObi=0 \
                     tb_idma_inst64_txid:-GNumChannels=2
 
 .PHONY: idma_lint_inst64
