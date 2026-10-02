@@ -88,8 +88,9 @@ and forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraint
 | `ComputeSrcAligned` / `ComputeDstAligned` | src/dst addresses are beat-aligned for size-changing ops |
 | `ComputeMxdequantBeatAligned` | dequant input `length` is a multiple of `MxBlockBytes * StrbWidth` |
 | `ComputeMxFp16Width` | FP16 element formats require `StrbWidth <= 64` (at most one block per beat) |
-| `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
+| `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops run on AXI or OBI src and dst; the other ports are not validated |
 | `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported |
+| `ComputeTransposeDstStrobe` | transpose edge strobes need a write port that takes the compute byte mask (AXI or OBI) |
 | `ComputeMxdequantLengthFits` | dequant output length must fit the `length` field width |
 
 ## Source Files

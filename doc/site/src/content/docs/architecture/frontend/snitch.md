@@ -45,7 +45,7 @@ The latched op persists until the next `DMOPC` and resets to passthrough. An und
 
 The host core is RV32, so it sign-extends `rs1` and `rs2` into the upper half of the 64-bit accelerator bus. No `DMOPC` field may cross bit 31 of its operand; that is why the 24 bits of transpose dimensions ride `rs2` instead of extending `rs1` past its top. `idma_inst64_top` fails elaboration on a layout that violates it (`LayoutRv32Safe`).
 
-The size-changing MX ops require AXI on both the source and the destination (`ComputeMxSrcProtocol` / `ComputeMxDstProtocol` in the legalizer), so they are only reachable for endpoints that decode outside the TCDM window. Transpose drives a per-beat write strobe that only `idma_axi_write` honours, so an OBI destination drops the edge-tile masking.
+The size-changing MX ops run on AXI and OBI sources and destinations alike, so they reach the TCDM as well as endpoints outside it; any other protocol fires `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` in the legalizer. Transpose drives a per-beat write strobe that both `idma_axi_write` and `idma_obi_write` honour. A transpose beat whose strobe is all zero still goes out on OBI with `be = 0`, which OBI 1.6 permits only for a `BE_FULL = 1` subordinate (R-8, the `obi_pkg` default); a TCDM behind `obi_to_tcdm` treats it as a no-op write.
 
 **Status select values** (`DMSTAT`/`DMSTATI`):
 - `0`: Completed transfer ID - compare against the ID returned by `DMCPY` to check if a specific transfer has finished
