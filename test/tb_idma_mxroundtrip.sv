@@ -95,13 +95,13 @@ module tb_idma_mxroundtrip
   // directed E8M0 decode: X = 1, 2^-127, 2^127 and the NaN scale, against literal values
   localparam logic [7:0]  DqScale [4] = '{8'h7F, 8'h00, 8'hFE, 8'hFF};
   localparam logic [7:0]  DqElem  [8] = '{8'h40, 8'hC0, 8'h7B, 8'h01, 8'h7C, 8'hFD, 8'h00, 8'h80};
-  // above FP32 max saturates, below FP32 min normal flushes (both implementation-defined)
+  // exact: below FP32 min normal gives FP32 subnormals, above FP32 max gives Inf
   localparam logic [31:0] DqFp32 [4][8] = '{
     '{32'h4000_0000, 32'hC000_0000, 32'h4760_0000, 32'h3780_0000,
       32'h7F80_0000, 32'h7FC0_0000, 32'h0000_0000, 32'h8000_0000},
-    '{32'h0080_0000, 32'h8080_0000, 32'h07E0_0000, 32'h0000_0000,
+    '{32'h0080_0000, 32'h8080_0000, 32'h07E0_0000, 32'h0000_0040,
       32'h7F80_0000, 32'h7FC0_0000, 32'h0000_0000, 32'h8000_0000},
-    '{32'h7F7F_FFFF, 32'hFF7F_FFFF, 32'h7F7F_FFFF, 32'h7700_0000,
+    '{32'h7F80_0000, 32'hFF80_0000, 32'h7F80_0000, 32'h7700_0000,
       32'h7F80_0000, 32'h7FC0_0000, 32'h0000_0000, 32'h8000_0000},
     '{default: 32'h7FC0_0000}};
   localparam logic [15:0] DqFp16 [4][8] = '{

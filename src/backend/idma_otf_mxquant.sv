@@ -7,7 +7,8 @@
 
 // On-the-fly MX quantizer: gathers a 32-element block from the input beats
 // (FP32 4B/elem, or FP16 2B/elem widened to FP32) and emits one 33B MX block
-// ([1B E8M0 scale][32B E5M2]) packed into StrbWidth-wide output beats.
+// ([1B E8M0 scale][32B E5M2]) packed into StrbWidth-wide output beats. A block holding an
+// Inf or NaN is poisoned (0xFF scale, canonical NaN elements) unless `poison_dis_i`.
 // FP16 requires StrbWidth <= 64 (at most one block completes per beat).
 module idma_otf_mxquant
   import idma_float_pkg::*;
@@ -20,6 +21,8 @@ module idma_otf_mxquant
   input  logic clear_i,
   /// Source element format: FP16 collects 64B/block, FP32 128B/block
   input  idma_pkg::mx_fmt_e src_fmt_i,
+  /// Keep Inf/NaN blocks finite instead of poisoning them
+  input  logic              poison_dis_i,
 
   input  logic [StrbWidth-1:0][7:0] data_i,
   input  logic                      valid_i,
@@ -82,14 +85,14 @@ module idma_otf_mxquant
 
   assign busy_o = (fill_q != '0) || (pack_off_q != '0);
 
-  // widen this beat's elements to FP32
+  // widen this beat's elements to FP32; FP32 subnormals are normalized in-band
   logic [31:0] in_elem [ElemsMax];
   always_comb begin
     for (int e = 0; e < ElemsMax; e++) begin
       if (fp16_act)
         in_elem[e] = fp16_bits_to_fp32({data_i[e*2+1], data_i[e*2]});
       else if (e < ElemsFP32)
-        in_elem[e] = {data_i[e*4+3], data_i[e*4+2], data_i[e*4+1], data_i[e*4]};
+        in_elem[e] = fp32_sub_norm({data_i[e*4+3], data_i[e*4+2], data_i[e*4+1], data_i[e*4]});
       else
         in_elem[e] = 32'd0;
     end
@@ -113,87 +116,17 @@ module idma_otf_mxquant
     end
   end
 
-  // in-module reimplementation of fp32_to_mxfp8_byte_prescaled: bit-exact, with
-  // proven-bound narrowing (scaled_exp in [-254,254] -> 10b signed) and the
-  // subnormal shifter reduced to its 3 reachable amounts (sh in {22,23,24})
-  function automatic logic [7:0] q_e5m2(input logic [31:0] f, input logic signed [7:0] dec_scale);
-    logic               sign;
-    logic [7:0]         expf;
-    logic [22:0]        manf;
-    logic signed [9:0]  exp_s, sc_s, scaled_exp;
-    logic [23:0]        full_mant;
-    logic [3:0]         rounded;
-    logic               guard, sticky, roundup, carry;
-    logic [5:0]         oexp;
-    logic [4:0]         mexp;
-    logic [1:0]         mmant;
-    logic [3:0]         sub_kept;
-    logic               sub_guard, sub_stky;
-
-    sign = f[31]; expf = f[30:23]; manf = f[22:0];
-    if (expf == 8'd0 && manf == 23'd0) return {sign, 5'd0, 2'd0};
-    if (expf == 8'hFF && manf != 23'd0) return {sign, 5'h1F, 2'd1};
-    if (expf == 8'hFF)                  return {sign, 5'h1E, 2'd3};
-
-    exp_s      = signed'({2'b00, expf});
-    sc_s       = signed'({{2{dec_scale[7]}}, dec_scale});
-    scaled_exp = exp_s - 10'sd127 - sc_s;
-    full_mant  = {1'b1, manf};
-
-    if (scaled_exp > 10'sd15) return {sign, 5'h1E, 2'd3};
-
-    if (scaled_exp >= -10'sd14) begin
-      rounded = {1'b0, full_mant[23:21]};
-      guard   = full_mant[20];
-      sticky  = (full_mant[19:0] != 20'd0);
-      roundup = guard && (rounded[0] || sticky);
-      if (roundup) rounded = rounded + 4'd1;
-      carry = rounded[3];
-      oexp  = 6'(scaled_exp + 10'sd15) + 6'(carry);
-      mmant = rounded[1:0];
-      if (oexp > 6'd30) begin
-        mexp  = 5'd30;
-        mmant = 2'd3;
-      end else begin
-        mexp = oexp[4:0];
-      end
-      return {sign, mexp, mmant};
-    end
-
-    if (scaled_exp < -10'sd17) return {sign, 5'd0, 2'd0};
-    // scaled_exp in {-15,-16,-17} <=> low bits {01,00,11}; sh_amt {22,23,24}
-    case (scaled_exp[1:0])
-      2'b01: begin
-        sub_kept  = {2'b00, full_mant[23:22]};
-        sub_guard = full_mant[21];
-        sub_stky  = (full_mant[20:0] != 21'd0);
-      end
-      2'b00: begin
-        sub_kept  = {3'b000, full_mant[23]};
-        sub_guard = full_mant[22];
-        sub_stky  = (full_mant[21:0] != 22'd0);
-      end
-      default: begin
-        sub_kept  = 4'd0;
-        sub_guard = full_mant[23];
-        sub_stky  = (full_mant[22:0] != 23'd0);
-      end
-    endcase
-    if (sub_guard && (sub_kept[0] || sub_stky)) sub_kept = sub_kept + 4'd1;
-    if (sub_kept == 4'd0)     return {sign, 5'd0, 2'd0};
-    else if (sub_kept < 4'd4) return {sign, 5'd0, sub_kept[1:0]};
-    else                      return {sign, 5'd1, 2'd0};
-  endfunction
-
   // one shared scale tree + one bank of 32 quantizers (<=1 block completes per beat)
   logic [7:0]        blk_scale;
   logic signed [7:0] dec_scale;
   logic [7:0]        qbyte [MxBlockSize];
+  logic              poison;
   always_comb begin
     blk_scale = compute_block_scale_with_bias(blk_elem, E5m2Bias);
     dec_scale = signed'(blk_scale - 8'(E8m0Bias));
+    poison    = block_has_special(blk_elem) & ~poison_dis_i;
     for (int i = 0; i < MxBlockSize; i++)
-      qbyte[i] = q_e5m2(blk_elem[i], dec_scale);
+      qbyte[i] = poison ? E5m2Nan : e5m2_lane(blk_elem[i], dec_scale);
   end
 
   logic                              can_accept, accept;
@@ -234,7 +167,7 @@ module idma_otf_mxquant
 
     // hoisted single 33B block insert at the post-pop write offset
     ins_base = pack_off_d;
-    blk33[0] = blk_scale;
+    blk33[0] = poison ? E8m0Nan : blk_scale;
     for (int i = 0; i < MxBlockSize; i++) blk33[i+1] = qbyte[i];
     blk_vec  = (BufSize*8)'(blk33) << {ins_base, 3'b000};
     ins_mask = BufSize'({MxCompressedBlockBytes{1'b1}}) << ins_base;

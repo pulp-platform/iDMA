@@ -101,6 +101,15 @@ Present when on-the-fly [compute](../compute/) is elaborated (`EnableCompute`). 
 | 30:19 | `transpose_tensor_n` | Transpose N dimension in elements (non-zero when transpose enabled) |
 | 31 | - | Reserved |
 
+### MX Configuration Register (`mx_cfg`)
+
+Follows `compute_cfg` and is sampled with it; used when `compute_op` is an MX op.
+
+| Bits | Field | Description |
+|------|-------|-------------|
+| 0 | `mx_poison_dis` | Quant keeps a block holding an Inf or NaN finite instead of poisoning it (`0xFF` scale, NaN elements) |
+| 31:1 | - | Reserved |
+
 ## Multi-Port Arbitration
 
 When `NumRegs > 1`, multiple register ports can submit transfers concurrently. An internal round-robin arbiter serializes requests to the single backend interface. Each port stalls independently on its `next_id` read until its request is accepted. This allows multiple cores to share a single DMA without software-level locking.

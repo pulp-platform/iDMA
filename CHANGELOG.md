@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   instead of two's complement; the shared exponent clamps to [-127, 127] and a `0xFF` scale
   dequantizes to NaN. MX blocks written by earlier versions decode differently
   [#259](https://github.com/pulp-platform/iDMA/issues/259).
+- **Breaking:** MX quant poisons a block holding an Inf or NaN (scale `0xFF`, every element
+  `0x7D`); the per-transfer `mx_options_t.poison_dis` bit (`mx_cfg` register, DMOPC `rs1[18]`)
+  restores the finite-lane behaviour.
+- MX dequant to FP32 is exact: FP32 subnormal results instead of a flush to zero, Inf instead of
+  saturation.
+
+### Fixed
+- MX quant of FP32 subnormal inputs dropped the leading zeros (implicit 1), e.g. 32 x 2^-127
+  quantized to 1.5 instead of 1.0.
 
 ## 0.7.3 - 2026-10-01
 

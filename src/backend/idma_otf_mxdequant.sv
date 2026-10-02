@@ -123,30 +123,6 @@ module idma_otf_mxdequant
     if (valid_i && ready_o) in_cnt_d = IcW'(StrbWidth);
   end
 
-  // bit-exact local reimplementation of decode_e8m0_scale +
-  // mxfp8_byte_to_fp32_prescaled with proven 10-bit exponent range [-16,270]
-  function automatic logic [31:0] mx_dq(input logic [7:0] b, input logic [7:0] sc);
-    logic              sign;
-    logic [4:0]        e5;
-    logic [1:0]        m;
-    logic [7:0]        base;
-    logic signed [9:0] es;
-    logic [22:0]       om;
-    sign = b[7];
-    e5   = b[6:2];
-    m    = b[1:0];
-    base = (e5 == '0) ? (8'd111 + 8'(m[1])) : (8'd112 + 8'(e5));
-    es   = signed'({2'b00, base}) + signed'({2'b00, sc}) - 10'(E8m0Bias);
-    om   = (e5 == '0) ? {m[1] & m[0], 22'd0} : {m, 21'd0};
-    // NaN scale: every element is NaN regardless of its encoding (OCP MX v1.0 5.1)
-    if (sc == E8m0Nan)             return 32'h7FC00000;
-    else if (e5 == '0 && m == '0)  return {sign, 31'd0};
-    else if (e5 == 5'h1F)          return (m == '0) ? {sign, 8'hFF, 23'd0} : 32'h7FC00000;
-    else if (es <= 10'sd0)         return {sign, 31'd0};
-    else if (es >= 10'sd255)       return {sign, 8'hFE, 23'h7FFFFF};
-    else                           return {sign, es[7:0], om};
-  endfunction
-
   logic                 fp16_act;
   logic [7:0]           dec_sc;
   logic [XB-1:0][7:0]   exp32_bytes, exp_bytes;
@@ -155,13 +131,9 @@ module idma_otf_mxdequant
   assign dec_sc   = merged[0];
   for (genvar e = 0; e < MxBlockSize; e++) begin : gen_exp
     logic [31:0] w;
-    assign w = mx_dq(merged[e+1], dec_sc);
+    assign w = e5m2_dequant_lane(merged[e+1], dec_sc, fp16_act);
     assign exp32_bytes[4*e+3 : 4*e] = w;
-    if (Fp16Dn) begin : gen_fp16
-      assign exp16_bytes[2*e+1 : 2*e] = fp32_bits_to_fp16(w);
-    end else begin : gen_no_fp16
-      assign exp16_bytes[2*e+1 : 2*e] = '0;
-    end
+    assign exp16_bytes[2*e+1 : 2*e] = w[15:0];
   end
   assign exp_bytes = fp16_act ? {{(XB/2){8'd0}}, exp16_bytes} : exp32_bytes;
 

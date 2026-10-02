@@ -105,6 +105,7 @@ module idma_otf_compute #(
       .rst_ni,
       .clear_i      ( ~sel_mxquant          ),
       .src_fmt_i    ( mx_fmt                ),
+      .poison_dis_i ( eff_compute.params.mx.poison_dis ),
       .data_i       ( data_i                ),
       .valid_i      ( valid_i & sel_mxquant ),
       .ready_o      ( mx_in_ready           ),

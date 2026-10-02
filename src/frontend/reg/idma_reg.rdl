@@ -188,6 +188,16 @@ addrmap idma_reg #(
         } transpose_compact [31:31] = 0;
     };
 
+    reg mx_cfg {
+        name = "mx_cfg";
+        desc = "Per-transfer MX compute options, used when compute_op is an MX op. Sampled with compute_cfg.";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Keep blocks holding an Inf or NaN finite instead of poisoning them (0xFF scale, NaN elements).";
+        } mx_poison_dis [0:0] = 0;
+    };
+
     regfile dim {
         dst_stride dst_stride[SysAddrWidth/32];
         src_stride src_stride[SysAddrWidth/32];
@@ -204,6 +214,7 @@ addrmap idma_reg #(
              length   length[SysAddrWidth/32];
              dim      dim[NumDims-1 | NumDims == 1];
              compute_cfg compute_cfg;
+             mx_cfg   mx_cfg;
 };
 
 `endif // IDMA_REG_RDL

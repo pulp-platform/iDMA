@@ -150,8 +150,9 @@ module tb_idma_mxquant
   endtask
 
   // OCP MX E8M0 conformance: directed FP32 blocks against hand-computed bytes (no DPI)
-  localparam int unsigned ConfBlocks = 8;
-  task automatic do_conform(input addr_t src, input addr_t dst, output int unsigned errs);
+  localparam int unsigned ConfBlocks = 10;
+  task automatic do_conform(input addr_t src, input addr_t dst, input logic pdis,
+                            output int unsigned errs);
     automatic logic [31:0] cv [ConfBlocks*32];
     automatic logic [7:0]  cx [ConfBlocks*33];
     errs = 0;
@@ -165,8 +166,11 @@ module tb_idma_mxquant
                     (e == 1) ? 32'hFF7F_FFFF : 32'h7F00_0000;
       cv[192 + e] = (e == 0) ? 32'h7F80_0000 : (e == 1) ? 32'hFF80_0000 :
                     (e == 2) ? 32'h7FC0_0000 : (e == 3) ? 32'hFFC0_0001 :
-                    32'h3FC0_0000;                               // Inf/NaN skip the scan
-      cv[224 + e] = (e == 0) ? 32'h7F80_0000 : 32'h0000_0000;    // Inf over zeros
+                    32'h3FC0_0000;                               // Inf/NaN: poisoned
+      cv[224 + e] = (e == 0) ? 32'h7F80_0000 : 32'h0000_0000;    // Inf over zeros: poisoned
+      cv[256 + e] = 32'h0040_0000;                               // 2^-127 subnormals: 1.0
+      cv[288 + e] = (e == 0) ? 32'h0000_2000 :                   // 2^-136 -> 2^-9
+                    (e == 1) ? 32'h007F_FFFF : 32'h0000_0001;    // max subnormal -> 2.0
     end
     for (int unsigned e = 0; e < 32; e++) begin
       cx[1 + e]   = 8'h78;
@@ -175,12 +179,16 @@ module tb_idma_mxquant
       cx[100 + e] = 8'h78;
       cx[133 + e] = (e == 0) ? 8'h78 : 8'h74;
       cx[166 + e] = (e == 0) ? 8'h7B : (e == 1) ? 8'hFB : 8'h78;
-      cx[199 + e] = (e == 0) ? 8'h7B : (e == 1) ? 8'hFB : (e == 2) ? 8'h7D :
+      cx[199 + e] = !pdis ? 8'h7D : (e == 0) ? 8'h7B : (e == 1) ? 8'hFB : (e == 2) ? 8'h7D :
                     (e == 3) ? 8'hFD : 8'h7A;
-      cx[232 + e] = (e == 0) ? 8'h7B : 8'h00;
+      cx[232 + e] = !pdis ? 8'h7D : (e == 0) ? 8'h7B : 8'h00;
+      cx[265 + e] = 8'h3C;
+      cx[298 + e] = (e == 0) ? 8'h18 : (e == 1) ? 8'h40 : 8'h00;
     end
     cx[0] = 8'h70; cx[33] = 8'h00; cx[66] = 8'h00; cx[99] = 8'h00;
-    cx[132] = 8'h01; cx[165] = 8'hEF; cx[198] = 8'h70; cx[231] = 8'h00;
+    cx[132] = 8'h01; cx[165] = 8'hEF;
+    cx[198] = pdis ? 8'h70 : 8'hFF; cx[231] = pdis ? 8'h00 : 8'hFF;
+    cx[264] = 8'h00; cx[297] = 8'h00;
     for (int unsigned el = 0; el < ConfBlocks*32; el++)
       for (int unsigned b = 0; b < 4; b++) wr_mem(src + el*4 + b, cv[el][b*8 +: 8]);
     for (int unsigned i = 0; i < ConfBlocks*33; i++) wr_mem(dst + i, 8'hA5);
@@ -196,6 +204,7 @@ module tb_idma_mxquant
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = 1'b1;
     idma_req.opt.compute.op      = idma_pkg::COMPUTE_MXQUANT;
+    idma_req.opt.compute.params.mx.poison_dis = pdis;
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -208,11 +217,11 @@ module tb_idma_mxquant
         errs++; if (errs <= 8) $display("[MXQ] conform dst[%0d] blk%0d.%0d = %02h exp %02h",
           i, i/33, i%33, rd_mem(dst+i), cx[i]);
       end
-    $display("[MXQ] E8M0 conformance: %0d mismatches", errs);
+    $display("[MXQ] E8M0 conformance (poison %s): %0d mismatches", pdis ? "off" : "on", errs);
   endtask
 
   initial begin
-    automatic int unsigned total = 0, e1, e2, e3, e4;
+    automatic int unsigned total = 0, e1, e2, e3, e4, e5;
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
@@ -224,8 +233,9 @@ module tb_idma_mxquant
       e1 = 0; e2 = 0;                                // FP16 quant capped at StrbWidth 64
     end
     do_mxquant_fp32('h0000_A000, 'h0000_D000, 8, e3);
-    do_conform('h0001_2000, 'h0001_4000, e4);
-    total = e1 + e2 + e3 + e4;
+    do_conform('h0001_2000, 'h0001_4000, 1'b0, e4);
+    do_conform('h0001_6000, 'h0001_8000, 1'b1, e5);
+    total = e1 + e2 + e3 + e4 + e5;
 
     if (total == 0) $display("[MXQ] ALL PASS (StrbWidth=%0d)", StrbWidth);
     else            $fatal(1, "[MXQ] FAIL: %0d mismatches", total);

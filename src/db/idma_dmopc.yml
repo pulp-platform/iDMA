@@ -29,6 +29,10 @@ fields:
     lsb: 16
     width: 2
     sv_width: "TpModeWidth"
+  - name: "mx_poison_dis"
+    operand: "rs1"
+    lsb: 18
+    width: 1
   # The transpose dimensions need 24 bits, so they ride `rs2` rather than straddling `rs1`
   - name: "tp_tensor_m"
     operand: "rs2"
@@ -50,12 +54,16 @@ opcodes:
   - name: "mx_quant"
     byte: 0x20
     op: "mxquant"
+    params:
+      "mx.poison_dis": "mx_poison_dis"
   - name: "mx_dequant"
     byte: 0x21
     op: "mxdequant"
   - name: "mx_quant_fp16"
     byte: 0x22
     op: "mxquant_fp16"
+    params:
+      "mx.poison_dis": "mx_poison_dis"
   - name: "mx_dequant_fp16"
     byte: 0x23
     op: "mxdequant_fp16"

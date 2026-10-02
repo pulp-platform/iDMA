@@ -63,13 +63,13 @@ Transpose does not change transfer size, and the transport layer retires an outp
 
 The MX ops implement OCP microscaling (MX) format conversion in blocks of `MxBlockElems = 32` elements. A compressed MX block is `MxBlockBytes = 33` B: one OCP E8M0 block scale byte followed by 32 MXFP8 (E5M2) element bytes. The uncompressed forms are FP32 (`4 * 32 = 128` B) or FP16 (`2 * 32 = 64` B) per block.
 
-- **Quantize** (`idma_otf_mxquant`): gathers a 32-element block from the input beats (FP32 4 B/elem, or FP16 2 B/elem widened to FP32), computes the block scale from the maximum element exponent (Inf/NaN lanes excluded; the shared exponent clamps to the E8M0 range), casts each element to E5M2 with round-to-nearest-even and full subnormal support, and emits the packed 33 B block.
+- **Quantize** (`idma_otf_mxquant`): gathers a 32-element block from the input beats (FP32 4 B/elem, or FP16 2 B/elem widened to FP32), computes the block scale from the maximum element exponent (the shared exponent clamps to the E8M0 range), casts each element to E5M2 with round-to-nearest-even and exact FP16/FP32 subnormal inputs and E5M2 subnormal outputs, and emits the packed 33 B block.
 - **Dequantize** (`idma_otf_mxdequant`): expands each 33 B MX block back to FP32 (128 B) or FP16 (64 B), applying the decoded block scale per element.
 
 The FP cast primitives (FP32 <-> MXFP8 E5M2, FP16 <-> FP32 widen/narrow, block-scale computation) live in the `idma_float_pkg` package.
 
 :::note[E8M0 block scale]
-The scale byte `E` is OCP MX v1.0 E8M0: the block scale is `2^(E - 127)`, `E` in 0..254, and `0xFF` is NaN. Quantize sets the shared exponent to the block's largest finite FP32 exponent minus the E5M2 emax (15), clamped to [-127, 127]; an all-zero block gets `E = 0`. Elements keep their own Inf/NaN: NaN quantizes to E5M2 NaN and Inf saturates to the E5M2 max normal, like finite overflow. Dequantize turns every element of a `0xFF`-scale block into NaN, saturates results above the FP32 max and flushes results below the FP32 min normal to zero.
+The scale byte `E` is OCP MX v1.0 E8M0: the block scale is `2^(E - 127)`, `E` in 0..254, and `0xFF` is NaN. Quantize sets the shared exponent to the block's largest finite FP32 exponent minus the E5M2 emax (15), clamped to [-127, 127]; an all-zero block gets `E = 0`. A block holding an Inf or NaN is poisoned: its scale is `0xFF` and every element the canonical E5M2 NaN `0x7D`. The per-transfer `mx_options_t.poison_dis` bit (register `mx_cfg.mx_poison_dis`, DMOPC `rs1[18]` on the quant opcodes) keeps such a block finite instead: the scale comes from the finite lanes, NaN quantizes to E5M2 NaN and Inf saturates to the E5M2 max normal. Dequantize turns every element of a `0xFF`-scale block into NaN and is exact: results below the FP32 min normal become FP32 subnormals, results above the FP32 max become Inf.
 :::
 
 ## Size-Changing Transfers

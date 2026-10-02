@@ -133,9 +133,16 @@ package idma_pkg;
         logic [TransposeDimWidth-1:0] tensor_n;
     } transpose_options_t;
 
+    /// MX options; `poison_dis` keeps Inf/NaN blocks finite instead of poisoning them
+    typedef struct packed {
+        logic                                  poison_dis;
+        logic [$bits(transpose_options_t)-2:0] reserved;
+    } mx_options_t;
+
     /// Per-op compute parameter union (members must be equal width)
     typedef union packed {
         transpose_options_t transpose;
+        mx_options_t        mx;
     } compute_params_t;
 
     /// Compute option type: per-transfer on-the-fly compute selection
@@ -167,6 +174,12 @@ package idma_pkg;
     function automatic mx_fmt_e compute_op_fmt(compute_op_e op);
         return (op inside {COMPUTE_MXQUANT_FP16, COMPUTE_MXDEQUANT_FP16})
                ? MX_FMT_FP16 : MX_FMT_FP32;
+    endfunction
+
+    /// Single source of truth: is `op` an MX op (its params are `mx_options_t`)?
+    function automatic logic compute_op_is_mx(compute_op_e op);
+        return op inside {COMPUTE_MXQUANT, COMPUTE_MXQUANT_FP16,
+                          COMPUTE_MXDEQUANT, COMPUTE_MXDEQUANT_FP16};
     endfunction
 
     /// Single source of truth: is `op` elaborated under this feature mask?

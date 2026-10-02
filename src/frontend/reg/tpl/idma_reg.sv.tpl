@@ -257,6 +257,11 @@ module idma_${identifier} #(
       // Compact mode removes tile padding from destination rows.
       nxt_dma_req${sep}opt.compute.params.transpose.compact  =
           dma_reg2hw[i].compute_cfg.transpose_compact.value;
+      if (idma_pkg::compute_op_is_mx(nxt_dma_req${sep}opt.compute.op)) begin
+        nxt_dma_req${sep}opt.compute.params                = '0;
+        nxt_dma_req${sep}opt.compute.params.mx.poison_dis  =
+            dma_reg2hw[i].mx_cfg.mx_poison_dis.value;
+      end
 
 % if num_dim != 1:
       // ND connections
