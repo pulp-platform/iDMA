@@ -424,7 +424,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         typedef logic [$clog2(MetaFifoDepth + 32'd2)-1:0] num_outst_t;
 
         num_outst_t num_outst_q;
-        logic       tf_accept, tf_complete;
+        logic       tf_accept, tf_complete, outst;
         logic       zero_len_accept, zero_rsp_pending_q;
 
         // is the current transfer length 0?
@@ -434,16 +434,35 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         assign req_valid = is_length_zero ? 1'b0 : req_valid_i;
 
         // Stall a zero-length request while a response or an older rejection is still owed
-        assign zero_len_stall = is_length_zero & (zero_rsp_pending_q | (num_outst_q != '0));
+        assign zero_len_stall = is_length_zero & (zero_rsp_pending_q | outst);
 
         // outstanding transfer counter; mirrors the one in the error handler
         assign tf_accept   = req_valid & req_ready_o;
         assign tf_complete = rsp_valid & rsp_ready & ~idma_rsp.error;
 
-        always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
-            if (!rst_ni)                        num_outst_q <= '0;
-            else if (tf_accept & ~tf_complete)  num_outst_q <= num_outst_q + 'd1;
-            else if (tf_complete & ~tf_accept)  num_outst_q <= num_outst_q - 'd1;
+        if (TimingCuts.outst_cnt_reg) begin : gen_outst_cnt_reg
+            // the accept of the last cycle is counted now, so the counter needs no req_ready_o
+            logic tf_accept_q;
+            assign outst = (num_outst_q != '0) | tf_accept_q;
+
+            always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
+                if (!rst_ni) begin
+                    num_outst_q <= '0;
+                    tf_accept_q <= 1'b0;
+                end else begin
+                    num_outst_q <= num_outst_q + num_outst_t'(tf_accept_q) -
+                                   num_outst_t'(tf_complete);
+                    tf_accept_q <= tf_accept;
+                end
+            end
+        end else begin : gen_outst_cnt
+            assign outst = num_outst_q != '0;
+
+            always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
+                if (!rst_ni)                        num_outst_q <= '0;
+                else if (tf_accept & ~tf_complete)  num_outst_q <= num_outst_q + 'd1;
+                else if (tf_complete & ~tf_accept)  num_outst_q <= num_outst_q - 'd1;
+            end
         end
 
         // the rejection is a proper stream: it is held until the consumer accepts it

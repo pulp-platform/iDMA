@@ -170,6 +170,8 @@ package idma_pkg;
         logic dfe_reg_flags;
         /// Spill register on the head of the write datapath request FIFO
         logic wdp_head_spill;
+        /// The outstanding-transfer counter takes accepted requests one cycle late
+        logic outst_cnt_reg;
     } timing_cuts_t;
 
     /// MX element transfer format (FP32 is the architectural base format)
