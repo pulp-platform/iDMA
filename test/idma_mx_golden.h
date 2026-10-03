@@ -47,8 +47,7 @@ static inline int block_has_special(const uint32_t *block, size_t len) {
   return 0;
 }
 
-// Shared exponent over the finite lanes, clamped to [-127, 127], E8M0-encoded; rceil adds one
-// when the max magnitude's significand exceeds the element max normal's 1.75
+// E8M0 shared exponent over the finite lanes, clamped to [-127, 127], plus the RCEIL bump
 static inline uint8_t block_scale_mx(const uint32_t *block, size_t len, int elem, int rceil) {
   uint32_t max_mag = 0;
   for (size_t i = 0; i < len; ++i) {

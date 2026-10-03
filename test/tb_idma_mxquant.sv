@@ -214,9 +214,7 @@ module tb_idma_mxquant
     $display("[MXQ] E8M0 conformance (poison %s): %0d mismatches", pdis ? "off" : "on", errs);
   endtask
 
-  // OCP MX E4M3 and RCEIL conformance: directed FP32 blocks against hand-computed bytes (no DPI).
-  // E4M3: max normal 448 = 0x7E, min subnormal 2^-9 = 0x01, NaN S.1111.111; RCEIL raises the scale
-  // of a block whose max significand exceeds 1.75. Blocks 6, 7 are quantized to E5M2.
+  // E4M3 and RCEIL conformance against hand-computed bytes; blocks 6, 7 are quantized to E5M2
   localparam int unsigned CfBlocks = 8;
   task automatic do_conform_cfg(input addr_t src, input addr_t dst, input logic rceil,
                                 input logic pdis, output int unsigned errs);

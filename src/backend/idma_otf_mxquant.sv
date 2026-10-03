@@ -64,9 +64,7 @@ module idma_otf_mxquant
     return slot ? '0 : CntW'(EpB);
   endfunction
 
-  //--------------------------------------
   // Issue: credit check and Q0
-  //--------------------------------------
   logic            pop, fp16, blk_done, oq_pop, sq_pop;
   logic [PhW-1:0]  phase_q, phase_d;
   logic            slot_q, slot_d;
@@ -157,9 +155,7 @@ module idma_otf_mxquant
     end
   end
 
-  //--------------------------------------
   // Q1: block scale, exponent distances
-  //--------------------------------------
   logic signed [8:0] bmax, sem, emin;
   logic              poison1_d, bump1_d;
   logic [7:0]        scale1_d;
@@ -175,8 +171,7 @@ module idma_otf_mxquant
     for (int s = NumGrp / 2; s > 0; s = s / 2)
       for (int g = 0; g < s; g++) m[g] = (m[g] > m[g+s]) ? m[g] : m[g+s];
     bmax = m[0][9:1];
-    // E8M0 shared exponent bmax - emax clamped below at -127, plus the RCEIL bump; sem = shared
-    // exponent + emax, so the lane gaps are format independent
+    // sem = shared exponent + emax (clamped at -127, plus the RCEIL bump): format-free lane gaps
     emin      = e4m3_0q ? -9'sd119 : -9'sd112;
     sem       = (bmax < emin) ? emin : bmax;
     bump1_d   = rceil0_q & m[0][0] & (bmax >= emin);
@@ -205,9 +200,7 @@ module idma_otf_mxquant
     bump1_q   <= bump1_d;
   end
 
-  //--------------------------------------
   // Q2: element lanes
-  //--------------------------------------
   logic [DatB-1:0][7:0] dat_d, dat_q;
   logic [7:0]           scale2_q;
   logic                 v2_q, last2_q, g322_q, gend2_q;
@@ -233,9 +226,7 @@ module idma_otf_mxquant
     a2_q     <= a1_q;
   end
 
-  //--------------------------------------
   // Q3: insert into the output queues
-  //--------------------------------------
   beat_t            oq_q [Depth];
   logic [Depth-1:0] oq_gend_q;
   logic [PtrW-1:0]  wp_q, wp_d, rp_q, rp_d;
@@ -265,8 +256,7 @@ module idma_otf_mxquant
       if (v2_q && (32'(j) < 32'(npush))) oq_gend_q[e] <= gend2_q & (32'(j) == 32'(npush) - 1);
   end
 
-  // scale queue: the tail line collects its group's scale bytes and is pushed at the group end;
-  // the chunk covers sub-beats s0..s1 of the line
+  // scale queue: the tail line collects the group's scale bytes, sub-beats s0..s1 of the line
   line_t           sq_q    [NSq];
   logic [SubW-1:0] sq_s0_q [NSq];
   logic [SubW-1:0] sq_s1_q [NSq];

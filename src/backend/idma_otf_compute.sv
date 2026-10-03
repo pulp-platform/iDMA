@@ -5,10 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// On-the-fly compute dispatcher. MX beats carry their config in a tag through the dataflow
-/// element, are popped on the engine's registered credit and leave through whole-beat queues
-/// that the write side selects per burst after the write shifter. Transpose runs on the
-/// per-transfer config latch; a transpose config change drains the datapath first.
+/// On-the-fly compute dispatcher: tagged MX beats on registered credit, transpose on a config latch
 module idma_otf_compute #(
   /// Byte lanes per beat (= DataWidth/8)
   parameter int unsigned StrbWidth       = 32'd8,

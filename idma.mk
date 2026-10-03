@@ -214,7 +214,8 @@ log2dimension = $(shell echo $$(( $$( echo "obase=2;$$(($(1)-1))" | bc | wc -c )
 IDMA_LICENSE   := Copyright 2026 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51
 IDMA_C_HDR_LIC := // $(subst \n,\n// ,$(IDMA_LICENSE))\n
 
-$(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv: $(IDMA_FE_DIR)/reg/idma_reg.rdl
+$(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv \
+$(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv: $(IDMA_FE_DIR)/reg/idma_reg.rdl
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif $(IDMA_REG_CPUIF) \
 	  --module-name idma_reg$*d_reg_top \

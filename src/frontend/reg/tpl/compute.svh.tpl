@@ -32,7 +32,8 @@ localparam logic [${span - 1}:0] ComputeOpValid = ${span}'h${format(mask, '0%dx'
 /// MX option `${e["name"][3:]}`
 typedef enum logic [${e["width"] - 1}:0] {
 % for m in e["choices"]:
-    ${(pfx + m["name"]).ljust(ew)} = ${e["width"]}'d${m["value"]}${"," if not loop.last else " "} // ${m["desc"]}
+<% sep = "," if not loop.last else " " %>\
+    ${(pfx + m["name"]).ljust(ew)} = ${e["width"]}'d${m["value"]}${sep} // ${m["desc"]}
 % endfor
 } ${e["name"]}_e;
 % endfor

@@ -548,9 +548,14 @@ ${rendered_read_ports[read_port]}
 
         `ASSERT(ComputeConsumeValid, cmp_consumed_this_cycle != '0 |-> cmp_beat_valid, clk_i, !rst_ni, "Write datapath consumed bytes without a valid atomic compute result")
         `ASSERT(ComputeBeatAllLanesValid, cmp_beat_valid |-> &cmp_lane_valid, clk_i, !rst_ni, "Scalar compute beat handshake requires all output lanes to be valid")
-        `ASSERT(ComputeMxWholeBeat, r_dp_req_i.mx.mx & (|buffer_in_valid) |-> &buffer_in_valid, clk_i, !rst_ni, "MX beats enter the dataflow element whole")
-        `ASSERT(ComputeMxNoShift, cmp_w_mx |-> w_dp_req_i.shift == '0, clk_i, !rst_ni, "MX output bypasses the write shifter")
-        `ASSERT(ComputeMxWPop, cmp_w_mx |-> ((buffer_out_valid_shifted[0] & w_dp_valid_i & w_chan_ready_o) == (w_chan_valid_o & w_chan_ready_o)), clk_i, !rst_ni, "MX queue pop differs from the W handshake")
+        `ASSERT(ComputeMxWholeBeat, r_dp_req_i.mx.mx & (|buffer_in_valid) |-> &buffer_in_valid,
+                clk_i, !rst_ni, "MX beats enter the dataflow element whole")
+        `ASSERT(ComputeMxNoShift, cmp_w_mx |-> w_dp_req_i.shift == '0, clk_i, !rst_ni,
+                "MX output bypasses the write shifter")
+        `ASSERT(ComputeMxWPop, cmp_w_mx |->
+                ((buffer_out_valid_shifted[0] & w_dp_valid_i & w_chan_ready_o) ==
+                 (w_chan_valid_o & w_chan_ready_o)), clk_i, !rst_ni,
+                "MX queue pop differs from the W handshake")
     end else begin : gen_no_compute
         assign wr_data                  = buffer_out;
         assign wr_valid                 = buffer_out_valid;

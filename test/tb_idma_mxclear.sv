@@ -5,9 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Unit negtest for the MX output-queue guards. Quant=1 drives idma_otf_mxquant, Quant=0
-// idma_otf_mxdequant; popping the empty output queue after reset must fire the guard
-// $fatal. Not reachable black-box. The runner greps for the message.
+// Popping an empty MX output queue (Quant=1 mxquant, 0 mxdequant) must fire the guard $fatal
 
 `timescale 1ns/1ps
 

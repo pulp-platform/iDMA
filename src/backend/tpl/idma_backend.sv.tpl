@@ -511,8 +511,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic req_valid_leg, leg_ready;
 % if compute_eligible:
     if (EnableCompute) begin : gen_compute_cfg_gate
-        // a transpose request, or the first request after one, whose compute config differs
-        // from the last accepted one waits until the datapath drained; MX beats carry their tag
+        // a transpose config change (to or from transpose) waits until the datapath drained
         idma_pkg::compute_options_t cmp_cfg_q;
         logic backend_active, cmp_cfg_stall, cmp_cfg_tp;
         assign backend_active = busy_o.buffer_busy | busy_o.r_dp_busy | busy_o.w_dp_busy |

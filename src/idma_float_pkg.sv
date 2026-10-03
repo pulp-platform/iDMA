@@ -163,8 +163,7 @@ package idma_float_pkg;
     return {sign, rounded[10] ? {5'd1, 10'd0} : {5'd0, rounded[9:0]}};
   endfunction
 
-  // MXFP8 (E5M2) -> FP32 with the decoded block scale applied, exact (IEEE subnormals, overflow to
-  // Inf); the caller handles the NaN scale
+  // E5M2 x decoded block scale -> FP32, exact; the caller handles the NaN scale
   function automatic logic [31:0] mxfp8_byte_to_fp32_prescaled(input logic [7:0] byte_val,
                                                                input int scaled);
     logic        sign;
@@ -200,9 +199,7 @@ package idma_float_pkg;
     return sign_bit | (32'(fp32_exp[7:0]) << 23) | 32'(out_mant);
   endfunction
 
-  // FP32 subnormal -> exponent 0, mantissa [22:18] {4 bits after the leading one, sticky},
-  // [5:0] -lz; lossless for E5M2/E4M3 rounding, the other bits are don't care. The leading one
-  // is found per nibble, then inside the 8-bit window at the leading nibble
+  // FP32 subnormal -> {exponent 0, [22:18] 4 bits after the leading one + sticky, [5:0] -lz}
   function automatic logic [31:0] fp32_sub_norm(input logic [31:0] f);
     logic [23:0] mp;
     logic [5:0]  nz, ohk, below;
@@ -237,8 +234,7 @@ package idma_float_pkg;
     return {f[31], 8'd0, m4, st | rem, f[17:6], 6'(-lz)};
   endfunction
 
-  // quantizer input lane: floor(log2|v|) (MxKeyNone unless finite non-zero), the 4 bits after
-  // the leading one and a sticky over the rest
+  // quantizer input lane: floor(log2|v|), the 4 bits after the leading one, sticky
   typedef enum logic [1:0] { MX_ZERO, MX_FIN, MX_INF, MX_NAN } mx_cls_e;
   typedef struct packed {
     logic              sign;
@@ -296,14 +292,12 @@ package idma_float_pkg;
     return l;
   endfunction
 
-  // significand above the max-normal 1.75 of E5M2/E4M3: RCEIL raises the scale of a block whose
-  // max lane has it
+  // significand above the 1.75 of the E5M2/E4M3 max normal (RCEIL bump)
   function automatic logic mx_sig_big(input logic [3:0] sig, input logic sticky);
     return sig[3] & sig[2] & (|{sig[1:0], sticky});
   endfunction
 
-  // E5M2 element: RNE, element subnormals, saturation to max normal; Inf/NaN lanes only reach
-  // here with poisoning disabled
+  // E5M2 element: RNE, element subnormals, saturation to max normal
   function automatic logic [7:0] mx_e5m2_quant(input mx_qlane_t l);
     logic [3:0] r;
     logic [4:0] e;
@@ -362,9 +356,7 @@ package idma_float_pkg;
     return {l.sign, 3'd0, k};
   endfunction
 
-  // E5M2/E4M3 x E8M0 -> FP32 (exact: IEEE subnormals, overflow to Inf) or FP16 ([15:0], RNE)
-  // from one denormalizing shifter; same results as mxfp8_byte_to_fp32_prescaled and
-  // fp32_bits_to_fp16 for E5M2
+  // E5M2/E4M3 x E8M0 -> exact FP32 or RNE FP16 ([15:0]) from one denormalizing shifter
   function automatic logic [31:0] mx_dequant_lane(input logic [7:0] b, input logic [7:0] sc,
                                                   input logic fp16, input logic e4m3);
     logic              sign, is_nan, is_inf, is_zero;
