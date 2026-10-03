@@ -29,31 +29,31 @@ addrmap idma_reg #(
         default sw = rw;
         default hw = r;
         field {
-            desc = "Decouple R-AW";
+            desc = "R-AW coupling: hold write addresses until the read data arrives";
         } decouple_aw [0:0] = 0;
         field {
-            desc = "Decouple R-W";
+            desc = "Fully decouple the read and write channels";
         } decouple_rw [1:1] = 0;
         field {
-            desc = "Reduce maximal source burst length";
+            desc = "Shorten source bursts to src_max_llen";
         } src_reduce_len [2:2] = 0;
         field {
-            desc = "Reduce maximal destination burst length";
+            desc = "Shorten destination bursts to dst_max_llen";
         } dst_reduce_len [3:3] = 0;
         field {
-            desc = "Maximal logarithmic source burst length";
+            desc = "Maximal source burst length as log2(beats)";
         } src_max_llen [6:4] = 0;
         field {
-            desc = "Maximal logarithmic destination burst length";
+            desc = "Maximal destination burst length as log2(beats)";
         } dst_max_llen [9:7] = 0;
         field {
-            desc = "ND-extension enabled";
+            desc = "Dimensions in use beyond the first (0: 1D)";
         } enable_nd [10+Log2NumDims:10] = 0;
         field {
-            desc = "Selection of the source protocol";
+            desc = "Source protocol (idma_pkg::protocol_e)";
          } src_protocol [NumProtBits+11+Log2NumDims-1:11+Log2NumDims] = 0;
         field {
-            desc = "Selection of the destination protocol";
+            desc = "Destination protocol (idma_pkg::protocol_e)";
          } dst_protocol [2*NumProtBits+11+Log2NumDims-1:11+Log2NumDims+NumProtBits] = 0;
     };
 
@@ -196,11 +196,11 @@ addrmap idma_reg #(
 
     reg mx_cfg {
         name = "mx_cfg";
-        desc = "Per-transfer MX compute options, used when compute_op is an MX op. Sampled with compute_cfg.";
+        desc = "MX options of an MX compute_op, sampled with compute_cfg.";
         default sw = rw;
         default hw = r;
         field {
-            desc = "Keep blocks holding an Inf or NaN finite instead of poisoning them (0xFF scale, NaN elements).";
+            desc = "Keep Inf/NaN blocks finite instead of poisoning them (0xFF scale, NaN lanes)";
         } mx_poison_dis [0:0] = 0;
         field {
             desc = "Round the block scale up (RCEIL) instead of down (FLOOR).";

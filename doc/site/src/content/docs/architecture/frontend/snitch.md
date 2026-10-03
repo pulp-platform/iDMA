@@ -32,16 +32,18 @@ All DMA instructions that return a value write to `rd` (destination register). T
 `src/db/idma_dmopc.yml`; MARIO renders them into `idma_inst64_compute_pkg` and into the SW header
 `target/sw/idma_compute.h`, so hardware and software cannot disagree:
 
-| Byte | Operation |
-|------|-----------|
-| `0x08` | Passthrough; return to a plain copy |
-| `0x20` | MX quantize, FP32 source; `rs1[18]` poison_dis, `rs1[19]` rceil, `rs1[21:20]` elem_fmt, `rs1[22]` group |
-| `0x21` | MX dequantize, FP32 destination; `rs1[21:20]` elem_fmt, `rs1[22]` group |
-| `0x22` | MX quantize, FP16 source; fields as `0x20` |
-| `0x23` | MX dequantize, FP16 destination; fields as `0x21` |
-| `0x50` | Tiled transpose; `rs1[17:16]` is the element-size mode, `rs2[11:0]` `tensor_m`, `rs2[23:12]` `tensor_n` |
-| `0x28` | Set the MX scale plane address in 64 B units: `rs1[31:8]` address bits 29:6, `rs2[31:0]` bits 61:30; leaves the compute op unchanged |
-| `0x29` | Set the 2D scale plane stride, signed, in 64 B units: `rs2[31:0]`; leaves the compute op unchanged |
+<!-- BEGIN GENERATED dmopc -->
+| Byte | Name | Effect | Operand fields |
+|------|------|--------|----------------|
+| `0x08` | `passthrough` | latch a plain copy | - |
+| `0x20` | `mx_quant` | latch `mxquant` | `rs1[18]` `mx.poison_dis`, `rs1[19]` `mx.rceil`, `rs1[21:20]` `mx.elem_fmt`, `rs1[22]` `mx.group` |
+| `0x21` | `mx_dequant` | latch `mxdequant` | `rs1[21:20]` `mx.elem_fmt`, `rs1[22]` `mx.group` |
+| `0x22` | `mx_quant_fp16` | latch `mxquant_fp16` | `rs1[18]` `mx.poison_dis`, `rs1[19]` `mx.rceil`, `rs1[21:20]` `mx.elem_fmt`, `rs1[22]` `mx.group` |
+| `0x23` | `mx_dequant_fp16` | latch `mxdequant_fp16` | `rs1[21:20]` `mx.elem_fmt`, `rs1[22]` `mx.group` |
+| `0x28` | `mx_scale_addr` | set the frontend register to {`rs2[31:0]`, `rs1[31:8]`} << 6 | - |
+| `0x29` | `mx_scale_stride` | set the frontend register to sign-extended {`rs2[31:0]`} << 6 | - |
+| `0x50` | `transpose` | latch `transpose` | `rs1[17:16]` `transpose.mode`, `rs2[11:0]` `transpose.tensor_m`, `rs2[23:12]` `transpose.tensor_n` |
+<!-- END GENERATED dmopc -->
 
 The scale plane address and stride setters (`0x28`, `0x29`) load frontend state that every
 following `DMCPY` sends with its request, like `DMSRC` and `DMSTR`; carried in 64 B units they

@@ -798,9 +798,15 @@ idma_trace_clean:
 # Doc
 # ---------------
 
-.PHONY: idma_doc_site idma_doc_clean
+.PHONY: idma_doc_site idma_doc_clean idma_doc_tables
 
 IDMA_SITE_DIR := $(IDMA_ROOT)/doc/site
+# Docs pages with register-map and DMOPC tables rendered from the RDL and idma_dmopc.yml
+IDMA_DOC_GEN_PAGES := $(addprefix $(IDMA_SITE_DIR)/src/content/docs/architecture/frontend/, \
+                        register.md snitch.md)
+
+idma_doc_tables:
+	$(PYTHON) $(IDMA_UTIL_DIR)/gen_doc_tables.py $(IDMA_DOC_GEN_PAGES)
 
 # Copy the generated hierarchy graphs into the Astro site's static assets
 idma_doc_site: $(IDMA_RTL_DOC_ALL)

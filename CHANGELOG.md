@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   `dfe_reg_flags` (registered dataflow flags, pointers without load enables), `wdp_head_spill`
   (spill register on the write datapath request head) and `outst_cnt_reg` (outstanding-transfer
   counter off `req_ready_o`). `idma_inst64_top` passes it to its backends.
+- The register-map tables of the register frontend page and the DMOPC opcode table of the
+  Snitch page are generated from the RDL and `idma_dmopc.yml` (`make idma_doc_tables`);
+  `make idma_verify_codegen` fails when a page differs.
 - MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by
   `mx_options_t.elem_fmt` (E4M3: max normal 448 = `0x7E`, NaN `0x7F`, no Inf); a poisoned E4M3
   block has `0x7F` elements.

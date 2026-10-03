@@ -37,8 +37,9 @@ Compute (`EnableCompute`) applies only on compute-eligible backends (AXI or OBI 
 - Size-changing MX ops force `decouple_rw`/`decouple_aw`, since read and write lengths differ.
 - Transfer length must be a whole multiple of the op's input granule (128 B FP32, 64 B FP16, 32 B per block of the MX data plane); source and destination must be beat-aligned.
 - MX ops require `StrbWidth <= 64` (one 64 B scale line per beat).
-- MX dequant reads whole beats: the last data beat may read up to `StrbWidth - 1` bytes past the end of the data plane (never across a 4 KiB page).
+- MX dequant reads whole beats: the last data beat may read up to `StrbWidth - 1` bytes past the end of the data plane, and a partial last group reads its whole 64 B scale line (never across a 4 KiB page). The memory behind both planes must be readable there.
 - A quant transfer of one block writes two beats (data and scale) per read beat. The legalizer's read side runs up to three MX quant requests ahead of its write side, so a stream of such transfers keeps the read channel ahead after a read stall.
+- MX beats share the in-order dataflow element. A dequant transfer whose input does not fit into the dequant engine waits there until the write side reaches it, and the read beats of the next transfer wait behind it. After a quant transfer, whose write side trails its read side by the pipeline latency, a quant transfer behind such a dequant loses a read cycle: in a directed 512-bit stream (FP16 quant of 21 blocks, FP32 dequant of 1 to 24 blocks, FP16 quant of 21 blocks) 6 of 24 boundaries lose one cycle each.
 - Size-changing MX is validated on AXI source/destination only; OBI is not yet supported. TileLink is not a valid compute write destination.
 - Transpose is size-preserving but restricted to single-beat writes.
 

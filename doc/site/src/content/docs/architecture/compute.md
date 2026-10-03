@@ -96,7 +96,8 @@ Quant writes both planes in one pass: per group of G blocks the legalizer emits 
 bursts, then one burst of its scale bytes, on the same AW/W port. Dequant reads the group's
 scale bytes first (whole aligned beats, never past their 64 B line), then the group's data as
 whole beats; the last data beat may read up to `StrbWidth - 1` bytes past the end of the data
-plane. The quant `length` is the source length; the dequant `length` is the data-plane length.
+plane, so the memory behind the plane must be readable up to the end of that beat. The quant
+`length` is the source length; the dequant `length` is the data-plane length.
 
 Placement rules:
 
