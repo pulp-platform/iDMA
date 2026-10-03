@@ -447,9 +447,9 @@ idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 .PHONY: idma_sim_tb_idma_reg_frontend
 idma_sim_tb_idma_reg_frontend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=1 tb_idma_reg_frontend -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 tb_idma_reg_frontend -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 -gNumRegs=2 tb_idma_reg_frontend -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); for g in "-gNumStreams=1" "-gNumStreams=2" "-gNumStreams=2 -gNumRegs=2"; do \
+	  $(VSIM) -c -t 1ps -voptargs=+acc $$g tb_idma_reg_frontend -logfile reg_frontend.log \
+	    -do "run -all; quit" && grep -q "RESULT     : PASS" reg_frontend.log || exit 1; done
 
 .PHONY: idma_sim_tb_idma_inst64_axi_copy
 idma_sim_tb_idma_inst64_axi_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_axi_copy.tcl
