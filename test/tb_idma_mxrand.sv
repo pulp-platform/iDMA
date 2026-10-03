@@ -98,7 +98,7 @@ module tb_idma_mxrand
 
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
                          input logic en, input idma_pkg::compute_op_e op,
-                         input idma_pkg::mx_options_t mxo = '0);
+                         input idma_pkg::mx_options_t mxo = '0, input int soff = 0);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
     idma_req.src_addr = src;
@@ -112,6 +112,7 @@ module tb_idma_mxrand
     idma_req.opt.compute.enable  = en;
     idma_req.opt.compute.op      = op;
     if (en) idma_req.opt.compute.params.mx = mxo;
+    if (en) idma_req.scale_addr = mx_scale_of(op, src, dst, soff);
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -149,7 +150,6 @@ module tb_idma_mxrand
       mxo.group      = mx_group_e'($urandom_range(1));
       // scale plane 16-20 KiB above or below the data plane
       soff = $urandom_range(1) ? int'($urandom_range(256, 320)) : -int'($urandom_range(256, 320));
-      mxo.scale_off  = MxScaleOffWidth'(soff);
       nb = 0;
       case (op)
         0: begin  // plain copy, arbitrary alignment, compute idle
@@ -210,10 +210,11 @@ module tb_idma_mxrand
       case (op)
         0:       do_xfer(src, dst, L, 1'b0, idma_pkg::COMPUTE_NONE);
         1:       do_xfer(src, dst, L, 1'b1,
-                         fp16 ? idma_pkg::COMPUTE_MXQUANT_FP16 : idma_pkg::COMPUTE_MXQUANT, mxo);
+                         fp16 ? idma_pkg::COMPUTE_MXQUANT_FP16 : idma_pkg::COMPUTE_MXQUANT, mxo,
+                         soff);
         default: do_xfer(src, dst, L, 1'b1,
                          fp16 ? idma_pkg::COMPUTE_MXDEQUANT_FP16 : idma_pkg::COMPUTE_MXDEQUANT,
-                         mxo);
+                         mxo, soff);
       endcase
 
       for (int unsigned i = 0; i < WL; i++) begin
@@ -284,7 +285,7 @@ module tb_idma_mxrand
           idma_req.opt.compute.params.mx.elem_fmt  = idma_pkg::mx_elem_e'(k % 2);
           idma_req.opt.compute.params.mx.rceil     = (k / 2) % 2;
           idma_req.opt.compute.params.mx.group     = mx_group_e'(k / 3);
-          idma_req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(BSoff[k % 2]);
+          idma_req.scale_addr = mx_scale_base(idma_req.dst_addr, BSoff[k % 2]);
         end else begin
           // different config issued pipelined: the hardware interlock must drain first
           idma_req.length   = tf_len_t'(512);

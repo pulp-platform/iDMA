@@ -145,6 +145,7 @@ module idma_rt_midend #(
         assign idma_nd_req[c].burst_req.src_addr = src_addr_i [c];
         assign idma_nd_req[c].burst_req.dst_addr = dst_addr_i [c];
         assign idma_nd_req[c].burst_req.opt      = '0;
+        assign idma_nd_req[c].burst_req.scale_addr = '0;
 
     end
 

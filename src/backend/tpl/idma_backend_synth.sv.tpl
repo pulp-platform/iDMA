@@ -132,6 +132,7 @@ module idma_backend_synth_${name_uniqueifier} #(
     input  logic                   req_compute_enable_i,
     input  idma_pkg::compute_op_e  req_compute_op_i,
     input  idma_pkg::compute_params_t req_compute_params_i,
+    input  addr_t                  req_scale_addr_i,
 % endif
 
     output logic                   rsp_valid_o,
@@ -418,8 +419,10 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.opt.compute.enable     = req_compute_enable_i;
     assign idma_req.opt.compute.op         = req_compute_op_i;
     assign idma_req.opt.compute.params     = req_compute_params_i;
+    assign idma_req.scale_addr             = req_scale_addr_i;
 % else:
     assign idma_req.opt.compute            = '0;
+    assign idma_req.scale_addr             = '0;
 % endif
 
     assign rsp_cause_o      = idma_rsp.pld.cause;

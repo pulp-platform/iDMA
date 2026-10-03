@@ -217,10 +217,13 @@ module idma_${identifier} #(
       nxt_dma_req${sep}length   = dma_reg2hw[i].length[0].length.value;
       nxt_dma_req${sep}src_addr = dma_reg2hw[i].src_addr[0].src_addr.value;
       nxt_dma_req${sep}dst_addr = dma_reg2hw[i].dst_addr[0].dst_addr.value;
+      nxt_dma_req${sep}scale_addr = dma_reg2hw[i].scale_addr[0].scale_addr.value;
 % else:
       nxt_dma_req${sep}length   = {dma_reg2hw[i].length[1].length.value,     dma_reg2hw[i].length[0].length.value};
       nxt_dma_req${sep}src_addr = {dma_reg2hw[i].src_addr[1].src_addr.value, dma_reg2hw[i].src_addr[0].src_addr.value};
       nxt_dma_req${sep}dst_addr = {dma_reg2hw[i].dst_addr[1].dst_addr.value, dma_reg2hw[i].dst_addr[0].dst_addr.value};
+      nxt_dma_req${sep}scale_addr = {dma_reg2hw[i].scale_addr[1].scale_addr.value,
+                                    dma_reg2hw[i].scale_addr[0].scale_addr.value};
 % endif
 
       // Protocols
@@ -267,8 +270,6 @@ module idma_${identifier} #(
             idma_pkg::mx_elem_e'(dma_reg2hw[i].mx_cfg.mx_elem_fmt.value);
         nxt_dma_req${sep}opt.compute.params.mx.group       =
             dma_reg2hw[i].mx_cfg.mx_group.value;
-        nxt_dma_req${sep}opt.compute.params.mx.scale_off   =
-            dma_reg2hw[i].mx_cfg.mx_scale_off.value;
       end
 
 % if num_dim != 1:
@@ -321,8 +322,7 @@ module idma_${identifier} #(
   end
 
   // the RDL MX fields and idma_pkg::mx_options_t must agree
-  if (($bits(dma_reg2hw[0].mx_cfg.mx_scale_off.value) != idma_pkg::MxScaleOffWidth) ||
-      ($bits(dma_reg2hw[0].mx_cfg.mx_elem_fmt.value) != $bits(idma_pkg::mx_elem_e)))
+  if ($bits(dma_reg2hw[0].mx_cfg.mx_elem_fmt.value) != $bits(idma_pkg::mx_elem_e))
   begin : gen_mx_cfg_check
     $fatal(1, "idma_${identifier}: mx_cfg fields do not match idma_pkg::mx_options_t");
   end

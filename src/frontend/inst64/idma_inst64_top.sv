@@ -184,6 +184,7 @@ module idma_inst64_top #(
     // frontend state
     idma_pkg::compute_options_t idma_fe_compute_q;
     logic                       idma_fe_dmopc;
+    logic                       idma_fe_setter;
     logic [1:0] idma_fe_cfg;
     logic [1:0] idma_fe_init_cfg;
     logic [1:0] idma_fe_status;
@@ -803,8 +804,16 @@ module idma_inst64_top #(
                     dma_op_name     = "DMUSER";
                 end
 
-                // latch the on-the-fly compute configuration, registered below
+                // latch the on-the-fly compute configuration (registered below) or a setter
                 idma_inst64_snitch_pkg::DMOPC : begin
+                    unique case (acc_req_i.data_arga[idma_inst64_compute_pkg::Rs1OpcByteLsb +:
+                                                     idma_inst64_compute_pkg::Rs1OpcByteWidth])
+                        idma_inst64_compute_pkg::OpcMxScaleAddr:
+                            idma_fe_req_d.burst_req.scale_addr = addr_t'(
+                                idma_inst64_compute_pkg::opc_mx_scale_addr(acc_req_i.data_arga,
+                                                                           acc_req_i.data_argb));
+                        default: ;
+                    endcase
                     acc_req_ready_o = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMOPC";
@@ -865,11 +874,14 @@ module idma_inst64_top #(
     `FF(idma_fe_req_q, idma_fe_req_d, '0)
 
     // DMOPC persists across transfers until the next DMOPC; reset is a plain copy
-    assign idma_fe_dmopc = acc_req_valid_i & acc_req_ready_o &
-                           (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMOPC);
+    assign idma_fe_dmopc  = acc_req_valid_i & acc_req_ready_o &
+                            (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMOPC);
+    assign idma_fe_setter = idma_inst64_compute_pkg::opc_is_setter(
+                                acc_req_i.data_arga[idma_inst64_compute_pkg::Rs1OpcByteLsb +:
+                                                    idma_inst64_compute_pkg::Rs1OpcByteWidth]);
     `FFL(idma_fe_compute_q,
          idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
-         idma_fe_dmopc, '0)
+         idma_fe_dmopc & ~idma_fe_setter, '0)
 
 
     //--------------------------------------
@@ -941,6 +953,12 @@ module idma_inst64_top #(
     // Overlapping DMOPC fields alias onto each other and silently corrupt the decode.
     if (!idma_inst64_compute_pkg::LayoutDisjoint) begin : gen_compute_overlap_check
         $fatal(1, "idma_inst64_top: the DMOPC operand layout has overlapping fields");
+    end
+
+    // The DMOPC scale setter must keep the scale plane on its 64 B line by construction.
+    if ((32'd1 << idma_inst64_compute_pkg::MxScaleAddrUnitLog2) % idma_pkg::MxScaleSlotBytes != 0)
+    begin : gen_compute_scale_unit_check
+        $fatal(1, "idma_inst64_top: the DMOPC scale setter does not keep 64 B alignment");
     end
 
     // A compute op the RDL adds but DMOPC never encodes is unreachable, not a plain copy.

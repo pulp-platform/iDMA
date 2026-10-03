@@ -80,8 +80,32 @@ def _context(db: dict) -> dict:
             'enable': opcode.get('enable', True),
             'params': params
         })
-    _unique([o['sv'] for o in opcodes], 'opcode')
-    _unique([o['byte'] for o in opcodes], 'opcode byte')
+    # setters: an opcode byte that loads a frontend register from operand fields
+    setters = []
+    for setter in db.get('setters') or []:
+        parts = []
+        for key in setter['fields']:
+            if key not in by_key:
+                raise ValueError(f'setter {setter["name"]}: unknown field {key}')
+            parts.append(by_key[key])
+        shift = int(setter.get('shift', 0))
+        if sum(f['width'] for f in parts) + shift > operand_width:
+            raise ValueError(f'setter {setter["name"]}: value wider than {operand_width} b')
+        byte = int(setter['byte'])
+        if not 0 <= byte < (1 << opcode_width):
+            raise ValueError(f'setter {setter["name"]}: byte {byte:#x} outside the opcode width')
+        setters.append({
+            'sv': 'Opc' + _camel(setter['name']),
+            'c': setter['name'].upper(),
+            'fn': 'opc_' + setter['name'],
+            'byte': byte,
+            'hex': format(byte, f'0{(opcode_width + 3) // 4}x'),
+            'fields': parts,
+            'shift': shift,
+            'signed': bool(setter.get('signed', False))
+        })
+    _unique([o['sv'] for o in opcodes + setters], 'opcode')
+    _unique([o['byte'] for o in opcodes + setters], 'opcode byte')
 
     # per-operand fields in layout order
     operand_fields = {name: sorted([f for f in fields if f['operand'] == name],
@@ -89,8 +113,9 @@ def _context(db: dict) -> dict:
 
     # the disjointness guard compares neighbours among the fields one opcode reads
     disjoint_pairs, seen_pairs = [], set()
-    for opcode in opcodes:
-        used = [by_key[db['opcode_field']]] + [p['field'] for p in opcode['params']]
+    reads = [[p['field'] for p in o['params']] for o in opcodes] + [s['fields'] for s in setters]
+    for read in reads:
+        used = [by_key[db['opcode_field']]] + read
         for name in operands:
             ordered = sorted({f['key']: f for f in used if f['operand'] == name}.values(),
                              key=lambda f: f['lsb'])
@@ -113,6 +138,7 @@ def _context(db: dict) -> dict:
         'operand_fields': operand_fields,
         'disjoint_pairs': disjoint_pairs,
         'opcodes': opcodes,
+        'setters': setters,
         'name_width': max(len(f['sv']) for f in fields) + len('Width')
     }
 

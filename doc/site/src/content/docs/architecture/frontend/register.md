@@ -111,11 +111,19 @@ Follows `compute_cfg` and is sampled with it; used when `compute_op` is an MX op
 | 1 | `mx_rceil` | Quant rounds the block scale up (RCEIL) instead of down (FLOOR) |
 | 3:2 | `mx_elem_fmt` | Element format: 0 E5M2, 1 E4M3; 2 (E2M1) and 3 are reserved |
 | 4 | `mx_group` | Blocks per scale group: 0 G = 64, 1 G = 32 |
-| 9:5 | - | Reserved |
-| 31:10 | `mx_scale_off` | Scale plane start relative to the data plane, signed, in 64 B units |
+| 31:5 | - | Reserved |
 
 The register is `0x11C` in `reg64_1d`/`reg64_2d` and `0xFC` in `reg32_3d`. See
 [MX planes](../../compute/#mx-planes) for the data and scale plane layout.
+
+### MX Scale Plane Registers
+
+| Register | Access | Description |
+|----------|--------|-------------|
+| `scale_addr` | R/W | Scale plane address of the next MX transfer, 64 B aligned; sampled with `compute_cfg` |
+
+`scale_addr` follows `mx_cfg` (`0x120`/`0x124` in `reg64_1d`/`reg64_2d`, `0x100` in
+`reg32_3d`).
 
 ## Multi-Port Arbitration
 

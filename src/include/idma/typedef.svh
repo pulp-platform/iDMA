@@ -42,6 +42,7 @@
         tf_len_t   length;                                               \
         axi_addr_t src_addr;                                             \
         axi_addr_t dst_addr;                                             \
+        axi_addr_t scale_addr;                                           \
         user_t     user;                                                 \
         options_t  opt;                                                  \
     } idma_req_t;

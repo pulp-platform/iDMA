@@ -91,7 +91,7 @@ module tb_idma_mxperf
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = en;
     idma_req.opt.compute.op      = op;
-    idma_req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(Soff);
+    idma_req.scale_addr = mx_scale_of(op, src, dst, Soff);
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -131,7 +131,7 @@ module tb_idma_mxperf
       idma_req.opt.beo.decouple_aw = 1'b1;
       idma_req.opt.compute.enable  = en;
       idma_req.opt.compute.op      = op;
-      idma_req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(Soff);
+      idma_req.scale_addr = mx_scale_of(op, src, idma_req.dst_addr, Soff);
       idma_req.opt.last            = 1'b1;
       req_valid = 1'b1;
       do @(posedge clk); while (!req_ready);

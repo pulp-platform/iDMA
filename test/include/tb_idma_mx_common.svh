@@ -74,9 +74,15 @@ function automatic logic [7:0] rd_mem(input addr_t a);
   return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
 endfunction
 
-// MX planes: block k's 32 elements at data + 32 k, its scale byte at data + 64 * soff + k
+// MX planes: block k at data + 32 k, its scale byte at (data's 64 B line + soff lines) + k
 function automatic addr_t mx_scale_base(input addr_t data, input int soff);
-  return data + addr_t'(soff * 64);
+  return (data & ~addr_t'(idma_pkg::MxScaleSlotBytes - 1)) + addr_t'(soff * 64);
+endfunction
+// scale plane address of a request: `soff` lines from the compressed side (quant dst, dequant src)
+function automatic addr_t mx_scale_of(input idma_pkg::compute_op_e op, input addr_t src,
+                                      input addr_t dst, input int soff);
+  return mx_scale_base((op inside {idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::COMPUTE_MXDEQUANT_FP16})
+                       ? src : dst, soff);
 endfunction
 // planar address of byte i of the [scale][32 elements] block sequence of an expectation table
 function automatic addr_t mx_pl_addr(input addr_t data, input int soff, input int unsigned i);

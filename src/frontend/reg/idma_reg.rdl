@@ -212,9 +212,16 @@ addrmap idma_reg #(
             desc = "Blocks per scale group; a group's scale bytes move as one chunk.";
             encode = mx_group;
         } mx_group [4:4] = 0;
+    };
+
+    reg scale_addr {
+        name = "scale_addr";
+        desc = "MX scale plane address, 64 B aligned. Sampled with compute_cfg.";
+        default sw = rw;
+        default hw = r;
         field {
-            desc = "Scale plane start relative to the data plane, signed, in 64 B units.";
-        } mx_scale_off [31:10] = 0;
+            desc = "MX scale plane address, 64 B aligned.";
+        } scale_addr [31:0] = 0;
     };
 
     regfile dim {
@@ -234,6 +241,7 @@ addrmap idma_reg #(
              dim      dim[NumDims-1 | NumDims == 1];
              compute_cfg compute_cfg;
              mx_cfg   mx_cfg;
+             scale_addr scale_addr[SysAddrWidth/32];
 };
 
 `endif // IDMA_REG_RDL

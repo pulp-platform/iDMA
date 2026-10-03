@@ -88,7 +88,7 @@ module tb_idma_mxroundtrip
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = 1'b1;
     idma_req.opt.compute.op      = op;
-    idma_req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(Soff);
+    idma_req.scale_addr = mx_scale_of(op, src, dst, Soff);
     idma_req.opt.compute.params.mx.elem_fmt  = idma_pkg::mx_elem_e'(ElemFmt);
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;

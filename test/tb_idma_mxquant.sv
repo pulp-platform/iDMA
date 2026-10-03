@@ -80,7 +80,7 @@ module tb_idma_mxquant
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = 1'b1;
     idma_req.opt.compute.op      = op;
-    idma_req.opt.compute.params.mx.scale_off  = MxScaleOffWidth'(soff);
+    idma_req.scale_addr = mx_scale_base(dst, soff);
     idma_req.opt.compute.params.mx.elem_fmt   = elem;
     idma_req.opt.compute.params.mx.rceil      = rceil;
     idma_req.opt.compute.params.mx.poison_dis = pdis;

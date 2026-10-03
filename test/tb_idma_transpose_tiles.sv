@@ -166,7 +166,7 @@ module idma_transpose_tiles_bench
     j.req                    = base_req(src, dst, num_blocks * MxFp32BlockBytes);
     j.req.opt.compute.enable = 1'b1;
     j.req.opt.compute.op     = idma_pkg::COMPUTE_MXQUANT;
-    j.req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(dat_len / MxScaleSlotBytes);
+    j.req.scale_addr = dst + addr_t'(dat_len / MxScaleSlotBytes * MxScaleSlotBytes);
     j.dst     = dst;
     j.dst_len = out_len + 1;
     jobs.push_back(j);

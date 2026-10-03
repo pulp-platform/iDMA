@@ -610,16 +610,15 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                                                               idma_pkg::COMPUTE_MXDEQUANT_FP16};
                 mx_pl_d.g32   = req_i.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
                 mx_pl_d.daddr = mx_pl_d.rd ? req_i.src_addr : req_i.dst_addr;
-                mx_pl_d.saddr = mx_pl_d.daddr +
-                    (addr_t'($signed(req_i.opt.compute.params.mx.scale_off)) <<
-                     $clog2(idma_pkg::MxScaleSlotBytes));
+                mx_pl_d.saddr = req_i.scale_addr;
                 if (mx_pl_d.rd) begin
                     mx_pl_d.half  = (StrbWidth == 64) & req_i.length[5];
                     mx_pl_d.drem  = len_t'(req_i.length);
                     mx_pl_d.scl   = 1'b1;
-                    r_tf_d.addr   = {mx_pl_d.saddr[AddrWidth-1:OffsetWidth], {OffsetWidth{1'b0}}};
-                    r_tf_d.length = mx_rchunk(mx_pl_d.saddr, mx_rseg(len_t'(req_i.length),
-                                                                     mx_pl_d.g32));
+                    r_tf_d.addr   = {req_i.scale_addr[AddrWidth-1:OffsetWidth],
+                                     {OffsetWidth{1'b0}}};
+                    r_tf_d.length = mx_rchunk(req_i.scale_addr,
+                                              mx_rseg(len_t'(req_i.length), mx_pl_d.g32));
                 end else begin
                     mx_pl_d.drem  = len_t'(w_tf_d.length);
                     mx_pl_d.sn    = mx_seg(len_t'(w_tf_d.length), mx_pl_d.g32) >>
@@ -881,6 +880,11 @@ ${database[protocol]['legalizer_write_data_path']}
                   idma_pkg::compute_op_is_mx(req_i.opt.compute.op) &
                   ~(req_i.opt.compute.params.mx.elem_fmt inside {idma_pkg::MX_E5M2,
                                                                  idma_pkg::MX_E4M3})),
+                  clk_i, !rst_ni)
+    // the scale plane starts on a 64 B scale line
+    `ASSERT_NEVER(ComputeMxScaleAligned, (ready_o & valid_i & req_i.opt.compute.enable &
+                  idma_pkg::compute_op_is_mx(req_i.opt.compute.op) &
+                  (req_i.scale_addr[$clog2(idma_pkg::MxScaleSlotBytes)-1:0] != '0)),
                   clk_i, !rst_ni)
     // NOT IMPLEMENTED: dequant output length that overflows the length field
     `ASSERT_NEVER(ComputeMxdequantLengthFits, (ready_o & valid_i & req_i.opt.compute.enable &

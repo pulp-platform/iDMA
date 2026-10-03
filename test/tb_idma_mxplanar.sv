@@ -87,7 +87,7 @@ module tb_idma_mxplanar
   endfunction
 
   function automatic addr_t blk_scale(input xfer_t x, input int unsigned k);
-    return (x.dq ? x.src : x.dst) + addr_t'(x.soff * 64) + addr_t'(k);
+    return mx_scale_base(x.dq ? x.src : x.dst, x.soff) + addr_t'(k);
   endfunction
 
   function automatic idma_req_t req_of(input xfer_t x);
@@ -105,7 +105,7 @@ module tb_idma_mxplanar
     r.opt.compute.op      = x.dq ? (x.fp16 ? COMPUTE_MXDEQUANT_FP16 : COMPUTE_MXDEQUANT)
                                  : (x.fp16 ? COMPUTE_MXQUANT_FP16 : COMPUTE_MXQUANT);
     r.opt.compute.params.mx.group     = x.g32 ? MX_GROUP_G32 : MX_GROUP_G64;
-    r.opt.compute.params.mx.scale_off = MxScaleOffWidth'(x.soff);
+    r.scale_addr = blk_scale(x, 0);
     r.opt.last = 1'b1;
     return r;
   endfunction

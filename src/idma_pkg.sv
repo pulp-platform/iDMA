@@ -89,10 +89,8 @@ package idma_pkg;
     localparam int unsigned MxFp16BlockBytes = 32'd2 * MxBlockElems;
     /// Data-plane bytes of a block (one E5M2 or E4M3 byte per element)
     localparam int unsigned MxDataBlockBytes = MxBlockElems;
-    /// Scale plane unit: one 64 B line holds the E8M0 scales of up to 64 blocks
+    /// Scale plane unit and alignment: one 64 B line holds the E8M0 scales of up to 64 blocks
     localparam int unsigned MxScaleSlotBytes = 32'd64;
-    /// Width of the signed scale plane offset (64 B units)
-    localparam int unsigned MxScaleOffWidth  = 32'd22;
 
     /// Transpose tensor dimension width (elements)
     localparam int unsigned TransposeDimWidth = 32'd12;
@@ -118,13 +116,17 @@ package idma_pkg;
     /// MX element format (OCP MX v1.0); E2M1 is reserved, not elaborated
     typedef enum logic [1:0] { MX_E5M2, MX_E4M3, MX_E2M1 } mx_elem_e;
 
-    /// MX options; `scale_off` is the scale plane start relative to the data plane in 64 B units
+    /// Unused low bits of `mx_options_t`; the scale plane address is `idma_req_t.scale_addr`
+    localparam int unsigned MxOptResvWidth = $bits(transpose_options_t) - 32'd2 -
+                                             $bits(mx_elem_e) - $bits(mx_group_e);
+
+    /// MX options
     typedef struct packed {
         logic                         poison_dis;
         logic                         rceil;
         mx_elem_e                     elem_fmt;
         logic [$bits(mx_group_e)-1:0] group;
-        logic [MxScaleOffWidth-1:0]   scale_off;
+        logic [MxOptResvWidth-1:0]    resv;
     } mx_options_t;
 
     /// Per-op compute parameter union (members must be equal width)

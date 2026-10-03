@@ -163,6 +163,15 @@ interface idma_inst64_drv_if #(
                   {{32{opcode[31]}}, opcode}, {{32{params[31]}}, params});
     endtask
 
+    /// DMOPC setter of the MX scale plane address (64 B units, `rs1[31:8]` low, `rs2` high)
+    task automatic dma_set_scale(input addr_t addr);
+        logic [63:0] a;
+        a = 64'(addr) >> idma_inst64_compute_pkg::MxScaleAddrUnitLog2;
+        dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxScaleAddr) |
+                            (32'(a[23:0]) << idma_inst64_compute_pkg::Rs1MxSaddrLoLsb),
+                        a[55:24]);
+    endtask
+
     task automatic dma_set_strides(
         input logic [31:0] src_stride,
         input logic [31:0] dst_stride

@@ -601,7 +601,9 @@
                 { "tag" : "mxneg_13", "params" : { "NegCase" : 13, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 0 }, "token" : "ComputeOpUnsupported" },
                 { "tag" : "mxneg_14", "params" : { "NegCase" : 14, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeShape" },
                 { "tag" : "mxneg_17", "params" : { "NegCase" : 17, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeSizeAligned" },
-                { "tag" : "mxneg_18", "params" : { "NegCase" : 18, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxElemFmt" }
+                { "tag" : "mxneg_18", "params" : { "NegCase" : 18, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxElemFmt" },
+                { "tag" : "mxneg_19", "params" : { "NegCase" : 19, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxScaleAligned" },
+                { "tag" : "mxneg_20", "params" : { "NegCase" : 20, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxScaleAligned" }
             ],
             "exclude" : [
                 { "case" : 11, "why" : "the request is never accepted, so the guard is never sampled" }

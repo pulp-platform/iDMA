@@ -41,6 +41,8 @@ module tb_idma_inst64_compute #(
     // scale planes 6 and 10 x 64 B above the data plane, inside the sentinel window
     localparam int unsigned PlScaleOff [2] = '{32'd6, 32'd10};
     localparam logic [7:0]  Sentinel   = 8'h5A;
+    // highest scale address bit + 1 the DMOPC setter reaches
+    localparam int unsigned ScaleTop   = (AxiAddrWidth < 62) ? AxiAddrWidth : 62;
 
     // Outside the TCDM window in both topologies, so every endpoint decodes to AXI
     localparam addr_t SrcAddr   = 64'h8000_0000;
@@ -112,13 +114,24 @@ module tb_idma_inst64_compute #(
                 (32'(exp.poison_dis) << idma_inst64_compute_pkg::Rs1MxPoisonDisLsb) |
                 (32'(exp.rceil)      << idma_inst64_compute_pkg::Rs1MxRceilLsb) |
                 (32'(exp.elem_fmt)   << idma_inst64_compute_pkg::Rs1MxElemFmtLsb) |
-                (32'(exp.group)      << idma_inst64_compute_pkg::Rs1MxGroupLsb),
-            32'(exp.scale_off) << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
+                (32'(exp.group)      << idma_inst64_compute_pkg::Rs1MxGroupLsb));
         repeat (4) @(posedge harness.clk);
         got = harness.i_dut.idma_fe_compute_q;
         if (!got.enable || got.params.mx !== exp) begin
             $error("DMOPC 0x%02x MX options: expected %h, got %h (enable=%0b)", opc, exp,
                    got.params.mx, got.enable);
+            errors++;
+        end
+    endtask
+
+    /// Latch a scale address with the DMOPC setter and read back the frontend state.
+    task automatic check_scale_cfg(input addr_t saddr);
+        addr_t got_a;
+        harness.drv_if.dma_set_scale(saddr);
+        repeat (4) @(posedge harness.clk);
+        got_a = harness.i_dut.idma_fe_req_q.burst_req.scale_addr;
+        if (got_a !== saddr) begin
+            $error("DMOPC scale address: expected %h, got %h", saddr, got_a);
             errors++;
         end
     endtask
@@ -221,16 +234,24 @@ module tb_idma_inst64_compute #(
         $display("[TB] DMOPC transpose operands round-trip over the full %0d-bit range",
                  idma_pkg::TransposeDimWidth);
 
-        // Walking ones over every MX option bit, quant and FP16 quant opcodes
-        for (int unsigned i = 0; i < $bits(idma_pkg::mx_options_t); i++) begin
+        // Walking ones over every MX option bit above the reserved ones, both quant opcodes
+        for (int unsigned i = idma_pkg::MxOptResvWidth; i < $bits(idma_pkg::mx_options_t); i++)
+        begin
             check_mx_cfg(8'(idma_inst64_compute_pkg::OpcMxQuant),
                          idma_pkg::mx_options_t'(1 << i));
             check_mx_cfg(8'(idma_inst64_compute_pkg::OpcMxQuantFp16),
-                         idma_pkg::mx_options_t'(~(1 << i)));
+                         idma_pkg::mx_options_t'(~(1 << i) &
+                                                 ~((1 << idma_pkg::MxOptResvWidth) - 1)));
         end
         if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC MX option decode errors", errors);
-        $display("[TB] DMOPC MX options round-trip over all %0d bits",
-                 $bits(idma_pkg::mx_options_t));
+        $display("[TB] DMOPC MX options round-trip over all %0d option bits",
+                 $bits(idma_pkg::mx_options_t) - idma_pkg::MxOptResvWidth);
+
+        // Walking ones over every scale address bit DMOPC carries (64 B lines, 62-bit space)
+        for (int unsigned i = 6; i < ScaleTop; i++) check_scale_cfg(addr_t'(1) << i);
+        check_scale_cfg(addr_t'({(ScaleTop-6){1'b1}}) << 6);
+        if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC scale setter errors", errors);
+        $display("[TB] DMOPC scale address round-trips over %0d address bits", ScaleTop - 6);
 
         $display("[TB] inst64 DMOPC mxquant (EnableCompute=%0d, EnableTcdmObi=%0d): %0d B -> %0d B",
                  EnableCompute, EnableTcdmObi, SrcBytes, QuantBytes);
@@ -240,8 +261,8 @@ module tb_idma_inst64_compute #(
 
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_before);
 
-        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant),
-            PlScaleOff[0] << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
+        harness.drv_if.dma_set_scale(QuantAddr + PlScaleOff[0] * 64);
+        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
         // DMOPC only latches state; it must not launch a transfer of its own
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_opc);
         if (next_id_opc !== next_id_before) begin
@@ -257,9 +278,9 @@ module tb_idma_inst64_compute #(
 
         // The same blocks in scale groups of 32, scale plane further up
         poison_destination(QuantAddr);
+        harness.drv_if.dma_set_scale(QuantAddr + PlScaleOff[1] * 64);
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant) |
-            (32'(idma_pkg::MX_GROUP_G32) << idma_inst64_compute_pkg::Rs1MxGroupLsb),
-            PlScaleOff[1] << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
+            (32'(idma_pkg::MX_GROUP_G32) << idma_inst64_compute_pkg::Rs1MxGroupLsb));
         harness.drv_if.dma_set_dest(QuantAddr);
         harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, quant_id);
         harness.drv_if.dma_wait(quant_id, 3'd0);

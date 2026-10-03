@@ -30,14 +30,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   engines.
 - **Breaking:** MX transfers use a data plane (32 B of elements per block) and a separate
   scale plane (one E8M0 byte per block) in one pass; the inline 33 B block layout is removed.
-  `mx_options_t` (`compute_params_t.mx`, register `mx_cfg`, DMOPC `rs1`/`rs2` fields generated
-  from the same database) carries `poison_dis`, `rceil`, `elem_fmt`, `group` (G = 64 or 32
-  blocks per scale chunk) and a signed 22-bit `scale_off` in 64 B units. The legalizer
+  `mx_options_t` (`compute_params_t.mx`, register `mx_cfg`, DMOPC `rs1` fields generated
+  from the same database) carries `poison_dis`, `rceil`, `elem_fmt` and `group` (G = 64 or 32
+  blocks per scale chunk); the scale plane address is `idma_req_t.scale_addr`. The legalizer
   interleaves data bursts and per-group scale bursts on the write side (quant) and scale-first
   reads on the read side (dequant). The dequant `length` is the data-plane length.
   `idma_pkg::MxBlockBytes` is gone, and the `idma_mx_golden.h` quant/dequant helpers take a data
   and a scale buffer.
 - **Breaking:** MX compute needs `StrbWidth <= 64`; wider MX builds stop at elaboration.
+- **Breaking:** `IDMA_TYPEDEF_REQ_T` adds `scale_addr`, the MX scale plane address, 64 B
+  aligned (`ComputeMxScaleAligned`); code that builds the request field by field must drive it
+  (zero outside MX). The register frontend has a `scale_addr` register after `mx_cfg`, inst64
+  sets it with the DMOPC setter `0x28`.
 
 ### Added
 - MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by

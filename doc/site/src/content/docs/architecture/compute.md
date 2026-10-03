@@ -39,7 +39,9 @@ Compute is configured at two levels:
 | `enable` | Arm compute for this transfer |
 | `op` | `idma_pkg::compute_op_e` selector |
 | `params.transpose` | `mode` (element size), `tensor_m`, `tensor_n` (elements) |
-| `params.mx` | `poison_dis`, `rceil`, `elem_fmt`, `group`, `scale_off` (see MX Planes) |
+| `params.mx` | `poison_dis`, `rceil`, `elem_fmt`, `group` (see MX Planes) |
+
+MX transfers also use `idma_req_t.scale_addr`, the scale plane address; other ops ignore it.
 
 The register frontend exposes these through its `compute_cfg` register. The op encoding is single-homed in `src/frontend/reg/idma_reg.rdl` and re-exported as `idma_pkg::compute_op_e`:
 
@@ -76,8 +78,11 @@ The scale byte `E` is OCP MX v1.0 E8M0: the block scale is `2^(E - 127)`, `E` in
 
 ### MX Planes
 
-`mx_options_t` (in `compute_params_t`, register `mx_cfg`, DMOPC fields on the MX opcodes) places
-the planes of the compressed side (quant destination, dequant source):
+The compressed side of an MX transfer (quant destination, dequant source) is two planes: the
+data plane at the compressed-side address (`dst_addr` for quant, `src_addr` for dequant), 32 B
+per block, and the scale plane at `idma_req_t.scale_addr`, one E8M0 byte per block.
+`mx_options_t` (in `compute_params_t`, register `mx_cfg`, DMOPC fields on the MX opcodes) holds
+the per-transfer options:
 
 | Field | Bits | Meaning |
 |-------|------|---------|
@@ -85,15 +90,23 @@ the planes of the compressed side (quant destination, dequant source):
 | `rceil` | 1 | round the block scale up instead of down (quant) |
 | `elem_fmt` | 2 | element format `mx_elem_e`: E5M2 or E4M3 (E2M1 and 3 reserved, `ComputeMxElemFmt`) |
 | `group` | 1 | blocks per scale group G: `g64` (a full 64 B scale line) or `g32` (half a line) |
-| `scale_off` | 22 | scale plane start relative to the data plane, signed, in 64 B units |
+| `resv` | 22 | unused, zero |
 
-The data plane holds 32 B per block at the compressed-side address (`dst_addr` for quant,
-`src_addr` for dequant); the scale plane holds one byte per block at `addr + 64 * scale_off`.
-Quant writes both in one pass: per group of G blocks the legalizer emits the group's data
+Quant writes both planes in one pass: per group of G blocks the legalizer emits the group's data
 bursts, then one burst of its scale bytes, on the same AW/W port. Dequant reads the group's
 scale bytes first (whole aligned beats, never past their 64 B line), then the group's data as
 whole beats; the last data beat may read up to `StrbWidth - 1` bytes past the end of the data
 plane. The quant `length` is the source length; the dequant `length` is the data-plane length.
+
+Placement rules:
+
+- The scale plane starts on a 64 B scale line, `scale_addr % 64 == 0` (`ComputeMxScaleAligned`),
+  and the data plane on a beat (`ComputeSrcAligned` / `ComputeDstAligned`). Group `g` of a
+  transfer has its scale bytes at `scale_addr + g * G`.
+- The last group of a transfer may be partial (`n < G` blocks): quant writes exactly its `n`
+  scale bytes (byte strobes) and leaves the rest of the line untouched; dequant reads the whole
+  line and ignores the bytes past `n`. The next transfer's scale plane starts on its own line, so
+  the scale bytes of two transfers never share a line.
 
 The quant engine collects the scale bytes of the open group in a scale queue of 64 B lines and
 emits them after the group's last data beat; the dequant engine holds the group's scale line in
@@ -117,6 +130,7 @@ group. The legalizer also forces `decouple_rw` / `decouple_aw` on for any comput
 | `ComputeSizeAligned` | `length` is a whole multiple of the op's input granule |
 | `ComputeSrcAligned` / `ComputeDstAligned` | src/dst addresses are beat-aligned for size-changing ops |
 | `ComputeMxElemFmt` | `elem_fmt` is E5M2 or E4M3 (E2M1 is not elaborated) |
+| `ComputeMxScaleAligned` | `scale_addr` of an MX transfer is 64 B aligned |
 | `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
 | `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported |
 | `ComputeMxdequantLengthFits` | dequant output length must fit the `length` field width |
