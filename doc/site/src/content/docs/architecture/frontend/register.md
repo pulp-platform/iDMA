@@ -121,8 +121,10 @@ The register is `0x11C` in `reg64_1d`/`reg64_2d` and `0xFC` in `reg32_3d`. See
 | Register | Access | Description |
 |----------|--------|-------------|
 | `scale_addr` | R/W | Scale plane address of the next MX transfer, 64 B aligned; sampled with `compute_cfg` |
+| `mx_dim[d].scale_stride` | R/W | ND only: scale plane stride of dimension `d`, a multiple of 64 B, applied as `dim[d]` applies its strides |
 
-`scale_addr` follows `mx_cfg` (`0x120`/`0x124` in `reg64_1d`/`reg64_2d`, `0x100` in
+`scale_addr` follows `mx_cfg` (`0x120`/`0x124` in `reg64_1d`/`reg64_2d`, `0x100` in `reg32_3d`),
+then one `scale_stride` per dimension (`0x128`/`0x12C` in `reg64_2d`, `0x104` and `0x108` in
 `reg32_3d`).
 
 ## Multi-Port Arbitration

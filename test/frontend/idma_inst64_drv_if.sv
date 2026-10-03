@@ -172,6 +172,11 @@ interface idma_inst64_drv_if #(
                         a[55:24]);
     endtask
 
+    /// DMOPC setter of the ND scale plane stride (64 B units, signed)
+    task automatic dma_set_scale_stride(input logic [31:0] stride_lines);
+        dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxScaleStride), stride_lines);
+    endtask
+
     task automatic dma_set_strides(
         input logic [31:0] src_stride,
         input logic [31:0] dst_stride

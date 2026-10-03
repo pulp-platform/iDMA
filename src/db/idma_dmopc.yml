@@ -57,6 +57,10 @@ fields:
     operand: "rs2"
     lsb: 0
     width: 32
+  - name: "mx_sstride"
+    operand: "rs2"
+    lsb: 0
+    width: 32
   # The transpose dimensions need 24 bits, so they ride `rs2` rather than straddling `rs1`
   - name: "tp_tensor_m"
     operand: "rs2"
@@ -118,3 +122,8 @@ setters:
     byte: 0x28
     fields: ["mx_saddr_hi", "mx_saddr_lo"]
     shift: 6
+  - name: "mx_scale_stride"
+    byte: 0x29
+    fields: ["mx_sstride"]
+    shift: 6
+    signed: true

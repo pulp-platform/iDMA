@@ -224,6 +224,21 @@ addrmap idma_reg #(
         } scale_addr [31:0] = 0;
     };
 
+    reg scale_stride {
+        name = "scale_stride";
+        desc = "MX scale plane stride, a multiple of 64 B";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "MX scale plane stride, a multiple of 64 B";
+        } scale_stride [31:0] = 0;
+    };
+
+    regfile mx_dim {
+        scale_stride scale_stride[SysAddrWidth/32];
+        ispresent = NumDims > 1;
+    };
+
     regfile dim {
         dst_stride dst_stride[SysAddrWidth/32];
         src_stride src_stride[SysAddrWidth/32];
@@ -242,6 +257,7 @@ addrmap idma_reg #(
              compute_cfg compute_cfg;
              mx_cfg   mx_cfg;
              scale_addr scale_addr[SysAddrWidth/32];
+             mx_dim   mx_dim[NumDims-1 | NumDims == 1];
 };
 
 `endif // IDMA_REG_RDL

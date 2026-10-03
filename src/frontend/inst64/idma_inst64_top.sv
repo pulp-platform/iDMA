@@ -812,6 +812,10 @@ module idma_inst64_top #(
                             idma_fe_req_d.burst_req.scale_addr = addr_t'(
                                 idma_inst64_compute_pkg::opc_mx_scale_addr(acc_req_i.data_arga,
                                                                            acc_req_i.data_argb));
+                        idma_inst64_compute_pkg::OpcMxScaleStride:
+                            idma_fe_req_d.d_req[0].scale_strides = strides_t'(
+                                idma_inst64_compute_pkg::opc_mx_scale_stride(acc_req_i.data_arga,
+                                                                             acc_req_i.data_argb));
                         default: ;
                     endcase
                     acc_req_ready_o = 1'b1;
@@ -955,10 +959,11 @@ module idma_inst64_top #(
         $fatal(1, "idma_inst64_top: the DMOPC operand layout has overlapping fields");
     end
 
-    // The DMOPC scale setter must keep the scale plane on its 64 B line by construction.
-    if ((32'd1 << idma_inst64_compute_pkg::MxScaleAddrUnitLog2) % idma_pkg::MxScaleSlotBytes != 0)
+    // The DMOPC scale setters must keep the scale plane on its 64 B line by construction.
+    if ((32'd1 << idma_inst64_compute_pkg::MxScaleAddrUnitLog2) % idma_pkg::MxScaleSlotBytes != 0 ||
+        (32'd1 << idma_inst64_compute_pkg::MxScaleStrideUnitLog2) % idma_pkg::MxScaleSlotBytes != 0)
     begin : gen_compute_scale_unit_check
-        $fatal(1, "idma_inst64_top: the DMOPC scale setter does not keep 64 B alignment");
+        $fatal(1, "idma_inst64_top: the DMOPC scale setters do not keep 64 B alignment");
     end
 
     // A compute op the RDL adds but DMOPC never encodes is unreachable, not a plain copy.

@@ -39,9 +39,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   and a scale buffer.
 - **Breaking:** MX compute needs `StrbWidth <= 64`; wider MX builds stop at elaboration.
 - **Breaking:** `IDMA_TYPEDEF_REQ_T` adds `scale_addr`, the MX scale plane address, 64 B
-  aligned (`ComputeMxScaleAligned`); code that builds the request field by field must drive it
-  (zero outside MX). The register frontend has a `scale_addr` register after `mx_cfg`, inst64
-  sets it with the DMOPC setter `0x28`.
+  aligned (`ComputeMxScaleAligned`), and `IDMA_TYPEDEF_D_REQ_T` adds `scale_strides`; code that
+  builds these structs field by field must drive them (zero outside MX). The ND midend steps
+  `scale_addr` per row with `scale_strides`. The register frontend has `scale_addr` and
+  per-dimension `mx_dim[d].scale_stride` registers after `mx_cfg`, inst64 sets them with the
+  DMOPC setters `0x28` and `0x29`.
 
 ### Added
 - MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by

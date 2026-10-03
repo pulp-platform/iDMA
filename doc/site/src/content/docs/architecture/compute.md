@@ -107,6 +107,8 @@ Placement rules:
   scale bytes (byte strobes) and leaves the rest of the line untouched; dequant reads the whole
   line and ignores the bytes past `n`. The next transfer's scale plane starts on its own line, so
   the scale bytes of two transfers never share a line.
+- The ND midend steps `scale_addr` per row with `idma_d_req_t.scale_strides`, a multiple of
+  64 B, as it steps the source and destination addresses with theirs.
 
 The quant engine collects the scale bytes of the open group in a scale queue of 64 B lines and
 emits them after the group's last data beat; the dequant engine holds the group's scale line in

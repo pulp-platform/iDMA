@@ -41,10 +41,11 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `0x23` | MX dequantize, FP16 destination; fields as `0x21` |
 | `0x50` | Tiled transpose; `rs1[17:16]` is the element-size mode, `rs2[11:0]` `tensor_m`, `rs2[23:12]` `tensor_n` |
 | `0x28` | Set the MX scale plane address in 64 B units: `rs1[31:8]` address bits 29:6, `rs2[31:0]` bits 61:30; leaves the compute op unchanged |
+| `0x29` | Set the 2D scale plane stride, signed, in 64 B units: `rs2[31:0]`; leaves the compute op unchanged |
 
-The scale plane address setter (`0x28`) loads frontend state that every following `DMCPY`
-sends with its request, like `DMSRC`; carried in 64 B units it is 64 B aligned by construction
-(scale addresses up to 2^62).
+The scale plane address and stride setters (`0x28`, `0x29`) load frontend state that every
+following `DMCPY` sends with its request, like `DMSRC` and `DMSTR`; carried in 64 B units they
+are 64 B aligned by construction (scale addresses up to 2^62).
 
 The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` is not yet allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
 

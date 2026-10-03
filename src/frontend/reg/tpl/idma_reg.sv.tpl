@@ -279,6 +279,8 @@ module idma_${identifier} #(
       nxt_dma_req.d_req[${nd}].reps = dma_reg2hw[i].dim[${nd}].reps[0].reps.value;
       nxt_dma_req.d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value;
       nxt_dma_req.d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value;
+      nxt_dma_req.d_req[${nd}].scale_strides =
+          dma_reg2hw[i].mx_dim[${nd}].scale_stride[0].scale_stride.value;
 % else:
       nxt_dma_req.d_req[${nd}].reps = {dma_reg2hw[i].dim[${nd}].reps[1].reps.value,
                                       dma_reg2hw[i].dim[${nd}].reps[0].reps.value };
@@ -286,6 +288,9 @@ module idma_${identifier} #(
                                              dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value};
       nxt_dma_req.d_req[${nd}].dst_strides = {dma_reg2hw[i].dim[${nd}].dst_stride[1].dst_stride.value,
                                              dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value};
+      nxt_dma_req.d_req[${nd}].scale_strides =
+          {dma_reg2hw[i].mx_dim[${nd}].scale_stride[1].scale_stride.value,
+           dma_reg2hw[i].mx_dim[${nd}].scale_stride[0].scale_stride.value};
 % endif
 % endfor
 

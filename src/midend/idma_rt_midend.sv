@@ -139,6 +139,8 @@ module idma_rt_midend #(
         assign idma_nd_req[c].d_req[1].reps        = num_1d_reps_i   [c];
         assign idma_nd_req[c].d_req[1].src_strides = src_1d_stride_i [c];
         assign idma_nd_req[c].d_req[1].dst_strides = dst_1d_stride_i [c];
+        assign idma_nd_req[c].d_req[0].scale_strides = '0;
+        assign idma_nd_req[c].d_req[1].scale_strides = '0;
 
         // 1D assignment
         assign idma_nd_req[c].burst_req.length   = length_i   [c];

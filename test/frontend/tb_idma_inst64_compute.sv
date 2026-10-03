@@ -124,14 +124,21 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
-    /// Latch a scale address with the DMOPC setter and read back the frontend state.
-    task automatic check_scale_cfg(input addr_t saddr);
+    /// Latch a scale address and stride with the DMOPC setters and read back the frontend state.
+    task automatic check_scale_cfg(input addr_t saddr, input logic [31:0] stride_lines);
         addr_t got_a;
+        addr_t got_s;
         harness.drv_if.dma_set_scale(saddr);
+        harness.drv_if.dma_set_scale_stride(stride_lines);
         repeat (4) @(posedge harness.clk);
         got_a = harness.i_dut.idma_fe_req_q.burst_req.scale_addr;
+        got_s = harness.i_dut.idma_fe_req_q.d_req[0].scale_strides;
         if (got_a !== saddr) begin
             $error("DMOPC scale address: expected %h, got %h", saddr, got_a);
+            errors++;
+        end
+        if (got_s !== addr_t'($signed(stride_lines)) << 6) begin
+            $error("DMOPC scale stride: expected %h lines, got %h B", stride_lines, got_s);
             errors++;
         end
     endtask
@@ -248,10 +255,12 @@ module tb_idma_inst64_compute #(
                  $bits(idma_pkg::mx_options_t) - idma_pkg::MxOptResvWidth);
 
         // Walking ones over every scale address bit DMOPC carries (64 B lines, 62-bit space)
-        for (int unsigned i = 6; i < ScaleTop; i++) check_scale_cfg(addr_t'(1) << i);
-        check_scale_cfg(addr_t'({(ScaleTop-6){1'b1}}) << 6);
+        for (int unsigned i = 6; i < ScaleTop; i++)
+            check_scale_cfg(addr_t'(1) << i, 32'(1) << (i % 32));
+        check_scale_cfg(addr_t'({(ScaleTop-6){1'b1}}) << 6, 32'hFFFF_FFFF);
         if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC scale setter errors", errors);
-        $display("[TB] DMOPC scale address round-trips over %0d address bits", ScaleTop - 6);
+        $display("[TB] DMOPC scale address and stride round-trip over %0d address bits",
+                 ScaleTop - 6);
 
         $display("[TB] inst64 DMOPC mxquant (EnableCompute=%0d, EnableTcdmObi=%0d): %0d B -> %0d B",
                  EnableCompute, EnableTcdmObi, SrcBytes, QuantBytes);

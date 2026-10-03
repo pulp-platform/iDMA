@@ -375,6 +375,7 @@ module idma_nd_midend_synth #(
         assign d_req.reps        = req_reps_i[d];
         assign d_req.src_strides = req_src_strides_i[d];
         assign d_req.dst_strides = req_dst_strides_i[d];
+        assign d_req.scale_strides = '0;
         // connection
         assign nd_req.d_req[d]   = d_req;
     end
