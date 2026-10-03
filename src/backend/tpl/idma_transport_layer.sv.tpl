@@ -30,6 +30,8 @@ module idma_transport_layer_${name_uniqueifier} #(
     /// Implementation tuning knobs for the compute engines
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
+    /// Opt-in timing cuts
+    parameter idma_pkg::timing_cuts_t TimingCuts = '0,
     /// Print the info of the FIFO configuration
     parameter bit PrintFifoInfo = 1'b0,
     /// `r_dp_req_t` type:
@@ -194,6 +196,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
     /// Stobe width
     localparam int unsigned StrbWidth   = DataWidth / 8;
+    /// Dataflow element lanes with registered flags
+    localparam bit DfeRegFlags = TimingCuts.dfe_ready_cut | TimingCuts.dfe_reg_flags;
 
     /// Data type
     typedef logic [DataWidth-1:0] data_t;
@@ -242,6 +246,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     byte_t [StrbWidth-1:0] buffer_out_shifted;
     byte_t [StrbWidth-1:0] wr_data;
     strb_t                 wr_valid, wr_strb, mask_ext_shifted, dataflow_ready_in;
+    // MX pops: short from flops, so a full lane may take a push in the same cycle
+    strb_t                 dataflow_fast_pop;
     // write-shifter output before the compute write-source select
     byte_t [StrbWidth-1:0] wr_beat;
     strb_t                 wr_beat_valid, wr_beat_mask;
@@ -387,6 +393,8 @@ ${rendered_read_ports[read_port]}
 
         idma_dataflow_element #(
             .BufferDepth   ( BufferDepth   ),
+            .SameCycleRW   ( !TimingCuts.dfe_ready_cut ),
+            .RegFlags      ( DfeRegFlags   ),
             .StrbWidth     ( StrbWidth     ),
             .PrintFifoInfo ( PrintFifoInfo ),
             .strb_t        ( strb_t        ),
@@ -399,13 +407,16 @@ ${rendered_read_ports[read_port]}
             .ready_o     ( buffer_in_ready          ),
             .data_o      ( mx_lane_out              ),
             .valid_o     ( buffer_out_valid         ),
-            .ready_i     ( dataflow_ready_in        )
+            .ready_i     ( dataflow_ready_in        ),
+            .fast_pop_i  ( dataflow_fast_pop        )
         );
     end else begin : gen_dataflow
         assign buffer_out_mx = '0;
 
         idma_dataflow_element #(
             .BufferDepth   ( BufferDepth   ),
+            .SameCycleRW   ( !TimingCuts.dfe_ready_cut ),
+            .RegFlags      ( DfeRegFlags   ),
             .StrbWidth     ( StrbWidth     ),
             .PrintFifoInfo ( PrintFifoInfo ),
             .strb_t        ( strb_t        ),
@@ -418,12 +429,15 @@ ${rendered_read_ports[read_port]}
             .ready_o     ( buffer_in_ready          ),
             .data_o      ( buffer_out               ),
             .valid_o     ( buffer_out_valid         ),
-            .ready_i     ( dataflow_ready_in        )
+            .ready_i     ( dataflow_ready_in        ),
+            .fast_pop_i  ( dataflow_fast_pop        )
         );
     end
 % else:
     idma_dataflow_element #(
         .BufferDepth   ( BufferDepth   ),
+        .SameCycleRW   ( !TimingCuts.dfe_ready_cut ),
+        .RegFlags      ( DfeRegFlags   ),
         .StrbWidth     ( StrbWidth     ),
         .PrintFifoInfo ( PrintFifoInfo ),
         .strb_t        ( strb_t        ),
@@ -436,7 +450,8 @@ ${rendered_read_ports[read_port]}
         .ready_o     ( buffer_in_ready          ),
         .data_o      ( buffer_out               ),
         .valid_o     ( buffer_out_valid         ),
-        .ready_i     ( dataflow_ready_in        )
+        .ready_i     ( dataflow_ready_in        ),
+        .fast_pop_i  ( dataflow_fast_pop        )
     );
 % endif
 
@@ -468,7 +483,9 @@ ${rendered_read_ports[read_port]}
             .StrbWidth           ( StrbWidth          ),
             .ComputeEnable       ( ComputeOps         ),
             .ComputeTuning       ( ComputeTuning      ),
-            .BufferDepth         ( BufferDepth        )
+            .BufferDepth         ( BufferDepth        ),
+            .SameCycleRW         ( !TimingCuts.dfe_ready_cut ),
+            .RegFlags            ( DfeRegFlags        )
         ) i_idma_otf_compute (
             .clk_i,
             .rst_ni,
@@ -486,6 +503,7 @@ ${rendered_read_ports[read_port]}
             .tag_i        ( cmp_tag                  ),
             .tag_push_i   ( buffer_in_valid[0]       ),
             .tag_pop_i    ( dataflow_ready_in[0]     ),
+            .tag_fast_pop_i ( dataflow_fast_pop[0]   ),
             .mx_valid_i   ( cmp_mx_valid             ),
             .mx_pop_o     ( cmp_mx_pop               ),
             .w_data_i     ( wr_beat                  ),
@@ -525,6 +543,7 @@ ${rendered_read_ports[read_port]}
                 buffer_out_mx[i] ? cmp_mx_pop :
                 cmp_active       ? (&buffer_out_valid) & cmp_in_ready :
                 ~cmp_w_mx & buffer_out_ready_shifted[i];
+            assign dataflow_fast_pop[i] = buffer_out_mx[i] & cmp_mx_pop;
         end
 
         `ASSERT(ComputeConsumeValid, cmp_consumed_this_cycle != '0 |-> cmp_beat_valid, clk_i, !rst_ni, "Write datapath consumed bytes without a valid atomic compute result")
@@ -537,6 +556,7 @@ ${rendered_read_ports[read_port]}
         assign wr_valid                 = buffer_out_valid;
         assign wr_strb                  = '1;
         assign dataflow_ready_in        = buffer_out_ready_shifted;
+        assign dataflow_fast_pop        = '0;
         assign buffer_out_shifted       = wr_beat;
         assign buffer_out_valid_shifted = wr_beat_valid;
         assign mask_ext_shifted         = wr_beat_mask;
@@ -547,6 +567,7 @@ ${rendered_read_ports[read_port]}
     assign wr_valid                 = buffer_out_valid;
     assign wr_strb                  = '1;
     assign dataflow_ready_in        = buffer_out_ready_shifted;
+    assign dataflow_fast_pop        = '0;
     assign buffer_out_shifted       = wr_beat;
     assign buffer_out_valid_shifted = wr_beat_valid;
     assign mask_ext_shifted         = wr_beat_mask;

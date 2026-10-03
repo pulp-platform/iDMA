@@ -43,6 +43,8 @@ module idma_backend_${name_uniqueifier} #(
     /// Implementation tuning knobs for the compute engines
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
+    /// Opt-in timing cuts
+    parameter idma_pkg::timing_cuts_t TimingCuts = '0,
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
     parameter bit          RAWCouplingAvail = 1'b\
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
@@ -185,9 +187,13 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     localparam int unsigned ComputeFifoDepth = 32'd0;
 % endif
 
+    /// Dataflow element depth; the ready cut needs one more entry for the same rate
+    localparam int unsigned DfeDepth = BufferDepth + 32'(TimingCuts.dfe_ready_cut);
+
     /// The localparam MetaFifoDepth holds the maximum number of transfers that can be
     /// in-flight under any circumstances.
-    localparam int unsigned MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth + ComputeFifoDepth;
+    localparam int unsigned MetaFifoDepth = DfeDepth + NumAxInFlight + MemSysDepth +
+        ComputeFifoDepth;
 
     /// Address type
     typedef logic [AddrWidth-1:0]   addr_t;
@@ -798,13 +804,14 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     idma_transport_layer_${name_uniqueifier} #(
         .NumAxInFlight               ( NumAxInFlight               ),
         .DataWidth                   ( DataWidth                   ),
-        .BufferDepth                 ( BufferDepth                 ),
+        .BufferDepth                 ( DfeDepth                    ),
         .MaskInvalidData             ( MaskInvalidData             ),
 % if compute_eligible:
         .EnableCompute               ( EnableCompute               ),
         .ComputeOps                  ( ComputeOps                  ),
         .ComputeTuning               ( ComputeTuning               ),
 % endif
+        .TimingCuts                  ( TimingCuts                  ),
         .PrintFifoInfo               ( PrintFifoInfo               ),
         .r_dp_req_t                  ( r_dp_req_t                  ),
         .w_dp_req_t                  ( w_dp_req_t                  ),

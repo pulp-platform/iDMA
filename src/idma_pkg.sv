@@ -162,6 +162,14 @@ package idma_pkg;
         logic transpose_full_duplex;
     } compute_tuning_t;
 
+    /// Opt-in timing cuts of the backend; '0 is the stock datapath
+    typedef struct packed {
+        /// Dataflow element refills a full lane only on an MX pop; it gets one more entry
+        logic dfe_ready_cut;
+        /// Dataflow element lanes with registered full/empty flags, pointers without enables
+        logic dfe_reg_flags;
+    } timing_cuts_t;
+
     /// MX element transfer format (FP32 is the architectural base format)
     typedef enum logic [0:0] { MX_FMT_FP32, MX_FMT_FP16 } mx_fmt_e;
 

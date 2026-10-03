@@ -17,7 +17,11 @@ module idma_otf_compute #(
   /// Implementation tuning knobs
   parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
   /// Depth of the dataflow element (entries of the beat-tag FIFO)
-  parameter int unsigned BufferDepth     = 32'd3
+  parameter int unsigned BufferDepth     = 32'd3,
+  /// The dataflow element pushes into a full entry on a same-cycle pop
+  parameter bit          SameCycleRW     = 1'b1,
+  /// The dataflow element lanes have registered flags (`idma_dataflow_element`)
+  parameter bit          RegFlags        = 1'b0
 ) (
   input  logic clk_i,
   input  logic rst_ni,
@@ -44,6 +48,8 @@ module idma_otf_compute #(
   input  idma_pkg::mx_tag_t         tag_i,
   input  logic                      tag_push_i,
   input  logic                      tag_pop_i,
+  /// `tag_pop_i` is an MX pop, which may refill a full tag entry in the same cycle
+  input  logic                      tag_fast_pop_i,
   /// Every lane of the dataflow head holds an MX beat; it is popped by `mx_pop_o`
   input  logic                      mx_valid_i,
   output logic                      mx_pop_o,
@@ -125,20 +131,27 @@ module idma_otf_compute #(
   logic              tag_valid, mq_in, dq_in;
 
   if (ComputeEnable.mxquant || ComputeEnable.mxdequant) begin : gen_mx_tag
-    cc_passthrough_stream_fifo #(
-      .Depth  ( BufferDepth        ),
-      .data_t ( idma_pkg::mx_tag_t )
+    idma_pkg::mx_tag_t [0:0] tag_in, tag_out;
+    assign tag_in[0] = tag_i;
+    assign tag       = tag_out[0];
+
+    idma_dataflow_element #(
+      .BufferDepth ( BufferDepth        ),
+      .SameCycleRW ( SameCycleRW        ),
+      .RegFlags    ( RegFlags           ),
+      .StrbWidth   ( 32'd1              ),
+      .strb_t      ( logic [0:0]        ),
+      .byte_t      ( idma_pkg::mx_tag_t )
     ) i_tag_fifo (
       .clk_i,
       .rst_ni,
-      .clr_i   ( 1'b0       ),
-      .flush_i ( 1'b0       ),
-      .data_i  ( tag_i      ),
-      .valid_i ( tag_push_i ),
-      .ready_o ( /* lockstep with lane 0 */ ),
-      .data_o  ( tag        ),
-      .valid_o ( tag_valid  ),
-      .ready_i ( tag_pop_i  )
+      .data_i     ( tag_in         ),
+      .valid_i    ( tag_push_i     ),
+      .ready_o    ( /* lockstep with lane 0 */ ),
+      .data_o     ( tag_out        ),
+      .valid_o    ( tag_valid      ),
+      .ready_i    ( tag_pop_i      ),
+      .fast_pop_i ( tag_fast_pop_i )
     );
   end else begin : gen_no_mx_tag
     assign tag = '0; assign tag_valid = 1'b0;

@@ -51,6 +51,8 @@ module idma_backend_synth_${name_uniqueifier} #(
     /// Implementation tuning knobs for the compute engines
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
+    /// Opt-in timing cuts
+    parameter idma_pkg::timing_cuts_t TimingCuts = '0,
     /// Mask invalid data on the manager interface
     parameter bit          MaskInvalidData     = 1'b1,
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
@@ -319,6 +321,7 @@ ${p}_${database[p]['write_meta_channel']}_width\
         .ComputeOps           ( ComputeOps              ),
         .ComputeTuning        ( ComputeTuning           ),
 % endif
+        .TimingCuts           ( TimingCuts              ),
         .RAWCouplingAvail     ( RAWCouplingAvail        ),
         .HardwareLegalizer    ( HardwareLegalizer       ),
         .RejectZeroTransfers  ( RejectZeroTransfers     ),
