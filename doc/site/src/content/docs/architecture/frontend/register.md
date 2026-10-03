@@ -130,8 +130,10 @@ See [MX planes](../../compute/#mx-planes) for the data and scale plane layout.
 | `scale_addr` | R/W | Scale plane address of the next MX transfer, 64 B aligned; sampled with `compute_cfg` |
 | `mx_dim[d].scale_stride` | R/W | ND only: scale plane stride of dimension `d`, a multiple of 64 B, applied as `dim[d]` applies its strides |
 
-An MX launch that breaks the alignment rules or carries a reserved element format is refused:
-`next_id` reads 0 and no transfer starts.
+An MX launch is refused (`next_id` reads 0 and no transfer starts) when it carries a reserved
+element format, its scale plane or a used dimension's scale stride is off a 64 B line, its data
+planes or a used dimension's data strides are off a beat of the frontend's `DataWidth` parameter
+(default 512 bit), or its length is not a whole number of blocks.
 
 ### Offsets
 

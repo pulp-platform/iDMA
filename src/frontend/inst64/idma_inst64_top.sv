@@ -896,10 +896,20 @@ module idma_inst64_top #(
          idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
          idma_fe_dmopc & ~idma_fe_setter, '0)
 
-    // a reserved MX element format is refused at DMCPY; the scale plane is 64 B aligned by encoding
+    // DMCPY refuses an MX copy with a reserved format, planes off a beat or a partial block
+    logic idma_fe_mx_twod;
+    assign idma_fe_mx_twod   = (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMCPYI) ?
+                               acc_req_i.data_op[21] : acc_req_i.data_argb[1];
     assign idma_fe_mx_refuse = idma_fe_compute_q.enable &
                                idma_pkg::compute_op_is_mx(idma_fe_compute_q.op) &
-                               ~idma_pkg::mx_elem_legal(idma_fe_compute_q.params.mx.elem_fmt);
+                               (~idma_pkg::mx_elem_legal(idma_fe_compute_q.params.mx.elem_fmt) |
+                                (idma_fe_req_q.burst_req.src_addr[OffsetWidth-1:0] != '0) |
+                                (idma_fe_req_q.burst_req.dst_addr[OffsetWidth-1:0] != '0) |
+                                ((acc_req_i.data_arga &
+                                  (idma_pkg::compute_in_bytes(idma_fe_compute_q.op) - 1)) != '0) |
+                                (idma_fe_mx_twod & (idma_fe_req_q.d_req[0].reps > 'd1) &
+                                 ((idma_fe_req_q.d_req[0].src_strides[OffsetWidth-1:0] != '0) |
+                                  (idma_fe_req_q.d_req[0].dst_strides[OffsetWidth-1:0] != '0))));
 
 
     //--------------------------------------

@@ -50,9 +50,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 - The register frontend refuses an MX launch with a reserved element format, a scale plane that
-  is not 64 B aligned or a used dimension's scale stride that is not a multiple of 64: `next_id`
-  reads 0 and no transfer starts. inst64 refuses a `DMCPY` with a reserved element format with
-  id 0 and the error bit.
+  is not 64 B aligned, a used dimension's scale stride that is not a multiple of 64, a data plane
+  or a used dimension's data stride off a beat (new parameter `DataWidth`, default 512) or a
+  length that is not a whole number of blocks: `next_id` reads 0 and no transfer starts. inst64
+  refuses such a `DMCPY` with id 0 and the error bit.
 - Backend parameter `TimingCuts` (`idma_pkg::timing_cuts_t`, default `'0` = unchanged):
   `dfe_ready_cut` (dataflow element without same-cycle refill on write-side pops, one more entry),
   `dfe_reg_flags` (registered dataflow flags, pointers without load enables), `wdp_head_spill`

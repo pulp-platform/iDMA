@@ -216,6 +216,21 @@ interface idma_inst64_drv_if #(
         acc_get_rsp_raw(item);
     endtask
 
+    /// Immediate-form copy returning the raw response, for a launch the frontend refuses
+    task automatic dma_try_copy_imm(
+        input  addr_t          length,
+        input  logic [1:0]     cfg,
+        input  logic [2:0]     channel,
+        output acc_rsp_item_t  item
+    );
+        logic [31:0] encoding;
+        encoding        = inst_encoding(idma_inst64_snitch_pkg::DMCPYI);
+        encoding[21:20] = cfg;
+        encoding[24:22] = channel;
+        acc_issue(encoding, length, 64'b0);
+        acc_get_rsp_raw(item);
+    endtask
+
     /// Immediate-form copy; data_op[21:20] = cfg, data_op[24:22] = channel
     task automatic dma_start_copy_imm(
         input  addr_t      length,

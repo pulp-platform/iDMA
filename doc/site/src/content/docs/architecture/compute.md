@@ -110,10 +110,13 @@ Placement rules:
   the scale bytes of two transfers never share a line.
 - The ND midend steps `scale_addr` per row with `idma_d_req_t.scale_strides`, a multiple of
   64 B, as it steps the source and destination addresses with theirs.
-- A frontend refuses an MX transfer that breaks these rules or carries a reserved `elem_fmt`
-  (register frontend: `next_id` reads 0; inst64: `DMCPY` returns id 0 with the error bit), so
-  no such request reaches the backend from them. The backend itself checks them only with the
-  simulation assertions above.
+- A frontend refuses an MX transfer that breaks these rules, whose length is not a whole
+  number of blocks (`ComputeSizeAligned`), whose ND data strides move a plane off a beat, or that
+  carries a reserved `elem_fmt` (register frontend: `next_id` reads 0; inst64: `DMCPY` returns id
+  0 with the error bit), so no such request reaches the backend from them. The register frontend
+  checks beats of its `DataWidth` parameter (default 512 bit, the widest MX backend). The backend
+  itself checks the rules only with the simulation assertions above; a request from another
+  source with a misaligned data plane or a partial block can write wrong data or never finish.
 
 The quant engine collects the scale bytes of the open group in a scale queue of 64 B lines and
 emits them after the group's last data beat; the dequant engine holds the group's scale line in

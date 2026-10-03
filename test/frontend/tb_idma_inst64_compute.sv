@@ -62,6 +62,7 @@ module tb_idma_inst64_compute #(
     // scale planes 6 and 10 x 64 B above the data plane, inside the sentinel window
     localparam int unsigned PlScaleOff [2] = '{32'd6, 32'd10};
     localparam logic [7:0]  Sentinel   = 8'h5A;
+    localparam int unsigned HalfBeat   = AxiDataWidth / 16;
     // highest scale address bit + 1 the DMOPC setter reaches
     localparam int unsigned ScaleTop   = (AxiAddrWidth < 62) ? AxiAddrWidth : 62;
 
@@ -329,13 +330,43 @@ module tb_idma_inst64_compute #(
                 errors++;
             end
         end
+        // Planes off a beat, a partial block or a 2D stride off a beat are refused too
+        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
+        for (int unsigned c = 0; c < 6; c++) begin
+            automatic addr_t       src = SrcAddr, dst = QuantAddr, len = addr_t'(SrcBytes);
+            automatic logic [31:0] sst = 'h1000, dst_st = 'h1000;
+            automatic logic [1:0]  cfg = 2'b00;
+            unique case (c)
+                0: src = SrcAddr + HalfBeat;
+                1: dst = QuantAddr + HalfBeat;
+                2: len = addr_t'(SrcBytes - BlkInBytes / 2);
+                3: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
+                4: begin cfg = 2'b10; dst_st = 'h1000 + HalfBeat; end
+                5: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
+                default: ;
+            endcase
+            harness.drv_if.dma_set_source(src);
+            harness.drv_if.dma_set_dest(dst);
+            harness.drv_if.dma_set_strides(sst, dst_st);
+            harness.drv_if.dma_set_reps(32'd2);
+            if (c == 5) harness.drv_if.dma_try_copy_imm(len, cfg, 3'd0, refused);
+            else        harness.drv_if.dma_try_copy(len, cfg, 3'd0, refused);
+            if (!refused.error || refused.data !== '0) begin
+                $error("MX launch check %0d: DMCPY not refused (error=%0b id=%0d)", c,
+                       refused.error, refused.data);
+                errors++;
+            end
+        end
+        harness.drv_if.dma_set_source(SrcAddr);
+        harness.drv_if.dma_set_strides('0, '0);
+        harness.drv_if.dma_set_reps(32'd1);
         repeat (200) @(posedge harness.clk);
         for (int unsigned i = 0; i < SrcBytes + GuardBytes; i++)
             if (harness.mem_read_byte(QuantAddr - GuardBytes + i) !== Sentinel) begin
                 if (errors < 20) $error("refused DMCPY wrote at %0d", i);
                 errors++;
             end
-        $display("[TB] DMCPY with a reserved MX element format refused");
+        $display("[TB] DMCPY refused: reserved MX format, plane off a beat, partial block");
 
         // Back to a plain copy: the latched op must not leak into the next transfer
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));

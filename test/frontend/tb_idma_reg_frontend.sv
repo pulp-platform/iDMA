@@ -51,7 +51,12 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam logic [31:0] RegDstAddr  = 32'h0000_00D0;
   localparam logic [31:0] RegSrcAddr  = 32'h0000_00D4;
   localparam logic [31:0] RegLength   = 32'h0000_00D8;
+  localparam logic [31:0] RegDim0Dst  = 32'h0000_00E0;
+  localparam logic [31:0] RegDim0Src  = 32'h0000_00E4;
   localparam logic [31:0] RegDim0Reps = 32'h0000_00E8;
+  localparam logic [31:0] RegDim1Dst  = 32'h0000_00EC;
+  localparam logic [31:0] RegDim1Src  = 32'h0000_00F0;
+  localparam logic [31:0] RegDim1Reps = 32'h0000_00F4;
   localparam logic [31:0] RegCompute  = 32'h0000_00F8;
   localparam logic [31:0] RegMxCfg    = 32'h0000_00FC;
   localparam logic [31:0] RegScale    = 32'h0000_0100;
@@ -351,6 +356,28 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     if (!rst_n) launch_accept_count <= 0;
     else if (backend_cb.issue) launch_accept_count <= launch_accept_count + 1;
   end
+
+  // Test 6 case: conf, compute_cfg, mx_cfg, scale plane, dim0 reps, dim0/1 scale and data strides
+  typedef struct {
+    logic [31:0] conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1;
+    bit          ok;
+    string       name;
+  } mx_case_t;
+  localparam logic [31:0] Quant16 = 32'h1 | (32'(COMPUTE_MXQUANT_FP16) << 1);
+  localparam logic [31:0] Dq16    = 32'h1 | (32'(COMPUTE_MXDEQUANT_FP16) << 1);
+  function automatic mx_case_t mc(input logic [31:0] conf, input logic [31:0] cmp,
+                                  input logic [31:0] mx, input logic [31:0] sa,
+                                  input logic [31:0] reps, input logic [31:0] ss0,
+                                  input logic [31:0] ss1,
+                                  input bit ok, input string name,
+                                  input logic [31:0] src = 32'h1000_0000,
+                                  input logic [31:0] dst = 32'h2000_0000,
+                                  input logic [31:0] len = 32'h400,
+                                  input logic [31:0] reps1 = 32'd1,
+                                  input logic [31:0] st0 = 32'h400,
+                                  input logic [31:0] st1 = 32'h1000);
+    return '{conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1, ok, name};
+  endfunction
 
   // Test 5 scoreboard: each port programs a src_addr encoding its identity
   logic [31:0] sb_addr_stream0;          // src_addr programmed for stream 0's port
@@ -733,38 +760,58 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     end
 
     // Test 6: an illegal MX setup is refused: next_id reads 0, nothing launches
-    $display("\n--- Test 6: MX scale plane and element format checks ---");
+    $display("\n--- Test 6: MX launch checks ---");
     backend_auto_retire = 1'b1;
     set_req_ready(1'b1);
     begin
-      // {conf, compute_cfg, mx_cfg, scale_addr, dim0 reps, dim0 / dim1 scale stride, launches}
-      typedef struct {
-        logic [31:0] conf, cmp, mx, sa, reps, ss0, ss1;
-        bit          ok;
-        string       name;
-      } mx_case_t;
-      localparam logic [31:0] Quant16 = 32'h1 | (32'(COMPUTE_MXQUANT_FP16) << 1);
       mx_case_t cs[$];
-      cs.push_back('{32'h400, Quant16, 32'h4, 32'h4000_0040, 4, 32'h40, 32'h20, 1,
-                     "E4M3 ND, aligned plane and stride, misaligned unused dim1 stride"});
-      cs.push_back('{32'h400, Quant16, 32'h8, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 2"});
-      cs.push_back('{32'h400, Quant16, 32'hC, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 3"});
-      cs.push_back('{32'h0, Quant16, 32'h0, 32'h4000_0020, 1, 0, 0, 0, "scale plane off 64 B"});
-      cs.push_back('{32'h0, Quant16, 32'h0, 32'h4000_0001, 1, 0, 0, 0, "scale plane off 1 B"});
-      cs.push_back('{32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h60, 0, 0,
-                     "scale stride off 64 B"});
-      cs.push_back('{32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0010, 1, 0,
-                     0, 0, "dequant scale plane off 64 B"});
-      cs.push_back('{32'h0, Quant16 & ~32'h1, 32'hC, 32'h4000_0001, 1, 0, 0, 1,
-                     "compute disabled: MX fields ignored"});
-      cs.push_back('{32'h0, 32'h1 | (32'(COMPUTE_TRANSPOSE) << 1) | (32'h1 << 7) | (32'h1 << 19),
-                     32'hC, 32'h4000_0001, 1, 0, 0, 1, "transpose: MX fields ignored"});
+      cs.push_back(mc(32'h400, Quant16, 32'h4, 32'h4000_0040, 4, 32'h40, 32'h20, 1,
+                      "E4M3 ND, aligned plane and stride, misaligned unused dim1 stride"));
+      cs.push_back(mc(32'h400, Quant16, 32'h8, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 2"));
+      cs.push_back(mc(32'h400, Quant16, 32'hC, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 3"));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0020, 1, 0, 0, 0, "scale plane off 64 B"));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0001, 1, 0, 0, 0, "scale plane off 1 B"));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h60, 0, 0,
+                      "scale stride off 64 B"));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0010, 1, 0,
+                      0, 0, "dequant scale plane off 64 B"));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h80, 1,
+                      "3D, aligned dim1 scale stride", .reps1(3)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h20, 0,
+                      "3D, dim1 scale stride off 64 B", .reps1(3)));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "quant src off a beat",
+                      .src(32'h1000_0020)));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "quant dst off a beat",
+                      .dst(32'h2000_0020)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "dequant dst off a beat",
+                      .dst(32'h2000_0020)));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "quant partial block",
+                      .len(32'h420)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 1, "dequant 33 blocks",
+                      .len(32'h420)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "dequant partial block",
+                      .len(32'h410)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 0,
+                      "dim0 data stride off a beat", .st0(32'h420)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 0,
+                      "dim1 data stride off a beat", .reps1(3), .st1(32'h1020)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 1, 32'h40, 0, 1,
+                      "misaligned unused dim0 data stride", .st0(32'h420)));
+      cs.push_back(mc(32'h0, Quant16 & ~32'h1, 32'hC, 32'h4000_0001, 1, 0, 0, 1,
+                      "compute disabled: MX fields ignored", .src(32'h1000_0001)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_TRANSPOSE) << 1) | (32'h1 << 7) | (32'h1 << 19),
+                      32'hC, 32'h4000_0001, 1, 0, 0, 1, "transpose: MX fields ignored"));
       foreach (cs[k]) begin
         logic [31:0] got;
         int unsigned acc_before;
         captured_q.delete();
-        program_transfer(32'h1000_0000, 32'h2000_0000, 32'h0000_0400);
+        program_transfer(cs[k].src, cs[k].dst, cs[k].len);
         apb_write(RegConf,     cs[k].conf);
+        apb_write(RegDim0Src,  cs[k].st0);
+        apb_write(RegDim0Dst,  cs[k].st0);
+        apb_write(RegDim1Src,  cs[k].st1);
+        apb_write(RegDim1Dst,  cs[k].st1);
+        apb_write(RegDim1Reps, cs[k].reps1);
         apb_write(RegCompute,  cs[k].cmp);
         apb_write(RegMxCfg,    cs[k].mx);
         apb_write(RegScale,    cs[k].sa);

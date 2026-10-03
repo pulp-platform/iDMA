@@ -37,6 +37,8 @@ module idma_${identifier} #(
   parameter int unsigned IdCounterWidth = 32'd32,
   /// Dependent parameter: Stream Idx
   parameter int unsigned StreamWidth    = cc_pkg::idx_width(NumStreams),
+  /// Backend data width; MX data planes, lengths and strides must fit its beats
+  parameter int unsigned DataWidth      = 32'd512,
 % if _fam == 'apb':
   /// APB4 request type
   parameter type         apb_req_t      = logic,
@@ -90,6 +92,7 @@ module idma_${identifier} #(
   localparam int unsigned MaxNumStreams = 32'd16;
   localparam int unsigned RegAddrWidth  = idma_${identifier}_reg_pkg::IDMA_${identifier.upper()}_REG_TOP_MIN_ADDR_WIDTH;
   localparam int unsigned ScaleAlignWidth = $clog2(idma_pkg::MxScaleSlotBytes);
+  localparam int unsigned BeatAlignWidth  = $clog2(DataWidth / 8);
 
   // register connections
   idma_${identifier}_reg_pkg::idma_reg__out_t dma_reg2hw [NumRegs-1:0];
@@ -190,16 +193,22 @@ module idma_${identifier} #(
         end
     end
 
-    // an MX transfer with a reserved element format or a scale plane off its 64 B line is refused
+    // an MX launch needs an elaborated format, beat-aligned planes (scale: 64 B) and whole blocks
     always_comb begin : proc_launch_ok
       launch_ok = 1'b1;
       if (nxt_dma_req${sep}opt.compute.enable &&
           idma_pkg::compute_op_is_mx(nxt_dma_req${sep}opt.compute.op)) begin
         launch_ok = idma_pkg::mx_elem_legal(nxt_dma_req${sep}opt.compute.params.mx.elem_fmt) &&
-                    (nxt_dma_req${sep}scale_addr[ScaleAlignWidth-1:0] == '0);
+                    (nxt_dma_req${sep}scale_addr[ScaleAlignWidth-1:0] == '0) &&
+                    (nxt_dma_req${sep}src_addr[BeatAlignWidth-1:0] == '0) &&
+                    (nxt_dma_req${sep}dst_addr[BeatAlignWidth-1:0] == '0) &&
+                    ((nxt_dma_req${sep}length &
+                      (idma_pkg::compute_in_bytes(nxt_dma_req${sep}opt.compute.op) - 1)) == '0);
 % for nd in range(0, num_dim-1):
         if (nxt_dma_req.d_req[${nd}].reps > 'd1 &&
-            nxt_dma_req.d_req[${nd}].scale_strides[ScaleAlignWidth-1:0] != '0) begin
+            ((nxt_dma_req.d_req[${nd}].scale_strides[ScaleAlignWidth-1:0] != '0) ||
+             (nxt_dma_req.d_req[${nd}].src_strides[BeatAlignWidth-1:0] != '0) ||
+             (nxt_dma_req.d_req[${nd}].dst_strides[BeatAlignWidth-1:0] != '0))) begin
           launch_ok = 1'b0;
         end
 % endfor
