@@ -120,6 +120,7 @@ sources:
       # Level 0
       - test/idma_intf.sv
       - test/idma_test.sv
+      - test/idma_mx_axi_mon.sv
       # Level 1
       - test/frontend/tb_idma_desc64_top.sv
       - test/frontend/tb_idma_desc64_bench.sv

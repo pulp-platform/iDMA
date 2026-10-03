@@ -69,6 +69,8 @@ axi_sim_mem #(
   .mon_w_data_o(), .mon_w_addr_o(), .mon_w_valid_o()
 );
 
+`include "include/tb_idma_mx_axi_mon_bind.svh"
+
 task automatic wr_mem(input addr_t a, input logic [7:0] d); i_axi_sim_mem.mem[a] = d; endtask
 function automatic logic [7:0] rd_mem(input addr_t a);
   return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
