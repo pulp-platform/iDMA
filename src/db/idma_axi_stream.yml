@@ -216,7 +216,7 @@ legalizer_write_meta_channel: |
         strb: '1,
         keep: '0,
         last: w_tf_q.length == w_num_bytes,
-        id: opt_tf_q.axi_id,
+        id: opt_w_q.axi_id,
         dest: w_tf_q.base_addr[$bits(w_req_o.aw_req.axis.t_chan.dest)-1:0],
         user: w_tf_q.base_addr[$bits(w_req_o.aw_req.axis.t_chan.user)-1+:$bits(w_req_o.aw_req.axis.t_chan.dest)]
     };

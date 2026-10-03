@@ -53,7 +53,7 @@ legalizer_read_meta_channel: |
 legalizer_write_meta_channel: |
     w_req_o.aw_req.axi_lite.aw_chan = '{
         addr: { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
-        prot: opt_tf_q.dst_axi_opt.prot
+        prot: opt_w_q.dst_axi_opt.prot
     };
 read_template: |
     idma_axil_read #(

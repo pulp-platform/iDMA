@@ -146,6 +146,7 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     idma_mut_tf_t     r_tf_d,   r_tf_q;
     idma_mut_tf_t     w_tf_d,   w_tf_q;
     idma_mut_tf_opt_t opt_tf_d, opt_tf_q;
+    idma_mut_tf_opt_t opt_w_d,  opt_w_q;
 
     // enable signals for next mutable transfer storage
     logic r_tf_ena;
@@ -201,6 +202,9 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     } mx_pl_t;
     mx_pl_t mx_pl_d, mx_pl_q;
     logic   mx_pl_ena;
+
+    // MX quant requests whose W side waits while R runs ahead
+    localparam int unsigned MxWqDepth = 32'd3;
 
     // data bytes of a group
     localparam int unsigned MxGrpWidth = $clog2(64 * idma_pkg::MxDataBlockBytes) + 1;
@@ -331,7 +335,7 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
     % elif len(used_non_bursting_write_protocols) == 0:
         .not_bursting_i    ( 1'b0 ),
     % else:
-        .not_bursting_i    ( opt_tf_q.dst_protocol inside {\
+        .not_bursting_i    ( opt_w_q.dst_protocol inside {\
         % for index, protocol in enumerate(used_non_bursting_write_protocols):
  idma_pkg::${database[protocol]['protocol_enum']}\
             % if index != len(used_non_bursting_write_protocols)-1:
@@ -341,8 +345,8 @@ r_num_bytes_to_pb = r_page_num_bytes_to_pb;
 } ),
     % endif
 
-        .reduce_len_i      ( opt_tf_q.dst_reduce_len ),
-        .max_llen_i        ( opt_tf_q.dst_max_llen   ),
+        .reduce_len_i      ( opt_w_q.dst_reduce_len ),
+        .max_llen_i        ( opt_w_q.dst_max_llen   ),
 
         .addr_i            ( w_tf_q.addr             ),
         .num_bytes_to_pb_o ( w_page_num_bytes_to_pb  )
@@ -384,7 +388,7 @@ w_tf_q.length[PageAddrWidth:0] ),
     % endif
 % else:
     always_comb begin : gen_write_num_bytes_to_pb_logic
-        case (opt_tf_q.dst_protocol)
+        case (opt_w_q.dst_protocol)
     % for write_protocol in used_write_protocols:
         idma_pkg::${database[write_protocol]['protocol_enum']}: \
         % if database[write_protocol]['bursts'] == 'only_pow2':
@@ -429,7 +433,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
     % endif
     % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
 
-            || (opt_tf_q.dst_protocol inside {\
+            || (opt_w_q.dst_protocol inside {\
         % for index, protocol in enumerate(used_non_bursting_or_force_decouple_write_protocols):
  idma_pkg::${database[protocol]['protocol_enum']}\
             % if index != len(used_non_bursting_or_force_decouple_write_protocols)-1:
@@ -447,6 +451,137 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
     assign r_addr_offset = r_tf_q.addr[OffsetWidth-1:0];
     assign w_addr_offset = w_tf_q.addr[OffsetWidth-1:0];
 
+    // state of a request: both machines, options and the MX plane state
+    typedef struct packed {
+        idma_mut_tf_t     r_tf;
+        idma_mut_tf_t     w_tf;
+        idma_mut_tf_opt_t opt;
+% if compute_eligible:
+        mx_pl_t           mx_pl;
+% endif
+    } load_t;
+
+    function automatic load_t load(idma_req_t req);
+        load_t l;
+        l = '0;
+        // load all three mutable objects (source, destination, option)
+        l.r_tf = '{
+            length: req.length,
+            addr:   req.src_addr,
+            valid:   1'b1,
+            base_addr: req.src_addr,
+            default: '0
+        };
+        // destination or write
+        l.w_tf = '{
+            length: req.length,
+            addr:   req.dst_addr,
+            valid:   1'b1,
+            base_addr: req.dst_addr,
+            user: req.user,
+            default: '0
+        };
+% if compute_eligible:
+        // size-changing compute: write length follows the per-op byte ratio
+        l.mx_pl = '0;
+        if (EnableCompute && req.opt.compute.enable) begin
+            unique case (req.opt.compute.op)
+% for op in ['COMPUTE_MXQUANT', 'COMPUTE_MXQUANT_FP16', 'COMPUTE_MXDEQUANT',\
+              'COMPUTE_MXDEQUANT_FP16']:
+                idma_pkg::${op}:
+                    l.w_tf.length = (req.length /
+                        idma_pkg::compute_in_bytes(idma_pkg::${op})) *
+                        idma_pkg::compute_out_bytes(idma_pkg::${op});
+% endfor
+                default: ;
+            endcase
+        end
+        // MX: quant starts with the first data segment, dequant with the first scale chunk
+        if (EnableCompute && req.opt.compute.enable &&
+            idma_pkg::compute_op_is_mx(req.opt.compute.op)) begin
+            l.mx_pl.on    = 1'b1;
+            l.mx_pl.rd    = req.opt.compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
+                                                      idma_pkg::COMPUTE_MXDEQUANT_FP16};
+            l.mx_pl.g32   = req.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
+            l.mx_pl.daddr = l.mx_pl.rd ? req.src_addr : req.dst_addr;
+            l.mx_pl.saddr = req.scale_addr;
+            if (l.mx_pl.rd) begin
+                l.mx_pl.half  = (StrbWidth == 64) & req.length[5];
+                l.mx_pl.drem  = len_t'(req.length);
+                l.mx_pl.scl   = 1'b1;
+                l.r_tf.addr   = {req.scale_addr[AddrWidth-1:OffsetWidth],
+                                 {OffsetWidth{1'b0}}};
+                l.r_tf.length = mx_rchunk(req.scale_addr,
+                                          mx_rseg(len_t'(req.length), l.mx_pl.g32));
+            end else begin
+                l.mx_pl.drem  = len_t'(l.w_tf.length);
+                l.mx_pl.sn    = mx_seg(len_t'(l.w_tf.length), l.mx_pl.g32) >>
+                                $clog2(idma_pkg::MxDataBlockBytes);
+                l.w_tf.length = mx_seg(len_t'(l.w_tf.length), l.mx_pl.g32);
+            end
+        end
+% endif
+        // options
+        l.opt = '{
+            src_protocol:   req.opt.src_protocol,
+            dst_protocol:   req.opt.dst_protocol,
+            src_head:       req.opt.src_head,
+            dst_head:       req.opt.dst_head,
+            read_shift:     '0,
+            write_shift:    '0,
+% if compute_eligible:
+            decouple_rw:    req.opt.beo.decouple_rw |
+                            (EnableCompute & req.opt.compute.enable),
+            decouple_aw:    req.opt.beo.decouple_aw |
+                            (EnableCompute & req.opt.compute.enable),
+% else:
+            decouple_rw:    req.opt.beo.decouple_rw,
+            decouple_aw:    req.opt.beo.decouple_aw,
+% endif
+            src_max_llen:   req.opt.beo.src_max_llen,
+            dst_max_llen:   req.opt.beo.dst_max_llen,
+            src_reduce_len: req.opt.beo.src_reduce_len,
+            dst_reduce_len: req.opt.beo.dst_reduce_len,
+            axi_id:         req.opt.axi_id,
+            src_axi_opt:    req.opt.src,
+            dst_axi_opt:    req.opt.dst,
+            super_last:     req.opt.last,
+            compute:        req.opt.compute
+        };
+        // determine shift amount
+        if (CombinedShifter) begin
+            l.opt.read_shift  = req.src_addr[OffsetWidth-1:0] -
+                                req.dst_addr[OffsetWidth-1:0];
+            l.opt.write_shift = '0;
+        end else begin
+            l.opt.read_shift  =   req.src_addr[OffsetWidth-1:0];
+            l.opt.write_shift = - req.dst_addr[OffsetWidth-1:0];
+        end
+        return l;
+    endfunction
+
+    load_t ld_in;
+    assign ld_in = load(req_i);
+% if compute_eligible:
+
+    // MX quant: R takes the next MX quant request while W still writes earlier MX transfers
+    idma_req_t mx_wq_in, mx_wq_head;
+    logic      mx_wq_empty, mx_wq_full, mx_wq_direct, mx_wq_push, mx_wq_pop;
+    load_t     ld_wq;
+    assign ld_wq = load(mx_wq_head);
+
+    // the queue keeps the write-side fields only
+    always_comb begin : proc_mx_wq_in
+        mx_wq_in                        = req_i;
+        mx_wq_in.src_addr               = '0;
+        mx_wq_in.opt.src_protocol       = idma_pkg::protocol_e'(0);
+        mx_wq_in.opt.src_head           = '0;
+        mx_wq_in.opt.src                = '0;
+        mx_wq_in.opt.beo.src_max_llen   = '0;
+        mx_wq_in.opt.beo.src_reduce_len = 1'b0;
+    end
+% endif
+
     // legalization process -> read and write is coupled together
     always_comb begin : proc_read_write_transaction
 
@@ -454,6 +589,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         r_tf_d   = r_tf_q;
         w_tf_d   = w_tf_q;
         opt_tf_d = opt_tf_q;
+        opt_w_d  = opt_w_q;
 
         // default: not done
         r_done = 1'b0;
@@ -498,9 +634,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         end
 
 % if compute_eligible:
-        //--------------------------------------
         // MX: switch between data segments and scale chunks
-        //--------------------------------------
         mx_pl_d = mx_pl_q;
         if (EnableCompute && mx_pl_q.on && mx_pl_q.rd && r_tf_q.valid && r_done) begin
             // dequant source: scale chunk, then the group's data, whole aligned beats
@@ -569,101 +703,25 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         //--------------------------------------
         // new request is taken in if both r and w machines are ready.
         if (ready_o & valid_i) begin
-
-            // load all three mutable objects (source, destination, option)
-            // source or read
-            r_tf_d = '{
-                length: req_i.length,
-                addr:   req_i.src_addr,
-                valid:   1'b1,
-                base_addr: req_i.src_addr,
-                default: '0
-            };
-            // destination or write
-            w_tf_d = '{
-                length: req_i.length,
-                addr:   req_i.dst_addr,
-                valid:   1'b1,
-                base_addr: req_i.dst_addr,
-                user: req_i.user,
-                default: '0
-            };
+            r_tf_d   = ld_in.r_tf;
+            opt_tf_d = ld_in.opt;
 % if compute_eligible:
-            // size-changing compute: write length follows the per-op byte ratio
-            mx_pl_d = '0;
-            if (EnableCompute && req_i.opt.compute.enable) begin
-                unique case (req_i.opt.compute.op)
-% for op in ['COMPUTE_MXQUANT', 'COMPUTE_MXQUANT_FP16', 'COMPUTE_MXDEQUANT', 'COMPUTE_MXDEQUANT_FP16']:
-                    idma_pkg::${op}:
-                        w_tf_d.length = (req_i.length /
-                            idma_pkg::compute_in_bytes(idma_pkg::${op})) *
-                            idma_pkg::compute_out_bytes(idma_pkg::${op});
-% endfor
-                    default: ;
-                endcase
-            end
-            // MX: quant starts with the first data segment, dequant with the first scale chunk
-            if (EnableCompute && req_i.opt.compute.enable &&
-                idma_pkg::compute_op_is_mx(req_i.opt.compute.op)) begin
-                mx_pl_d.on    = 1'b1;
-                mx_pl_d.rd    = req_i.opt.compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
-                                                              idma_pkg::COMPUTE_MXDEQUANT_FP16};
-                mx_pl_d.g32   = req_i.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
-                mx_pl_d.daddr = mx_pl_d.rd ? req_i.src_addr : req_i.dst_addr;
-                mx_pl_d.saddr = req_i.scale_addr;
-                if (mx_pl_d.rd) begin
-                    mx_pl_d.half  = (StrbWidth == 64) & req_i.length[5];
-                    mx_pl_d.drem  = len_t'(req_i.length);
-                    mx_pl_d.scl   = 1'b1;
-                    r_tf_d.addr   = {req_i.scale_addr[AddrWidth-1:OffsetWidth],
-                                     {OffsetWidth{1'b0}}};
-                    r_tf_d.length = mx_rchunk(req_i.scale_addr,
-                                              mx_rseg(len_t'(req_i.length), mx_pl_d.g32));
-                end else begin
-                    mx_pl_d.drem  = len_t'(w_tf_d.length);
-                    mx_pl_d.sn    = mx_seg(len_t'(w_tf_d.length), mx_pl_d.g32) >>
-                                    $clog2(idma_pkg::MxDataBlockBytes);
-                    w_tf_d.length = mx_seg(len_t'(w_tf_d.length), mx_pl_d.g32);
-                end
-            end
-% endif
-            // options
-            opt_tf_d = '{
-                src_protocol:   req_i.opt.src_protocol,
-                dst_protocol:   req_i.opt.dst_protocol,
-                src_head:       req_i.opt.src_head,
-                dst_head:       req_i.opt.dst_head,
-                read_shift:     '0,
-                write_shift:    '0,
-% if compute_eligible:
-                decouple_rw:    req_i.opt.beo.decouple_rw |
-                                (EnableCompute & req_i.opt.compute.enable),
-                decouple_aw:    req_i.opt.beo.decouple_aw |
-                                (EnableCompute & req_i.opt.compute.enable),
-% else:
-                decouple_rw:    req_i.opt.beo.decouple_rw,
-                decouple_aw:    req_i.opt.beo.decouple_aw,
-% endif
-                src_max_llen:   req_i.opt.beo.src_max_llen,
-                dst_max_llen:   req_i.opt.beo.dst_max_llen,
-                src_reduce_len: req_i.opt.beo.src_reduce_len,
-                dst_reduce_len: req_i.opt.beo.dst_reduce_len,
-                axi_id:         req_i.opt.axi_id,
-                src_axi_opt:    req_i.opt.src,
-                dst_axi_opt:    req_i.opt.dst,
-                super_last:     req_i.opt.last,
-                compute:        req_i.opt.compute
-            };
-            // determine shift amount
-            if (CombinedShifter) begin
-                opt_tf_d.read_shift  = req_i.src_addr[OffsetWidth-1:0] -
-                                       req_i.dst_addr[OffsetWidth-1:0];
-                opt_tf_d.write_shift = '0;
-            end else begin
-                opt_tf_d.read_shift  =   req_i.src_addr[OffsetWidth-1:0];
-                opt_tf_d.write_shift = - req_i.dst_addr[OffsetWidth-1:0];
+            if (!mx_wq_push) begin
+                w_tf_d  = ld_in.w_tf;
+                mx_pl_d = ld_in.mx_pl;
+                opt_w_d = ld_in.opt;
             end
         end
+        // W takes the next queued MX quant request
+        if (mx_wq_pop) begin
+            w_tf_d  = ld_wq.w_tf;
+            mx_pl_d = ld_wq.mx_pl;
+            opt_w_d = ld_wq.opt;
+        end
+% else:
+            w_tf_d   = ld_in.w_tf;
+        end
+% endif
     end
 
 
@@ -717,21 +775,21 @@ ${database[used_write_protocols[0]]['legalizer_write_meta_channel']}
 ${database[used_write_protocols[0]]['legalizer_write_data_path']}
     % else:
         w_req_o.w_dp_req = '{
-            dst_protocol: opt_tf_q.dst_protocol,
-            dst_head:     opt_tf_q.dst_head,
+            dst_protocol: opt_w_q.dst_protocol,
+            dst_head:     opt_w_q.dst_head,
             offset:       w_addr_offset,
             tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-            shift:        opt_tf_q.write_shift,
+            shift:        opt_w_q.write_shift,
             num_beats:    'd0,
             is_single:    1'b1,
-            compute:      opt_tf_q.compute
+            compute:      opt_w_q.compute
         };
     % endif
     end
 % else:
     always_comb begin : gen_write_meta_channel
         w_req_o.aw_req = '0;
-        case(opt_tf_q.dst_protocol)
+        case(opt_w_q.dst_protocol)
     % for protocol in used_write_protocols:
         idma_pkg::${database[protocol]['protocol_enum']}: begin
 ${database[protocol]['legalizer_write_meta_channel']}
@@ -744,7 +802,7 @@ ${database[protocol]['legalizer_write_meta_channel']}
 
     // assign the signals needed to set-up the write data path
     always_comb begin : gen_write_data_path
-        case (opt_tf_q.dst_protocol)
+        case (opt_w_q.dst_protocol)
         % for protocol in used_write_protocols:
             % if 'legalizer_write_data_path' in database[protocol]:
         idma_pkg::${database[protocol]['protocol_enum']}:
@@ -753,14 +811,14 @@ ${database[protocol]['legalizer_write_data_path']}
         % endfor
         default:
             w_req_o.w_dp_req = '{
-                dst_protocol: opt_tf_q.dst_protocol,
-                dst_head:     opt_tf_q.dst_head,
+                dst_protocol: opt_w_q.dst_protocol,
+                dst_head:     opt_w_q.dst_head,
                 offset:       w_addr_offset,
                 tailer:       OffsetWidth'(w_num_bytes + w_addr_offset),
-                shift:        opt_tf_q.write_shift,
+                shift:        opt_w_q.write_shift,
                 num_beats:    'd0,
                 is_single:    1'b1,
-                compute:      opt_tf_q.compute
+                compute:      opt_w_q.compute
             };
         endcase
     end
@@ -771,14 +829,18 @@ ${database[protocol]['legalizer_write_data_path']}
     assign w_req_o.last = w_done;
 
     // last burst indicated by midend
-    assign w_req_o.super_last = opt_tf_q.super_last;
+    assign w_req_o.super_last = opt_w_q.super_last;
 
     // assign aw decouple flag
-    assign w_req_o.decouple_aw = opt_tf_q.decouple_aw;
+    assign w_req_o.decouple_aw = opt_w_q.decouple_aw;
 
     // busy output
     assign r_busy_o = r_tf_q.valid;
+% if compute_eligible:
+    assign w_busy_o = w_tf_q.valid | ~mx_wq_empty;
+% else:
     assign w_busy_o = w_tf_q.valid;
+% endif
 
 
     //--------------------------------------
@@ -803,7 +865,7 @@ ${database[protocol]['legalizer_write_data_path']}
         % endif
         % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
 
-            || (opt_tf_q.dst_protocol inside {\
+            || (opt_w_q.dst_protocol inside {\
             % for index, protocol in enumerate(used_non_bursting_or_force_decouple_write_protocols):
  idma_pkg::${database[protocol]['protocol_enum']}\
                 % if index != len(used_non_bursting_or_force_decouple_write_protocols)-1:
@@ -827,8 +889,47 @@ ${database[protocol]['legalizer_write_data_path']}
         end
     end
 
+% if compute_eligible:
+    // load next idma request: if both machines are done, or into the W queue
+    assign mx_wq_direct = w_done & (mx_wq_empty | kill_i);
+    assign ready_o      = r_done & r_ready_i & w_ready_i & !flush_i &
+                          (mx_wq_direct | (EnableCompute & ~mx_wq_full & req_i.opt.compute.enable &
+                           (req_i.opt.compute.op inside {idma_pkg::COMPUTE_MXQUANT,
+                                                         idma_pkg::COMPUTE_MXQUANT_FP16}) &
+                           (~mx_wq_empty | (opt_w_q.compute.enable &
+                                            idma_pkg::compute_op_is_mx(opt_w_q.compute.op)))));
+    assign mx_wq_push   = ready_o & valid_i & ~mx_wq_direct;
+    assign mx_wq_pop    = ~mx_wq_empty & w_done & w_ready_i & !flush_i & !kill_i;
+
+    if (EnableCompute) begin : gen_mx_wq
+        cc_fifo #(
+            .Depth  ( MxWqDepth  ),
+            .data_t ( idma_req_t )
+        ) i_mx_wq (
+            .clk_i,
+            .rst_ni,
+            .clr_i   ( 1'b0        ),
+            .flush_i ( kill_i      ),
+            .full_o  ( mx_wq_full  ),
+            .empty_o ( mx_wq_empty ),
+            .usage_o ( /* NC */    ),
+            .data_i  ( mx_wq_in    ),
+            .push_i  ( mx_wq_push  ),
+            .data_o  ( mx_wq_head  ),
+            .pop_i   ( mx_wq_pop   )
+        );
+        `FF(opt_w_q, opt_w_d, '0, clk_i, rst_ni)
+    end else begin : gen_no_mx_wq
+        assign mx_wq_full  = 1'b1;
+        assign mx_wq_empty = 1'b1;
+        assign mx_wq_head  = '0;
+        assign opt_w_q     = opt_tf_q;
+    end
+% else:
     // load next idma request: if both machines are done!
     assign ready_o = r_done & w_done & r_ready_i & w_ready_i & !flush_i;
+    assign opt_w_q = opt_tf_q;
+% endif
 
 
     //--------------------------------------

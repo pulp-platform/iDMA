@@ -38,6 +38,7 @@ Compute (`EnableCompute`) applies only on compute-eligible backends (AXI or OBI 
 - Transfer length must be a whole multiple of the op's input granule (128 B FP32, 64 B FP16, 32 B per block of the MX data plane); source and destination must be beat-aligned.
 - MX ops require `StrbWidth <= 64` (one 64 B scale line per beat).
 - MX dequant reads whole beats: the last data beat may read up to `StrbWidth - 1` bytes past the end of the data plane (never across a 4 KiB page).
+- A quant transfer of one block writes two beats (data and scale) per read beat. The legalizer's read side runs up to three MX quant requests ahead of its write side, so a stream of such transfers keeps the read channel ahead after a read stall.
 - Size-changing MX is validated on AXI source/destination only; OBI is not yet supported. TileLink is not a valid compute write destination.
 - Transpose is size-preserving but restricted to single-beat writes.
 

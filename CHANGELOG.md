@@ -65,6 +65,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 - MX quant of FP32 subnormal inputs dropped the leading zeros (implicit 1), e.g. 32 x 2^-127
   quantized to 1.5 instead of 1.0.
+- The legalizer took a request only when both its read and write sides had emitted the previous
+  one, so a stream of one-block MX quant transfers (two write bursts per read burst) left the
+  read channel no lead and lost cycles after every read stall. The write side now queues up to
+  three MX quant requests (`MxWqDepth`) while the read side runs ahead.
 
 ## 0.7.3 - 2026-10-01
 

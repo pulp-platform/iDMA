@@ -59,7 +59,7 @@ legalizer_write_meta_channel: |
         be: '0,
         we: 1,
         wdata: '0,
-        aid: opt_tf_q.axi_id,
+        aid: opt_w_q.axi_id,
         a_optional: '0
     };
 read_template: |
