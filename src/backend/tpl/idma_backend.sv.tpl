@@ -193,7 +193,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// The localparam MetaFifoDepth holds the maximum number of transfers that can be
     /// in-flight under any circumstances.
     localparam int unsigned MetaFifoDepth = DfeDepth + NumAxInFlight + MemSysDepth +
-        ComputeFifoDepth;
+        ComputeFifoDepth + 32'd2 * 32'(TimingCuts.wdp_head_spill);
 
     /// Address type
     typedef logic [AddrWidth-1:0]   addr_t;
@@ -370,6 +370,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic r_dp_req_out_ready, w_dp_req_out_ready;
     r_dp_req_t r_dp_req_out;
     w_dp_req_t w_dp_req_out;
+    logic      w_dp_req_head_valid, w_dp_req_head_ready, w_dp_busy;
+    w_dp_req_t w_dp_req_head;
+    // decouple_aw tag of the R-AW coupler, kept with the write datapath request head
+    logic      w_decouple_aw_out, w_decouple_aw_head;
 
     // datapah responses
     r_dp_rsp_t r_dp_rsp;
@@ -740,6 +744,41 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .ready_i    ( w_dp_req_out_ready  )
     );
 
+    typedef struct packed {
+        logic      decouple_aw;
+        w_dp_req_t w_dp_req;
+    } w_dp_head_t;
+    w_dp_head_t w_dp_head_in, w_dp_head_out;
+
+    assign w_dp_head_in       = '{decouple_aw: w_decouple_aw_out, w_dp_req: w_dp_req_out};
+    assign w_dp_req_head      = w_dp_head_out.w_dp_req;
+    assign w_decouple_aw_head = w_dp_head_out.decouple_aw;
+
+    cc_spill_register #(
+        .data_t ( w_dp_head_t                ),
+        .Bypass ( !TimingCuts.wdp_head_spill )
+    ) i_w_dp_req_head (
+        .clk_i   ( clk_i               ),
+        .rst_ni  ( rst_ni              ),
+        .clr_i   ( 1'b0                ),
+        .valid_i ( w_dp_req_out_valid  ),
+        .ready_o ( w_dp_req_out_ready  ),
+        .data_i  ( w_dp_head_in        ),
+        .valid_o ( w_dp_req_head_valid ),
+        .ready_i ( w_dp_req_head_ready ),
+        .data_o  ( w_dp_head_out       )
+    );
+
+    // with the head register, busy comes from valid flops (a datapath pop implies valid)
+    assign busy_o.w_dp_busy = TimingCuts.wdp_head_spill ?
+                              (w_dp_req_head_valid | w_dp_req_out_valid) : w_dp_busy;
+
+    `IDMA_NONSYNTH_BLOCK(
+    always @(posedge clk_i) if (rst_ni && TimingCuts.wdp_head_spill)
+        assert (!w_dp_req_head_ready || w_dp_req_head_valid) else
+            $fatal(1, "The write datapath popped a request it did not hold!");
+    )
+
     // Add fall-through register to allow the input to be ready if the output is not. This
     // does not add a cycle of delay
 % if not one_read_port:
@@ -872,9 +911,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .r_dp_rsp_o      ( r_dp_rsp             ),
         .r_dp_valid_o    ( r_dp_rsp_valid       ),
         .r_dp_ready_i    ( r_dp_rsp_ready       ),
-        .w_dp_req_i      ( w_dp_req_out         ),
-        .w_dp_valid_i    ( w_dp_req_out_valid   ),
-        .w_dp_ready_o    ( w_dp_req_out_ready   ),
+        .w_dp_req_i      ( w_dp_req_head        ),
+        .w_dp_valid_i    ( w_dp_req_head_valid  ),
+        .w_dp_ready_o    ( w_dp_req_head_ready  ),
         .w_dp_rsp_o      ( w_dp_rsp             ),
         .w_dp_valid_o    ( w_dp_rsp_valid       ),
         .w_dp_ready_i    ( w_dp_rsp_ready       ),
@@ -886,7 +925,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_busy            ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .w_chan_valid_o  ( w_chan_valid         ),
         .w_chan_ready_o  ( w_chan_ready         ),
@@ -906,9 +945,6 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
     if (RAWCouplingAvail) begin : gen_r_aw_coupler
 % if one_read_port and one_write_port and (used_read_protocols[0] == used_write_protocols[0]):
-        // per-transfer decouple_aw tag travelling with the write datapath request
-        logic w_decouple_aw_out;
-
         // mirrors i_w_dp_req exactly: same depth, same push valid, same pop ready
         cc_stream_fifo_optimal_wrap #(
             .Depth     ( NumAxInFlight + ComputeFifoDepth ),
@@ -947,7 +983,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             .w_req_valid_i    ( w_chan_valid                ),
             .w_req_ready_i    ( w_chan_ready                ),
             .w_req_first_i    ( w_chan_first                ),
-            .w_decouple_aw_i  ( w_decouple_aw_out           ),
+            .w_decouple_aw_i  ( w_decouple_aw_head          ),
             .aw_decouple_aw_i ( \
 % if one_write_port:
 w_req.decouple_aw\
@@ -981,8 +1017,10 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
             $fatal(1, "Channel Coupler only implemented for AXI DMAs!");
         end
         )
+        assign w_decouple_aw_out = 1'b0;
 % endif
     end else begin : gen_r_aw_bypass
+        assign w_decouple_aw_out = 1'b0;
 % if combined_aw_and_w:
     % if compute_eligible:
         // combined aw+w read-meta buffer; deepened for the compute engine tile read-ahead (cf. i_w_dp_req)

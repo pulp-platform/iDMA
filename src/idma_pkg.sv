@@ -168,6 +168,8 @@ package idma_pkg;
         logic dfe_ready_cut;
         /// Dataflow element lanes with registered full/empty flags, pointers without enables
         logic dfe_reg_flags;
+        /// Spill register on the head of the write datapath request FIFO
+        logic wdp_head_spill;
     } timing_cuts_t;
 
     /// MX element transfer format (FP32 is the architectural base format)
