@@ -74,7 +74,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - The legalizer took a request only when both its read and write sides had emitted the previous
   one, so a stream of one-block MX quant transfers (two write bursts per read burst) left the
   read channel no lead and lost cycles after every read stall. The write side now queues up to
-  three MX quant requests (`MxWqDepth`) while the read side runs ahead.
+  three requests (`MxWqDepth`) behind an MX transfer while the read side runs ahead; the read
+  and write sides keep separate MX plane state, so a dequant behind a short quant reads at once.
 - `make idma_verify_codegen` takes the compute guards from the generated legalizers, and every
   one of them has a negative test: mxneg case 11 now runs (`ComputeMxdequantLengthFits`), and
   `ComputeDstTilelink` is only generated for variants with a TileLink write port.

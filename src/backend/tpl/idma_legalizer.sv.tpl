@@ -186,24 +186,33 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     logic      w_done;
 % if compute_eligible:
 
-    // MX: per group a data segment, then its scale chunk; the other plane waits in `mx_pl_q`
+    // MX: per group a data segment, then its scale chunk; the other plane waits in `mx_*_q`
     localparam int unsigned LenWidth = $bits(r_tf_q.length);
     typedef logic [LenWidth-1:0] len_t;
+    // dequant read side
     typedef struct packed {
         logic  on;
-        logic  rd;
         logic  g32;
         logic  scl;
         logic  half;
         addr_t daddr;
         addr_t saddr;
         len_t  drem;
+    } mx_r_t;
+    // quant write side
+    typedef struct packed {
+        logic  on;
+        logic  g32;
+        logic  scl;
+        addr_t daddr;
+        addr_t saddr;
+        len_t  drem;
         len_t  sn;
-    } mx_pl_t;
-    mx_pl_t mx_pl_d, mx_pl_q;
-    logic   mx_pl_ena;
+    } mx_w_t;
+    mx_r_t mx_r_d, mx_r_q;
+    mx_w_t mx_w_d, mx_w_q;
 
-    // MX quant requests whose W side waits while R runs ahead
+    // requests whose W side waits while R runs ahead of an MX write side
     localparam int unsigned MxWqDepth = 32'd3;
 
     // data bytes of a group
@@ -457,7 +466,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         idma_mut_tf_t     w_tf;
         idma_mut_tf_opt_t opt;
 % if compute_eligible:
-        mx_pl_t           mx_pl;
+        mx_r_t            mx_r;
+        mx_w_t            mx_w;
 % endif
     } load_t;
 
@@ -483,7 +493,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         };
 % if compute_eligible:
         // size-changing compute: write length follows the per-op byte ratio
-        l.mx_pl = '0;
+        l.mx_r = '0;
+        l.mx_w = '0;
         if (EnableCompute && req.opt.compute.enable) begin
             unique case (req.opt.compute.op)
 % for op in ['COMPUTE_MXQUANT', 'COMPUTE_MXQUANT_FP16', 'COMPUTE_MXDEQUANT',\
@@ -499,25 +510,28 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         // MX: quant starts with the first data segment, dequant with the first scale chunk
         if (EnableCompute && req.opt.compute.enable &&
             idma_pkg::compute_op_is_mx(req.opt.compute.op)) begin
-            l.mx_pl.on    = 1'b1;
-            l.mx_pl.rd    = req.opt.compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
-                                                      idma_pkg::COMPUTE_MXDEQUANT_FP16};
-            l.mx_pl.g32   = req.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
-            l.mx_pl.daddr = l.mx_pl.rd ? req.src_addr : req.dst_addr;
-            l.mx_pl.saddr = req.scale_addr;
-            if (l.mx_pl.rd) begin
-                l.mx_pl.half  = (StrbWidth == 64) & req.length[5];
-                l.mx_pl.drem  = len_t'(req.length);
-                l.mx_pl.scl   = 1'b1;
+            if (req.opt.compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
+                                           idma_pkg::COMPUTE_MXDEQUANT_FP16}) begin
+                l.mx_r.on     = 1'b1;
+                l.mx_r.g32    = req.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
+                l.mx_r.daddr  = req.src_addr;
+                l.mx_r.saddr  = req.scale_addr;
+                l.mx_r.half   = (StrbWidth == 64) & req.length[5];
+                l.mx_r.drem   = len_t'(req.length);
+                l.mx_r.scl    = 1'b1;
                 l.r_tf.addr   = {req.scale_addr[AddrWidth-1:OffsetWidth],
                                  {OffsetWidth{1'b0}}};
                 l.r_tf.length = mx_rchunk(req.scale_addr,
-                                          mx_rseg(len_t'(req.length), l.mx_pl.g32));
+                                          mx_rseg(len_t'(req.length), l.mx_r.g32));
             end else begin
-                l.mx_pl.drem  = len_t'(l.w_tf.length);
-                l.mx_pl.sn    = mx_seg(len_t'(l.w_tf.length), l.mx_pl.g32) >>
+                l.mx_w.on     = 1'b1;
+                l.mx_w.g32    = req.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
+                l.mx_w.daddr  = req.dst_addr;
+                l.mx_w.saddr  = req.scale_addr;
+                l.mx_w.drem   = len_t'(l.w_tf.length);
+                l.mx_w.sn     = mx_seg(len_t'(l.w_tf.length), l.mx_w.g32) >>
                                 $clog2(idma_pkg::MxDataBlockBytes);
-                l.w_tf.length = mx_seg(len_t'(l.w_tf.length), l.mx_pl.g32);
+                l.w_tf.length = mx_seg(len_t'(l.w_tf.length), l.mx_w.g32);
             end
         end
 % endif
@@ -564,7 +578,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
     assign ld_in = load(req_i);
 % if compute_eligible:
 
-    // MX quant: R takes the next MX quant request while W still writes earlier MX transfers
+    // R takes the next decoupled request while W still writes earlier MX transfers
     idma_req_t mx_wq_in, mx_wq_head;
     logic      mx_wq_empty, mx_wq_full, mx_wq_direct, mx_wq_push, mx_wq_pop;
     load_t     ld_wq;
@@ -635,51 +649,52 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
 
 % if compute_eligible:
         // MX: switch between data segments and scale chunks
-        mx_pl_d = mx_pl_q;
-        if (EnableCompute && mx_pl_q.on && mx_pl_q.rd && r_tf_q.valid && r_done) begin
+        mx_r_d = mx_r_q;
+        mx_w_d = mx_w_q;
+        if (EnableCompute && mx_r_q.on && r_tf_q.valid && r_done) begin
             // dequant source: scale chunk, then the group's data, whole aligned beats
-            if (mx_pl_q.scl) begin
-                r_tf_d.addr   = mx_pl_q.daddr;
-                r_tf_d.length = mx_rseg(mx_pl_q.drem, mx_pl_q.g32);
+            if (mx_r_q.scl) begin
+                r_tf_d.addr   = mx_r_q.daddr;
+                r_tf_d.length = mx_rseg(mx_r_q.drem, mx_r_q.g32);
                 r_tf_d.valid  = 1'b1;
-                mx_pl_d.drem  = (mx_pl_q.drem > mx_grp(mx_pl_q.g32)) ?
-                                mx_pl_q.drem - mx_grp(mx_pl_q.g32) : '0;
-                mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.g32);
-                mx_pl_d.scl   = 1'b0;
+                mx_r_d.drem   = (mx_r_q.drem > mx_grp(mx_r_q.g32)) ?
+                                mx_r_q.drem - mx_grp(mx_r_q.g32) : '0;
+                mx_r_d.saddr  = mx_r_q.saddr + mx_sstep(mx_r_q.g32);
+                mx_r_d.scl    = 1'b0;
                 r_done        = 1'b0;
-            end else if (mx_pl_q.drem != '0) begin
-                mx_pl_d.daddr = mx_pl_q.daddr + addr_t'(mx_grp(mx_pl_q.g32));
-                r_tf_d.addr   = {mx_pl_q.saddr[AddrWidth-1:OffsetWidth], {OffsetWidth{1'b0}}};
-                r_tf_d.length = mx_rchunk(mx_pl_q.saddr, mx_rseg(mx_pl_q.drem, mx_pl_q.g32));
+            end else if (mx_r_q.drem != '0) begin
+                mx_r_d.daddr  = mx_r_q.daddr + addr_t'(mx_grp(mx_r_q.g32));
+                r_tf_d.addr   = {mx_r_q.saddr[AddrWidth-1:OffsetWidth], {OffsetWidth{1'b0}}};
+                r_tf_d.length = mx_rchunk(mx_r_q.saddr, mx_rseg(mx_r_q.drem, mx_r_q.g32));
                 r_tf_d.valid  = 1'b1;
-                mx_pl_d.scl   = 1'b1;
+                mx_r_d.scl    = 1'b1;
                 r_done        = 1'b0;
             end else begin
-                mx_pl_d.on    = 1'b0;
+                mx_r_d.on     = 1'b0;
             end
         end
-        if (EnableCompute && mx_pl_q.on && !mx_pl_q.rd && w_tf_q.valid && w_done) begin
+        if (EnableCompute && mx_w_q.on && w_tf_q.valid && w_done) begin
             // quant destination: the group's data, then its scale chunk
-            if (!mx_pl_q.scl) begin
-                mx_pl_d.daddr = mx_pl_q.daddr + addr_t'(mx_grp(mx_pl_q.g32));
-                mx_pl_d.drem  = (mx_pl_q.drem > mx_grp(mx_pl_q.g32)) ?
-                                mx_pl_q.drem - mx_grp(mx_pl_q.g32) : '0;
-                w_tf_d.addr   = mx_pl_q.saddr;
-                w_tf_d.length = mx_pl_q.sn;
+            if (!mx_w_q.scl) begin
+                mx_w_d.daddr  = mx_w_q.daddr + addr_t'(mx_grp(mx_w_q.g32));
+                mx_w_d.drem   = (mx_w_q.drem > mx_grp(mx_w_q.g32)) ?
+                                mx_w_q.drem - mx_grp(mx_w_q.g32) : '0;
+                w_tf_d.addr   = mx_w_q.saddr;
+                w_tf_d.length = mx_w_q.sn;
                 w_tf_d.valid  = 1'b1;
-                mx_pl_d.scl   = 1'b1;
+                mx_w_d.scl    = 1'b1;
                 w_done        = 1'b0;
-            end else if (mx_pl_q.drem != '0) begin
-                w_tf_d.addr   = mx_pl_q.daddr;
-                w_tf_d.length = mx_seg(mx_pl_q.drem, mx_pl_q.g32);
+            end else if (mx_w_q.drem != '0) begin
+                w_tf_d.addr   = mx_w_q.daddr;
+                w_tf_d.length = mx_seg(mx_w_q.drem, mx_w_q.g32);
                 w_tf_d.valid  = 1'b1;
-                mx_pl_d.sn    = mx_seg(mx_pl_q.drem, mx_pl_q.g32) >>
+                mx_w_d.sn     = mx_seg(mx_w_q.drem, mx_w_q.g32) >>
                                 $clog2(idma_pkg::MxDataBlockBytes);
-                mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.g32);
-                mx_pl_d.scl   = 1'b0;
+                mx_w_d.saddr  = mx_w_q.saddr + mx_sstep(mx_w_q.g32);
+                mx_w_d.scl    = 1'b0;
                 w_done        = 1'b0;
             end else begin
-                mx_pl_d.on    = 1'b0;
+                mx_w_d.on     = 1'b0;
             end
         end
 
@@ -694,7 +709,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             r_done = 1'b1;
             w_done = 1'b1;
 % if compute_eligible:
-            mx_pl_d = '0;
+            mx_r_d = '0;
+            mx_w_d = '0;
 % endif
         end
 
@@ -706,16 +722,17 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             r_tf_d   = ld_in.r_tf;
             opt_tf_d = ld_in.opt;
 % if compute_eligible:
+            mx_r_d   = ld_in.mx_r;
             if (!mx_wq_push) begin
                 w_tf_d  = ld_in.w_tf;
-                mx_pl_d = ld_in.mx_pl;
+                mx_w_d  = ld_in.mx_w;
                 opt_w_d = ld_in.opt;
             end
         end
-        // W takes the next queued MX quant request
+        // W takes the next queued request
         if (mx_wq_pop) begin
             w_tf_d  = ld_wq.w_tf;
-            mx_pl_d = ld_wq.mx_pl;
+            mx_w_d  = ld_wq.mx_w;
             opt_w_d = ld_wq.opt;
         end
 % else:
@@ -760,8 +777,8 @@ ${database[protocol]['legalizer_read_meta_channel']}
 % if compute_eligible:
         is_single:    r_num_bytes <= StrbWidth,
         mx:           EnableCompute ? idma_pkg::mx_tag(ComputeOps, opt_tf_q.compute,
-                                                       mx_pl_q.on & mx_pl_q.rd & mx_pl_q.scl,
-                                                       mx_pl_q.half & r_done, r_done) : '0
+                                                       mx_r_q.on & mx_r_q.scl,
+                                                       mx_r_q.half & r_done, r_done) : '0
 % else:
         is_single:    r_num_bytes <= StrbWidth
 % endif
@@ -893,9 +910,8 @@ ${database[protocol]['legalizer_write_data_path']}
     // load next idma request: if both machines are done, or into the W queue
     assign mx_wq_direct = w_done & (mx_wq_empty | kill_i);
     assign ready_o      = r_done & r_ready_i & w_ready_i & !flush_i &
-                          (mx_wq_direct | (EnableCompute & ~mx_wq_full & req_i.opt.compute.enable &
-                           (req_i.opt.compute.op inside {idma_pkg::COMPUTE_MXQUANT,
-                                                         idma_pkg::COMPUTE_MXQUANT_FP16}) &
+                          (mx_wq_direct | (EnableCompute & ~mx_wq_full &
+                           (req_i.opt.beo.decouple_rw | req_i.opt.compute.enable) &
                            (~mx_wq_empty | (opt_w_q.compute.enable &
                                             idma_pkg::compute_op_is_mx(opt_w_q.compute.op)))));
     assign mx_wq_push   = ready_o & valid_i & ~mx_wq_direct;
@@ -939,8 +955,8 @@ ${database[protocol]['legalizer_write_data_path']}
     `FFL(r_tf_q,   r_tf_d,   r_tf_ena, '0, clk_i, rst_ni)
     `FFL(w_tf_q,   w_tf_d,   w_tf_ena, '0, clk_i, rst_ni)
 % if compute_eligible:
-    assign mx_pl_ena = (mx_pl_q.on & mx_pl_q.rd) ? r_tf_ena : w_tf_ena;
-    `FFL(mx_pl_q,  mx_pl_d,  mx_pl_ena, '0, clk_i, rst_ni)
+    `FFL(mx_r_q,   mx_r_d,   r_tf_ena, '0, clk_i, rst_ni)
+    `FFL(mx_w_q,   mx_w_d,   w_tf_ena, '0, clk_i, rst_ni)
 % endif
 
 

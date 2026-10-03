@@ -113,7 +113,7 @@ Each variant also gets its own tracer header, `idma/tracer_<id>.svh`, holding th
 
 ## Legalizer
 
-The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. It operates as two coupled state machines - one for the read side, one for the write side - that track the remaining bytes and current address of each transfer independently. With compute, the write side keeps up to three accepted MX quant requests in a queue (`MxWqDepth`): the read side takes the next MX quant request as soon as it has emitted its own bursts, while the write side still emits the data and scale bursts of earlier MX transfers. Every other request waits until both sides are done and the queue is empty.
+The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. It operates as two coupled state machines - one for the read side, one for the write side - that track the remaining bytes and current address of each transfer independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
 
 The legalizer is pure control path: it does not touch the data. It computes page/burst boundaries, splits transfers accordingly, and emits `offset`, `tailer`, and `shift` values that the transport layer uses for data realignment.
 
