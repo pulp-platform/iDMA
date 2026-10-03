@@ -202,11 +202,23 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     mx_pl_t mx_pl_d, mx_pl_q;
     logic   mx_pl_ena;
 
+    // data bytes of a group
+    localparam int unsigned MxGrpWidth = $clog2(64 * idma_pkg::MxDataBlockBytes) + 1;
+    function automatic len_t mx_grp(logic g32);
+        return len_t'((g32 ? 32 : 64) * idma_pkg::MxDataBlockBytes);
+    endfunction
+
     // data bytes of the next segment: one group or the rest
     function automatic len_t mx_seg(len_t rem, logic g32);
-        len_t g;
-        g = g32 ? len_t'(32 * idma_pkg::MxDataBlockBytes) : len_t'(64 * idma_pkg::MxDataBlockBytes);
-        return (rem > g) ? g : rem;
+        return (rem > mx_grp(g32)) ? mx_grp(g32) : rem;
+    endfunction
+
+    // dequant reads the last segment as whole beats
+    function automatic len_t mx_rseg(len_t rem, logic g32);
+        logic [MxGrpWidth-1:0] r;
+        r = rem[MxGrpWidth-1:0] + MxGrpWidth'(StrbWidth - 1);
+        r = (r >> OffsetWidth) << OffsetWidth;
+        return (rem > mx_grp(g32)) ? mx_grp(g32) : len_t'(r);
     endfunction
 
     // whole beats a scale chunk of `seg / 32` bytes at `sa` is read with (never past its 64 B slot)
@@ -494,16 +506,17 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             // dequant source: scale chunk, then the group's data, whole aligned beats
             if (mx_pl_q.scl) begin
                 r_tf_d.addr   = mx_pl_q.daddr;
-                r_tf_d.length = mx_seg(mx_pl_q.drem, mx_pl_q.g32);
+                r_tf_d.length = mx_rseg(mx_pl_q.drem, mx_pl_q.g32);
                 r_tf_d.valid  = 1'b1;
-                mx_pl_d.drem  = mx_pl_q.drem - mx_seg(mx_pl_q.drem, mx_pl_q.g32);
+                mx_pl_d.drem  = (mx_pl_q.drem > mx_grp(mx_pl_q.g32)) ?
+                                mx_pl_q.drem - mx_grp(mx_pl_q.g32) : '0;
                 mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.g32);
                 mx_pl_d.scl   = 1'b0;
                 r_done        = 1'b0;
             end else if (mx_pl_q.drem != '0) begin
-                mx_pl_d.daddr = r_tf_q.addr + addr_t'(r_num_bytes);
+                mx_pl_d.daddr = mx_pl_q.daddr + addr_t'(mx_grp(mx_pl_q.g32));
                 r_tf_d.addr   = {mx_pl_q.saddr[AddrWidth-1:OffsetWidth], {OffsetWidth{1'b0}}};
-                r_tf_d.length = mx_rchunk(mx_pl_q.saddr, mx_seg(mx_pl_q.drem, mx_pl_q.g32));
+                r_tf_d.length = mx_rchunk(mx_pl_q.saddr, mx_rseg(mx_pl_q.drem, mx_pl_q.g32));
                 r_tf_d.valid  = 1'b1;
                 mx_pl_d.scl   = 1'b1;
                 r_done        = 1'b0;
@@ -514,7 +527,9 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         if (EnableCompute && mx_pl_q.on && !mx_pl_q.rd && w_tf_q.valid && w_done) begin
             // quant destination: the group's data, then its scale chunk
             if (!mx_pl_q.scl) begin
-                mx_pl_d.daddr = w_tf_q.addr + addr_t'(w_num_bytes);
+                mx_pl_d.daddr = mx_pl_q.daddr + addr_t'(mx_grp(mx_pl_q.g32));
+                mx_pl_d.drem  = (mx_pl_q.drem > mx_grp(mx_pl_q.g32)) ?
+                                mx_pl_q.drem - mx_grp(mx_pl_q.g32) : '0;
                 w_tf_d.addr   = mx_pl_q.saddr;
                 w_tf_d.length = mx_pl_q.sn;
                 w_tf_d.valid  = 1'b1;
@@ -524,7 +539,6 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 w_tf_d.addr   = mx_pl_q.daddr;
                 w_tf_d.length = mx_seg(mx_pl_q.drem, mx_pl_q.g32);
                 w_tf_d.valid  = 1'b1;
-                mx_pl_d.drem  = mx_pl_q.drem - mx_seg(mx_pl_q.drem, mx_pl_q.g32);
                 mx_pl_d.sn    = mx_seg(mx_pl_q.drem, mx_pl_q.g32) >>
                                 $clog2(idma_pkg::MxDataBlockBytes);
                 mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.g32);
@@ -601,14 +615,13 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                      $clog2(idma_pkg::MxScaleSlotBytes));
                 if (mx_pl_d.rd) begin
                     mx_pl_d.half  = (StrbWidth == 64) & req_i.length[5];
-                    mx_pl_d.drem  = len_t'((req_i.length + StrbWidth - 1) >> OffsetWidth)
-                                    << OffsetWidth;
+                    mx_pl_d.drem  = len_t'(req_i.length);
                     mx_pl_d.scl   = 1'b1;
                     r_tf_d.addr   = {mx_pl_d.saddr[AddrWidth-1:OffsetWidth], {OffsetWidth{1'b0}}};
-                    r_tf_d.length = mx_rchunk(mx_pl_d.saddr, mx_seg(mx_pl_d.drem, mx_pl_d.g32));
+                    r_tf_d.length = mx_rchunk(mx_pl_d.saddr, mx_rseg(len_t'(req_i.length),
+                                                                     mx_pl_d.g32));
                 end else begin
-                    mx_pl_d.drem  = len_t'(w_tf_d.length) -
-                                    mx_seg(len_t'(w_tf_d.length), mx_pl_d.g32);
+                    mx_pl_d.drem  = len_t'(w_tf_d.length);
                     mx_pl_d.sn    = mx_seg(len_t'(w_tf_d.length), mx_pl_d.g32) >>
                                     $clog2(idma_pkg::MxDataBlockBytes);
                     w_tf_d.length = mx_seg(len_t'(w_tf_d.length), mx_pl_d.g32);
