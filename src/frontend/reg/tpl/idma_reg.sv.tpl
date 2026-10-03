@@ -89,6 +89,7 @@ module idma_${identifier} #(
   /// needs to be adapted too.
   localparam int unsigned MaxNumStreams = 32'd16;
   localparam int unsigned RegAddrWidth  = idma_${identifier}_reg_pkg::IDMA_${identifier.upper()}_REG_TOP_MIN_ADDR_WIDTH;
+  localparam int unsigned ScaleAlignWidth = $clog2(idma_pkg::MxScaleSlotBytes);
 
   // register connections
   idma_${identifier}_reg_pkg::idma_reg__out_t dma_reg2hw [NumRegs-1:0];
@@ -176,16 +177,33 @@ module idma_${identifier} #(
     logic     read_happens;
     stream_t  read_stream;
     dma_req_t nxt_dma_req;
+    logic     launch_ok;
 
     always_comb begin : proc_launch
         read_happens = 1'b0;
         read_stream  = '0;
         for (int c = 0; c < NumStreams; c++) begin
             if (dma_reg2hw[i].next_id[c].next_id.rd_swacc) begin
-                read_happens = 1'b1;
+                read_happens = launch_ok;
                 read_stream  = c;
             end
         end
+    end
+
+    // an MX transfer with a reserved element format or a scale plane off its 64 B line is refused
+    always_comb begin : proc_launch_ok
+      launch_ok = 1'b1;
+      if (nxt_dma_req${sep}opt.compute.enable &&
+          idma_pkg::compute_op_is_mx(nxt_dma_req${sep}opt.compute.op)) begin
+        launch_ok = idma_pkg::mx_elem_legal(nxt_dma_req${sep}opt.compute.params.mx.elem_fmt) &&
+                    (nxt_dma_req${sep}scale_addr[ScaleAlignWidth-1:0] == '0);
+% for nd in range(0, num_dim-1):
+        if (nxt_dma_req.d_req[${nd}].reps > 'd1 &&
+            nxt_dma_req.d_req[${nd}].scale_strides[ScaleAlignWidth-1:0] != '0) begin
+          launch_ok = 1'b0;
+        end
+% endfor
+      end
     end
 
     // set on the read strobe (or an accept-and-reload in the same cycle), clear on accept
@@ -313,7 +331,7 @@ module idma_${identifier} #(
     // observational registers: drive .next (read-side launch is the rd_swacc strobe above)
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
         assign dma_hw2reg[i].status[c].busy.next     = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].next_id[c].next_id.next = next_id_i;
+        assign dma_hw2reg[i].next_id[c].next_id.next = launch_ok ? next_id_i : '0;
         assign dma_hw2reg[i].done_id[c].done_id.next = done_id_i[c];
     end
 

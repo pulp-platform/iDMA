@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   DMOPC setters `0x28` and `0x29`.
 
 ### Added
+- The register frontend refuses an MX launch with a reserved element format, a scale plane that
+  is not 64 B aligned or a used dimension's scale stride that is not a multiple of 64: `next_id`
+  reads 0 and no transfer starts. inst64 refuses a `DMCPY` with a reserved element format with
+  id 0 and the error bit.
 - MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by
   `mx_options_t.elem_fmt` (E4M3: max normal 448 = `0x7E`, NaN `0x7F`, no Inf); a poisoned E4M3
   block has `0x7F` elements.

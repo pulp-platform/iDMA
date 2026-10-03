@@ -45,7 +45,9 @@ All DMA instructions that return a value write to `rd` (destination register). T
 
 The scale plane address and stride setters (`0x28`, `0x29`) load frontend state that every
 following `DMCPY` sends with its request, like `DMSRC` and `DMSTR`; carried in 64 B units they
-are 64 B aligned by construction (scale addresses up to 2^62).
+are 64 B aligned by construction (scale addresses up to 2^62). A `DMCPY` whose latched MX op has
+a reserved `elem_fmt` is refused: the response carries id 0 with the error bit set and nothing
+is launched.
 
 The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` is not yet allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
 

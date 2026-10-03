@@ -51,6 +51,12 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam logic [31:0] RegDstAddr  = 32'h0000_00D0;
   localparam logic [31:0] RegSrcAddr  = 32'h0000_00D4;
   localparam logic [31:0] RegLength   = 32'h0000_00D8;
+  localparam logic [31:0] RegDim0Reps = 32'h0000_00E8;
+  localparam logic [31:0] RegCompute  = 32'h0000_00F8;
+  localparam logic [31:0] RegMxCfg    = 32'h0000_00FC;
+  localparam logic [31:0] RegScale    = 32'h0000_0100;
+  localparam logic [31:0] RegSStride0 = 32'h0000_0104;
+  localparam logic [31:0] RegSStride1 = 32'h0000_0108;
 
   function automatic logic [31:0] reg_next_id(input int unsigned s);
     return RegNextId0 + 32'(s) * 32'h4;
@@ -724,6 +730,74 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       $display("[ ok ] Test5 concurrent arbitration: %0d mismatches", sb_mismatch);
     end else begin
       $display("\n--- Test 5: skipped (needs NumRegs>1 and NumStreams>1) ---");
+    end
+
+    // Test 6: an illegal MX setup is refused: next_id reads 0, nothing launches
+    $display("\n--- Test 6: MX scale plane and element format checks ---");
+    backend_auto_retire = 1'b1;
+    set_req_ready(1'b1);
+    begin
+      // {conf, compute_cfg, mx_cfg, scale_addr, dim0 reps, dim0 / dim1 scale stride, launches}
+      typedef struct {
+        logic [31:0] conf, cmp, mx, sa, reps, ss0, ss1;
+        bit          ok;
+        string       name;
+      } mx_case_t;
+      localparam logic [31:0] Quant16 = 32'h1 | (32'(COMPUTE_MXQUANT_FP16) << 1);
+      mx_case_t cs[$];
+      cs.push_back('{32'h400, Quant16, 32'h4, 32'h4000_0040, 4, 32'h40, 32'h20, 1,
+                     "E4M3 ND, aligned plane and stride, misaligned unused dim1 stride"});
+      cs.push_back('{32'h400, Quant16, 32'h8, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 2"});
+      cs.push_back('{32'h400, Quant16, 32'hC, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 3"});
+      cs.push_back('{32'h0, Quant16, 32'h0, 32'h4000_0020, 1, 0, 0, 0, "scale plane off 64 B"});
+      cs.push_back('{32'h0, Quant16, 32'h0, 32'h4000_0001, 1, 0, 0, 0, "scale plane off 1 B"});
+      cs.push_back('{32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h60, 0, 0,
+                     "scale stride off 64 B"});
+      cs.push_back('{32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0010, 1, 0,
+                     0, 0, "dequant scale plane off 64 B"});
+      cs.push_back('{32'h0, Quant16 & ~32'h1, 32'hC, 32'h4000_0001, 1, 0, 0, 1,
+                     "compute disabled: MX fields ignored"});
+      cs.push_back('{32'h0, 32'h1 | (32'(COMPUTE_TRANSPOSE) << 1) | (32'h1 << 7) | (32'h1 << 19),
+                     32'hC, 32'h4000_0001, 1, 0, 0, 1, "transpose: MX fields ignored"});
+      foreach (cs[k]) begin
+        logic [31:0] got;
+        int unsigned acc_before;
+        captured_q.delete();
+        program_transfer(32'h1000_0000, 32'h2000_0000, 32'h0000_0400);
+        apb_write(RegConf,     cs[k].conf);
+        apb_write(RegCompute,  cs[k].cmp);
+        apb_write(RegMxCfg,    cs[k].mx);
+        apb_write(RegScale,    cs[k].sa);
+        apb_write(RegDim0Reps, cs[k].reps);
+        apb_write(RegSStride0, cs[k].ss0);
+        apb_write(RegSStride1, cs[k].ss1);
+        exp_id     = next_id;
+        acc_before = launch_accept_count;
+        launch(got, rcyc);
+        repeat (8) @(backend_cb);
+        if (cs[k].ok) begin
+          check_eq(got, exp_id, $sformatf("Test6 %s: launch id", cs[k].name));
+          check_eq(launch_accept_count, acc_before + 1,
+                   $sformatf("Test6 %s: launched", cs[k].name));
+          if (captured_q.size() > 0) begin
+            check_eq(captured_q[0].burst_req.scale_addr, cs[k].sa,
+                     $sformatf("Test6 %s: scale_addr", cs[k].name));
+            check_eq(captured_q[0].d_req[0].scale_strides, cs[k].ss0,
+                     $sformatf("Test6 %s: scale stride", cs[k].name));
+            if (compute_op_is_mx(compute_op_e'(cs[k].cmp[4:1])))
+              check_eq(captured_q[0].burst_req.opt.compute.params.mx.elem_fmt, cs[k].mx[3:2],
+                       $sformatf("Test6 %s: elem_fmt", cs[k].name));
+          end
+          prev_id = got;
+          poll_done(got);
+        end else begin
+          check_eq(got, 32'd0, $sformatf("Test6 %s: next_id reads 0", cs[k].name));
+          check_eq(launch_accept_count, acc_before, $sformatf("Test6 %s: nothing launched",
+                                                              cs[k].name));
+          check_eq(next_id, exp_id, $sformatf("Test6 %s: id not consumed", cs[k].name));
+        end
+      end
+      apb_write(RegCompute, 32'h0);
     end
 
     // ------------------------------------------------------------------

@@ -878,8 +878,7 @@ ${database[protocol]['legalizer_write_data_path']}
     // E2M1 and the reserved MX element format are not elaborated
     `ASSERT_NEVER(ComputeMxElemFmt, (ready_o & valid_i & req_i.opt.compute.enable &
                   idma_pkg::compute_op_is_mx(req_i.opt.compute.op) &
-                  ~(req_i.opt.compute.params.mx.elem_fmt inside {idma_pkg::MX_E5M2,
-                                                                 idma_pkg::MX_E4M3})),
+                  ~idma_pkg::mx_elem_legal(req_i.opt.compute.params.mx.elem_fmt)),
                   clk_i, !rst_ni)
     // the scale plane starts on a 64 B scale line
     `ASSERT_NEVER(ComputeMxScaleAligned, (ready_o & valid_i & req_i.opt.compute.enable &

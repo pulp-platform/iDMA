@@ -214,6 +214,7 @@ module tb_idma_inst64_compute #(
         logic [63:0] next_id_before;
         logic [63:0] next_id_opc;
         logic [63:0] next_id_after;
+        acc_rsp_item_t refused;
 
         @(posedge harness.rst_n);
         repeat (10) @(posedge harness.clk);
@@ -294,6 +295,26 @@ module tb_idma_inst64_compute #(
         harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, quant_id);
         harness.drv_if.dma_wait(quant_id, 3'd0);
         check_planar_payload(PlScaleOff[1]);
+
+        // A reserved element format is refused at DMCPY: id 0, error set, nothing written
+        poison_destination(QuantAddr);
+        for (int unsigned f = 2; f < 4; f++) begin
+            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant) |
+                (32'(f) << idma_inst64_compute_pkg::Rs1MxElemFmtLsb));
+            harness.drv_if.dma_try_copy(addr_t'(SrcBytes), 2'b00, 3'd0, refused);
+            if (!refused.error || refused.data !== '0) begin
+                $error("elem_fmt %0d: DMCPY not refused (error=%0b id=%0d)", f, refused.error,
+                       refused.data);
+                errors++;
+            end
+        end
+        repeat (200) @(posedge harness.clk);
+        for (int unsigned i = 0; i < SrcBytes + GuardBytes; i++)
+            if (harness.mem_read_byte(QuantAddr - GuardBytes + i) !== Sentinel) begin
+                if (errors < 20) $error("refused DMCPY wrote at %0d", i);
+                errors++;
+            end
+        $display("[TB] DMCPY with a reserved MX element format refused");
 
         // Back to a plain copy: the latched op must not leak into the next transfer
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));

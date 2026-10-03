@@ -129,6 +129,11 @@ package idma_pkg;
         logic [MxOptResvWidth-1:0]    resv;
     } mx_options_t;
 
+    /// MX element formats implemented in this release (E2M1 and 3 are reserved)
+    function automatic logic mx_elem_legal(mx_elem_e f);
+        return f inside {MX_E5M2, MX_E4M3};
+    endfunction
+
     /// Per-op compute parameter union (members must be equal width)
     typedef union packed {
         transpose_options_t transpose;

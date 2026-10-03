@@ -185,6 +185,7 @@ module idma_inst64_top #(
     idma_pkg::compute_options_t idma_fe_compute_q;
     logic                       idma_fe_dmopc;
     logic                       idma_fe_setter;
+    logic                       idma_fe_mx_refuse;
     logic [1:0] idma_fe_cfg;
     logic [1:0] idma_fe_init_cfg;
     logic [1:0] idma_fe_status;
@@ -681,7 +682,12 @@ module idma_inst64_top #(
                     // 3. wait for twod transfer to be accepted (ready)
                     // 4. send acc response (pvalid)
                     // 5. acknowledge acc request (qready)
-                    if (acc_res_ready) begin
+                    if (acc_res_ready && idma_fe_mx_refuse) begin
+                        // an illegal MX configuration is not launched: id 0 and the error bit
+                        acc_res.id      = acc_req_i.id;
+                        acc_res_valid   = 1'b1;
+                        acc_req_ready_o = 1'b1;
+                    end else if (acc_res_ready) begin
                         idma_fe_req_valid[idma_fe_sel_chan] = 1'b1;
                         if (idma_fe_req_ready[idma_fe_sel_chan]) begin
                             acc_res.id      = acc_req_i.id;
@@ -886,6 +892,11 @@ module idma_inst64_top #(
     `FFL(idma_fe_compute_q,
          idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
          idma_fe_dmopc & ~idma_fe_setter, '0)
+
+    // a reserved MX element format is refused at DMCPY; the scale plane is 64 B aligned by encoding
+    assign idma_fe_mx_refuse = idma_fe_compute_q.enable &
+                               idma_pkg::compute_op_is_mx(idma_fe_compute_q.op) &
+                               ~idma_pkg::mx_elem_legal(idma_fe_compute_q.params.mx.elem_fmt);
 
 
     //--------------------------------------

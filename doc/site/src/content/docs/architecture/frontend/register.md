@@ -29,7 +29,7 @@ A thin wrapper (`src/frontend/reg/tpl/idma_reg.sv.tpl`, rendered by MARIO for th
 
 1. **Write transfer parameters**: Set `src_addr`, `length`, `dst_addr`, and optionally `reps`/`src_stride`/`dst_stride` for 2D mode
 2. **Write configuration**: Set `conf` with the desired decouple flags, protocol selection, and ND mode enable. For an on-the-fly compute transfer also set `compute_cfg` (see below). Stream selection is implicit in which `next_id[stream]` register you read in the next step
-3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID (0 if the transfer was not set up correctly)
+3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID. It returns 0 and launches nothing if the transfer is not set up correctly: an MX op with a reserved `mx_elem_fmt`, a `scale_addr` that is not 64 B aligned, or a `scale_stride` of a dimension in use (`reps > 1`) that is not a multiple of 64
 4. **Poll `done_id[stream]`**: Wait until `done_id >= next_id` to confirm completion
 
 :::caution[Side-effect read]
@@ -125,7 +125,8 @@ The register is `0x11C` in `reg64_1d`/`reg64_2d` and `0xFC` in `reg32_3d`. See
 
 `scale_addr` follows `mx_cfg` (`0x120`/`0x124` in `reg64_1d`/`reg64_2d`, `0x100` in `reg32_3d`),
 then one `scale_stride` per dimension (`0x128`/`0x12C` in `reg64_2d`, `0x104` and `0x108` in
-`reg32_3d`).
+`reg32_3d`). An MX launch that breaks the alignment rules or carries a reserved element format
+is refused: `next_id` reads 0 and no transfer starts.
 
 ## Multi-Port Arbitration
 
