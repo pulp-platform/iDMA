@@ -994,9 +994,11 @@ ${database[protocol]['legalizer_write_data_path']}
                   (((64'(req_i.length) / 64'(idma_pkg::compute_in_bytes(req_i.opt.compute.op))) *
                     64'(idma_pkg::compute_out_bytes(req_i.opt.compute.op))) >=
                    (65'd1 << $bits(req_i.length)))), clk_i, !rst_ni)
+% if 'tilelink' in used_write_protocols:
     // compute retires on the per-beat write pulse; TileLink writes retire per burst
     `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.dst_protocol == idma_pkg::TILELINK)), clk_i, !rst_ni)
+% endif
     // A tiled-walk strip, or one whole padded tile to a beat-aligned destination
     `ASSERT_NEVER(ComputeTransposeShape, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE) &

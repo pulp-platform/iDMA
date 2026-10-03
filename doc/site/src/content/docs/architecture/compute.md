@@ -138,7 +138,7 @@ group. The legalizer also forces `decouple_rw` / `decouple_aw` on for any comput
 | `ComputeMxElemFmt` | `elem_fmt` is E5M2 or E4M3 (E2M1 is not elaborated) |
 | `ComputeMxScaleAligned` | `scale_addr` of an MX transfer is 64 B aligned |
 | `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
-| `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported |
+| `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported (variants with a TileLink write port) |
 | `ComputeMxdequantLengthFits` | dequant output length must fit the `length` field width |
 
 ## Source Files

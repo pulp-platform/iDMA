@@ -69,6 +69,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   one, so a stream of one-block MX quant transfers (two write bursts per read burst) left the
   read channel no lead and lost cycles after every read stall. The write side now queues up to
   three MX quant requests (`MxWqDepth`) while the read side runs ahead.
+- `make idma_verify_codegen` takes the compute guards from the generated legalizers, and every
+  one of them has a negative test: mxneg case 11 now runs (`ComputeMxdequantLengthFits`), and
+  `ComputeDstTilelink` is only generated for variants with a TileLink write port.
 
 ## 0.7.3 - 2026-10-01
 
