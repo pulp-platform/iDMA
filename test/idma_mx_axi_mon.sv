@@ -49,14 +49,15 @@ module idma_mx_axi_mon #(
 );
 
   // pragma translate_off
+  typedef longint unsigned u64_t;
   localparam int unsigned LgS = $clog2(StrbWidth);
-  localparam longint      S   = longint'(StrbWidth);
+  localparam u64_t        S   = u64_t'(StrbWidth);
   // legalizer burst limit: a 4 KiB page or 256 beats
-  localparam longint      PS  = (256 * S < 4096) ? 256 * S : 4096;
+  localparam u64_t        PS  = (256 * S < 4096) ? 256 * S : 4096;
 
   typedef logic [StrbWidth-1:0] strb_t;
-  typedef struct { longint lo, hi; } seg_t;
-  typedef struct { longint addr, lo, hi; int len, k; int x; } bur_t;
+  typedef struct { u64_t lo, hi; } seg_t;
+  typedef struct { u64_t addr, lo, hi; int len, k; int x; } bur_t;
   typedef struct { strb_t strb; bit last; } wb_t;
 
   class xfer_c;
@@ -65,7 +66,7 @@ module idma_mx_axi_mon #(
     logic [1:0] burst [2];
     seg_t seg [2][$];
     int   si [2];
-    longint na [2], base [2];
+    u64_t na [2], base [2];
   endclass
 
   xfer_c  xq [2][$];
@@ -75,8 +76,8 @@ module idma_mx_axi_mon #(
   int     nx, bcred, nerr, nbur [2], nbeat [2];
   bit     planes = 1'b1;
 
-  function automatic longint dn(longint a); return a >> LgS << LgS; endfunction
-  function automatic longint up(longint a); return (a + S - 1) >> LgS << LgS; endfunction
+  function automatic u64_t dn(u64_t a); return a >> LgS << LgS; endfunction
+  function automatic u64_t up(u64_t a); return (a + S - 1) >> LgS << LgS; endfunction
 
   function automatic void err(string m);
     nerr++;
@@ -84,9 +85,9 @@ module idma_mx_axi_mon #(
   endfunction
 
   // the planes a request reads and writes, in the order the legalizer emits them
-  function automatic void plan(xfer_c x, longint len, longint src, longint dst, longint scl,
+  function automatic void plan(xfer_c x, u64_t len, u64_t src, u64_t dst, u64_t scl,
                               idma_pkg::compute_options_t c);
-    longint g, nb, sb, drem, sg;
+    u64_t g, nb, sb, drem, sg;
     idma_pkg::mx_options_t mx = c.params.mx;
     g  = (mx.group == idma_pkg::MX_GROUP_G32) ? 32 : 64;
     sb = scl;
@@ -98,8 +99,8 @@ module idma_mx_axi_mon #(
       idma_pkg::COMPUTE_MXQUANT, idma_pkg::COMPUTE_MXQUANT_FP16: begin
         nb = len / ((c.op == idma_pkg::COMPUTE_MXQUANT) ? 128 : 64);
         x.seg[0].push_back('{src, src + len});
-        for (longint b = 0; b < nb; b += g) begin
-          longint n = (nb - b < g) ? nb - b : g;
+        for (u64_t b = 0; b < nb; b += g) begin
+          automatic u64_t n = (nb - b < g) ? nb - b : g;
           x.seg[1].push_back('{dst + b * 32, dst + (b + n) * 32});
           x.seg[1].push_back('{sb + b, sb + b + n});
         end
@@ -107,8 +108,8 @@ module idma_mx_axi_mon #(
       idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::COMPUTE_MXDEQUANT_FP16: begin
         nb   = len / 32;
         drem = up(len);
-        for (longint b = 0; drem > 0; b += g) begin
-          longint n = (nb - b < g) ? nb - b : g;
+        for (u64_t b = 0; drem > 0; b += g) begin
+          automatic u64_t n = (nb - b < g) ? nb - b : g;
           sg = (drem > g * 32) ? g * 32 : drem;
           x.seg[0].push_back('{dn(sb + b), up(sb + b + n)});
           x.seg[0].push_back('{src + b * 32, src + b * 32 + sg});
@@ -124,12 +125,13 @@ module idma_mx_axi_mon #(
   endfunction
 
   // AXI rules of an AR/AW; it carries the next bytes of its segment up to the burst limit
-  function automatic void burst(int s, longint a, int len, int size, logic [1:0] bt);
+  function automatic void burst(int s, u64_t a, int len, int size, logic [1:0] bt);
     xfer_c  x;
-    longint e = dn(a) + (longint'(len) + 1) * S, n, na;
+    u64_t   e = dn(a) + (u64_t'(len) + 1) * S, n, na;
     string  ch = s ? "AW" : "AR";
     nbur[s]++;
-    if (size > LgS) err($sformatf("%s size %0d wider than the bus", ch, size));
+    // the legalizer issues full-width beats only; strobes are checked against whole beats
+    if (size != LgS) err($sformatf("%s size %0d, the bus beat is size %0d", ch, size, LgS));
     if (bt == axi_pkg::BURST_INCR && ((a >> 12) != ((e - 1) >> 12)))
       err($sformatf("%s %0h len %0d crosses a 4 KiB page", ch, a, len));
     if (bt == 2'b11) err($sformatf("%s reserved burst type", ch));
@@ -147,7 +149,7 @@ module idma_mx_axi_mon #(
     n  = x.seg[s][x.si[s]].hi - na;
     if (PS - (na % PS) < n) n = PS - (na % PS);
     if (x.coupled) begin
-      automatic longint o = na - x.base[s], q = x.base[!s] + o;
+      automatic u64_t o = na - x.base[s], q = x.base[!s] + o;
       if (PS - (q % PS) < n) n = PS - (q % PS);
     end
     if (bt != x.burst[s]) err($sformatf("%s burst type %0d, request %0d", ch, bt, x.burst[s]));
@@ -170,7 +172,7 @@ module idma_mx_axi_mon #(
 
   // one W beat against the head AW burst: strobes inside the addressed bytes and the plane, WLAST
   function automatic void wbeat(wb_t w);
-    longint ba = dn(wq[0].addr) + longint'(wq[0].k) * S;
+    u64_t   ba = dn(wq[0].addr) + u64_t'(wq[0].k) * S;
     strb_t  ax = '1, ex = '0;
     if (wq[0].k == 0) ax = strb_t'('1) << (wq[0].addr - dn(wq[0].addr));
     for (int i = 0; i < StrbWidth; i++) ex[i] = (ba + i >= wq[0].lo) && (ba + i < wq[0].hi);
@@ -206,6 +208,12 @@ module idma_mx_axi_mon #(
           w_valid_i, w_ready_i, w_data_i, w_strb_i, w_last_i, b_valid_i, b_ready_i;
   endclocking
 
+  function automatic bit wdata_same(logic [StrbWidth-1:0][7:0] a, logic [StrbWidth-1:0][7:0] b,
+                                    strb_t m);
+    for (int i = 0; i < StrbWidth; i++) if (m[i] && a[i] !== b[i]) return 1'b0;
+    return 1'b1;
+  endfunction
+
   ax_t                       ar_q, aw_q;
   logic [StrbWidth-1:0][7:0] wd_q;
   logic [StrbWidth-1:0]      ws_q;
@@ -219,8 +227,10 @@ module idma_mx_axi_mon #(
       // a valid stays up with a stable payload until its handshake
       if (hold_ar && !(cb.ar_valid_i && ar == ar_q)) err("AR dropped or changed before AR ready");
       if (hold_aw && !(cb.aw_valid_i && aw == aw_q)) err("AW dropped or changed before AW ready");
-      if (hold_w && !(cb.w_valid_i && cb.w_data_i == wd_q && cb.w_strb_i == ws_q &&
-                      cb.w_last_i == wl_q)) err("W dropped or changed before W ready");
+      // WDATA must hold on the strobed lanes only (AXI4_ERRM_WDATA_STABLE)
+      if (hold_w && !(cb.w_valid_i && cb.w_strb_i == ws_q && cb.w_last_i == wl_q &&
+                      wdata_same(cb.w_data_i, wd_q, ws_q)))
+        err("W dropped or changed before W ready");
       if (hold_r && !(cb.r_valid_i && cb.r_last_i == rl_q))
         err("R dropped or changed before R ready");
       if (hold_b && !cb.b_valid_i) err("B dropped before B ready");
@@ -239,21 +249,21 @@ module idma_mx_axi_mon #(
         x.coupled  = !cb.req_decouple_rw_i && !c.enable;
         x.burst[0] = cb.req_src_burst_i;
         x.burst[1] = cb.req_dst_burst_i;
-        plan(x, longint'(cb.req_len_i), longint'(cb.req_src_i), longint'(cb.req_dst_i),
-             longint'(cb.req_scale_i), c);
-        x.base[0] = longint'(cb.req_src_i);
-        x.base[1] = longint'(cb.req_dst_i);
+        plan(x, u64_t'(cb.req_len_i), u64_t'(cb.req_src_i), u64_t'(cb.req_dst_i),
+             u64_t'(cb.req_scale_i), c);
+        x.base[0] = u64_t'(cb.req_src_i);
+        x.base[1] = u64_t'(cb.req_dst_i);
         for (int s = 0; s < 2; s++) begin
           x.na[s] = x.seg[s].size() ? x.seg[s][0].lo : 0;
           if (planes) xq[s].push_back(x);
         end
       end
       if (cb.ar_valid_i && cb.ar_ready_i) begin
-        burst(0, longint'(ar.addr), int'(ar.len), int'(ar.size), ar.burst);
+        burst(0, u64_t'(ar.addr), int'(ar.len), int'(ar.size), ar.burst);
         rq.push_back(int'(ar.len));
       end
       if (cb.aw_valid_i && cb.aw_ready_i) begin
-        burst(1, longint'(aw.addr), int'(aw.len), int'(aw.size), aw.burst);
+        burst(1, u64_t'(aw.addr), int'(aw.len), int'(aw.size), aw.burst);
         while (wpend.size() && wq.size()) wbeat(wpend.pop_front());
       end
       if (cb.w_valid_i && cb.w_ready_i) begin
