@@ -164,7 +164,7 @@ package idma_pkg;
 
     /// Opt-in timing cuts of the backend; '0 is the stock datapath
     typedef struct packed {
-        /// Dataflow element refills a full lane only on an MX pop; it gets one more entry
+        /// Dataflow element ready from flops, no same-cycle refill of a full lane; one more entry
         logic dfe_ready_cut;
         /// Dataflow element lanes with registered full/empty flags, pointers without enables
         logic dfe_reg_flags;

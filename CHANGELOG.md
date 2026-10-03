@@ -22,9 +22,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - MX dequant is a beat-granular pipeline (input buffer, extract, expand lanes, output queue)
   that retires one output beat per cycle.
 - MX ops left the compute config interlock: every MX beat carries its config in a beat tag
-  (`r_dp_req_t.mx`) beside the dataflow element, whose byte lanes mark MX bytes, so transfers
-  with different MX ops and copies stream back to back without draining. Both engines pop whole
-  dataflow beats on a registered credit and have no transfer-boundary clear; the write side
+  (`r_dp_req_t.mx`), so transfers with different MX ops and copies stream back to back without
+  draining. MX beats go from the read side to their engine past the dataflow element: the quant
+  engine has an input queue of `BufferDepth` beats (one more with `dfe_ready_cut`), the dequant
+  input buffer holds three more, and the dataflow element carries copy and transpose beats only,
+  so a copy or a waiting dequant input does not block the next transfer's input. Both engines take
+  whole beats on a registered credit and have no transfer-boundary clear; the write side
   selects the burst's output queue after the write shifter and pops it on the W handshake. The
   interlock remains for transpose. `tb_idma_mxclear` checks the empty-queue pop guard of both
   engines.

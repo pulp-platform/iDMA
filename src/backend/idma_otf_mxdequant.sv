@@ -10,16 +10,18 @@ module idma_otf_mxdequant
   import idma_float_pkg::*;
 #(
   parameter int unsigned StrbWidth = 32'd8,
-  parameter bit          Fp16En    = 1'b1
+  parameter bit          Fp16En    = 1'b1,
+  /// Input buffer entries (whole data beats)
+  parameter int unsigned InDepth   = 32'd3
 ) (
   input  logic clk_i,
   input  logic rst_ni,
 
-  /// Dataflow-element head beat tagged as dequant, with its tag
+  /// Read-side dequant beat with its tag; `valid_i` only while `ready_o`
   input  logic [StrbWidth-1:0][7:0] data_i,
   input  logic                      valid_i,
   input  idma_pkg::mx_tag_t         tag_i,
-  output logic                      pop_o,
+  output logic                      ready_o,
 
   /// Output queue head, popped on the W beat handshake
   output logic [StrbWidth-1:0][7:0] data_o,
@@ -37,7 +39,7 @@ module idma_otf_mxdequant
   localparam int unsigned NL16   = StrbWidth / 2;
   localparam int unsigned NL32   = StrbWidth / 4;
   localparam int unsigned NL     = Fp16Dn ? NL16 : NL32;
-  localparam int unsigned NIB    = 3;
+  localparam int unsigned NIB    = InDepth;
   localparam int unsigned NOQ    = 3;
   localparam int unsigned IbPW   = $clog2(NIB);
   localparam int unsigned IbCW   = $clog2(NIB + 1);
@@ -84,9 +86,9 @@ module idma_otf_mxdequant
 
   assign is_sc = tag_i.is_scale;
   // a scale beat never waits: the previous group's data beats copied their scale bytes already
-  assign pop_o = valid_i & (in_ok_q | is_sc);
-  assign dpop  = pop_o & ~is_sc;
-  assign spop  = pop_o & is_sc;
+  assign ready_o = in_ok_q | is_sc;
+  assign dpop    = valid_i & ~is_sc;
+  assign spop    = valid_i & is_sc;
 
   // D0 issue: the head entry's next output beat; a half entry ends after its first 32 B
   logic                fmt16, half_hd, issue, adv;
@@ -134,7 +136,7 @@ module idma_otf_mxdequant
       if (issue) os_q    <= adv ? 2'd0 : os_q + 2'd1;
       // data bytes within the scale line
       if (dpop)  dk_q    <= tag_i.last ? '0 : dk_q + 11'(StrbWidth);
-      if (pop_o) in_s_q  <= is_sc;
+      if (valid_i) in_s_q <= is_sc;
       if (spop)  sw_q    <= sw_d;
     end
   end

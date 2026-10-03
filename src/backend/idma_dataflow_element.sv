@@ -10,7 +10,7 @@
 module idma_dataflow_element #(
     /// The depth of the buffer
     parameter int unsigned BufferDepth = 32'd3,
-    /// A full lane accepts a push in the cycle it is popped (else only on `fast_pop_i`)
+    /// A full lane accepts a push in the cycle it is popped
     parameter bit SameCycleRW = 1'b1,
     /// Lanes with registered full/empty flags and pointers without load enables
     parameter bit RegFlags = 1'b0,
@@ -32,9 +32,7 @@ module idma_dataflow_element #(
 
     output byte_t [StrbWidth-1:0] data_o,
     output strb_t valid_o,
-    input  strb_t ready_i,
-    /// Pops in `ready_i` that refill a full lane in the same cycle when `SameCycleRW` is off
-    input  strb_t fast_pop_i
+    input  strb_t ready_i
 );
 
     // buffer is implemented as an array of FIFOs
@@ -66,8 +64,7 @@ module idma_dataflow_element #(
             logic  [CntW-1:0]        cnt_q, cnt_d;
             logic                    full_q, empty_q, push, pop;
 
-            // without same-cycle refill only fast pops reach ready and the slot write enable
-            assign ready_o[i] = ~full_q | (SameCycleRW ? pop : fast_pop_i[i]);
+            assign ready_o[i] = ~full_q | (SameCycleRW & pop);
             assign valid_o[i] = ~empty_q;
             assign data_o[i]  = mem_q[rptr_q];
             assign push       = valid_i[i] & ready_o[i];
@@ -101,11 +98,5 @@ module idma_dataflow_element #(
             end
         end
     end : gen_fifo_buffer
-
-    // pragma translate_off
-    always @(posedge clk_i) if (rst_ni && RegFlags && !SameCycleRW)
-        assert ((fast_pop_i & ~(ready_i & valid_o)) == '0)
-            else $fatal(1, "idma_dataflow_element: fast pop of a lane that is not popped");
-    // pragma translate_on
 
 endmodule
