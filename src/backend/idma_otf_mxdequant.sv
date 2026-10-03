@@ -41,6 +41,8 @@ module idma_otf_mxdequant
   localparam int unsigned NOQ    = 3;
   localparam int unsigned IbPW   = $clog2(NIB);
   localparam int unsigned IbCW   = $clog2(NIB + 1);
+  localparam int unsigned OqPW   = $clog2(NOQ);
+  localparam int unsigned OqCW   = $clog2(NOQ + 1);
   // scale bytes per IB entry, the 64 B scale line
   localparam int unsigned DatB   = idma_pkg::MxDataBlockBytes;
   localparam int unsigned NSc    = (StrbWidth > DatB) ? StrbWidth / DatB : 1;
@@ -69,10 +71,11 @@ module idma_otf_mxdequant
 
   // OQd with its free-slot credit counter
   logic [NOQ-1:0][StrbWidth-1:0][7:0] oq_q;
-  logic [1:0]                         oq_wr_q, oq_rd_q, oq_cnt_q, oq_free_q;
+  logic [OqPW-1:0]                    oq_wr_q, oq_rd_q;
+  logic [OqCW-1:0]                    oq_cnt_q, oq_free_q;
 
-  function automatic logic [1:0] inc3(input logic [1:0] p);
-    return (p == 2'd2) ? 2'd0 : p + 2'd1;
+  function automatic logic [OqPW-1:0] inc_oq(input logic [OqPW-1:0] p);
+    return (32'(p) == NOQ - 1) ? '0 : p + OqPW'(1);
   endfunction
 
   function automatic logic [IbPW-1:0] inc_ib(input logic [IbPW-1:0] p);
@@ -93,7 +96,7 @@ module idma_otf_mxdequant
   assign fmt16   = Fp16Dn & ib_fp16_q[ib_hd_q];
   assign half_hd = ib_half_q[ib_hd_q];
   assign os_last = (fmt16 ? 2'd1 : 2'd3) >> half_hd;
-  assign issue   = (ib_cnt_q != '0) & (oq_free_q != 2'd0);
+  assign issue   = (ib_cnt_q != '0) & (oq_free_q != '0);
   assign adv     = issue & (os_q == os_last);
 
   always_comb begin
@@ -170,16 +173,16 @@ module idma_otf_mxdequant
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      oq_wr_q <= '0; oq_rd_q <= '0; oq_cnt_q <= '0; oq_free_q <= 2'(NOQ);
+      oq_wr_q <= '0; oq_rd_q <= '0; oq_cnt_q <= '0; oq_free_q <= OqCW'(NOQ);
     end else begin
-      if (d0_v_q)     oq_wr_q <= inc3(oq_wr_q);
-      if (beat_pop_i) oq_rd_q <= inc3(oq_rd_q);
-      oq_cnt_q  <= oq_cnt_q  + 2'(d0_v_q) - 2'(beat_pop_i);
-      oq_free_q <= oq_free_q - 2'(issue)  + 2'(beat_pop_i);
+      if (d0_v_q)     oq_wr_q <= inc_oq(oq_wr_q);
+      if (beat_pop_i) oq_rd_q <= inc_oq(oq_rd_q);
+      oq_cnt_q  <= oq_cnt_q  + OqCW'(d0_v_q) - OqCW'(beat_pop_i);
+      oq_free_q <= oq_free_q - OqCW'(issue)  + OqCW'(beat_pop_i);
     end
   end
 
-  assign beat_valid_o = (oq_cnt_q != 2'd0);
+  assign beat_valid_o = (oq_cnt_q != '0);
   assign data_o       = oq_q[oq_rd_q];
   assign busy_o       = (ib_cnt_q != '0) | d0_v_q | beat_valid_o;
 
@@ -187,7 +190,7 @@ module idma_otf_mxdequant
   always @(posedge clk_i) if (rst_ni) begin
     assert (!beat_pop_i || beat_valid_o)
       else $fatal(1, "idma_otf_mxdequant: pop of an empty output queue");
-    assert (!d0_v_q || (oq_cnt_q != 2'(NOQ)))
+    assert (!d0_v_q || (oq_cnt_q != OqCW'(NOQ)))
       else $fatal(1, "idma_otf_mxdequant: output queue overflow");
   end
   // pragma translate_on

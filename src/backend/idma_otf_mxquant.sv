@@ -40,7 +40,7 @@ module idma_otf_mxquant
   // blocks per output entry, entries per block, and the queue depth covering the credit loop
   localparam int unsigned BpE    = (StrbWidth > DatB) ? StrbWidth / DatB : 1;
   localparam int unsigned EpB    = (StrbWidth < DatB) ? DatB / StrbWidth : 1;
-  localparam int unsigned Depth  = EpB + 5;
+  localparam int unsigned Depth  = EpB + 4;
   localparam int unsigned PtrW   = $clog2(Depth);
   localparam int unsigned CntW   = $clog2(Depth + 1);
   // scale queue: 64 B lines, one per group, read in sub-beats; the tail line fills in place
