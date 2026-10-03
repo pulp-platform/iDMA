@@ -17,7 +17,9 @@ module tb_idma_mxplanar
   parameter int unsigned AddrWidth  = 32,
   parameter int unsigned UserWidth  = 1,
   parameter int unsigned AxiIdWidth = 12,
-  parameter int unsigned TFLenWidth = 32
+  parameter int unsigned TFLenWidth = 32,
+  /// AR, AW and B are held off at random in this share of cycles (address and response backpressure)
+  parameter int unsigned AxStallPct = 0
 );
 
   import "DPI-C" function void gm_load(input int idx, input int val);
@@ -35,8 +37,31 @@ module tb_idma_mxplanar
 
   localparam bit Fp16 = StrbWidth <= 64;
 
-  assign axi_req_mem = axi_req;
-  assign axi_rsp     = axi_rsp_mem;
+  // AR/AW/B stall shim: one draw per channel and cycle; the go bit only falls after its handshake
+  logic ar_go, aw_go, b_go;
+  function automatic logic go_next(input logic go, input logic vld, input logic rdy);
+    automatic logic d = ($urandom_range(99) >= AxStallPct);
+    if (go && vld && !rdy) return 1'b1;
+    return d;
+  endfunction
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) {ar_go, aw_go, b_go} <= '0;
+    else begin
+      ar_go <= go_next(ar_go, axi_req.ar_valid, axi_rsp_mem.ar_ready);
+      aw_go <= go_next(aw_go, axi_req.aw_valid, axi_rsp_mem.aw_ready);
+      b_go  <= go_next(b_go,  axi_rsp_mem.b_valid, axi_req.b_ready);
+    end
+  end
+  always_comb begin
+    axi_req_mem          = axi_req;
+    axi_rsp              = axi_rsp_mem;
+    axi_req_mem.ar_valid = axi_req.ar_valid & ar_go;
+    axi_req_mem.aw_valid = axi_req.aw_valid & aw_go;
+    axi_rsp.ar_ready     = axi_rsp_mem.ar_ready & ar_go;
+    axi_rsp.aw_ready     = axi_rsp_mem.aw_ready & aw_go;
+    axi_req_mem.b_ready  = axi_req.b_ready & b_go;
+    axi_rsp.b_valid      = axi_rsp_mem.b_valid & b_go;
+  end
 
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
@@ -236,6 +261,20 @@ module tb_idma_mxplanar
       b2b.push_back(x);
     end
     run("b2b mix", b2b, e);
+    total += e;
+
+    // back to back: one-block quants (two write bursts per read beat), every fourth a short dequant
+    b2b.delete();
+    for (int i = 0; i < 128; i++) begin
+      automatic xfer_t x;
+      x.dq = i % 4 == 3; x.fp16 = Fp16 && (i % 8 < 4);
+      x.g32 = i % 3 == 0; x.nblk = x.dq ? 1 + i % 3 : 1;
+      x.src = 32'h0001_0000 + i * 32'h0001_0000;
+      x.dst = 32'h0100_0000 + i * 32'h0002_0000;
+      x.soff = (i % 2) ? -32'sd96 : 32'sd512;
+      b2b.push_back(x);
+    end
+    run("b2b short", b2b, e);
     total += e;
 
     if (total == 0) $display("[MXPL] ALL PASS (StrbWidth=%0d)", StrbWidth);

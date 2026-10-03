@@ -569,6 +569,7 @@ idma_sim_tb_idma_mxplanar: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
 	$(call idma_run_mx_sim,tb_idma_mxplanar,32 64 256 512,,)
+	$(call idma_run_mx_sim,tb_idma_mxplanar,64 512,ax50_,-gAxStallPct=50)
 
 .PHONY: idma_sim_tb_idma_mxnd
 idma_sim_tb_idma_mxnd: $(IDMA_VSIM_DIR)/compile.tcl
