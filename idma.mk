@@ -495,11 +495,12 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_inst64_compute \
-		-logfile inst64_compute.log -do "run -all; quit"
-	# Questa does not propagate $$fatal to the exit code; gate on the transcript
-	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute.log
-	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute.log
+	cd $(IDMA_VSIM_DIR); for t in "0 axi" "1 obi"; do set -- $$t; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=$$1 tb_idma_inst64_compute \
+	    tb_idma_inst64_mon_$$2 -logfile inst64_compute_$$2.log -do "run -all; quit"; \
+	  ! grep -qE "Error:|Fatal:" inst64_compute_$$2.log || exit 1; \
+	  grep -q "TEST PASSED" inst64_compute_$$2.log || exit 1; \
+	  grep -q "\[AXIMON\] transfers=[1-9].*violations=0" inst64_compute_$$2.log || exit 1; done
 	# the guard must fire; a silent fallback to a plain copy would pass the run above
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=1 \
 		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true
