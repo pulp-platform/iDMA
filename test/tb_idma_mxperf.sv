@@ -74,6 +74,9 @@ module tb_idma_mxperf
     return (last > first) ? int'(100 * beats / (last - first + 1)) : 100;
   endfunction
 
+  // scale planes 32 KiB above their data planes
+  localparam int Soff = 512;
+
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
                          input logic en, input idma_pkg::compute_op_e op);
     idma_req = '0;
@@ -88,6 +91,7 @@ module tb_idma_mxperf
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = en;
     idma_req.opt.compute.op      = op;
+    idma_req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(Soff);
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -127,6 +131,7 @@ module tb_idma_mxperf
       idma_req.opt.beo.decouple_aw = 1'b1;
       idma_req.opt.compute.enable  = en;
       idma_req.opt.compute.op      = op;
+      idma_req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(Soff);
       idma_req.opt.last            = 1'b1;
       req_valid = 1'b1;
       do @(posedge clk); while (!req_ready);
@@ -162,9 +167,9 @@ module tb_idma_mxperf
     if (StrbWidth <= 64)
       measure("mxquant16", Src, Dst, NbQ * 64,  1'b1, idma_pkg::COMPUTE_MXQUANT_FP16, q16_r, q16_w);
     else begin q16_r = cp_r; q16_w = 100; end
-    measure("mxdequant",   Src, Dst, NbDq * 33, 1'b1, idma_pkg::COMPUTE_MXDEQUANT, dq_r,  dq_w);
+    measure("mxdequant",   Src, Dst, NbDq * 32, 1'b1, idma_pkg::COMPUTE_MXDEQUANT, dq_r,  dq_w);
     if (StrbWidth <= 64)
-      measure("mxdequant16", Src, Dst, NbDq * 33, 1'b1, idma_pkg::COMPUTE_MXDEQUANT_FP16,
+      measure("mxdequant16", Src, Dst, NbDq * 32, 1'b1, idma_pkg::COMPUTE_MXDEQUANT_FP16,
               dq16_r, dq16_w);
     else begin dq16_r = 0; dq16_w = cp_w; end
 
@@ -173,7 +178,7 @@ module tb_idma_mxperf
                 idma_pkg::COMPUTE_NONE,      bcp_r, bcp_w);
     measure_b2b("b2b-quant32", Src, Dst, NbB2b * 128,  KB2b, 1'b1,
                 idma_pkg::COMPUTE_MXQUANT,   bq_r,  bq_w);
-    measure_b2b("b2b-dequant", Src, Dst, NbDqB2b * 33, KB2b, 1'b1,
+    measure_b2b("b2b-dequant", Src, Dst, NbDqB2b * 32, KB2b, 1'b1,
                 idma_pkg::COMPUTE_MXDEQUANT, bdq_r, bdq_w);
 
     // quant is read-bound, dequant write-bound; compare against the copy baseline

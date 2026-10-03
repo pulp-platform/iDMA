@@ -156,20 +156,13 @@ addrmap idma_reg #(
     enum compute_op {
         none           = 4'd0 { desc = "No compute (plain copy)."; };
         transpose      = 4'd1 { desc = "Tiled transpose."; };
-        mxquant        = 4'd2 { desc = "MX quant, FP32 source (128B -> 33B per 32-element block)."; };
-        mxquant_fp16   = 4'd3 { desc = "MX quant, FP16 source (64B -> 33B per 32-element block)."; };
-        mxdequant      = 4'd4 { desc = "MX dequant, FP32 destination (33B -> 128B per 32-element block)."; };
-        mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (33B -> 64B per 32-element block)."; };
+        mxquant        = 4'd2 { desc = "MX quant, FP32 source (128B -> 32B + 1B scale)."; };
+        mxquant_fp16   = 4'd3 { desc = "MX quant, FP16 source (64B -> 32B + 1B scale)."; };
+        mxdequant      = 4'd4 { desc = "MX dequant, FP32 destination (32B + 1B scale -> 128B)."; };
+        mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (32B + 1B scale -> 64B)."; };
     };
 
-    // MX layout of the compressed side; idma_pkg::mx_layout_e derives from it
-    enum mx_layout {
-        inline  = 2'd0 { desc = "Inline 33 B blocks: [1 B scale][32 B elements]."; };
-        planar  = 2'd1 { desc = "Data plane at the MX address, scale plane at the MX address + 64 * mx_scale_off."; };
-        grouped = 2'd2 { desc = "Groups of G blocks: G x 32 B data, then the G scale bytes in a 64 B slot."; };
-    };
-
-    // Blocks per scale group G of the planar and grouped layouts; idma_pkg::mx_group_e derives from it
+    // Blocks per scale group G; idma_pkg::mx_group_e derives from it
     enum mx_group {
         g64 = 1'd0 { desc = "G = 64 blocks (one 64 B scale beat at 512 bit)."; };
         g32 = 1'd1 { desc = "G = 32 blocks (half a 64 B scale beat)."; };
@@ -213,19 +206,15 @@ addrmap idma_reg #(
             desc = "Round the block scale up (RCEIL) instead of down (FLOOR).";
         } mx_rceil [1:1] = 0;
         field {
-            desc = "MX element format (0: E5M2, 1: E4M3).";
+            desc = "MX element format (0: E5M2, 1: E4M3; 2 E2M1 and 3 reserved).";
         } mx_elem_fmt [3:2] = 0;
         field {
-            desc = "Layout of the compressed side (quant destination, dequant source).";
-            encode = mx_layout;
-        } mx_layout [5:4] = 0;
-        field {
-            desc = "Blocks per scale group of the planar and grouped layouts.";
+            desc = "Blocks per scale group; a group's scale bytes move as one chunk.";
             encode = mx_group;
-        } mx_group [6:6] = 0;
+        } mx_group [4:4] = 0;
         field {
-            desc = "Planar scale plane start relative to the compressed-side address, in signed 64 B units.";
-        } mx_scale_off [31:12] = 0;
+            desc = "Scale plane start relative to the data plane, signed, in 64 B units.";
+        } mx_scale_off [31:10] = 0;
     };
 
     regfile dim {

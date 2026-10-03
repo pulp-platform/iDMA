@@ -5,10 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// MX roundtrip through one rw_axi backend, quant then dequant, checked
-// byte-exact against the DPI-C golden (idma_mxquant_dpi.c); the roundtrip is
-// the exact E5M2/E4M3 identity. QuantFp16 picks the source/destination format of
-// both legs, ElemFmt the MX element format (0 E5M2, 1 E4M3).
+// MX quant to both planes, then dequant back, byte-exact against the DPI-C golden.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -35,12 +32,16 @@ module tb_idma_mxroundtrip
   import "DPI-C" function void gm_mxdequant_cfg(input int num_blocks, input int fp16,
                                                 input int elem);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_get_scale(input int idx);
+  import "DPI-C" function void gm_load_scale(input int idx, input int val);
   import "DPI-C" function int  gm_stim_fp16(input int e, input int total, input int salt);
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
 
-  localparam int unsigned NumBlocks = 2 * StrbWidth;  // k % StrbWidth == 0 for dequant
+  localparam int unsigned NumBlocks = 2 * StrbWidth;
+  // scale planes 96 x 64 B above their data planes
+  localparam int          Soff      = 96;
 
   assign axi_req_mem = axi_req;
   assign axi_rsp     = axi_rsp_mem;
@@ -87,7 +88,8 @@ module tb_idma_mxroundtrip
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = 1'b1;
     idma_req.opt.compute.op      = op;
-    idma_req.opt.compute.params.mx.elem_fmt = idma_pkg::mx_elem_e'(ElemFmt);
+    idma_req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(Soff);
+    idma_req.opt.compute.params.mx.elem_fmt  = idma_pkg::mx_elem_e'(ElemFmt);
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -140,17 +142,17 @@ module tb_idma_mxroundtrip
     automatic logic [7:0]  el;
     errs_lit = 0; errs_gm = 0;
     for (int unsigned b = 0; b < nb; b++) begin
-      wr_mem(src + b*33, DqScale[b % 4]);
-      gm_load(int'(b*33), int'(DqScale[b % 4]));
+      wr_mem(mx_scale_base(src, Soff) + b, DqScale[b % 4]);
+      gm_load_scale(int'(b), int'(DqScale[b % 4]));
       for (int unsigned e = 0; e < 32; e++) begin
         el = E4m3 ? DqE4m3[(e + b) % 8] : DqE5m2[(e + b) % 8];
-        wr_mem(src + b*33 + 1 + e, el);
-        gm_load(int'(b*33 + 1 + e), int'(el));
+        wr_mem(src + b*32 + e, el);
+        gm_load(int'(b*32 + e), int'(el));
       end
     end
     for (int unsigned i = 0; i < nb*32*ob; i++) wr_mem(dst + i, 8'h5A);
     gm_mxdequant_cfg(int'(nb), int'(QuantFp16), int'(ElemFmt));
-    do_xfer(src, dst, nb*33,
+    do_xfer(src, dst, nb*32,
             QuantFp16 ? idma_pkg::COMPUTE_MXDEQUANT_FP16 : idma_pkg::COMPUTE_MXDEQUANT);
     for (int unsigned b = 0; b < nb; b++)
       for (int unsigned e = 0; e < 32; e++) begin
@@ -176,7 +178,7 @@ module tb_idma_mxroundtrip
   initial begin
     automatic addr_t src = 'h0001_0000, mid = 'h0003_0000, dst = 'h0005_0000;
     automatic int unsigned qL  = NumBlocks * QuantInBytes;
-    automatic int unsigned mL  = NumBlocks * 33;
+    automatic int unsigned mL  = NumBlocks * 32;
     automatic int unsigned dL  = NumBlocks * (QuantFp16 ? 64 : 128);
     automatic int unsigned e1 = 0, e2 = 0, e3 = 0, e4 = 0;
     automatic logic [15:0] h;
@@ -205,6 +207,7 @@ module tb_idma_mxroundtrip
       gm_mxquant_cfg(int'(NumBlocks), 0, int'(ElemFmt), 0, 0);
     end
     for (int unsigned i = 0; i < mL; i++) wr_mem(mid + i, 8'hA5);
+    for (int unsigned i = 0; i < NumBlocks; i++) wr_mem(mx_scale_base(mid, Soff) + i, 8'hA5);
     for (int unsigned i = 0; i < dL; i++) wr_mem(dst + i, 8'h5A);
 
     do_xfer(src, mid, qL,
@@ -215,8 +218,16 @@ module tb_idma_mxroundtrip
         if (e1 <= 8)
           $display("[MXRT] quant mid[%0d]=%02h exp %02h", i, rd_mem(mid+i), 8'(gm_get(int'(i))));
       end
+    for (int unsigned i = 0; i < NumBlocks; i++)
+      if (rd_mem(mx_scale_base(mid, Soff) + i) !== 8'(gm_get_scale(int'(i)))) begin
+        e1++;
+        if (e1 <= 8) $display("[MXRT] quant scale[%0d]=%02h exp %02h", i,
+                              rd_mem(mx_scale_base(mid, Soff) + i), 8'(gm_get_scale(int'(i))));
+      end
 
     for (int unsigned i = 0; i < mL; i++) gm_load(int'(i), int'(rd_mem(mid + i)));
+    for (int unsigned i = 0; i < NumBlocks; i++)
+      gm_load_scale(int'(i), int'(rd_mem(mx_scale_base(mid, Soff) + i)));
     gm_mxdequant_cfg(int'(NumBlocks), int'(QuantFp16), int'(ElemFmt));
 
     do_xfer(mid, dst, mL,

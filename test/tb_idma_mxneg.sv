@@ -54,7 +54,6 @@ module tb_idma_mxneg
     .axi_write_req_o(axi_write_req), .axi_write_rsp_i(axi_write_rsp), .busy_o(busy)
   );
 
-  logic [1:0] layout = idma_pkg::MX_LAYOUT_INLINE;
   idma_pkg::mx_elem_e neg_elem = idma_pkg::MX_E5M2;
 
   task automatic issue(input addr_t src, input addr_t dst, input int unsigned L,
@@ -73,10 +72,7 @@ module tb_idma_mxneg
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = (op != idma_pkg::COMPUTE_NONE);
     idma_req.opt.compute.op      = op;
-    if (idma_pkg::compute_op_is_mx(op)) begin
-      idma_req.opt.compute.params.mx.layout   = layout;
-      idma_req.opt.compute.params.mx.elem_fmt = neg_elem;
-    end
+    if (idma_pkg::compute_op_is_mx(op)) idma_req.opt.compute.params.mx.elem_fmt = neg_elem;
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
@@ -97,9 +93,7 @@ module tb_idma_mxneg
       1: issue(Src, Dst, 100, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       2: issue(Src + 1, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       3: issue(Src, Dst + 1, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      4: issue(Src, Dst, 64, idma_pkg::COMPUTE_MXQUANT_FP16, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      5: issue(Src, Dst, 33, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      6: issue(Src, Dst, 33 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT,
+      6: issue(Src, Dst, 32 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT,
                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       7: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::OBI, idma_pkg::AXI, 1'b0);
       8: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::OBI, 1'b0);
@@ -107,24 +101,11 @@ module tb_idma_mxneg
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       11: issue(Src, Dst, 32'd264 << 22, idma_pkg::COMPUTE_MXDEQUANT,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      12: issue(Src, Dst, 33 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT_FP16,
-                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       13: issue(Src, Dst, 64, idma_pkg::COMPUTE_MXQUANT_FP16,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       14: issue(Src, Dst + 1, StrbWidth * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      15: begin
-        layout = 2'd3;
-        issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      end
-      16: begin
-        layout = idma_pkg::MX_LAYOUT_PLANAR;
-        issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      end
-      17: begin
-        layout = idma_pkg::MX_LAYOUT_PLANAR;
-        issue(Src, Dst, 48, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      end
+      17: issue(Src, Dst, 48, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       18: begin
         neg_elem = idma_pkg::MX_E2M1;
         issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);

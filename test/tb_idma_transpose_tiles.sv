@@ -5,12 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Back-to-back single-tile transposes through the rw_axi backend, the shape inst64
-// issues (one NE x NE padded tile per request). Runs the same request streams on a
-// FullDuplex=0 and a FullDuplex=1 backend, checks every destination byte, reports the
-// write-channel rate and fails unless full duplex overlaps consecutive tiles. A mixed
-// stream interleaves transposes of changing geometry with a plain copy and an MX quant
-// (checked against the DPI-C golden, idma_mxquant_dpi.c).
+// Back-to-back single-tile transposes (FullDuplex 0/1) mixed with a copy and an MX quant.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -30,6 +25,7 @@ module idma_transpose_tiles_bench
   import "DPI-C" function void gm_load(input int idx, input int val);
   import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_get_scale(input int idx);
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
@@ -148,9 +144,10 @@ module idma_transpose_tiles_bench
     jobs.push_back(j);
   endtask
 
-  // FP32 -> MXFP8 quant of num_blocks blocks, golden from the DPI-C model
+  // FP32 -> MXFP8 quant; the scale plane follows the data plane (num_blocks even)
   task automatic add_mxquant(input addr_t src, input addr_t dst, input int unsigned num_blocks);
-    automatic int unsigned out_len = num_blocks * MxBlockBytes;
+    automatic int unsigned dat_len = num_blocks * MxDataBlockBytes;
+    automatic int unsigned out_len = dat_len + num_blocks;
     automatic logic [31:0] w;
     automatic job_t j;
     for (int unsigned el = 0; el < num_blocks * 32; el++) begin
@@ -163,12 +160,13 @@ module idma_transpose_tiles_bench
     gm_mxquant_fp32(int'(num_blocks));
     for (int unsigned i = 0; i < out_len; i++) begin
       wr_mem(dst + i, Guard);
-      exp_mem[dst + i] = 8'(gm_get(int'(i)));
+      exp_mem[dst + i] = (i < dat_len) ? 8'(gm_get(int'(i))) : 8'(gm_get_scale(int'(i - dat_len)));
     end
     wr_mem(dst + out_len, Guard); exp_mem[dst + out_len] = Guard;
     j.req                    = base_req(src, dst, num_blocks * MxFp32BlockBytes);
     j.req.opt.compute.enable = 1'b1;
     j.req.opt.compute.op     = idma_pkg::COMPUTE_MXQUANT;
+    j.req.opt.compute.params.mx.scale_off = MxScaleOffWidth'(dat_len / MxScaleSlotBytes);
     j.dst     = dst;
     j.dst_len = out_len + 1;
     jobs.push_back(j);

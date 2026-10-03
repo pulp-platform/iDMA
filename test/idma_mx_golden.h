@@ -5,13 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Bit-exact C goldens and deterministic stimulus for the MX compute ops, shared
-// by the DPI-C testbench glue and by integrators' on-target tests: FP32/FP16 ->
-// MXFP8 (E5M2 or E4M3) quantization and MXFP8 -> FP32/FP16 dequantization; blocks are
-// [1B E8M0 scale][32B elements]. Pure functions over bit patterns and caller-owned buffers.
-// The scale is OCP MX v1.0 E8M0: X = 2^(E - 127), E in [0, 254], 0xFF = NaN, rounded down
-// (FLOOR) or, with rceil, up so the block max never saturates. A block holding an Inf or NaN
-// is poisoned (0xFF scale, every element the canonical NaN 0x7D / 0x7F) unless poison_dis is set.
+// Bit-exact OCP MX goldens (E8M0 scale plane + E5M2/E4M3 data plane) and test stimulus.
 
 #pragma once
 
@@ -189,24 +183,25 @@ static inline uint16_t fp32_to_fp16_bits(uint32_t f) {
   return (uint16_t)((sign << 15) | rounded);
 }
 
-// One 32-element FP32 block into a 33B MX block [scale][32 elements]
-static inline void quantize_block_mx(const uint32_t *blk, uint8_t *out, int elem, int rceil,
-                                     int poison_dis) {
+// One 32-element FP32 block into its 32 elements and its scale byte
+static inline void quantize_block_mx(const uint32_t *blk, uint8_t *data, uint8_t *scale_out,
+                                     int elem, int rceil, int poison_dis) {
   uint8_t scale = block_scale_mx(blk, 32u, elem, rceil);
   int poison = !poison_dis && block_has_special(blk, 32u);
-  out[0] = poison ? (uint8_t)MX_E8M0_NAN : scale;
+  *scale_out = poison ? (uint8_t)MX_E8M0_NAN : scale;
   for (uint32_t lane = 0; lane < 32u; ++lane)
-    out[1u + lane] = poison ? (uint8_t)(elem == MX_ELEM_E4M3 ? MX_E4M3_NAN : MX_E5M2_NAN)
-                            : quantize_fp32_mx(blk[lane], (int8_t)(scale - MX_E8M0_BIAS), elem);
+    data[lane] = poison ? (uint8_t)(elem == MX_ELEM_E4M3 ? MX_E4M3_NAN : MX_E5M2_NAN)
+                        : quantize_fp32_mx(blk[lane], (int8_t)(scale - MX_E8M0_BIAS), elem);
 }
 
-static inline void quantize_block_e5m2(const uint32_t *blk, uint8_t *out, int poison_dis) {
-  quantize_block_mx(blk, out, MX_ELEM_E5M2, 0, poison_dis);
+static inline void quantize_block_e5m2(const uint32_t *blk, uint8_t *data, uint8_t *scale_out,
+                                       int poison_dis) {
+  quantize_block_mx(blk, data, scale_out, MX_ELEM_E5M2, 0, poison_dis);
 }
 
-// Quantize num_blocks 64B FP16 blocks from in into 33B MX blocks in out.
-static inline void mx_quant_fp16_cfg(const uint8_t *in, uint8_t *out, uint32_t num_blocks,
-                                     int elem, int rceil, int poison_dis) {
+// Quantize num_blocks 64B FP16 blocks into a data plane (32B/block) and a scale plane.
+static inline void mx_quant_fp16_cfg(const uint8_t *in, uint8_t *data, uint8_t *scale,
+                                     uint32_t num_blocks, int elem, int rceil, int poison_dis) {
   for (uint32_t b = 0; b < num_blocks; ++b) {
     uint32_t blk[32];
     for (uint32_t lane = 0; lane < 32u; ++lane) {
@@ -214,13 +209,13 @@ static inline void mx_quant_fp16_cfg(const uint8_t *in, uint8_t *out, uint32_t n
                             | ((uint32_t)in[b*64u + lane*2u + 1u] << 8));
       blk[lane] = fp16_to_fp32_bits(h);
     }
-    quantize_block_mx(blk, out + b*33u, elem, rceil, poison_dis);
+    quantize_block_mx(blk, data + b*32u, scale + b, elem, rceil, poison_dis);
   }
 }
 
-// Quantize num_blocks 128B FP32 blocks from in into 33B MX blocks in out.
-static inline void mx_quant_fp32_cfg(const uint8_t *in, uint8_t *out, uint32_t num_blocks,
-                                     int elem, int rceil, int poison_dis) {
+// Quantize num_blocks 128B FP32 blocks from in into a data plane and a scale plane.
+static inline void mx_quant_fp32_cfg(const uint8_t *in, uint8_t *data, uint8_t *scale,
+                                     uint32_t num_blocks, int elem, int rceil, int poison_dis) {
   for (uint32_t b = 0; b < num_blocks; ++b) {
     uint32_t blk[32];
     for (uint32_t lane = 0; lane < 32u; ++lane)
@@ -228,48 +223,48 @@ static inline void mx_quant_fp32_cfg(const uint8_t *in, uint8_t *out, uint32_t n
                 | ((uint32_t)in[b*128u + lane*4u + 1u] << 8)
                 | ((uint32_t)in[b*128u + lane*4u + 2u] << 16)
                 | ((uint32_t)in[b*128u + lane*4u + 3u] << 24);
-    quantize_block_mx(blk, out + b*33u, elem, rceil, poison_dis);
+    quantize_block_mx(blk, data + b*32u, scale + b, elem, rceil, poison_dis);
   }
 }
 
-static inline void mx_quant_fp16_opt(const uint8_t *in, uint8_t *out, uint32_t num_blocks,
-                                     int poison_dis) {
-  mx_quant_fp16_cfg(in, out, num_blocks, MX_ELEM_E5M2, 0, poison_dis);
+static inline void mx_quant_fp16_opt(const uint8_t *in, uint8_t *data, uint8_t *scale,
+                                     uint32_t num_blocks, int poison_dis) {
+  mx_quant_fp16_cfg(in, data, scale, num_blocks, MX_ELEM_E5M2, 0, poison_dis);
 }
 
-static inline void mx_quant_fp32_opt(const uint8_t *in, uint8_t *out, uint32_t num_blocks,
-                                     int poison_dis) {
-  mx_quant_fp32_cfg(in, out, num_blocks, MX_ELEM_E5M2, 0, poison_dis);
+static inline void mx_quant_fp32_opt(const uint8_t *in, uint8_t *data, uint8_t *scale,
+                                     uint32_t num_blocks, int poison_dis) {
+  mx_quant_fp32_cfg(in, data, scale, num_blocks, MX_ELEM_E5M2, 0, poison_dis);
 }
 
-static inline void mx_quant_fp16(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
-  mx_quant_fp16_opt(in, out, num_blocks, 0);
+static inline void mx_quant_fp16(const uint8_t *in, uint8_t *data, uint8_t *scale,
+                                 uint32_t num_blocks) {
+  mx_quant_fp16_opt(in, data, scale, num_blocks, 0);
 }
 
-static inline void mx_quant_fp32(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
-  mx_quant_fp32_opt(in, out, num_blocks, 0);
+static inline void mx_quant_fp32(const uint8_t *in, uint8_t *data, uint8_t *scale,
+                                 uint32_t num_blocks) {
+  mx_quant_fp32_opt(in, data, scale, num_blocks, 0);
 }
 
-// Dequantize num_blocks 33B MX blocks from in into 64B FP16 blocks in out.
-static inline void mx_dequant_fp16_cfg(const uint8_t *in, uint8_t *out, uint32_t num_blocks,
-                                       int elem) {
+// Dequantize num_blocks blocks (data plane, scale plane) into 64B FP16 blocks in out.
+static inline void mx_dequant_fp16_cfg(const uint8_t *data, const uint8_t *scale, uint8_t *out,
+                                       uint32_t num_blocks, int elem) {
   for (uint32_t b = 0; b < num_blocks; ++b) {
-    uint8_t scale = in[b*33u];
     for (uint32_t lane = 0; lane < 32u; ++lane) {
-      uint16_t h = fp32_to_fp16_bits(dequant_mx_fp32(in[b*33u + 1u + lane], scale, elem));
+      uint16_t h = fp32_to_fp16_bits(dequant_mx_fp32(data[b*32u + lane], scale[b], elem));
       out[b*64u + lane*2u]      = (uint8_t)(h & 0xFFu);
       out[b*64u + lane*2u + 1u] = (uint8_t)((uint32_t)h >> 8);
     }
   }
 }
 
-// Dequantize num_blocks 33B MX blocks from in into 128B FP32 blocks in out.
-static inline void mx_dequant_fp32_cfg(const uint8_t *in, uint8_t *out, uint32_t num_blocks,
-                                       int elem) {
+// Dequantize num_blocks blocks (data plane, scale plane) into 128B FP32 blocks in out.
+static inline void mx_dequant_fp32_cfg(const uint8_t *data, const uint8_t *scale, uint8_t *out,
+                                       uint32_t num_blocks, int elem) {
   for (uint32_t b = 0; b < num_blocks; ++b) {
-    uint8_t scale = in[b*33u];
     for (uint32_t lane = 0; lane < 32u; ++lane) {
-      uint32_t f = dequant_mx_fp32(in[b*33u + 1u + lane], scale, elem);
+      uint32_t f = dequant_mx_fp32(data[b*32u + lane], scale[b], elem);
       out[b*128u + lane*4u + 0u] = (uint8_t)(f & 0xFFu);
       out[b*128u + lane*4u + 1u] = (uint8_t)((f >> 8) & 0xFFu);
       out[b*128u + lane*4u + 2u] = (uint8_t)((f >> 16) & 0xFFu);
@@ -278,12 +273,14 @@ static inline void mx_dequant_fp32_cfg(const uint8_t *in, uint8_t *out, uint32_t
   }
 }
 
-static inline void mx_dequant_fp16(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
-  mx_dequant_fp16_cfg(in, out, num_blocks, MX_ELEM_E5M2);
+static inline void mx_dequant_fp16(const uint8_t *data, const uint8_t *scale, uint8_t *out,
+                                   uint32_t num_blocks) {
+  mx_dequant_fp16_cfg(data, scale, out, num_blocks, MX_ELEM_E5M2);
 }
 
-static inline void mx_dequant_fp32(const uint8_t *in, uint8_t *out, uint32_t num_blocks) {
-  mx_dequant_fp32_cfg(in, out, num_blocks, MX_ELEM_E5M2);
+static inline void mx_dequant_fp32(const uint8_t *data, const uint8_t *scale, uint8_t *out,
+                                   uint32_t num_blocks) {
+  mx_dequant_fp32_cfg(data, scale, out, num_blocks, MX_ELEM_E5M2);
 }
 
 // Deterministic FP16 stimulus for element e of a total-element buffer; last blocks hold corners.

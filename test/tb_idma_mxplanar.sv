@@ -5,11 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Planar and grouped MX layouts end to end: quant writes a data plane and a scale plane (or
-// grouped [G x 32 B][64 B scale slot] groups), dequant reads them back. Every written byte is
-// checked against the DPI-C golden, every untouched byte around the planes against its canary.
-// Runs single transfers over block counts, G = 32/64, FP16/FP32, a negative scale offset and a
-// 4 KiB page crossing, then the same mix back to back.
+// MX data and scale planes end to end, every byte and the canaries around both planes.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -30,6 +26,8 @@ module tb_idma_mxplanar
   import "DPI-C" function void gm_mxdequant(input int num_blocks);
   import "DPI-C" function void gm_mxdequant_fp16(input int num_blocks);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_get_scale(input int idx);
+  import "DPI-C" function void gm_load_scale(input int idx, input int val);
   import "DPI-C" function int  gm_stim_fp16(input int e, input int total, input int salt);
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
@@ -70,7 +68,6 @@ module tb_idma_mxplanar
   typedef struct {
     bit          dq;
     bit          fp16;
-    bit          grouped;
     bit          g32;
     int unsigned nblk;
     addr_t       src;
@@ -86,17 +83,11 @@ module tb_idma_mxplanar
 
   // compressed side address of block k's data and scale byte
   function automatic addr_t blk_data(input xfer_t x, input int unsigned k);
-    automatic addr_t b = x.dq ? x.src : x.dst;
-    automatic int unsigned g = x.g32 ? 32 : 64;
-    if (x.grouped) return b + addr_t'((k / g) * (g * 32 + 64) + (k % g) * 32);
-    return b + addr_t'(k * 32);
+    return (x.dq ? x.src : x.dst) + addr_t'(k * 32);
   endfunction
 
   function automatic addr_t blk_scale(input xfer_t x, input int unsigned k);
-    automatic addr_t b = x.dq ? x.src : x.dst;
-    automatic int unsigned g = x.g32 ? 32 : 64;
-    if (x.grouped) return b + addr_t'((k / g) * (g * 32 + 64) + g * 32 + (k % g));
-    return b + addr_t'(x.soff * 64) + addr_t'(k);
+    return (x.dq ? x.src : x.dst) + addr_t'(x.soff * 64) + addr_t'(k);
   endfunction
 
   function automatic idma_req_t req_of(input xfer_t x);
@@ -113,7 +104,6 @@ module tb_idma_mxplanar
     r.opt.compute.enable  = 1'b1;
     r.opt.compute.op      = x.dq ? (x.fp16 ? COMPUTE_MXDEQUANT_FP16 : COMPUTE_MXDEQUANT)
                                  : (x.fp16 ? COMPUTE_MXQUANT_FP16 : COMPUTE_MXQUANT);
-    r.opt.compute.params.mx.layout    = x.grouped ? MX_LAYOUT_GROUPED : MX_LAYOUT_PLANAR;
     r.opt.compute.params.mx.group     = x.g32 ? MX_GROUP_G32 : MX_GROUP_G64;
     r.opt.compute.params.mx.scale_off = MxScaleOffWidth'(x.soff);
     r.opt.last = 1'b1;
@@ -130,9 +120,10 @@ module tb_idma_mxplanar
   task automatic prepare(input xfer_t x);
     automatic int unsigned ne = x.nblk * 32;
     automatic int unsigned eb = x.fp16 ? 2 : 4;
-    automatic logic [7:0] blk [];
+    automatic logic [7:0] dat [];
+    automatic logic [7:0] scl [];
     salt++;
-    // golden inline blocks of fresh FP stimulus
+    // golden planes of fresh FP stimulus
     for (int unsigned e = 0; e < ne; e++) begin
       automatic logic [31:0] v = x.fp16 ? 32'(gm_stim_fp16(int'(e), int'(ne), int'(salt)))
                                         : 32'(gm_stim_fp32(int'(e), int'(ne), int'(salt)));
@@ -142,23 +133,26 @@ module tb_idma_mxplanar
       end
     end
     if (x.fp16) gm_mxquant(int'(x.nblk)); else gm_mxquant_fp32(int'(x.nblk));
-    blk = new[x.nblk * 33];
-    for (int unsigned i = 0; i < x.nblk * 33; i++) blk[i] = 8'(gm_get(int'(i)));
+    dat = new[x.nblk * 32];
+    scl = new[x.nblk];
+    for (int unsigned i = 0; i < x.nblk * 32; i++) dat[i] = 8'(gm_get(int'(i)));
+    for (int unsigned k = 0; k < x.nblk; k++) scl[k] = 8'(gm_get_scale(int'(k)));
     if (!x.dq) begin
       for (int unsigned k = 0; k < x.nblk; k++) begin
-        exp_mem[blk_scale(x, k)] = blk[k * 33];
+        exp_mem[blk_scale(x, k)] = scl[k];
         for (int unsigned i = 0; i < 32; i++)
-          exp_mem[blk_data(x, k) + addr_t'(i)] = blk[k*33 + 1 + i];
+          exp_mem[blk_data(x, k) + addr_t'(i)] = dat[k*32 + i];
       end
       window(x.dst - 128, blk_data(x, x.nblk - 1) + 32 + 128);
       window(blk_scale(x, 0) - 128, blk_scale(x, x.nblk - 1) + 128);
     end else begin
       for (int unsigned k = 0; k < x.nblk; k++) begin
-        wr_mem(blk_scale(x, k), blk[k * 33]);
+        wr_mem(blk_scale(x, k), scl[k]);
+        gm_load_scale(int'(k), int'(scl[k]));
         for (int unsigned i = 0; i < 32; i++)
-          wr_mem(blk_data(x, k) + addr_t'(i), blk[k*33 + 1 + i]);
+          wr_mem(blk_data(x, k) + addr_t'(i), dat[k*32 + i]);
       end
-      for (int unsigned i = 0; i < x.nblk * 33; i++) gm_load(int'(i), int'(blk[i]));
+      for (int unsigned i = 0; i < x.nblk * 32; i++) gm_load(int'(i), int'(dat[i]));
       if (x.fp16) gm_mxdequant_fp16(int'(x.nblk)); else gm_mxdequant(int'(x.nblk));
       for (int unsigned i = 0; i < x.nblk * 32 * eb; i++)
         exp_mem[x.dst + addr_t'(i)] = 8'(gm_get(int'(i)));
@@ -215,26 +209,26 @@ module tb_idma_mxplanar
 
     for (int dq = 0; dq < 2; dq++)
       for (int f16 = 0; f16 < 2; f16++)
-        for (int lay = 0; lay < 4; lay++)
+        for (int g32 = 0; g32 < 2; g32++)
           for (int n = 0; n < NumN; n++) begin
             automatic xfer_t x;
             if (f16 && !Fp16) continue;
-            x.dq = dq; x.fp16 = f16; x.grouped = lay[1]; x.g32 = lay[0]; x.nblk = Ns[n];
+            x.dq = dq; x.fp16 = f16; x.g32 = g32; x.nblk = Ns[n];
             x.src = 32'h0001_0000;
             x.dst = 32'h0010_0000;
             x.soff = (n % 2) ? -32'sd64 : 32'sd256;
             // a quant data plane or a dequant destination crossing a 4 KiB page
             if (n == NumN - 1) x.dst = 32'h0010_0FC0 & ~32'(StrbWidth - 1);
             if (dq) begin x.src = 32'h0010_0000; x.dst = 32'h0020_0000; end
-            run($sformatf("%s%0d %s G%0d n=%0d", dq ? "dq" : "q", f16 ? 16 : 32,
-                          x.grouped ? "grouped" : "planar", x.g32 ? 32 : 64, x.nblk), '{x}, e);
+            run($sformatf("%s%0d G%0d n=%0d", dq ? "dq" : "q", f16 ? 16 : 32,
+                          x.g32 ? 32 : 64, x.nblk), '{x}, e);
             total += e;
           end
 
-    // back to back: quant and dequant, both layouts and group sizes, interleaved
+    // back to back: quant and dequant, both group sizes, interleaved
     for (int i = 0; i < 12; i++) begin
       automatic xfer_t x;
-      x.dq = i % 3 == 2; x.fp16 = Fp16 && (i % 2 == 0); x.grouped = (i % 4) == 3;
+      x.dq = i % 3 == 2; x.fp16 = Fp16 && (i % 2 == 0);
       x.g32 = (i % 5) < 2; x.nblk = Ns[(i * 7) % NumN];
       x.src = 32'h0001_0000 + i * 32'h0001_0000;
       x.dst = 32'h0100_0000 + i * 32'h0002_0000;

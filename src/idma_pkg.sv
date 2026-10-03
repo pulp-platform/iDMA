@@ -85,16 +85,14 @@ package idma_pkg;
 
     /// MX block geometry (OCP MX): 32 elements per block, width-independent
     localparam int unsigned MxBlockElems     = 32'd32;
-    /// Compressed block: 1B E8M0 scale + 32B E5M2
-    localparam int unsigned MxBlockBytes     = MxBlockElems + 32'd1;
     localparam int unsigned MxFp32BlockBytes = 32'd4 * MxBlockElems;
     localparam int unsigned MxFp16BlockBytes = 32'd2 * MxBlockElems;
-    /// Data bytes of a block in the planar and grouped layouts
+    /// Data-plane bytes of a block (one E5M2 or E4M3 byte per element)
     localparam int unsigned MxDataBlockBytes = MxBlockElems;
-    /// Bytes per scale group slot of the grouped layout, and the scale plane unit
+    /// Scale plane unit: one 64 B line holds the E8M0 scales of up to 64 blocks
     localparam int unsigned MxScaleSlotBytes = 32'd64;
     /// Width of the signed scale plane offset (64 B units)
-    localparam int unsigned MxScaleOffWidth  = 32'd20;
+    localparam int unsigned MxScaleOffWidth  = 32'd22;
 
     /// Transpose tensor dimension width (elements)
     localparam int unsigned TransposeDimWidth = 32'd12;
@@ -120,16 +118,13 @@ package idma_pkg;
     /// MX element format (OCP MX v1.0); E2M1 is reserved, not elaborated
     typedef enum logic [1:0] { MX_E5M2, MX_E4M3, MX_E2M1 } mx_elem_e;
 
-    /// MX options; `poison_dis` keeps Inf/NaN blocks finite instead of poisoning them, `rceil`
-    /// rounds the block scale up, `layout` and `group` place the compressed side and `scale_off`
-    /// is the planar scale plane start relative to the compressed-side address in 64 B units
+    /// MX options; `scale_off` is the scale plane start relative to the data plane in 64 B units
     typedef struct packed {
-        logic                          poison_dis;
-        logic                          rceil;
-        mx_elem_e                      elem_fmt;
-        logic [$bits(mx_layout_e)-1:0] layout;
-        logic [$bits(mx_group_e)-1:0]  group;
-        logic [MxScaleOffWidth-1:0]    scale_off;
+        logic                         poison_dis;
+        logic                         rceil;
+        mx_elem_e                     elem_fmt;
+        logic [$bits(mx_group_e)-1:0] group;
+        logic [MxScaleOffWidth-1:0]   scale_off;
     } mx_options_t;
 
     /// Per-op compute parameter union (members must be equal width)
@@ -175,35 +170,28 @@ package idma_pkg;
                           COMPUTE_MXDEQUANT, COMPUTE_MXDEQUANT_FP16};
     endfunction
 
-    /// MX op with a separate scale plane (planar or grouped layout)?
-    function automatic logic compute_mx_planar(compute_options_t c);
-        return c.enable & compute_op_is_mx(c.op) &
-               (c.params.mx.layout inside {MX_LAYOUT_PLANAR, MX_LAYOUT_GROUPED});
-    endfunction
-
-    /// Per-plane byte ratio: bytes per block of the request length and of the written main plane;
-    /// the legalizer sizes the write length from it. A planar scale plane adds one byte per block.
-    function automatic int unsigned compute_in_bytes(compute_op_e op, logic planar);
+    /// Per-op bytes per block of the request length and of the written data plane
+    function automatic int unsigned compute_in_bytes(compute_op_e op);
         unique case (op)
             COMPUTE_MXQUANT:        return MxFp32BlockBytes;
             COMPUTE_MXQUANT_FP16:   return MxFp16BlockBytes;
             COMPUTE_MXDEQUANT,
-            COMPUTE_MXDEQUANT_FP16: return planar ? MxDataBlockBytes : MxBlockBytes;
+            COMPUTE_MXDEQUANT_FP16: return MxDataBlockBytes;
             default:                return 32'd1;
         endcase
     endfunction
 
-    function automatic int unsigned compute_out_bytes(compute_op_e op, logic planar);
+    function automatic int unsigned compute_out_bytes(compute_op_e op);
         unique case (op)
             COMPUTE_MXQUANT,
-            COMPUTE_MXQUANT_FP16:   return planar ? MxDataBlockBytes : MxBlockBytes;
+            COMPUTE_MXQUANT_FP16:   return MxDataBlockBytes;
             COMPUTE_MXDEQUANT:      return MxFp32BlockBytes;
             COMPUTE_MXDEQUANT_FP16: return MxFp16BlockBytes;
             default:                return 32'd1;
         endcase
     endfunction
 
-    /// Blocks per scale group of the planar and grouped layouts
+    /// Blocks per scale group
     function automatic int unsigned compute_mx_group_blocks(compute_options_t c);
         return (c.params.mx.group == MX_GROUP_G32) ? 32'd32 : 32'd64;
     endfunction
@@ -220,21 +208,18 @@ package idma_pkg;
         endcase
     endfunction
 
-    /// Per-beat MX sideband of the read datapath request and the dataflow element; `last` marks
-    /// the last burst (request) or beat (dataflow element) of the transfer, `is_scale` a scale
-    /// plane burst, `half` a last planar data beat holding a single 32 B block
+    /// Per-beat MX sideband; `last`: last burst or beat of the transfer, `half`: one 32 B block
     typedef struct packed {
-        logic                          mx;
-        logic                          dequant;
-        mx_fmt_e                       fmt;
-        mx_elem_e                      elem_fmt;
-        logic                          rceil;
-        logic                          poison_dis;
-        logic [$bits(mx_layout_e)-1:0] layout;
-        logic [$bits(mx_group_e)-1:0]  group;
-        logic                          is_scale;
-        logic                          half;
-        logic                          last;
+        logic                         mx;
+        logic                         dequant;
+        mx_fmt_e                      fmt;
+        mx_elem_e                     elem_fmt;
+        logic                         rceil;
+        logic                         poison_dis;
+        logic [$bits(mx_group_e)-1:0] group;
+        logic                         is_scale;
+        logic                         half;
+        logic                         last;
     } mx_tag_t;
 
     /// MX sideband of a transfer; zero unless it is an elaborated MX op
@@ -248,7 +233,6 @@ package idma_pkg;
         t.elem_fmt   = t.mx ? c.params.mx.elem_fmt : MX_E5M2;
         t.rceil      = t.mx & ~t.dequant & c.params.mx.rceil;
         t.poison_dis = t.mx & ~t.dequant & c.params.mx.poison_dis;
-        t.layout     = (t.mx & compute_mx_planar(c)) ? c.params.mx.layout : MX_LAYOUT_INLINE;
         t.group      = t.mx ? c.params.mx.group : MX_GROUP_G64;
         t.is_scale   = t.mx & is_scale;
         t.half       = t.mx & half;

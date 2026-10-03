@@ -5,11 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// End-to-end FP16/FP32 -> MXFP8 quantization test: 64B (32 FP16 elems) or 128B
-// (32 FP32 elems) -> 33B (E8M0 scale + 32 E5M2 or E4M3) blocks through the rw_axi
-// backend, FLOOR and RCEIL scale rounding. Checked byte-exact against the DPI-C golden
-// (idma_mxquant_dpi.c) and against hand-computed blocks.
-// Watchdogs surface a hang; one run crosses a 4K page boundary.
+// FP16/FP32 -> MXFP8 quant to both planes, golden and hand-computed blocks, a 4K crossing.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -30,13 +26,14 @@ module tb_idma_mxquant
   import "DPI-C" function void gm_mxquant_cfg(input int num_blocks, input int fp16, input int elem,
                                               input int rceil, input int poison_dis);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_get_scale(input int idx);
   import "DPI-C" function int  gm_stim_fp16(input int e, input int total, input int salt);
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
 
-  localparam int unsigned BlkInBytes  = 64; // 32 FP16 elems
-  localparam int unsigned BlkOutBytes = 33;
+  localparam int unsigned BlkInBytes = 64; // 32 FP16 elems
+  localparam int unsigned Canary     = 64;
 
   assign axi_req_mem = axi_req;
   assign axi_rsp     = axi_rsp_mem;
@@ -68,14 +65,67 @@ module tb_idma_mxquant
     .clk_i(clk), .rst_ni(rst_n), .valid_i(axi_req.w_valid), .ready_i(axi_rsp.w_ready));
 
 
+  task automatic mx_req(input addr_t src, input addr_t dst, input int unsigned L,
+                        input compute_op_e op, input int soff, input mx_elem_e elem,
+                        input logic rceil, input logic pdis);
+    idma_req = '0;
+    idma_req.length   = tf_len_t'(L);
+    idma_req.src_addr = src;
+    idma_req.dst_addr = dst;
+    idma_req.opt.src_protocol = idma_pkg::AXI;
+    idma_req.opt.dst_protocol = idma_pkg::AXI;
+    idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
+    idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
+    idma_req.opt.beo.decouple_rw = 1'b1;
+    idma_req.opt.beo.decouple_aw = 1'b1;
+    idma_req.opt.compute.enable  = 1'b1;
+    idma_req.opt.compute.op      = op;
+    idma_req.opt.compute.params.mx.scale_off  = MxScaleOffWidth'(soff);
+    idma_req.opt.compute.params.mx.elem_fmt   = elem;
+    idma_req.opt.compute.params.mx.rceil      = rceil;
+    idma_req.opt.compute.params.mx.poison_dis = pdis;
+    idma_req.opt.last            = 1'b1;
+    req_valid = 1'b1;
+    do @(posedge clk); while (!req_ready);
+    req_valid = 1'b0;
+    idma_req = '0;
+    while (!(rsp_valid && rsp_ready)) @(posedge clk);
+    repeat (20) @(posedge clk);
+  endtask
+
+  // canaries behind both planes of a num_blocks transfer
+  task automatic fill_planes(input addr_t dst, input int soff, input int unsigned num_blocks);
+    for (int unsigned i = 0; i < num_blocks * 32 + Canary; i++) wr_mem(dst + i, 8'hA5);
+    for (int unsigned i = 0; i < num_blocks + Canary; i++)
+      wr_mem(mx_scale_base(dst, soff) + i, 8'hA5);
+  endtask
+
+  // both planes against the golden, then the canaries; returns error count
+  task automatic check_planes(input string tag, input addr_t dst, input int soff,
+                              input int unsigned num_blocks, output int unsigned errs);
+    automatic addr_t sb = mx_scale_base(dst, soff);
+    errs = 0;
+    for (int unsigned i = 0; i < num_blocks * 32 + Canary; i++) begin
+      automatic logic [7:0] e = (i < num_blocks * 32) ? 8'(gm_get(int'(i))) : 8'hA5;
+      if (rd_mem(dst + i) !== e) begin
+        errs++; if (errs <= 8) $display("[MXQ] %s data[%0d] blk%0d.%0d = %02h exp %02h", tag, i,
+                                          i / 32, i % 32, rd_mem(dst + i), e);
+      end
+    end
+    for (int unsigned k = 0; k < num_blocks + Canary; k++) begin
+      automatic logic [7:0] e = (k < num_blocks) ? 8'(gm_get_scale(int'(k))) : 8'hA5;
+      if (rd_mem(sb + k) !== e) begin
+        errs++; if (errs <= 8) $display("[MXQ] %s scale[%0d] = %02h exp %02h", tag, k,
+                                          rd_mem(sb + k), e);
+      end
+    end
+  endtask
+
   // one num_blocks FP16->MXFP8 transfer; returns error count
   task automatic do_mxquant(input addr_t src, input addr_t dst, input int unsigned num_blocks,
                             output int unsigned errs, input mx_elem_e elem = MX_E5M2,
-                            input logic rceil = 1'b0);
-    automatic int unsigned L  = num_blocks * BlkInBytes;
-    automatic int unsigned WL = num_blocks * BlkOutBytes;
+                            input logic rceil = 1'b0, input int soff = 64);
     automatic logic [15:0] h;
-    errs = 0;
     for (int unsigned el = 0; el < num_blocks*32; el++) begin
       h = 16'(gm_stim_fp16(int'(el), int'(num_blocks*32), 0));
       wr_mem(src + el*2,     h[7:0]);
@@ -84,44 +134,17 @@ module tb_idma_mxquant
       gm_load(int'(el*2 + 1), int'(h[15:8]));
     end
     gm_mxquant_cfg(int'(num_blocks), 1, int'(elem), int'(rceil), 0);
-    for (int unsigned i = 0; i < WL; i++) wr_mem(dst + i, 8'hA5);
-    idma_req = '0;
-    idma_req.length   = tf_len_t'(L);
-    idma_req.src_addr = src;
-    idma_req.dst_addr = dst;
-    idma_req.opt.src_protocol = idma_pkg::AXI;
-    idma_req.opt.dst_protocol = idma_pkg::AXI;
-    idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.beo.decouple_rw = 1'b1;
-    idma_req.opt.beo.decouple_aw = 1'b1;
-    idma_req.opt.compute.enable  = 1'b1;
-    idma_req.opt.compute.op      = idma_pkg::COMPUTE_MXQUANT_FP16;
-    idma_req.opt.compute.params.mx.elem_fmt = elem;
-    idma_req.opt.compute.params.mx.rceil    = rceil;
-    idma_req.opt.last            = 1'b1;
-    req_valid = 1'b1;
-    do @(posedge clk); while (!req_ready);
-    req_valid = 1'b0;
-    idma_req = '0;
-    while (!(rsp_valid && rsp_ready)) @(posedge clk);
-    repeat (20) @(posedge clk);
-    for (int unsigned i = 0; i < WL; i++)
-      if (rd_mem(dst + i) !== 8'(gm_get(int'(i)))) begin
-        errs++; if (errs <= 8) $display("[MXQ] %s%s dst[%0d] blk%0d.%0d = %02h exp %02h",
-          elem.name(), rceil ? " rceil" : "", i, i/BlkOutBytes, i%BlkOutBytes, rd_mem(dst+i),
-          8'(gm_get(int'(i))));
-      end
+    fill_planes(dst, soff, num_blocks);
+    mx_req(src, dst, num_blocks * BlkInBytes, COMPUTE_MXQUANT_FP16, soff, elem, rceil, 1'b0);
+    check_planes($sformatf("%s%s", elem.name(), rceil ? " rceil" : ""), dst, soff, num_blocks,
+                 errs);
   endtask
 
   // one num_blocks FP32->MXFP8 transfer; returns error count
   task automatic do_mxquant_fp32(input addr_t src, input addr_t dst, input int unsigned num_blocks,
                                  output int unsigned errs, input mx_elem_e elem = MX_E5M2,
-                                 input logic rceil = 1'b0);
-    automatic int unsigned L  = num_blocks * 128;
-    automatic int unsigned WL = num_blocks * BlkOutBytes;
+                                 input logic rceil = 1'b0, input int soff = 64);
     automatic logic [31:0] w;
-    errs = 0;
     for (int unsigned el = 0; el < num_blocks*32; el++) begin
       w = 32'(gm_stim_fp32(int'(el), int'(num_blocks*32), 0));
       for (int unsigned b = 0; b < 4; b++) begin
@@ -130,34 +153,10 @@ module tb_idma_mxquant
       end
     end
     gm_mxquant_cfg(int'(num_blocks), 0, int'(elem), int'(rceil), 0);
-    for (int unsigned i = 0; i < WL; i++) wr_mem(dst + i, 8'hA5);
-    idma_req = '0;
-    idma_req.length   = tf_len_t'(L);
-    idma_req.src_addr = src;
-    idma_req.dst_addr = dst;
-    idma_req.opt.src_protocol = idma_pkg::AXI;
-    idma_req.opt.dst_protocol = idma_pkg::AXI;
-    idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.beo.decouple_rw = 1'b1;
-    idma_req.opt.beo.decouple_aw = 1'b1;
-    idma_req.opt.compute.enable  = 1'b1;
-    idma_req.opt.compute.op      = idma_pkg::COMPUTE_MXQUANT;
-    idma_req.opt.compute.params.mx.elem_fmt = elem;
-    idma_req.opt.compute.params.mx.rceil    = rceil;
-    idma_req.opt.last            = 1'b1;
-    req_valid = 1'b1;
-    do @(posedge clk); while (!req_ready);
-    req_valid = 1'b0;
-    idma_req = '0;
-    while (!(rsp_valid && rsp_ready)) @(posedge clk);
-    repeat (20) @(posedge clk);
-    for (int unsigned i = 0; i < WL; i++)
-      if (rd_mem(dst + i) !== 8'(gm_get(int'(i)))) begin
-        errs++; if (errs <= 8) $display("[MXQ] fp32 %s%s dst[%0d] blk%0d.%0d = %02h exp %02h",
-          elem.name(), rceil ? " rceil" : "", i, i/BlkOutBytes, i%BlkOutBytes, rd_mem(dst+i),
-          8'(gm_get(int'(i))));
-      end
+    fill_planes(dst, soff, num_blocks);
+    mx_req(src, dst, num_blocks * 128, COMPUTE_MXQUANT, soff, elem, rceil, 1'b0);
+    check_planes($sformatf("fp32 %s%s", elem.name(), rceil ? " rceil" : ""), dst, soff,
+                 num_blocks, errs);
   endtask
 
   // OCP MX E8M0 conformance: directed FP32 blocks against hand-computed bytes (no DPI)
@@ -202,32 +201,16 @@ module tb_idma_mxquant
     cx[264] = 8'h00; cx[297] = 8'h00;
     for (int unsigned el = 0; el < ConfBlocks*32; el++)
       for (int unsigned b = 0; b < 4; b++) wr_mem(src + el*4 + b, cv[el][b*8 +: 8]);
-    for (int unsigned i = 0; i < ConfBlocks*33; i++) wr_mem(dst + i, 8'hA5);
-    idma_req = '0;
-    idma_req.length   = tf_len_t'(ConfBlocks*128);
-    idma_req.src_addr = src;
-    idma_req.dst_addr = dst;
-    idma_req.opt.src_protocol = idma_pkg::AXI;
-    idma_req.opt.dst_protocol = idma_pkg::AXI;
-    idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.beo.decouple_rw = 1'b1;
-    idma_req.opt.beo.decouple_aw = 1'b1;
-    idma_req.opt.compute.enable  = 1'b1;
-    idma_req.opt.compute.op      = idma_pkg::COMPUTE_MXQUANT;
-    idma_req.opt.compute.params.mx.poison_dis = pdis;
-    idma_req.opt.last            = 1'b1;
-    req_valid = 1'b1;
-    do @(posedge clk); while (!req_ready);
-    req_valid = 1'b0;
-    idma_req = '0;
-    while (!(rsp_valid && rsp_ready)) @(posedge clk);
-    repeat (20) @(posedge clk);
+    fill_planes(dst, 64, ConfBlocks);
+    mx_req(src, dst, ConfBlocks*128, COMPUTE_MXQUANT, 64, MX_E5M2, 1'b0, pdis);
     for (int unsigned i = 0; i < ConfBlocks*33; i++)
-      if (rd_mem(dst + i) !== cx[i]) begin
-        errs++; if (errs <= 8) $display("[MXQ] conform dst[%0d] blk%0d.%0d = %02h exp %02h",
-          i, i/33, i%33, rd_mem(dst+i), cx[i]);
+      if (rd_mem(mx_pl_addr(dst, 64, i)) !== cx[i]) begin
+        errs++; if (errs <= 8) $display("[MXQ] conform blk%0d.%0d = %02h exp %02h",
+          i/33, i%33, rd_mem(mx_pl_addr(dst, 64, i)), cx[i]);
       end
+    for (int unsigned i = 0; i < Canary; i++)
+      if (rd_mem(dst + ConfBlocks*32 + i) !== 8'hA5 ||
+          rd_mem(mx_scale_base(dst, 64) + ConfBlocks + i) !== 8'hA5) errs++;
     $display("[MXQ] E8M0 conformance (poison %s): %0d mismatches", pdis ? "off" : "on", errs);
   endtask
 
@@ -276,39 +259,22 @@ module tb_idma_mxquant
     cx[231] = 8'h70; cx[232] = 8'h7B; cx[233] = 8'h78;
     for (int unsigned el = 0; el < CfBlocks*32; el++)
       for (int unsigned b = 0; b < 4; b++) wr_mem(src + el*4 + b, cv[el][b*8 +: 8]);
-    for (int unsigned i = 0; i < 6*33; i++) wr_mem(dst + i, 8'hA5);
-    for (int unsigned i = 0; i < 2*33; i++) wr_mem(dst + 'h400 + i, 8'hA5);
-    for (int unsigned k = 0; k < 2; k++) begin
-      idma_req = '0;
-      idma_req.length   = tf_len_t'((k == 0) ? 6*128 : 2*128);
-      idma_req.src_addr = src + ((k == 0) ? 0 : 6*128);
-      idma_req.dst_addr = dst + ((k == 0) ? 0 : 'h400);
-      idma_req.opt.src_protocol = idma_pkg::AXI;
-      idma_req.opt.dst_protocol = idma_pkg::AXI;
-      idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
-      idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-      idma_req.opt.beo.decouple_rw = 1'b1;
-      idma_req.opt.beo.decouple_aw = 1'b1;
-      idma_req.opt.compute.enable  = 1'b1;
-      idma_req.opt.compute.op      = idma_pkg::COMPUTE_MXQUANT;
-      idma_req.opt.compute.params.mx.poison_dis = pdis;
-      idma_req.opt.compute.params.mx.rceil      = rceil;
-      idma_req.opt.compute.params.mx.elem_fmt   = (k == 0) ? MX_E4M3 : MX_E5M2;
-      idma_req.opt.last            = 1'b1;
-      req_valid = 1'b1;
-      do @(posedge clk); while (!req_ready);
-      req_valid = 1'b0;
-      idma_req = '0;
-      while (!(rsp_valid && rsp_ready)) @(posedge clk);
-      repeat (20) @(posedge clk);
-    end
+    fill_planes(dst, 64, 6);
+    fill_planes(dst + 'h400, -8, 2);
+    mx_req(src, dst, 6*128, COMPUTE_MXQUANT, 64, MX_E4M3, rceil, pdis);
+    mx_req(src + 6*128, dst + 'h400, 2*128, COMPUTE_MXQUANT, -8, MX_E5M2, rceil, pdis);
     for (int unsigned i = 0; i < CfBlocks*33; i++) begin
-      automatic addr_t a = (i < 6*33) ? dst + i : dst + 'h400 + (i - 6*33);
+      automatic addr_t a = (i < 6*33) ? mx_pl_addr(dst, 64, i)
+                                      : mx_pl_addr(dst + 'h400, -8, i - 6*33);
       if (rd_mem(a) !== cx[i]) begin
         errs++; if (errs <= 8) $display("[MXQ] conform cfg blk%0d.%0d = %02h exp %02h",
           i/33, i%33, rd_mem(a), cx[i]);
       end
     end
+    for (int unsigned i = 0; i < Canary; i++)
+      if (rd_mem(dst + 6*32 + i) !== 8'hA5 || rd_mem(mx_scale_base(dst, 64) + 6 + i) !== 8'hA5 ||
+          rd_mem(dst + 'h400 + 2*32 + i) !== 8'hA5 ||
+          rd_mem(mx_scale_base(dst + 'h400, -8) + 2 + i) !== 8'hA5) errs++;
     $display("[MXQ] E4M3/RCEIL conformance (%s, poison %s): %0d mismatches",
              rceil ? "RCEIL" : "FLOOR", pdis ? "off" : "on", errs);
   endtask
@@ -322,7 +288,7 @@ module tb_idma_mxquant
 
     if (StrbWidth <= 64) begin
       do_mxquant('h0000_2000, 'h0000_4000, 8, e1);   // 8 blocks, aligned
-      do_mxquant('h0000_6000, 'h0000_0F80, 6, e2);   // write (198B) crosses 4K boundary
+      do_mxquant('h0000_6000, 'h0000_0F80, 6, e2, MX_E5M2, 1'b0, -16); // data crosses 4K
     end else begin
       e1 = 0; e2 = 0;                                // FP16 quant capped at StrbWidth 64
     end

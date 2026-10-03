@@ -115,6 +115,11 @@ module idma_otf_compute #(
   assign lane_valid_o = {StrbWidth{beat_valid_o}};
   assign in_ready_o   = sel_transpose & tp_in_ready;
 
+  // the MX engines write a 64 B scale line per group; wider buses are not implemented
+  if ((ComputeEnable.mxquant || ComputeEnable.mxdequant) && (StrbWidth > 64)) begin : gen_mx_width
+    $fatal(1, "idma_otf_compute: MX compute needs StrbWidth <= 64, got %0d", StrbWidth);
+  end
+
   // MX beat tags
   idma_pkg::mx_tag_t tag;
   logic              tag_valid, mq_in, dq_in;

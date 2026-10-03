@@ -73,3 +73,13 @@ task automatic wr_mem(input addr_t a, input logic [7:0] d); i_axi_sim_mem.mem[a]
 function automatic logic [7:0] rd_mem(input addr_t a);
   return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
 endfunction
+
+// MX planes: block k's 32 elements at data + 32 k, its scale byte at data + 64 * soff + k
+function automatic addr_t mx_scale_base(input addr_t data, input int soff);
+  return data + addr_t'(soff * 64);
+endfunction
+// planar address of byte i of the [scale][32 elements] block sequence of an expectation table
+function automatic addr_t mx_pl_addr(input addr_t data, input int soff, input int unsigned i);
+  return (i % 33 == 0) ? mx_scale_base(data, soff) + addr_t'(i / 33)
+                       : data + addr_t'((i / 33) * 32 + i % 33 - 1);
+endfunction

@@ -185,14 +185,12 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     logic      w_done;
 % if compute_eligible:
 
-    // MX planar/grouped layouts: the compressed side alternates data segments of at most one
-    // group with the group's scale chunk; the stream not being legalized waits in `mx_pl_q`
+    // MX: per group a data segment, then its scale chunk; the other plane waits in `mx_pl_q`
     localparam int unsigned LenWidth = $bits(r_tf_q.length);
     typedef logic [LenWidth-1:0] len_t;
     typedef struct packed {
         logic  on;
         logic  rd;
-        logic  grp;
         logic  g32;
         logic  scl;
         logic  half;
@@ -218,11 +216,9 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
         return ((n + len_t'(StrbWidth - 1)) >> OffsetWidth) << OffsetWidth;
     endfunction
 
-    // scale address step per group and the data skip over the grouped scale slot
-    function automatic addr_t mx_sstep(logic grp, logic g32);
-        addr_t g;
-        g = g32 ? addr_t'(32) : addr_t'(64);
-        return grp ? (g * idma_pkg::MxDataBlockBytes + idma_pkg::MxScaleSlotBytes) : g;
+    // scale address step per group
+    function automatic addr_t mx_sstep(logic g32);
+        return g32 ? addr_t'(32) : addr_t'(64);
     endfunction
 % endif
 
@@ -491,7 +487,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
 
 % if compute_eligible:
         //--------------------------------------
-        // MX planar: switch between data segments and scale chunks
+        // MX: switch between data segments and scale chunks
         //--------------------------------------
         mx_pl_d = mx_pl_q;
         if (EnableCompute && mx_pl_q.on && mx_pl_q.rd && r_tf_q.valid && r_done) begin
@@ -501,12 +497,11 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 r_tf_d.length = mx_seg(mx_pl_q.drem, mx_pl_q.g32);
                 r_tf_d.valid  = 1'b1;
                 mx_pl_d.drem  = mx_pl_q.drem - mx_seg(mx_pl_q.drem, mx_pl_q.g32);
-                mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.grp, mx_pl_q.g32);
+                mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.g32);
                 mx_pl_d.scl   = 1'b0;
                 r_done        = 1'b0;
             end else if (mx_pl_q.drem != '0) begin
-                mx_pl_d.daddr = r_tf_q.addr + addr_t'(r_num_bytes) +
-                                (mx_pl_q.grp ? addr_t'(idma_pkg::MxScaleSlotBytes) : '0);
+                mx_pl_d.daddr = r_tf_q.addr + addr_t'(r_num_bytes);
                 r_tf_d.addr   = {mx_pl_q.saddr[AddrWidth-1:OffsetWidth], {OffsetWidth{1'b0}}};
                 r_tf_d.length = mx_rchunk(mx_pl_q.saddr, mx_seg(mx_pl_q.drem, mx_pl_q.g32));
                 r_tf_d.valid  = 1'b1;
@@ -519,8 +514,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         if (EnableCompute && mx_pl_q.on && !mx_pl_q.rd && w_tf_q.valid && w_done) begin
             // quant destination: the group's data, then its scale chunk
             if (!mx_pl_q.scl) begin
-                mx_pl_d.daddr = w_tf_q.addr + addr_t'(w_num_bytes) +
-                                (mx_pl_q.grp ? addr_t'(idma_pkg::MxScaleSlotBytes) : '0);
+                mx_pl_d.daddr = w_tf_q.addr + addr_t'(w_num_bytes);
                 w_tf_d.addr   = mx_pl_q.saddr;
                 w_tf_d.length = mx_pl_q.sn;
                 w_tf_d.valid  = 1'b1;
@@ -533,7 +527,7 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 mx_pl_d.drem  = mx_pl_q.drem - mx_seg(mx_pl_q.drem, mx_pl_q.g32);
                 mx_pl_d.sn    = mx_seg(mx_pl_q.drem, mx_pl_q.g32) >>
                                 $clog2(idma_pkg::MxDataBlockBytes);
-                mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.grp, mx_pl_q.g32);
+                mx_pl_d.saddr = mx_pl_q.saddr + mx_sstep(mx_pl_q.g32);
                 mx_pl_d.scl   = 1'b0;
                 w_done        = 1'b0;
             end else begin
@@ -581,37 +575,30 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
                 default: '0
             };
 % if compute_eligible:
-            // size-changing compute: write length follows the per-op, per-plane byte ratio
+            // size-changing compute: write length follows the per-op byte ratio
             mx_pl_d = '0;
             if (EnableCompute && req_i.opt.compute.enable) begin
                 unique case (req_i.opt.compute.op)
 % for op in ['COMPUTE_MXQUANT', 'COMPUTE_MXQUANT_FP16', 'COMPUTE_MXDEQUANT', 'COMPUTE_MXDEQUANT_FP16']:
                     idma_pkg::${op}:
-                        w_tf_d.length = idma_pkg::compute_mx_planar(req_i.opt.compute) ?
-                            (req_i.length /
-                             idma_pkg::compute_in_bytes(idma_pkg::${op}, 1'b1)) *
-                            idma_pkg::compute_out_bytes(idma_pkg::${op}, 1'b1) :
-                            (req_i.length /
-                             idma_pkg::compute_in_bytes(idma_pkg::${op}, 1'b0)) *
-                            idma_pkg::compute_out_bytes(idma_pkg::${op}, 1'b0);
+                        w_tf_d.length = (req_i.length /
+                            idma_pkg::compute_in_bytes(idma_pkg::${op})) *
+                            idma_pkg::compute_out_bytes(idma_pkg::${op});
 % endfor
                     default: ;
                 endcase
             end
-            // planar: the compressed side starts with its first data segment (quant) or the
-            // first group's scale chunk (dequant)
-            if (EnableCompute && idma_pkg::compute_mx_planar(req_i.opt.compute)) begin
-                mx_pl_d.on   = 1'b1;
-                mx_pl_d.rd   = req_i.opt.compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
-                                                             idma_pkg::COMPUTE_MXDEQUANT_FP16};
-                mx_pl_d.grp  = req_i.opt.compute.params.mx.layout == idma_pkg::MX_LAYOUT_GROUPED;
-                mx_pl_d.g32  = req_i.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
+            // MX: quant starts with the first data segment, dequant with the first scale chunk
+            if (EnableCompute && req_i.opt.compute.enable &&
+                idma_pkg::compute_op_is_mx(req_i.opt.compute.op)) begin
+                mx_pl_d.on    = 1'b1;
+                mx_pl_d.rd    = req_i.opt.compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
+                                                              idma_pkg::COMPUTE_MXDEQUANT_FP16};
+                mx_pl_d.g32   = req_i.opt.compute.params.mx.group == idma_pkg::MX_GROUP_G32;
                 mx_pl_d.daddr = mx_pl_d.rd ? req_i.src_addr : req_i.dst_addr;
-                mx_pl_d.saddr = mx_pl_d.daddr + (mx_pl_d.grp ?
-                    (mx_pl_d.g32 ? addr_t'(32 * idma_pkg::MxDataBlockBytes)
-                                 : addr_t'(64 * idma_pkg::MxDataBlockBytes)) :
+                mx_pl_d.saddr = mx_pl_d.daddr +
                     (addr_t'($signed(req_i.opt.compute.params.mx.scale_off)) <<
-                     $clog2(idma_pkg::MxScaleSlotBytes)));
+                     $clog2(idma_pkg::MxScaleSlotBytes));
                 if (mx_pl_d.rd) begin
                     mx_pl_d.half  = (StrbWidth == 64) & req_i.length[5];
                     mx_pl_d.drem  = len_t'((req_i.length + StrbWidth - 1) >> OffsetWidth)
@@ -865,50 +852,31 @@ ${database[protocol]['legalizer_write_data_path']}
 
     // size-changing compute: length must be a whole multiple of the op's input granule
     `ASSERT_NEVER(ComputeSizeAligned, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (req_i.length % idma_pkg::compute_in_bytes(req_i.opt.compute.op,
-                       idma_pkg::compute_mx_planar(req_i.opt.compute)) != 0)), clk_i, !rst_ni)
+                  (req_i.length %
+                   idma_pkg::compute_in_bytes(req_i.opt.compute.op) != 0)), clk_i, !rst_ni)
     // size-changing compute requires beat-aligned addresses
     `ASSERT_NEVER(ComputeSrcAligned, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op, 1'b0) !=
-                   idma_pkg::compute_out_bytes(req_i.opt.compute.op, 1'b0)) &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
                   (req_i.src_addr[OffsetWidth-1:0] != '0)), clk_i, !rst_ni)
     `ASSERT_NEVER(ComputeDstAligned, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op, 1'b0) !=
-                   idma_pkg::compute_out_bytes(req_i.opt.compute.op, 1'b0)) &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
                   (req_i.dst_addr[OffsetWidth-1:0] != '0)), clk_i, !rst_ni)
-    // FP16 element formats pack/expand at most one block per beat
-    `ASSERT_NEVER(ComputeMxFp16Width, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (idma_pkg::compute_op_fmt(req_i.opt.compute.op) == idma_pkg::MX_FMT_FP16) &
-                  (StrbWidth > 64)), clk_i, !rst_ni)
     // E2M1 and the reserved MX element format are not elaborated
     `ASSERT_NEVER(ComputeMxElemFmt, (ready_o & valid_i & req_i.opt.compute.enable &
                   idma_pkg::compute_op_is_mx(req_i.opt.compute.op) &
                   ~(req_i.opt.compute.params.mx.elem_fmt inside {idma_pkg::MX_E5M2,
                                                                  idma_pkg::MX_E4M3})),
                   clk_i, !rst_ni)
-    // inline mxdequant input must additionally be beat-aligned (33k % StrbWidth == 0)
-    `ASSERT_NEVER(ComputeMxdequantBeatAligned, (ready_o & valid_i & req_i.opt.compute.enable &
-                  ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) |
-                   (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)) &
-                  ~idma_pkg::compute_mx_planar(req_i.opt.compute) &
-                  (req_i.length % (idma_pkg::MxBlockBytes*StrbWidth) != 0)), clk_i, !rst_ni)
     // NOT IMPLEMENTED: dequant output length that overflows the length field
     `ASSERT_NEVER(ComputeMxdequantLengthFits, (ready_o & valid_i & req_i.opt.compute.enable &
                   ((req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT) |
                    (req_i.opt.compute.op == idma_pkg::COMPUTE_MXDEQUANT_FP16)) &
                   ($bits(req_i.length) < 64) &
-                  (((64'(req_i.length) / 64'(idma_pkg::compute_in_bytes(req_i.opt.compute.op,
-                       idma_pkg::compute_mx_planar(req_i.opt.compute)))) *
-                    64'(idma_pkg::compute_out_bytes(req_i.opt.compute.op, 1'b0))) >=
+                  (((64'(req_i.length) / 64'(idma_pkg::compute_in_bytes(req_i.opt.compute.op))) *
+                    64'(idma_pkg::compute_out_bytes(req_i.opt.compute.op))) >=
                    (65'd1 << $bits(req_i.length)))), clk_i, !rst_ni)
-    // NOT IMPLEMENTED: the reserved MX layout encoding
-    `ASSERT_NEVER(ComputeMxLayout, (ready_o & valid_i & req_i.opt.compute.enable &
-                  idma_pkg::compute_op_is_mx(req_i.opt.compute.op) &
-                  (req_i.opt.compute.params.mx.layout == 2'd3)), clk_i, !rst_ni)
-    // NOT IMPLEMENTED: planar and grouped layouts above 512 bit (a scale beat is one 64 B slot)
-    `ASSERT_NEVER(ComputeMxPlanarWidth, (ready_o & valid_i &
-                  idma_pkg::compute_mx_planar(req_i.opt.compute) & (StrbWidth > 64)),
-                  clk_i, !rst_ni)
     // compute retires on the per-beat write pulse; TileLink writes retire per burst
     `ASSERT_NEVER(ComputeDstTilelink, (ready_o & valid_i & req_i.opt.compute.enable &
                   (req_i.opt.dst_protocol == idma_pkg::TILELINK)), clk_i, !rst_ni)
@@ -923,12 +891,12 @@ ${database[protocol]['legalizer_write_data_path']}
                   clk_i, !rst_ni)
     // NOT IMPLEMENTED: size-changing compute is validated on AXI src/dst only (TODO: OBI)
     `ASSERT_NEVER(ComputeMxSrcProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op, 1'b0) !=
-                   idma_pkg::compute_out_bytes(req_i.opt.compute.op, 1'b0)) &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
                   (req_i.opt.src_protocol != idma_pkg::AXI)), clk_i, !rst_ni)
     `ASSERT_NEVER(ComputeMxDstProtocol, (ready_o & valid_i & req_i.opt.compute.enable &
-                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op, 1'b0) !=
-                   idma_pkg::compute_out_bytes(req_i.opt.compute.op, 1'b0)) &
+                  (idma_pkg::compute_in_bytes(req_i.opt.compute.op) !=
+                   idma_pkg::compute_out_bytes(req_i.opt.compute.op)) &
                   (req_i.opt.dst_protocol != idma_pkg::AXI)), clk_i, !rst_ni)
 % if compute_eligible:
     // the requested op must be elaborated in this configuration

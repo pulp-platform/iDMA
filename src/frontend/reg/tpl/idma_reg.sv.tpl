@@ -265,8 +265,6 @@ module idma_${identifier} #(
             dma_reg2hw[i].mx_cfg.mx_rceil.value;
         nxt_dma_req${sep}opt.compute.params.mx.elem_fmt    =
             idma_pkg::mx_elem_e'(dma_reg2hw[i].mx_cfg.mx_elem_fmt.value);
-        nxt_dma_req${sep}opt.compute.params.mx.layout      =
-            dma_reg2hw[i].mx_cfg.mx_layout.value;
         nxt_dma_req${sep}opt.compute.params.mx.group       =
             dma_reg2hw[i].mx_cfg.mx_group.value;
         nxt_dma_req${sep}opt.compute.params.mx.scale_off   =

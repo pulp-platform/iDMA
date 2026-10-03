@@ -463,8 +463,7 @@
                 { "tag" : "mxquant_32", "params" : { "DataWidth" : 32 } },
                 { "tag" : "mxquant_64", "params" : { "DataWidth" : 64 } },
                 { "tag" : "mxquant_256", "params" : { "DataWidth" : 256 } },
-                { "tag" : "mxquant_512", "params" : { "DataWidth" : 512 } },
-                { "tag" : "mxquant_1024", "params" : { "DataWidth" : 1024 } }
+                { "tag" : "mxquant_512", "params" : { "DataWidth" : 512 } }
             ]
         }
     },
@@ -485,8 +484,7 @@
                 { "tag" : "mxroundtrip_32", "params" : { "DataWidth" : 32 } },
                 { "tag" : "mxroundtrip_64", "params" : { "DataWidth" : 64 } },
                 { "tag" : "mxroundtrip_256", "params" : { "DataWidth" : 256 } },
-                { "tag" : "mxroundtrip_512", "params" : { "DataWidth" : 512 } },
-                { "tag" : "mxroundtrip_1024", "params" : { "DataWidth" : 1024, "QuantFp16" : 0 } }
+                { "tag" : "mxroundtrip_512", "params" : { "DataWidth" : 512 } }
             ]
         }
     },
@@ -596,18 +594,17 @@
                 { "tag" : "mxneg_1", "params" : { "NegCase" : 1, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeSizeAligned" },
                 { "tag" : "mxneg_2", "params" : { "NegCase" : 2, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeSrcAligned" },
                 { "tag" : "mxneg_3", "params" : { "NegCase" : 3, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeDstAligned" },
-                { "tag" : "mxneg_5", "params" : { "NegCase" : 5, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxdequantBeatAligned" },
                 { "tag" : "mxneg_6", "params" : { "NegCase" : 6, "DataWidth" : 64, "EnDequant" : 0, "EnFp16" : 1 }, "token" : "ComputeOpUnsupported" },
                 { "tag" : "mxneg_7", "params" : { "NegCase" : 7, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxSrcProtocol" },
                 { "tag" : "mxneg_8", "params" : { "NegCase" : 8, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxDstProtocol" },
                 { "tag" : "mxneg_10", "params" : { "NegCase" : 10, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeShape" },
                 { "tag" : "mxneg_13", "params" : { "NegCase" : 13, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 0 }, "token" : "ComputeOpUnsupported" },
-                { "tag" : "mxneg_14", "params" : { "NegCase" : 14, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeShape" }
+                { "tag" : "mxneg_14", "params" : { "NegCase" : 14, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeShape" },
+                { "tag" : "mxneg_17", "params" : { "NegCase" : 17, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeSizeAligned" },
+                { "tag" : "mxneg_18", "params" : { "NegCase" : 18, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxElemFmt" }
             ],
             "exclude" : [
-                { "case" : 4,  "why" : "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046" },
-                { "case" : 11, "why" : "the request is never accepted, so the guard is never sampled" },
-                { "case" : 12, "why" : "DataWidth 1024 SIGSEGVs on verilator 5.020; passes on 5.046" }
+                { "case" : 11, "why" : "the request is never accepted, so the guard is never sampled" }
             ]
         }
     },
@@ -656,7 +653,6 @@
         ],
         "elab_covered_elsewhere" : ["tb_idma_reg_frontend"],
         "guards_untested" : [
-            { "guard" : "ComputeMxFp16Width", "why" : "only reachable from the excluded 1024 cases" },
             { "guard" : "ComputeMxdequantLengthFits", "why" : "case 11 is never accepted" },
             { "guard" : "ComputeDstTilelink", "why" : "no TileLink backend variant exists" }
         ],

@@ -5,11 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// On-the-fly compute through the tightly-coupled `inst64` frontend. A `DMOPC` selects
-/// MX quantization, the following `DMCPY` is checked byte-exact against the DPI-C golden,
-/// once inline and once to a data and a scale plane, and a last `DMOPC` returns the frontend to
-/// a plain copy. `NegCase` 1 proves the
-/// unknown-opcode guard fires instead of silently degrading to a copy.
+/// inst64 DMOPC: MX quant to both planes byte-exact per group size, then a copy; NegCase 1 guard.
 module tb_idma_inst64_compute #(
     /// Elaborate the backend compute datapath; 0 must fail the golden compare
     parameter bit          EnableCompute = 1'b1,
@@ -24,6 +20,7 @@ module tb_idma_inst64_compute #(
     import "DPI-C" function void gm_load(input int idx, input int val);
     import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
     import "DPI-C" function int  gm_get(input int idx);
+    import "DPI-C" function int  gm_get_scale(input int idx);
     import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
     idma_inst64_base #(
@@ -34,15 +31,15 @@ module tb_idma_inst64_compute #(
 
     localparam int unsigned TimeoutCycles = 32'd200000;
 
-    // OCP MX geometry; the FP32 source granule is 128 B, the compressed block 33 B
+    // OCP MX geometry; the FP32 source granule is 128 B, a block 32 B of data and 1 B of scale
     localparam int unsigned NumBlocks   = 32'd8;
     localparam int unsigned BlkInBytes  = 32'd128;
-    localparam int unsigned BlkOutBytes = 32'd33;
     localparam int unsigned SrcBytes    = NumBlocks * BlkInBytes;
-    localparam int unsigned QuantBytes  = NumBlocks * BlkOutBytes;
+    localparam int unsigned QuantBytes  = NumBlocks * 33;
 
     localparam int unsigned GuardBytes = 32'd64;
-    localparam int unsigned PlScaleOff = 32'd6;
+    // scale planes 6 and 10 x 64 B above the data plane, inside the sentinel window
+    localparam int unsigned PlScaleOff [2] = '{32'd6, 32'd10};
     localparam logic [7:0]  Sentinel   = 8'h5A;
 
     // Outside the TCDM window in both topologies, so every endpoint decodes to AXI
@@ -70,45 +67,6 @@ module tb_idma_inst64_compute #(
     task automatic poison_destination(input addr_t base);
         for (int unsigned i = 0; i < SrcBytes + 2*GuardBytes; i++) begin
             harness.mem_write_byte(base - GuardBytes + i, Sentinel);
-        end
-    endtask
-
-    task automatic check_quant_payload();
-        logic [7:0] actual;
-        logic [7:0] expected;
-        for (int unsigned i = 0; i < QuantBytes; i++) begin
-            actual   = harness.mem_read_byte(QuantAddr + i);
-            expected = 8'(gm_get(int'(i)));
-            bytes_checked++;
-            if (actual !== expected) begin
-                if (errors < 10) begin
-                    $error("mxquant mismatch at %0d (blk%0d.%0d): expected 0x%02x, got 0x%02x",
-                           i, i/BlkOutBytes, i%BlkOutBytes, expected, actual);
-                end
-                errors++;
-            end
-            // a plain copy would land the source byte here instead
-            if (actual !== harness.mem_read_byte(SrcAddr + i)) bytes_differ++;
-        end
-    endtask
-
-    /// Everything past the compressed length must still hold the sentinel.
-    task automatic check_quant_extent();
-        logic [7:0] tail;
-        for (int unsigned i = QuantBytes; i < SrcBytes + GuardBytes; i++) begin
-            tail = harness.mem_read_byte(QuantAddr + i);
-            if (tail !== Sentinel) begin
-                if (errors < 20) $error("mxquant wrote past %0d B at +%0d: 0x%02x",
-                                        QuantBytes, i, tail);
-                errors++;
-            end
-        end
-        for (int unsigned i = 1; i <= GuardBytes; i++) begin
-            tail = harness.mem_read_byte(QuantAddr - i);
-            if (tail !== Sentinel) begin
-                $error("mxquant underrun at -%0d: 0x%02x", i, tail);
-                errors++;
-            end
         end
     endtask
 
@@ -154,7 +112,6 @@ module tb_idma_inst64_compute #(
                 (32'(exp.poison_dis) << idma_inst64_compute_pkg::Rs1MxPoisonDisLsb) |
                 (32'(exp.rceil)      << idma_inst64_compute_pkg::Rs1MxRceilLsb) |
                 (32'(exp.elem_fmt)   << idma_inst64_compute_pkg::Rs1MxElemFmtLsb) |
-                (32'(exp.layout)     << idma_inst64_compute_pkg::Rs1MxLayoutLsb) |
                 (32'(exp.group)      << idma_inst64_compute_pkg::Rs1MxGroupLsb),
             32'(exp.scale_off) << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
         repeat (4) @(posedge harness.clk);
@@ -166,28 +123,47 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
-    /// Planar quant: the data plane at `QuantAddr`, the scale plane `PlScaleOff` x 64 B above.
-    task automatic check_planar_payload();
+    /// Data plane at `QuantAddr`, scale plane `soff` x 64 B above, the rest still sentinel.
+    task automatic check_planar_payload(input int unsigned soff);
+        bytes_checked = 0;
+        bytes_differ  = 0;
         for (int unsigned k = 0; k < NumBlocks; k++) begin
-            for (int unsigned i = 0; i < BlkOutBytes; i++) begin
-                automatic addr_t a = (i == 0) ? QuantAddr + PlScaleOff * 64 + k
+            for (int unsigned i = 0; i < 33; i++) begin
+                automatic addr_t a = (i == 0) ? QuantAddr + soff * 64 + k
                                               : QuantAddr + k * 32 + i - 1;
-                if (harness.mem_read_byte(a) !== 8'(gm_get(int'(k * BlkOutBytes + i)))) begin
-                    if (errors < 10) $error("planar mismatch blk%0d.%0d at %0h", k, i, a);
+                automatic logic [7:0] e = (i == 0) ? 8'(gm_get_scale(int'(k)))
+                                                   : 8'(gm_get(int'(k * 32 + i - 1)));
+                bytes_checked++;
+                if (harness.mem_read_byte(a) !== e) begin
+                    if (errors < 10) $error("planar mismatch blk%0d.%0d at %0h: 0x%02x exp 0x%02x",
+                                            k, i, a, harness.mem_read_byte(a), e);
                     errors++;
                 end
+                // a plain copy would land the source byte here instead
+                if (harness.mem_read_byte(a) !== harness.mem_read_byte(SrcAddr + a - QuantAddr))
+                    bytes_differ++;
             end
         end
-        for (int unsigned i = NumBlocks * 32; i < PlScaleOff * 64; i++)
+        for (int unsigned i = NumBlocks * 32; i < soff * 64; i++)
             if (harness.mem_read_byte(QuantAddr + i) !== Sentinel) begin
                 if (errors < 20) $error("planar data plane overrun at +%0d", i);
                 errors++;
             end
-        for (int unsigned i = NumBlocks; i < GuardBytes; i++)
-            if (harness.mem_read_byte(QuantAddr + PlScaleOff * 64 + i) !== Sentinel) begin
+        for (int unsigned i = soff * 64 + NumBlocks; i < SrcBytes + GuardBytes; i++)
+            if (harness.mem_read_byte(QuantAddr + i) !== Sentinel) begin
                 if (errors < 20) $error("planar scale plane overrun at +%0d", i);
                 errors++;
             end
+        for (int unsigned i = 1; i <= GuardBytes; i++)
+            if (harness.mem_read_byte(QuantAddr - i) !== Sentinel) begin
+                if (errors < 20) $error("mxquant underrun at -%0d", i);
+                errors++;
+            end
+        // A bypassed compute path leaves the source bytes; name that instead of a diff dump.
+        if (bytes_differ == 0)
+            $fatal(1, "quantized planes are byte-identical to the source: compute did not run");
+        if (bytes_checked != QuantBytes)
+            $fatal(1, "compare loop ran %0d times, expected %0d", bytes_checked, QuantBytes);
     endtask
 
     task automatic check_copy_payload();
@@ -264,7 +240,8 @@ module tb_idma_inst64_compute #(
 
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_before);
 
-        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
+        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant),
+            PlScaleOff[0] << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
         // DMOPC only latches state; it must not launch a transfer of its own
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_opc);
         if (next_id_opc !== next_id_before) begin
@@ -276,27 +253,17 @@ module tb_idma_inst64_compute #(
         harness.drv_if.dma_set_dest(QuantAddr);
         harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, quant_id);
         harness.drv_if.dma_wait(quant_id, 3'd0);
+        check_planar_payload(PlScaleOff[0]);
 
-        check_quant_payload();
-        check_quant_extent();
-
-        // A bypassed compute path leaves the source bytes; name that instead of a diff dump.
-        if (bytes_differ == 0) begin
-            $fatal(1, "quantized block is byte-identical to the source: compute did not run");
-        end
-        if (bytes_checked != QuantBytes) begin
-            $fatal(1, "compare loop ran %0d times, expected %0d", bytes_checked, QuantBytes);
-        end
-
-        // The same blocks to a data plane and a scale plane
+        // The same blocks in scale groups of 32, scale plane further up
         poison_destination(QuantAddr);
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant) |
-            (32'(idma_pkg::MX_LAYOUT_PLANAR) << idma_inst64_compute_pkg::Rs1MxLayoutLsb),
-            32'(PlScaleOff) << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
+            (32'(idma_pkg::MX_GROUP_G32) << idma_inst64_compute_pkg::Rs1MxGroupLsb),
+            PlScaleOff[1] << idma_inst64_compute_pkg::Rs2MxScaleOffLsb);
         harness.drv_if.dma_set_dest(QuantAddr);
         harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, quant_id);
         harness.drv_if.dma_wait(quant_id, 3'd0);
-        check_planar_payload();
+        check_planar_payload(PlScaleOff[1]);
 
         // Back to a plain copy: the latched op must not leak into the next transfer
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));

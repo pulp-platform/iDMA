@@ -5,12 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// On-the-fly MX dequantizer, beat-granular and never stalling: inline 33B blocks
-// ([1B E8M0 scale][32B E5M2 or E4M3]) or planar 32B data blocks are accepted whole beats into
-// the input buffer (IB), extracted one output beat at a time (D0) and expanded to FP16 or FP32
-// (D1) into the output queue (OQd). A planar scale beat lands in the scale register (SR); each
-// data beat copies its blocks' scale bytes from it into its IB entry. Input pops and output
-// pushes are credit-checked from flops.
+// On-the-fly MX dequantizer: data beats (IB) with scales from SR, D0 select, D1 expand, OQd.
 module idma_otf_mxdequant
   import idma_float_pkg::*;
 #(
@@ -34,40 +29,38 @@ module idma_otf_mxdequant
 );
 
   // pragma translate_off
-  initial assert (StrbWidth >= 4 && StrbWidth <= 128 && (StrbWidth & (StrbWidth-1)) == 0) else
-      $fatal(1, "idma_otf_mxdequant: StrbWidth (%0d) must be a power of two in [4,128]", StrbWidth);
+  initial assert (StrbWidth >= 4 && StrbWidth <= 64 && (StrbWidth & (StrbWidth-1)) == 0) else
+      $fatal(1, "idma_otf_mxdequant: StrbWidth (%0d) must be a power of two in [4, 64]", StrbWidth);
   // pragma translate_on
 
-  // FP16 is illegal above StrbWidth 64 (legalizer ComputeMxFp16Width), so gate it off
-  localparam bit          Fp16Dn = Fp16En && (StrbWidth <= 64);
+  localparam bit          Fp16Dn = Fp16En;
   localparam int unsigned NL16   = StrbWidth / 2;
   localparam int unsigned NL32   = StrbWidth / 4;
   localparam int unsigned NL     = Fp16Dn ? NL16 : NL32;
   localparam int unsigned NIB    = 3;
   localparam int unsigned NOQ    = 3;
-  localparam int unsigned OW     = $clog2(StrbWidth);
-  localparam int unsigned SubW   = (StrbWidth < 128) ? $clog2(128 / StrbWidth) : 1;
-  // planar: scale bytes per IB entry, the 64 B scale line, data bytes counted per group
-  localparam bit          PlEn   = StrbWidth <= 64;
+  localparam int unsigned IbPW   = $clog2(NIB);
+  localparam int unsigned IbCW   = $clog2(NIB + 1);
+  // scale bytes per IB entry, the 64 B scale line
   localparam int unsigned DatB   = idma_pkg::MxDataBlockBytes;
   localparam int unsigned NSc    = (StrbWidth > DatB) ? StrbWidth / DatB : 1;
   localparam int unsigned SlB    = idma_pkg::MxScaleSlotBytes;
 
-  // IB: whole input beats, each with its destination and element format, layout and scale bytes
+  // IB: whole data beats, each with its destination and element format and its scale bytes
   logic [NIB-1:0][StrbWidth-1:0][7:0] ib_q;
-  logic [NIB-1:0]                     ib_fp16_q, ib_e4m3_q, ib_pl_q, ib_half_q;
+  logic [NIB-1:0]                     ib_fp16_q, ib_e4m3_q, ib_half_q;
   logic [NIB-1:0][NSc-1:0][7:0]       ib_sc_q;
-  // planar: scale register, data byte counter within the scale line, scale sub-beat pointer
+  // scale register, data byte counter within the scale line, scale sub-beat pointer
   logic [SlB-1:0][7:0]                sr_q;
   logic [10:0]                        dk_q;
   logic [5:0]                         sw_q;
   logic                               in_s_q;
-  logic                               pl, grp, is_sc, dpop, spop;
-  logic [1:0]                         ib_wr_q, ib_hd_q, ib_hd1;
-  logic [1:0]                         ib_cnt_q, ib_cnt_d;
+  logic                               is_sc, dpop, spop;
+  logic [IbPW-1:0]                    ib_wr_q, ib_hd_q;
+  logic [IbCW-1:0]                    ib_cnt_q, ib_cnt_d;
   logic                               in_ok_q;
-  logic [OW-1:0]                      off_q;
-  logic [SubW-1:0]                    sub_q;
+  // output beat within the head entry: 2 (FP16) or 4 (FP32) per data beat
+  logic [1:0]                         os_q;
 
   // D0 stage register
   logic                               d0_v_q, d0_fp16_q, d0_e4m3_q;
@@ -82,37 +75,38 @@ module idma_otf_mxdequant
     return (p == 2'd2) ? 2'd0 : p + 2'd1;
   endfunction
 
-  assign pl    = PlEn && (tag_i.layout != idma_pkg::MX_LAYOUT_INLINE);
-  assign grp   = PlEn && (tag_i.layout == idma_pkg::MX_LAYOUT_GROUPED);
-  assign is_sc = pl & tag_i.is_scale;
+  function automatic logic [IbPW-1:0] inc_ib(input logic [IbPW-1:0] p);
+    return (32'(p) == NIB - 1) ? '0 : p + IbPW'(1);
+  endfunction
+
+  assign is_sc = tag_i.is_scale;
   // a scale beat never waits: the previous group's data beats copied their scale bytes already
   assign pop_o = valid_i & (in_ok_q | is_sc);
   assign dpop  = pop_o & ~is_sc;
   assign spop  = pop_o & is_sc;
 
-  // D0 issue: the window holds the next output beat's bytes and an OQd slot is free
-  logic          fmt16, first, avail, issue, adv, pl_hd, half_hd;
-  logic [OW+1:0] need, nxt;
-  logic [SubW-1:0] sub_last;
-  assign ib_hd1   = inc3(ib_hd_q);
-  assign fmt16    = Fp16Dn & ib_fp16_q[ib_hd_q];
-  assign pl_hd    = PlEn & ib_pl_q[ib_hd_q];
-  assign half_hd  = PlEn & ib_half_q[ib_hd_q];
-  assign first    = (sub_q == '0);
-  assign need     = (fmt16 ? (OW+2)'(NL16) : (OW+2)'(NL32)) + (OW+2)'(first & ~pl_hd);
-  assign nxt      = (OW+2)'(off_q) + need;
-  assign avail    = (ib_cnt_q >= 2'd2) | ((ib_cnt_q == 2'd1) & (nxt <= (OW+2)'(StrbWidth)));
-  assign issue    = avail & (oq_free_q != 2'd0);
-  // a half entry (the last planar beat of a transfer with an odd block count) ends after 32 B
-  assign adv      = issue & (nxt >= (half_hd ? (OW+2)'(DatB) : (OW+2)'(StrbWidth)));
-  assign sub_last = fmt16 ? SubW'((64 / StrbWidth) - 1) : SubW'((128 / StrbWidth) - 1);
+  // D0 issue: the head entry's next output beat; a half entry ends after its first 32 B
+  logic                fmt16, half_hd, issue, adv;
+  logic [1:0]          os_last;
+  logic [NL-1:0][7:0]  ext;
+  logic [7:0]          sc;
+  assign fmt16   = Fp16Dn & ib_fp16_q[ib_hd_q];
+  assign half_hd = ib_half_q[ib_hd_q];
+  assign os_last = (fmt16 ? 2'd1 : 2'd3) >> half_hd;
+  assign issue   = (ib_cnt_q != '0) & (oq_free_q != 2'd0);
+  assign adv     = issue & (os_q == os_last);
 
-  logic [2*StrbWidth-1:0][7:0] win;
-  logic [NL:0][7:0]            ext;
-  assign win = {ib_q[ib_hd1], ib_q[ib_hd_q]};
-  assign ext = (8*(NL+1))'(win >> {off_q, 3'b000});
+  always_comb begin
+    for (int i = 0; i < NL; i++) begin
+      if (fmt16)       ext[i] = ib_q[ib_hd_q][32'(os_q[0])*NL16 + i];
+      else if (i < NL32) ext[i] = ib_q[ib_hd_q][32'(os_q)*NL32 + i];
+      else             ext[i] = '0;
+    end
+    if (NSc > 1) sc = ib_sc_q[ib_hd_q][fmt16 ? 32'(os_q[0]) : 32'(os_q[1])];
+    else         sc = ib_sc_q[ib_hd_q][0];
+  end
 
-  assign ib_cnt_d = ib_cnt_q + 2'(dpop) - 2'(adv);
+  assign ib_cnt_d = ib_cnt_q + IbCW'(dpop) - IbCW'(adv);
 
   // a group's scale beats fill the scale line from the sub-beat of its first block on
   logic [5:0] sw_d;
@@ -126,28 +120,19 @@ module idma_otf_mxdequant
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       ib_wr_q <= '0; ib_hd_q <= '0; ib_cnt_q <= '0; in_ok_q <= 1'b1;
-      off_q   <= '0; sub_q   <= '0; d0_v_q   <= 1'b0;
+      os_q    <= '0; d0_v_q  <= 1'b0;
       dk_q    <= '0; sw_q    <= '0; in_s_q   <= 1'b0;
     end else begin
       ib_cnt_q <= ib_cnt_d;
-      in_ok_q  <= ib_cnt_d < 2'(NIB);
+      in_ok_q  <= ib_cnt_d < IbCW'(NIB);
       d0_v_q   <= issue;
-      if (dpop) ib_wr_q <= inc3(ib_wr_q);
-      if (adv)  ib_hd_q <= ib_hd1;
-      if (issue) begin
-        off_q <= (adv & half_hd) ? '0 : OW'(nxt);
-        sub_q <= (sub_q == sub_last) ? '0 : sub_q + SubW'(1);
-      end
-      // planar data bytes within the scale line; grouped resets at the group end
-      if (dpop) begin
-        if (tag_i.last || (grp && ((32'(dk_q) + StrbWidth) ==
-            ((tag_i.group == idma_pkg::MX_GROUP_G32) ? 32 : 64) * DatB)))
-          dk_q <= '0;
-        else
-          dk_q <= dk_q + 11'(StrbWidth);
-      end
-      if (pop_o) in_s_q <= is_sc;
-      if (spop)  sw_q   <= sw_d;
+      if (dpop)  ib_wr_q <= inc_ib(ib_wr_q);
+      if (adv)   ib_hd_q <= inc_ib(ib_hd_q);
+      if (issue) os_q    <= adv ? 2'd0 : os_q + 2'd1;
+      // data bytes within the scale line
+      if (dpop)  dk_q    <= tag_i.last ? '0 : dk_q + 11'(StrbWidth);
+      if (pop_o) in_s_q  <= is_sc;
+      if (spop)  sw_q    <= sw_d;
     end
   end
 
@@ -156,16 +141,14 @@ module idma_otf_mxdequant
       ib_q[ib_wr_q]      <= data_i;
       ib_fp16_q[ib_wr_q] <= Fp16Dn & (tag_i.fmt == idma_pkg::MX_FMT_FP16);
       ib_e4m3_q[ib_wr_q] <= tag_i.elem_fmt == idma_pkg::MX_E4M3;
-      ib_pl_q[ib_wr_q]   <= pl;
-      ib_half_q[ib_wr_q] <= pl & tag_i.half;
+      ib_half_q[ib_wr_q] <= tag_i.half;
       for (int k = 0; k < NSc; k++) ib_sc_q[ib_wr_q][k] <= sr_q[dk_q[10:5] + 6'(k)];
     end
     if (issue) begin
       d0_fp16_q <= fmt16;
       d0_e4m3_q <= ib_e4m3_q[ib_hd_q];
-      if (pl_hd)      d0_sc_q <= ib_sc_q[ib_hd_q][(NSc > 1) ? 32'(off_q) / DatB : 0];
-      else if (first) d0_sc_q <= ext[0];
-      for (int i = 0; i < NL; i++) d0_el_q[i] <= (first & ~pl_hd) ? ext[i+1] : ext[i];
+      d0_sc_q   <= sc;
+      d0_el_q   <= ext;
     end
   end
 
@@ -198,7 +181,7 @@ module idma_otf_mxdequant
 
   assign beat_valid_o = (oq_cnt_q != 2'd0);
   assign data_o       = oq_q[oq_rd_q];
-  assign busy_o       = (ib_cnt_q != 2'd0) | (sub_q != '0) | d0_v_q | beat_valid_o;
+  assign busy_o       = (ib_cnt_q != '0) | d0_v_q | beat_valid_o;
 
   // pragma translate_off
   always @(posedge clk_i) if (rst_ni) begin

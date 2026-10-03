@@ -9,10 +9,9 @@
 package idma_float_pkg;
 
   // block geometry is single-homed in idma_pkg
-  localparam int unsigned MxBlockSize            = idma_pkg::MxBlockElems;
-  localparam int unsigned MxFp32BlockBytes       = idma_pkg::MxFp32BlockBytes;
-  localparam int unsigned MxFp16BlockBytes       = idma_pkg::MxFp16BlockBytes;
-  localparam int unsigned MxCompressedBlockBytes = idma_pkg::MxBlockBytes;
+  localparam int unsigned MxBlockSize      = idma_pkg::MxBlockElems;
+  localparam int unsigned MxFp32BlockBytes = idma_pkg::MxFp32BlockBytes;
+  localparam int unsigned MxFp16BlockBytes = idma_pkg::MxFp16BlockBytes;
 
   localparam int unsigned E5m2ExpBits = 5;
   localparam int unsigned Fp32ExpBits = 8;

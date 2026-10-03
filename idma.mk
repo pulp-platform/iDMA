@@ -551,16 +551,16 @@ endef
 idma_sim_tb_idma_mxquant: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mxquant,32 64 256 512 1024,,)
+	$(call idma_run_mx_sim,tb_idma_mxquant,32 64 256 512,,)
 
 .PHONY: idma_sim_tb_idma_mxroundtrip
 idma_sim_tb_idma_mxroundtrip: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
 	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,fp16_,-gQuantFp16=1)
-	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024,fp32_,-gQuantFp16=0)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,fp32_,-gQuantFp16=0)
 	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,e4m3_fp16_,-gQuantFp16=1 -gElemFmt=1)
-	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024,e4m3_fp32_,-gQuantFp16=0 -gElemFmt=1)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,e4m3_fp32_,-gQuantFp16=0 -gElemFmt=1)
 
 .PHONY: idma_sim_tb_idma_mxplanar
 idma_sim_tb_idma_mxplanar: $(IDMA_VSIM_DIR)/compile.tcl
@@ -572,7 +572,7 @@ idma_sim_tb_idma_mxplanar: $(IDMA_VSIM_DIR)/compile.tcl
 idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mxrand,32 64 256 512 1024,,)
+	$(call idma_run_mx_sim,tb_idma_mxrand,32 64 256 512,,)
 
 .PHONY: idma_sim_tb_idma_mxperf
 idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
@@ -590,20 +590,17 @@ idma_sim_tb_idma_mxclear: $(IDMA_VSIM_DIR)/compile.tcl
 	  else echo "[MXCLR] $$2 guard DID NOT FIRE (see mxclear_$$2.log)"; exit 1; fi; \
 	done
 
-# each case must print its guard assert; case 6 needs the op compiled out, case 4 a 1024-bit bus
+# each case must print its guard assert; cases 6 and 13 need the op compiled out
 .PHONY: idma_sim_tb_idma_mxneg
 idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); set -e; \
 	for c in "1 ComputeSizeAligned 64 1 1" "2 ComputeSrcAligned 64 1 1" \
-	         "3 ComputeDstAligned 64 1 1" "4 ComputeMxFp16Width 1024 1 1" \
-	         "5 ComputeMxdequantBeatAligned 64 1 1" "6 ComputeOpUnsupported 64 0 1" \
+	         "3 ComputeDstAligned 64 1 1" "6 ComputeOpUnsupported 64 0 1" \
 	         "7 ComputeMxSrcProtocol 64 1 1" "8 ComputeMxDstProtocol 64 1 1" \
 	         "10 ComputeTransposeShape 64 1 1" "11 ComputeMxdequantLengthFits 64 1 1" \
-	         "12 ComputeMxFp16Width 1024 1 1" "13 not.elaborated 64 1 0" \
-	         "14 ComputeTransposeShape 64 1 1" "15 ComputeMxLayout 64 1 1" \
-	         "16 ComputeMxPlanarWidth 1024 1 0" "17 ComputeSizeAligned 64 1 1" \
-	         "18 ComputeMxElemFmt 64 1 1"; do \
+	         "13 not.elaborated 64 1 0" "14 ComputeTransposeShape 64 1 1" \
+	         "17 ComputeSizeAligned 64 1 1" "18 ComputeMxElemFmt 64 1 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \
