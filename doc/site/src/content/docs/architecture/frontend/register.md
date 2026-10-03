@@ -108,7 +108,14 @@ Follows `compute_cfg` and is sampled with it; used when `compute_op` is an MX op
 | Bits | Field | Description |
 |------|-------|-------------|
 | 0 | `mx_poison_dis` | Quant keeps a block holding an Inf or NaN finite instead of poisoning it (`0xFF` scale, NaN elements) |
-| 31:1 | - | Reserved |
+| 1 | `mx_rceil` | Quant rounds the block scale up (RCEIL) instead of down (FLOOR) |
+| 3:2 | `mx_elem_fmt` | Element format: 0 E5M2, 1 E4M3; 2 (E2M1) and 3 are reserved |
+| 4 | `mx_group` | Blocks per scale group: 0 G = 64, 1 G = 32 |
+| 9:5 | - | Reserved |
+| 31:10 | `mx_scale_off` | Scale plane start relative to the data plane, signed, in 64 B units |
+
+The register is `0x11C` in `reg64_1d`/`reg64_2d` and `0xFC` in `reg32_3d`. See
+[MX planes](../../compute/#mx-planes) for the data and scale plane layout.
 
 ## Multi-Port Arbitration
 

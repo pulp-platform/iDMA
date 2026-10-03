@@ -54,7 +54,8 @@ with no extra memory traffic. One operation is applied per transfer:
 
 - **Transpose**: tiled matrix transpose (`idma_otf_transpose`).
 - **MX quantize / dequantize**: OCP microscaling between FP32/FP16 and MXFP8
-  (E5M2 elements with an OCP E8M0 block scale, 32-element / 33 B blocks).
+  (E5M2 or E4M3 elements with an OCP E8M0 block scale per 32-element block, written to
+  or read from a data plane and a scale plane).
   These are size-changing transfers, legalized in the legalizer.
 
 Enabled via `EnableCompute` plus a per-op `ComputeOps` mask. See

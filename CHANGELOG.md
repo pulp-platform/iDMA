@@ -28,14 +28,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   selects the burst's output queue after the write shifter and pops it on the W handshake. The
   interlock remains for transpose. `tb_idma_mxclear` checks the empty-queue pop guard of both
   engines.
+- **Breaking:** MX transfers use a data plane (32 B of elements per block) and a separate
+  scale plane (one E8M0 byte per block) in one pass; the inline 33 B block layout is removed.
+  `mx_options_t` (`compute_params_t.mx`, register `mx_cfg`, DMOPC `rs1`/`rs2` fields generated
+  from the same database) carries `poison_dis`, `rceil`, `elem_fmt`, `group` (G = 64 or 32
+  blocks per scale chunk) and a signed 22-bit `scale_off` in 64 B units. The legalizer
+  interleaves data bursts and per-group scale bursts on the write side (quant) and scale-first
+  reads on the read side (dequant). The dequant `length` is the data-plane length.
+  `idma_pkg::MxBlockBytes` is gone, and the `idma_mx_golden.h` quant/dequant helpers take a data
+  and a scale buffer.
+- **Breaking:** MX compute needs `StrbWidth <= 64`; wider MX builds stop at elaboration.
 
 ### Added
-- MX planar and grouped layouts in one pass: `mx_options_t` (`compute_params_t.mx`, register
-  `mx_cfg`, DMOPC `rs1`/`rs2` fields generated from the same database) carries `layout`,
-  `group` (G = 64 or 32 blocks per scale beat), a signed `scale_off` in 64 B units, `elem_fmt`
-  and `rceil`. The legalizer interleaves data bursts and per-group scale bursts on the write side
-  (quant) and scale-first reads on the read side (dequant); `tb_idma_mxplanar` checks both
-  layouts end to end.
 - MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by
   `mx_options_t.elem_fmt` (E4M3: max normal 448 = `0x7E`, NaN `0x7F`, no Inf); a poisoned E4M3
   block has `0x7F` elements.

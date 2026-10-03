@@ -35,8 +35,9 @@ If `HardwareLegalizer=0`, software must split transfers into protocol-legal burs
 Compute (`EnableCompute`) applies only on compute-eligible backends (AXI or OBI on both read and write paths). Per-transfer constraints, enforced by the legalizer:
 
 - Size-changing MX ops force `decouple_rw`/`decouple_aw`, since read and write lengths differ.
-- Transfer length must be a whole multiple of the op's input granule (128 B FP32, 64 B FP16, 33 B MX block); source and destination must be beat-aligned.
-- FP16 MX paths require `StrbWidth <= 64` (at most one 32-element block completes per beat).
+- Transfer length must be a whole multiple of the op's input granule (128 B FP32, 64 B FP16, 32 B per block of the MX data plane); source and destination must be beat-aligned.
+- MX ops require `StrbWidth <= 64` (one 64 B scale line per beat).
+- MX dequant reads whole beats: the last data beat may read up to `StrbWidth - 1` bytes past the end of the data plane (never across a 4 KiB page).
 - Size-changing MX is validated on AXI source/destination only; OBI is not yet supported. TileLink is not a valid compute write destination.
 - Transpose is size-preserving but restricted to single-beat writes.
 

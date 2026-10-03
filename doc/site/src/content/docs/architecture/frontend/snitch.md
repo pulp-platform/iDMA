@@ -35,10 +35,10 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | Byte | Operation |
 |------|-----------|
 | `0x08` | Passthrough; return to a plain copy |
-| `0x20` | MX quantize, FP32 source |
-| `0x21` | MX dequantize, FP32 destination |
-| `0x22` | MX quantize, FP16 source |
-| `0x23` | MX dequantize, FP16 destination |
+| `0x20` | MX quantize, FP32 source; `rs1[18]` poison_dis, `rs1[19]` rceil, `rs1[21:20]` elem_fmt, `rs1[22]` group, `rs2[21:0]` scale_off |
+| `0x21` | MX dequantize, FP32 destination; `rs1[21:20]` elem_fmt, `rs1[22]` group, `rs2[21:0]` scale_off |
+| `0x22` | MX quantize, FP16 source; fields as `0x20` |
+| `0x23` | MX dequantize, FP16 destination; fields as `0x21` |
 | `0x50` | Tiled transpose; `rs1[17:16]` is the element-size mode, `rs2[11:0]` `tensor_m`, `rs2[23:12]` `tensor_n` |
 
 The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` is not yet allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
