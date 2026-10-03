@@ -34,6 +34,7 @@ The most important parameters for a new integration are `DataWidth` (match your 
 | `RejectZeroTransfers` | 1 | Reject zero-length transfers with a `BACKEND` error response |
 | `ErrorCap` | `NO_ERROR_HANDLING` | Error handling capability: `NO_ERROR_HANDLING` or `ERROR_HANDLING` |
 | `PrintFifoInfo` | 0 | Print FIFO configuration during elaboration |
+| `TimingCuts` | `'0` | Opt-in timing cuts (`idma_pkg::timing_cuts_t`), see [Timing cuts](#timing-cuts). `'0` is the stock datapath |
 
 The maximum number of transfers in-flight at any point is:
 
@@ -42,6 +43,20 @@ MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth
 ```
 
 This determines how many 1D bursts can be in-flight simultaneously - `BufferDepth` entries in the data buffer, `NumAxInFlight` transactions on the bus, and `MemSysDepth` stages in the external memory system.
+
+### Timing cuts
+
+`TimingCuts` shortens the paths from the write-side handshake to the read side, which end at the
+dataflow element pointers, `r_ready` and the request FIFOs. Each field is independent:
+
+| Field | Effect | Cost |
+|-------|--------|------|
+| `dfe_ready_cut` | A full dataflow lane takes a new beat only in a cycle without a write-side pop, except for MX pops (registered engine credit). `r_ready` and the dataflow push no longer depend on the write datapath. Implies `dfe_reg_flags` | One more dataflow entry per byte lane (`BufferDepth + 1`) |
+| `dfe_reg_flags` | Dataflow lanes and the MX beat-tag FIFO keep full/empty in flops, update their pointers without load enables and write the free slot every cycle the lane can accept. Cycle-identical | A few flops per lane |
+| `wdp_head_spill` | A spill register on the head of the write datapath request FIFO, so the write datapath starts from flops instead of the FIFO read mux | +1 cycle from the legalizer to the write datapath; `MetaFifoDepth` +2 |
+| `outst_cnt_reg` | The outstanding-transfer counter of `RejectZeroTransfers` counts an accepted request one cycle late, so it does not depend on `req_ready_o`. Cycle-identical | One flop |
+
+`MetaFifoDepth` grows by the extra dataflow entry and by two with `wdp_head_spill`.
 
 ## Interface
 

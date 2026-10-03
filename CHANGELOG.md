@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   is not 64 B aligned or a used dimension's scale stride that is not a multiple of 64: `next_id`
   reads 0 and no transfer starts. inst64 refuses a `DMCPY` with a reserved element format with
   id 0 and the error bit.
+- Backend parameter `TimingCuts` (`idma_pkg::timing_cuts_t`, default `'0` = unchanged):
+  `dfe_ready_cut` (dataflow element without same-cycle refill on write-side pops, one more entry),
+  `dfe_reg_flags` (registered dataflow flags, pointers without load enables), `wdp_head_spill`
+  (spill register on the write datapath request head) and `outst_cnt_reg` (outstanding-transfer
+  counter off `req_ready_o`).
 - MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by
   `mx_options_t.elem_fmt` (E4M3: max normal 448 = `0x7E`, NaN `0x7F`, no Inf); a poisoned E4M3
   block has `0x7F` elements.
