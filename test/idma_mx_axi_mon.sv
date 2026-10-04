@@ -29,20 +29,20 @@ module idma_mx_axi_mon #(
   input logic [1:0]                   req_dst_burst_i,
   input logic                         req_decouple_rw_i,
   input idma_pkg::compute_options_t   req_cmp_i,
-  input idma_pkg::backend_options_t   req_beo_i = '0,
-  input logic [IdWidth-1:0]           req_id_i = '0,
-  input idma_pkg::axi_options_t       req_src_opt_i = '0,
-  input idma_pkg::axi_options_t       req_dst_opt_i = '0,
-  input logic [UserWidth-1:0]         req_user_i = '0,
-  input logic [IdWidth-1:0]           ar_id_i = '0,
-  input idma_pkg::axi_options_t       ar_opt_i = '0,
-  input logic [UserWidth-1:0]         ar_user_i = '0,
-  input logic [IdWidth-1:0]           r_id_i = '0,
-  input logic [IdWidth-1:0]           aw_id_i = '0,
-  input idma_pkg::axi_options_t       aw_opt_i = '0,
-  input logic [UserWidth-1:0]         aw_user_i = '0,
-  input logic [5:0]                   aw_atop_i = '0,
-  input logic [IdWidth-1:0]           b_id_i = '0,
+  input idma_pkg::backend_options_t   req_beo_i,
+  input logic [IdWidth-1:0]           req_id_i,
+  input idma_pkg::axi_options_t       req_src_opt_i,
+  input idma_pkg::axi_options_t       req_dst_opt_i,
+  input logic [UserWidth-1:0]         req_user_i,
+  input logic [IdWidth-1:0]           ar_id_i,
+  input idma_pkg::axi_options_t       ar_opt_i,
+  input logic [UserWidth-1:0]         ar_user_i,
+  input logic [IdWidth-1:0]           r_id_i,
+  input logic [IdWidth-1:0]           aw_id_i,
+  input idma_pkg::axi_options_t       aw_opt_i,
+  input logic [UserWidth-1:0]         aw_user_i,
+  input logic [5:0]                   aw_atop_i,
+  input logic [IdWidth-1:0]           b_id_i,
   input logic                         ar_valid_i,
   input logic                         ar_ready_i,
   input logic [AddrWidth-1:0]         ar_addr_i,
@@ -75,10 +75,10 @@ module idma_mx_axi_mon #(
   localparam u64_t        S   = u64_t'(StrbWidth);
 
   typedef logic [StrbWidth-1:0] strb_t;
-  typedef struct { u64_t lo, hi; } seg_t;
-  typedef struct { u64_t addr, lo, hi; int len, k; int x; id_t id; } bur_t;
-  typedef struct { strb_t strb; bit last; } wb_t;
-  typedef struct { int len; id_t id; } rb_t;
+  typedef struct packed { u64_t lo, hi; } seg_t;
+  typedef struct packed { u64_t addr, lo, hi; int len, k; int x; id_t id; } bur_t;
+  typedef struct packed { strb_t strb; bit last; } wb_t;
+  typedef struct packed { int len; id_t id; } rb_t;
 
   class xfer_c;
     int   idx;
@@ -126,16 +126,16 @@ module idma_mx_axi_mon #(
          c.op : idma_pkg::COMPUTE_NONE;
     unique case (op)
       idma_pkg::COMPUTE_NONE: begin
-        x.seg[0].push_back('{src, src + len});
-        x.seg[1].push_back('{dst, dst + len});
+        x.seg[0].push_back(seg_t'{src, src + len});
+        x.seg[1].push_back(seg_t'{dst, dst + len});
       end
       idma_pkg::COMPUTE_MXQUANT, idma_pkg::COMPUTE_MXQUANT_FP16: begin
         nb = len / ((c.op == idma_pkg::COMPUTE_MXQUANT) ? 128 : 64);
-        x.seg[0].push_back('{src, src + len});
+        x.seg[0].push_back(seg_t'{src, src + len});
         for (u64_t b = 0; b < nb; b += g) begin
           automatic u64_t n = (nb - b < g) ? nb - b : g;
-          x.seg[1].push_back('{dst + b * 32, dst + (b + n) * 32});
-          x.seg[1].push_back('{sb + b, sb + b + n});
+          x.seg[1].push_back(seg_t'{dst + b * 32, dst + (b + n) * 32});
+          x.seg[1].push_back(seg_t'{sb + b, sb + b + n});
         end
       end
       idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::COMPUTE_MXDEQUANT_FP16: begin
@@ -144,11 +144,12 @@ module idma_mx_axi_mon #(
         for (u64_t b = 0; drem > 0; b += g) begin
           automatic u64_t n = (nb - b < g) ? nb - b : g;
           sg = (drem > g * 32) ? g * 32 : drem;
-          x.seg[0].push_back('{dn(sb + b), up(sb + b + n)});
-          x.seg[0].push_back('{src + b * 32, src + b * 32 + sg});
+          x.seg[0].push_back(seg_t'{dn(sb + b), up(sb + b + n)});
+          x.seg[0].push_back(seg_t'{src + b * 32, src + b * 32 + sg});
           drem -= sg;
         end
-        x.seg[1].push_back('{dst, dst + nb * ((c.op == idma_pkg::COMPUTE_MXDEQUANT) ? 128 : 64)});
+        x.seg[1].push_back(seg_t'{dst,
+                                  dst + nb * ((c.op == idma_pkg::COMPUTE_MXDEQUANT) ? 128 : 64)});
       end
       default: begin
         if (planes) $display("[AXIMON] compute op %0d: plane checks off from here", c.op);
@@ -174,7 +175,7 @@ module idma_mx_axi_mon #(
       err($sformatf("%s WRAP with len %0d", ch, len));
     if (bt == axi_pkg::BURST_FIXED && len > 15) err($sformatf("%s FIXED with len %0d", ch, len));
     if (atop != '0) err($sformatf("%s ATOP %0h", ch, atop));
-    if (s) wq.push_back('{addr: a, lo: a, hi: e, len: len, k: 0, x: -1, id: id});
+    if (s) wq.push_back(bur_t'{addr: a, lo: a, hi: e, len: len, k: 0, x: -1, id: id});
     if (!planes) return;
     if (xq[s].size() == 0) begin
       err($sformatf("%s %0h len %0d without an open transfer", ch, a, len));
@@ -321,7 +322,7 @@ module idma_mx_axi_mon #(
       if (cb.ar_valid_i && cb.ar_ready_i) begin
         burst(0, u64_t'(ar.addr), int'(ar.len), int'(ar.size), ar.burst, ar.id, ar.opt, ar.user,
               '0);
-        rq.push_back('{len: int'(ar.len), id: ar.id});
+        rq.push_back(rb_t'{len: int'(ar.len), id: ar.id});
       end
       if (cb.aw_valid_i && cb.aw_ready_i) begin
         burst(1, u64_t'(aw.addr), int'(aw.len), int'(aw.size), aw.burst, aw.id, aw.opt, aw.user,
@@ -331,8 +332,8 @@ module idma_mx_axi_mon #(
       if (cb.w_valid_i && cb.w_ready_i) begin
         if (wq.size() == 0) begin
           err("W beat without an open AW burst");
-          wpend.push_back('{strb: cb.w_strb_i, last: cb.w_last_i});
-        end else wbeat('{strb: cb.w_strb_i, last: cb.w_last_i});
+          wpend.push_back(wb_t'{strb: cb.w_strb_i, last: cb.w_last_i});
+        end else wbeat(wb_t'{strb: cb.w_strb_i, last: cb.w_last_i});
       end
       if (cb.r_valid_i && cb.r_ready_i) begin
         automatic int i = 0;
