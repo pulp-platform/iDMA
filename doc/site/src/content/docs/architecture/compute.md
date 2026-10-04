@@ -30,7 +30,7 @@ Compute is configured at two levels:
 | `ComputeOps` | `idma_pkg::compute_enable_t` | Per-op enable mask: `transpose`, `mxquant`, `mxdequant`, `mxfp16` |
 | `ComputeTuning` | `idma_pkg::compute_tuning_t` | Implementation knobs (`transpose_full_duplex`) |
 
-`EnableCompute` requires `ErrorCap == NO_ERROR_HANDLING` (an elaboration assertion in the backend), and the MX ops need `StrbWidth <= 64`. `mxfp16` gates the FP16 source/destination paths of the MX ops; leaving it off drops that area. An op requested at run time but not elaborated is caught by the legalizer (`ComputeOpUnsupported`) and a simulation assertion in the dispatcher.
+`EnableCompute` requires `ErrorCap == NO_ERROR_HANDLING` (an elaboration assertion in the backend), and the MX ops need `StrbWidth <= 64`. `mxfp16` gates the FP16 source/destination paths of the MX ops; leaving it off drops that area. An op requested at run time but not elaborated (or a reserved op code) runs as a plain copy of its length; the legalizer (`ComputeOpUnsupported`) and a simulation assertion in the dispatcher flag it, and both frontends refuse it (`ComputeOps` parameter).
 
 **Per transfer** (`idma_req_t.opt.compute`, type `idma_pkg::compute_options_t`):
 
@@ -111,9 +111,11 @@ Placement rules:
 - The ND midend steps `scale_addr` per row with `idma_d_req_t.scale_strides`, a multiple of
   64 B, as it steps the source and destination addresses with theirs.
 - A frontend refuses an MX transfer that breaks these rules, whose length is not a whole
-  number of blocks (`ComputeSizeAligned`), whose ND data strides move a plane off a beat, or that
-  carries a reserved `elem_fmt` (register frontend: `next_id` reads 0; inst64: `DMCPY` returns id
-  0 with the error bit), so no such request reaches the backend from them. The register frontend
+  number of blocks (`ComputeSizeAligned`), whose ND data strides move a plane off a beat, whose
+  written length overflows the length field (`ComputeMxdequantLengthFits`), or that carries a
+  reserved `elem_fmt` (register frontend: `next_id` reads 0; inst64: `DMCPY` returns id 0 with
+  the error bit; inst64 also refuses planes in the TCDM window), so no such request reaches the
+  backend from them. The register frontend
   checks beats of its `DataWidth` parameter (default 512 bit, the widest MX backend). The backend
   itself checks the rules only with the simulation assertions above; a request from another
   source with a misaligned data plane or a partial block can write wrong data or never finish.

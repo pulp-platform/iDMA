@@ -24,12 +24,14 @@ A thin wrapper (`src/frontend/reg/tpl/idma_reg.sv.tpl`, rendered by MARIO for th
 | `NumRegs` | 1 | Number of configuration register ports (parallel access points) |
 | `NumStreams` | 1 | Number of independent DMA streams (max 16). Each stream has its own transfer ID counter |
 | `IdCounterWidth` | 32 | Width of the transfer ID counter (max 32-bit) |
+| `DataWidth` | 512 | Backend data width; MX data planes, strides and lengths are checked against its beats |
+| `ComputeOps` | all | Compute ops of the backend (`idma_pkg::compute_enable_t`); a launch of any other op is refused |
 
 ## Programming Sequence
 
 1. **Write transfer parameters**: Set `src_addr`, `length`, `dst_addr`, and optionally `reps`/`src_stride`/`dst_stride` for 2D mode
 2. **Write configuration**: Set `conf` with the desired decouple flags, protocol selection, and ND mode enable. For an on-the-fly compute transfer also set `compute_cfg` (see below). Stream selection is implicit in which `next_id[stream]` register you read in the next step
-3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID. It returns 0 and launches nothing if the transfer is not set up correctly: an MX op with a reserved `mx_elem_fmt`, a `scale_addr` that is not 64 B aligned, or a `scale_stride` of a dimension in use (`reps > 1`) that is not a multiple of 64
+3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID. It returns 0 and launches nothing if the transfer is not set up correctly: a compute op that `ComputeOps` does not name (reserved op codes included), or an MX launch that breaks a rule of [MX Scale Plane Registers](#mx-scale-plane-registers)
 4. **Poll `done_id[stream]`**: Wait until `done_id >= next_id` to confirm completion
 
 :::caution[Side-effect read]
@@ -132,8 +134,9 @@ See [MX planes](../../compute/#mx-planes) for the data and scale plane layout.
 
 An MX launch is refused (`next_id` reads 0 and no transfer starts) when it carries a reserved
 element format, its scale plane or a used dimension's scale stride is off a 64 B line, its data
-planes or a used dimension's data strides are off a beat of the frontend's `DataWidth` parameter
-(default 512 bit), or its length is not a whole number of blocks.
+planes or a used dimension's source or destination stride are off a beat of the frontend's
+`DataWidth` parameter (default 512 bit), its length is not a whole number of blocks, or its
+written length (a dequant writes 4x or 2x its length) does not fit the length field.
 
 ### Offsets
 

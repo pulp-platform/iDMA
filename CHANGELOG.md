@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   or a used dimension's data stride off a beat (new parameter `DataWidth`, default 512) or a
   length that is not a whole number of blocks: `next_id` reads 0 and no transfer starts. inst64
   refuses such a `DMCPY` with id 0 and the error bit.
+- Both frontends also refuse a compute op the backend does not elaborate (register frontend:
+  new parameter `ComputeOps`) or a reserved op code, and an MX dequant whose written length does
+  not fit the length field; inst64 refuses an MX `DMCPY` with a plane in the TCDM window. The
+  backend runs an op that is not elaborated as a plain copy instead of hanging.
 - Backend parameter `TimingCuts` (`idma_pkg::timing_cuts_t`, default `'0` = unchanged):
   `dfe_ready_cut` (dataflow element without same-cycle refill on write-side pops, one more entry),
   `dfe_reg_flags` (registered dataflow flags, pointers without load enables), `wdp_head_spill`

@@ -47,16 +47,18 @@ All DMA instructions that return a value write to `rd` (destination register). T
 
 The scale plane address and stride setters (`0x28`, `0x29`) load frontend state that every
 following `DMCPY` sends with its request, like `DMSRC` and `DMSTR`; carried in 64 B units they
-are 64 B aligned by construction (scale addresses up to 2^62). A `DMCPY` whose latched MX op has
-a reserved `elem_fmt`, a source or destination off a bus beat, a length that is not a whole
-number of blocks, or (2D) a source or destination stride off a beat is refused: the response
-carries id 0 with the error bit set and nothing is launched.
+are 64 B aligned by construction (scale addresses up to 2^62). A `DMCPY` whose latched op is not
+elaborated (`ComputeOps`), or whose latched MX op has a reserved `elem_fmt`, a source,
+destination or scale plane in the TCDM window, a source or destination off a bus beat, a length
+that is not a whole number of blocks or whose written length does not fit the length field, or
+(2D) a source or destination stride off a beat, is refused: the response carries id 0 with the
+error bit set and nothing is launched.
 
 The latched op persists until the next `DMOPC` and resets to passthrough. An undecodable byte falls back to a plain copy and fires the `DmopcUnknownOpcode` assertion. `DMOPC` is not yet allocated in upstream `riscv-opcodes`; the frontend decodes funct7 `0x0a`, the first free slot after `DMINIT`. Every `idma_pkg::compute_op_e` value the RDL declares must reach one of these bytes: `idma_inst64_top` fails elaboration and names any op `opc_decode` leaves unreachable.
 
 The host core is RV32, so it sign-extends `rs1` and `rs2` into the upper half of the 64-bit accelerator bus. No `DMOPC` field may cross bit 31 of its operand; that is why the 24 bits of transpose dimensions ride `rs2` instead of extending `rs1` past its top. `idma_inst64_top` fails elaboration on a layout that violates it (`LayoutRv32Safe`).
 
-The size-changing MX ops require AXI on both the source and the destination (`ComputeMxSrcProtocol` / `ComputeMxDstProtocol` in the legalizer), so they are only reachable for endpoints that decode outside the TCDM window. Transpose drives a per-beat write strobe that only `idma_axi_write` honours, so an OBI destination drops the edge-tile masking.
+The size-changing MX ops require AXI on both the source and the destination (`ComputeMxSrcProtocol` / `ComputeMxDstProtocol` in the legalizer); the frontend refuses an MX `DMCPY` with any plane in the TCDM window. Transpose drives a per-beat write strobe that only `idma_axi_write` honours, so an OBI destination drops the edge-tile masking.
 
 **Status select values** (`DMSTAT`/`DMSTATI`):
 - `0`: Completed transfer ID - compare against the ID returned by `DMCPY` to check if a specific transfer has finished
