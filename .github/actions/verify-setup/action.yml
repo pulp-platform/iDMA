@@ -9,7 +9,7 @@ name: Set up the public verification toolchain
 description: Bender database cache, uv, Bender and optionally Verilator (OSEDA 2026.09)
 inputs:
   verilator:
-    description: Install Verilator 5.052 from OSEDA 2026.09 and ccache from apt
+    description: Install Verilator 5.052 from OSEDA 2026.09, ccache and mold from apt
     default: 'false'
   bender-version:
     description: Bender release to install
@@ -52,8 +52,9 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.cache/apt-debs
-        key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v2
+        key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v3
 
+    # OSEDA's verilated.mk links with -fuse-ld=mold, as the OSEDA image does
     - if: inputs.verilator == 'true'
       shell: bash
       run: |
@@ -62,7 +63,7 @@ runs:
         else
           echo "apt-debs cache miss; installing from the archive"
           sudo apt-get update
-          sudo apt-get install -y ccache
+          sudo apt-get install -y ccache mold
         fi
         echo "CCACHE_DIR=$HOME/.cache/ccache" >> "$GITHUB_ENV"
         echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
@@ -97,6 +98,7 @@ runs:
         verilator --version
         verilator --version | grep -qE '^Verilator 5\.052 ' || {
           echo "expected Verilator 5.052 from OSEDA 2026.09"; exit 1; }
+        mold --version
     - if: inputs.verilator == 'true'
       shell: bash
       run: uv run --locked make idma_verify_toolchain
