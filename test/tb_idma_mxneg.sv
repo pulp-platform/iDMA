@@ -9,6 +9,7 @@
 // the matching legalizer guard assert to report (compile with +define+INC_ASSERT).
 // The runner greps the transcript for the assert name; case 9 provokes transfer
 // overlap and expects the mxquant sub-unit's clear-with-in-flight-state fatal.
+// Cases 21-23 run an op that is not elaborated with assertions off and expect a plain copy.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -85,6 +86,17 @@ module tb_idma_mxneg
 
   localparam addr_t Src = 'h0001_0000, Dst = 'h0005_0000;
 
+  // an op that is not elaborated, assertions off: expect a plain copy of its length
+  task automatic copy_of(input idma_pkg::compute_op_e op);
+    automatic int unsigned bad = 0;
+    $assertoff(0, tb_idma_mxneg.i_idma_backend);
+    issue(Src, Dst, 4 * StrbWidth, op, idma_pkg::AXI, idma_pkg::AXI, 1'b1);
+    for (int unsigned i = 0; i < 4 * StrbWidth; i++)
+      if (i_axi_sim_mem.mem[Dst + i] !== 8'(i)) bad++;
+    if (bad == 0) $display("[MXNEG] case %0d COPY_OK", NegCase);
+    else $display("[MXNEG] case %0d: %0d bytes differ from a copy", NegCase, bad);
+  endtask
+
   initial begin
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
     for (int unsigned i = 0; i < 8192; i++) i_axi_sim_mem.mem[Src + i] = 8'(i);
@@ -120,6 +132,9 @@ module tb_idma_mxneg
         neg_scale = 'h0009_0001;
         issue(Src, Dst, 64, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       end
+      21: copy_of(idma_pkg::COMPUTE_MXDEQUANT);
+      22: copy_of(idma_pkg::compute_op_e'(6));
+      23: copy_of(idma_pkg::COMPUTE_MXQUANT_FP16);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 

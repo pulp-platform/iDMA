@@ -495,7 +495,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         // size-changing compute: write length follows the per-op byte ratio
         l.mx_r = '0;
         l.mx_w = '0;
-        if (EnableCompute && req.opt.compute.enable) begin
+        if (EnableCompute && req.opt.compute.enable &&
+            idma_pkg::compute_op_supported(ComputeOps, req.opt.compute.op)) begin
             unique case (req.opt.compute.op)
 % for op in ['COMPUTE_MXQUANT', 'COMPUTE_MXQUANT_FP16', 'COMPUTE_MXDEQUANT',\
               'COMPUTE_MXDEQUANT_FP16']:
@@ -509,7 +510,8 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
         end
         // MX: quant starts with the first data segment, dequant with the first scale chunk
         if (EnableCompute && req.opt.compute.enable &&
-            idma_pkg::compute_op_is_mx(req.opt.compute.op)) begin
+            idma_pkg::compute_op_is_mx(req.opt.compute.op) &&
+            idma_pkg::compute_op_supported(ComputeOps, req.opt.compute.op)) begin
             if (req.opt.compute.op inside {idma_pkg::COMPUTE_MXDEQUANT,
                                            idma_pkg::COMPUTE_MXDEQUANT_FP16}) begin
                 l.mx_r.on     = 1'b1;
@@ -913,7 +915,9 @@ ${database[protocol]['legalizer_write_data_path']}
                           (mx_wq_direct | (EnableCompute & ~mx_wq_full &
                            (req_i.opt.beo.decouple_rw | req_i.opt.compute.enable) &
                            (~mx_wq_empty | (opt_w_q.compute.enable &
-                                            idma_pkg::compute_op_is_mx(opt_w_q.compute.op)))));
+                                            idma_pkg::compute_op_is_mx(opt_w_q.compute.op) &
+                                            idma_pkg::compute_op_supported(ComputeOps,
+                                                                           opt_w_q.compute.op)))));
     assign mx_wq_push   = ready_o & valid_i & ~mx_wq_direct;
     assign mx_wq_pop    = ~mx_wq_empty & w_done & w_ready_i & !flush_i & !kill_i;
 

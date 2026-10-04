@@ -66,10 +66,12 @@ module idma_otf_compute #(
   logic sel_transpose, w_mxq, w_mxdq;
   assign sel_transpose = eff_compute.enable & ComputeEnable.transpose &
                          (eff_compute.op == idma_pkg::COMPUTE_TRANSPOSE);
-  assign w_mxq         = cfg_valid_i & compute_i.enable & ComputeEnable.mxquant &
+  assign w_mxq         = cfg_valid_i & compute_i.enable &
+                         idma_pkg::compute_op_supported(ComputeEnable, compute_i.op) &
                          (compute_i.op inside {idma_pkg::COMPUTE_MXQUANT,
                                                idma_pkg::COMPUTE_MXQUANT_FP16});
-  assign w_mxdq        = cfg_valid_i & compute_i.enable & ComputeEnable.mxdequant &
+  assign w_mxdq        = cfg_valid_i & compute_i.enable &
+                         idma_pkg::compute_op_supported(ComputeEnable, compute_i.op) &
                          (compute_i.op inside {idma_pkg::COMPUTE_MXDEQUANT,
                                                idma_pkg::COMPUTE_MXDEQUANT_FP16});
 
