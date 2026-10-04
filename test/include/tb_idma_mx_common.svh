@@ -38,7 +38,7 @@ typedef struct packed { axi_read_meta_channel_t axi; } read_meta_channel_t;
 typedef struct packed { axi_aw_chan_t aw_chan; } axi_write_meta_channel_t;
 typedef struct packed { axi_write_meta_channel_t axi; } write_meta_channel_t;
 
-logic clk, rst_n;
+logic clk, rst_n, rst_gen_n, rst_dly_n;
 idma_req_t    idma_req;    logic req_valid, req_ready;
 idma_rsp_t    idma_rsp;    logic rsp_valid, rsp_ready;
 idma_eh_req_t idma_eh_req; logic eh_req_valid, eh_req_ready;
@@ -49,7 +49,11 @@ idma_busy_t busy;
 assign idma_eh_req = '0;
 assign eh_req_valid = 1'b0;
 
-clk_rst_gen #(.ClkPeriod(TCK), .RstClkCycles(1)) i_clk_rst_gen (.clk_o(clk), .rst_no(rst_n));
+clk_rst_gen #(.ClkPeriod(TCK), .RstClkCycles(1)) i_clk_rst_gen (.clk_o(clk), .rst_no(rst_gen_n));
+
+// clk_rst_gen releases on a clock edge; TA later no flop races the release
+assign #(TA) rst_dly_n = rst_gen_n;
+assign rst_n = rst_gen_n & rst_dly_n;
 
 axi_rw_join #(.axi_req_t(axi_req_t), .axi_resp_t(axi_rsp_t)) i_axi_rw_join (
   .clk_i(clk), .rst_ni(rst_n),
