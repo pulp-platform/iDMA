@@ -20,7 +20,9 @@ module tb_idma_mxplanar
   parameter int unsigned AxiIdWidth = 12,
   parameter int unsigned TFLenWidth = 32,
   /// Share of cycles in which AR, AW and B are held off
-  parameter int unsigned AxStallPct = 0
+  parameter int unsigned AxStallPct = 0,
+  /// Share of cycles in which the backend response is held off (the read side waits with it)
+  parameter int unsigned RspStallPct = 0
 );
 
   import "DPI-C" function void gm_load(input int idx, input int val);
@@ -54,6 +56,12 @@ module tb_idma_mxplanar
       b_go  <= go_next(b_go,  axi_rsp_mem.b_valid, axi_req.b_ready);
     end
   end
+  logic rsp_go;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) rsp_go <= 1'b1;
+    else        rsp_go <= $urandom_range(99) >= RspStallPct;
+  end
+
   always_comb begin
     axi_req_mem          = axi_req;
     axi_rsp              = axi_rsp_mem;
@@ -81,7 +89,7 @@ module tb_idma_mxplanar
   ) i_idma_backend (
     .clk_i(clk), .rst_ni(rst_n),
     .idma_req_i(idma_req), .req_valid_i(req_valid), .req_ready_o(req_ready),
-    .idma_rsp_o(idma_rsp), .rsp_valid_o(rsp_valid), .rsp_ready_i(rsp_ready),
+    .idma_rsp_o(idma_rsp), .rsp_valid_o(rsp_valid), .rsp_ready_i(rsp_ready & rsp_go),
     .idma_eh_req_i(idma_eh_req), .eh_req_valid_i(eh_req_valid), .eh_req_ready_o(eh_req_ready),
     .axi_read_req_o(axi_read_req), .axi_read_rsp_i(axi_read_rsp),
     .axi_write_req_o(axi_write_req), .axi_write_rsp_i(axi_write_rsp), .busy_o(busy)
@@ -237,7 +245,10 @@ module tb_idma_mxplanar
     foreach (xs[i]) prepare(xs[i]);
     fork
       foreach (xs[i]) issue(xs[i]);
-      while (nrsp < xs.size()) begin @(posedge clk); if (rsp_valid && rsp_ready) nrsp++; end
+      while (nrsp < xs.size()) begin
+        @(posedge clk);
+        if (rsp_valid && rsp_ready && rsp_go) nrsp++;
+      end
     join
     repeat (20) @(posedge clk);
     check(tag, errs);
