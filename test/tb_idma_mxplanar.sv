@@ -5,7 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// MX data and scale planes end to end, every byte and the canaries around both planes.
+// MX data and scale planes end to end, every byte and the canaries around both planes; random
+// AXI attributes per transfer, back to back with short copies.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -18,7 +19,7 @@ module tb_idma_mxplanar
   parameter int unsigned UserWidth  = 1,
   parameter int unsigned AxiIdWidth = 12,
   parameter int unsigned TFLenWidth = 32,
-  /// AR, AW and B are held off at random in this share of cycles (address and response backpressure)
+  /// Share of cycles in which AR, AW and B are held off
   parameter int unsigned AxStallPct = 0
 );
 
@@ -98,6 +99,7 @@ module tb_idma_mxplanar
     addr_t       src;
     addr_t       dst;
     int          soff;
+    int unsigned cp;
   } xfer_t;
 
   // expected bytes of the transfers in flight; any other byte in a checked window is a canary
@@ -120,18 +122,26 @@ module tb_idma_mxplanar
     r.length   = tf_len_t'(x.dq ? x.nblk * 32 : x.nblk * (x.fp16 ? 64 : 128));
     r.src_addr = x.src;
     r.dst_addr = x.dst;
+    r.user     = user_t'($urandom);
+    r.opt.axi_id       = id_t'($urandom);
+    r.opt.src          = axi_options_t'($urandom);
+    r.opt.dst          = axi_options_t'($urandom);
     r.opt.src_protocol = idma_pkg::AXI;
     r.opt.dst_protocol = idma_pkg::AXI;
     r.opt.src.burst    = axi_pkg::BURST_INCR;
     r.opt.dst.burst    = axi_pkg::BURST_INCR;
     r.opt.beo.decouple_rw = 1'b1;
     r.opt.beo.decouple_aw = 1'b1;
+    r.opt.last = 1'b1;
+    if (x.cp != 0) begin
+      r.length = tf_len_t'(x.cp);
+      return r;
+    end
     r.opt.compute.enable  = 1'b1;
     r.opt.compute.op      = x.dq ? (x.fp16 ? COMPUTE_MXDEQUANT_FP16 : COMPUTE_MXDEQUANT)
                                  : (x.fp16 ? COMPUTE_MXQUANT_FP16 : COMPUTE_MXQUANT);
     r.opt.compute.params.mx.group     = x.g32 ? MX_GROUP_G32 : MX_GROUP_G64;
     r.scale_addr = blk_scale(x, 0);
-    r.opt.last = 1'b1;
     return r;
   endfunction
 
@@ -148,6 +158,15 @@ module tb_idma_mxplanar
     automatic logic [7:0] dat [];
     automatic logic [7:0] scl [];
     salt++;
+    if (x.cp != 0) begin
+      for (int unsigned i = 0; i < x.cp; i++) begin
+        automatic logic [7:0] v = 8'($urandom);
+        wr_mem(x.src + addr_t'(i), v);
+        exp_mem[x.dst + addr_t'(i)] = v;
+      end
+      window(x.dst - 128, x.dst + addr_t'(x.cp) + 128);
+      return;
+    end
     // golden planes of fresh FP stimulus
     for (int unsigned e = 0; e < ne; e++) begin
       automatic logic [31:0] v = x.fp16 ? 32'(gm_stim_fp16(int'(e), int'(ne), int'(salt)))
@@ -264,6 +283,7 @@ module tb_idma_mxplanar
     total += e;
 
     // back to back: one-block quants (two write bursts per read beat), every fourth a short dequant
+    // or an unaligned copy that queues behind the quants' writes
     b2b.delete();
     for (int i = 0; i < 128; i++) begin
       automatic xfer_t x;
@@ -272,6 +292,12 @@ module tb_idma_mxplanar
       x.src = 32'h0001_0000 + i * 32'h0001_0000;
       x.dst = 32'h0100_0000 + i * 32'h0002_0000;
       x.soff = (i % 2) ? -32'sd96 : 32'sd512;
+      x.cp = 0;
+      if (i % 8 == 7) begin
+        x.cp = $urandom_range(1, 300);
+        x.src += addr_t'($urandom_range(0, 127));
+        x.dst += addr_t'($urandom_range(0, 127));
+      end
       b2b.push_back(x);
     end
     run("b2b short", b2b, e);
