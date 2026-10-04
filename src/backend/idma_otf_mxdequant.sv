@@ -194,6 +194,10 @@ module idma_otf_mxdequant
       else $fatal(1, "idma_otf_mxdequant: pop of an empty output queue");
     assert (!d0_v_q || (oq_cnt_q != OqCW'(NOQ)))
       else $fatal(1, "idma_otf_mxdequant: output queue overflow");
+    assert (!dpop || in_ok_q)
+      else $fatal(1, "idma_otf_mxdequant: data beat pushed into a full input buffer");
+    assert (32'(ib_cnt_d) <= NIB)
+      else $fatal(1, "idma_otf_mxdequant: input buffer overflow");
   end
   // pragma translate_on
 
