@@ -357,9 +357,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     else if (backend_cb.issue) launch_accept_count <= launch_accept_count + 1;
   end
 
-  // Test 6 case: conf, compute_cfg, mx_cfg, scale plane, dim0 reps, dim0/1 scale and data strides
+  // Test 6 case: conf, compute, mx_cfg, scale plane, dim0 reps, dim0/1 scale, dst and src strides
   typedef struct {
-    logic [31:0] conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1;
+    logic [31:0] conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1, sst0, sst1;
     bit          ok;
     string       name;
   } mx_case_t;
@@ -375,8 +375,11 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
                                   input logic [31:0] len = 32'h400,
                                   input logic [31:0] reps1 = 32'd1,
                                   input logic [31:0] st0 = 32'h400,
-                                  input logic [31:0] st1 = 32'h1000);
-    return '{conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1, ok, name};
+                                  input logic [31:0] st1 = 32'h1000,
+                                  input logic [31:0] sst0 = 32'h400,
+                                  input logic [31:0] sst1 = 32'h1000);
+    return '{conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1, sst0, sst1, ok,
+             name};
   endfunction
 
   // Test 5 scoreboard: each port programs a src_addr encoding its identity
@@ -792,11 +795,24 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "dequant partial block",
                       .len(32'h410)));
       cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 0,
-                      "dim0 data stride off a beat", .st0(32'h420)));
+                      "dim0 data strides off a beat", .st0(32'h420), .sst0(32'h420)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 0,
+                      "dim0 src stride off a beat", .sst0(32'h420)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 0,
+                      "dim0 dst stride off a beat", .st0(32'h420)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 1,
+                      "dim0 src and dst strides on distinct beats", .st0(32'h440), .sst0(32'h800)));
       cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 0,
-                      "dim1 data stride off a beat", .reps1(3), .st1(32'h1020)));
+                      "dim1 data strides off a beat", .reps1(3), .st1(32'h1020), .sst1(32'h1020)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 0,
+                      "dim1 src stride off a beat", .reps1(3), .sst1(32'h1020)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 0,
+                      "dim1 dst stride off a beat", .reps1(3), .st1(32'h1020)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 1,
+                      "dim1 src and dst strides on distinct beats", .reps1(3), .st1(32'h1040),
+                      .sst1(32'h2000)));
       cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 1, 32'h40, 0, 1,
-                      "misaligned unused dim0 data stride", .st0(32'h420)));
+                      "misaligned unused dim0 data strides", .st0(32'h420), .sst0(32'h420)));
       cs.push_back(mc(32'h0, Quant16 & ~32'h1, 32'hC, 32'h4000_0001, 1, 0, 0, 1,
                       "compute disabled: MX fields ignored", .src(32'h1000_0001)));
       cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_TRANSPOSE) << 1) | (32'h1 << 7) | (32'h1 << 19),
@@ -807,9 +823,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
         captured_q.delete();
         program_transfer(cs[k].src, cs[k].dst, cs[k].len);
         apb_write(RegConf,     cs[k].conf);
-        apb_write(RegDim0Src,  cs[k].st0);
+        apb_write(RegDim0Src,  cs[k].sst0);
         apb_write(RegDim0Dst,  cs[k].st0);
-        apb_write(RegDim1Src,  cs[k].st1);
+        apb_write(RegDim1Src,  cs[k].sst1);
         apb_write(RegDim1Dst,  cs[k].st1);
         apb_write(RegDim1Reps, cs[k].reps1);
         apb_write(RegCompute,  cs[k].cmp);
