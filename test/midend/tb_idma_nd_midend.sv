@@ -570,6 +570,13 @@ module tb_idma_nd_midend import idma_pkg::*; #(
         while (req_jobs.size() != 0) begin
             // pop front to get a job
             automatic tb_dma_job_t now_nd = req_jobs.pop_front();
+            // per field: the job's dims lack scale_strides, a bit cast misaligns them
+            automatic idma_d_req_t [NumDim-2:0] nd_dims = '0;
+            for (int unsigned d = 0; d < NumDim - 1; d++) begin
+                nd_dims[d].reps        = now_nd.n_dims[d].reps;
+                nd_dims[d].src_strides = now_nd.n_dims[d].src_strides;
+                nd_dims[d].dst_strides = now_nd.n_dims[d].dst_strides;
+            end
             // print job to terminal
             $display("%s", now_nd.pprint());
             // decompose the job
@@ -594,7 +601,7 @@ module tb_idma_nd_midend import idma_pkg::*; #(
                           $clog2(now_nd.max_dst_len),
                           now_nd.max_src_len != 'd256,
                           now_nd.max_dst_len != 'd256,
-                          now_nd.n_dims
+                          nd_dims
                          );
         end
         // once done: launched all transfers
