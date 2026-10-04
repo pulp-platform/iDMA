@@ -116,6 +116,8 @@ module tb_idma_desc64_top
         constraint axi_src_cache_zero_c { burst.opt.src.cache == '0; }
         constraint axi_dst_cache_zero_c { burst.opt.dst.cache == '0; }
         constraint compute_zero_c { burst.opt.compute == '0; }
+        // a descriptor carries no MX scale plane
+        constraint scale_addr_zero_c { burst.scale_addr == '0; }
         constraint transfer_length_c { burst.length == TransferLength; }
     endclass
 
