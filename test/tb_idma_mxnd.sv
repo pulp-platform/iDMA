@@ -196,9 +196,11 @@ module tb_idma_mxnd
 
   task automatic run(input job_t j, output int unsigned errs);
     prepare(j);
+    #(TA);
     nd_req       = req_of(j);
     nd_req_valid = 1'b1;
     do @(posedge clk); while (!nd_req_ready);
+    #(TA);
     nd_req_valid = 1'b0;
     nd_req       = '0;
     while (!nd_rsp_valid) @(posedge clk);

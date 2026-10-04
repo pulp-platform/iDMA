@@ -77,6 +77,7 @@ module tb_idma_mxroundtrip
 
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
                          input idma_pkg::compute_op_e op);
+    #(TA);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
     idma_req.src_addr = src;
@@ -94,6 +95,7 @@ module tb_idma_mxroundtrip
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
+    #(TA);
     req_valid = 1'b0;
     idma_req = '0;
     while (!(rsp_valid && rsp_ready)) @(posedge clk);

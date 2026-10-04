@@ -206,9 +206,11 @@ module tb_idma_mxplanar
   endtask
 
   task automatic issue(input xfer_t x);
+    #(TA);
     idma_req  = req_of(x);
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
+    #(TA);
     req_valid = 1'b0;
     idma_req  = '0;
   endtask

@@ -63,6 +63,7 @@ module tb_idma_mxneg
                        input idma_pkg::compute_op_e op,
                        input idma_pkg::protocol_e src_prot, input idma_pkg::protocol_e dst_prot,
                        input bit wait_done);
+    #(TA);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
     idma_req.src_addr = src;
@@ -80,6 +81,7 @@ module tb_idma_mxneg
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
+    #(TA);
     req_valid = 1'b0;
     idma_req = '0;
     if (wait_done) while (!(rsp_valid && rsp_ready)) @(posedge clk);

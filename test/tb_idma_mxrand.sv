@@ -100,6 +100,7 @@ module tb_idma_mxrand
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
                          input logic en, input idma_pkg::compute_op_e op,
                          input idma_pkg::mx_options_t mxo = '0, input int soff = 0);
+    #(TA);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
     idma_req.src_addr = src;
@@ -117,6 +118,7 @@ module tb_idma_mxrand
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
+    #(TA);
     req_valid = 1'b0;
     idma_req = '0;
     while (!(rsp_valid && rsp_ready)) @(posedge clk);
@@ -276,6 +278,7 @@ module tb_idma_mxrand
       end
       rsp_cnt = 0;
       for (int unsigned k = 0; k <= BK; k++) begin
+        #(TA);
         idma_req = '0;
         if (k < BK) begin
           idma_req.length   = tf_len_t'(BNb * 128);
@@ -303,6 +306,7 @@ module tb_idma_mxrand
         req_valid = 1'b1;
         do @(posedge clk); while (!req_ready);
       end
+      #(TA);
       req_valid = 1'b0;
       idma_req = '0;
       while (rsp_cnt < BK + 1) @(posedge clk);
