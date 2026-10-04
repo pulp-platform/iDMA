@@ -14,7 +14,9 @@ module idma_otf_compute #(
   /// Implementation tuning knobs
   parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
   /// Input beats buffered per MX engine (dequant: three more)
-  parameter int unsigned BufferDepth     = 32'd3
+  parameter int unsigned BufferDepth     = 32'd3,
+  /// MX beats enter their engine through a register stage, which takes one buffered beat
+  parameter bit          InReg           = 1'b0
 ) (
   input  logic clk_i,
   input  logic rst_ni,
@@ -117,8 +119,40 @@ module idma_otf_compute #(
     $fatal(1, "idma_otf_compute: MX compute needs StrbWidth <= 64, got %0d", StrbWidth);
   end
 
+  // MX input: straight from the read side, or a register stage loaded whenever it can accept
+  logic                      in_v, in_rdy, in_push, dq_ready, qb_rdy;
+  logic [StrbWidth-1:0][7:0] in_data;
+  idma_pkg::mx_tag_t         in_tag;
+  assign in_rdy  = in_tag.dequant ? dq_ready : qb_rdy;
+  assign in_push = in_v & in_rdy;
+
+  if (InReg) begin : gen_in_reg
+    logic                      v_q;
+    logic [StrbWidth-1:0][7:0] data_q;
+    idma_pkg::mx_tag_t         tag_q;
+    assign mx_ready_o = ~v_q | in_rdy;
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        v_q   <= 1'b0;
+        tag_q <= '0;
+      end else begin
+        v_q <= mx_push_i | (v_q & ~in_rdy);
+        if (mx_ready_o) tag_q <= mx_tag_i;
+      end
+    end
+    always_ff @(posedge clk_i) if (mx_ready_o) data_q <= mx_data_i;
+    assign in_v    = v_q;
+    assign in_data = data_q;
+    assign in_tag  = tag_q;
+  end else begin : gen_in_direct
+    assign mx_ready_o = in_rdy;
+    assign in_v       = mx_push_i;
+    assign in_data    = mx_data_i;
+    assign in_tag     = mx_tag_i;
+  end
+
   // MX quant sub-unit behind its input queue, which refills in the cycle the engine takes its head
-  logic                      mq_valid, mq_ready, mq_busy, qb_v, qb_rdy;
+  logic                      mq_valid, mq_ready, mq_busy, qb_v;
   logic [StrbWidth-1:0][7:0] mq_data;
 
   if (ComputeEnable.mxquant) begin : gen_mxquant
@@ -128,10 +162,10 @@ module idma_otf_compute #(
     } qb_t;
     qb_t [0:0] qb_in, qb_out;
 
-    assign qb_in[0] = '{tag: mx_tag_i, data: mx_data_i};
+    assign qb_in[0] = '{tag: in_tag, data: in_data};
 
     idma_dataflow_element #(
-      .BufferDepth ( BufferDepth ),
+      .BufferDepth ( BufferDepth - 32'(InReg) ),
       .SameCycleRW ( 1'b1        ),
       .RegFlags    ( 1'b1        ),
       .StrbWidth   ( 32'd1       ),
@@ -141,7 +175,7 @@ module idma_otf_compute #(
       .clk_i,
       .rst_ni,
       .data_i  ( qb_in                          ),
-      .valid_i ( mx_push_i & ~mx_tag_i.dequant ),
+      .valid_i ( in_push & ~in_tag.dequant      ),
       .ready_o ( qb_rdy                         ),
       .data_o  ( qb_out                         ),
       .valid_o ( qb_v                           ),
@@ -169,20 +203,20 @@ module idma_otf_compute #(
   end
 
   // MX dequant sub-unit
-  logic                      dq_valid, dq_ready, dq_busy;
+  logic                      dq_valid, dq_busy;
   logic [StrbWidth-1:0][7:0] dq_data;
 
   if (ComputeEnable.mxdequant) begin : gen_mxdequant
     idma_otf_mxdequant #(
       .StrbWidth ( StrbWidth            ),
       .Fp16En    ( ComputeEnable.mxfp16 ),
-      .InDepth   ( BufferDepth + 32'd3  )
+      .InDepth   ( BufferDepth + 32'd3 - 32'(InReg) )
     ) i_idma_otf_mxdequant (
       .clk_i,
       .rst_ni,
-      .data_i       ( mx_data_i                             ),
-      .valid_i      ( mx_push_i & mx_tag_i.dequant          ),
-      .tag_i        ( mx_tag_i                              ),
+      .data_i       ( in_data                               ),
+      .valid_i      ( in_push & in_tag.dequant              ),
+      .tag_i        ( in_tag                                ),
       .ready_o      ( dq_ready                              ),
       .data_o       ( dq_data                               ),
       .beat_valid_o ( dq_valid                              ),
@@ -194,12 +228,11 @@ module idma_otf_compute #(
   end
 
   // the write burst's op selects its queue, after the write shifter (MX writes are unshifted)
-  assign mx_ready_o = mx_tag_i.dequant ? dq_ready : qb_rdy;
   assign w_mx_o    = w_mxq | w_mxdq;
   assign w_data_o  = w_mxq ? mq_data : w_mxdq ? dq_data : w_data_i;
   assign w_valid_o = w_mxq ? {StrbWidth{mq_valid}} : w_mxdq ? {StrbWidth{dq_valid}} : w_valid_i;
   assign w_mask_o  = w_mx_o ? '1 : w_mask_i;
-  assign busy_o    = qb_v | mq_busy | dq_busy;
+  assign busy_o    = in_v | qb_v | mq_busy | dq_busy;
 
   // pragma translate_off
   // an op that is not elaborated must never be presented (legalizer fence reports first)

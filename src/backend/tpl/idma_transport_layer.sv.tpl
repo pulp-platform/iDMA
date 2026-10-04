@@ -451,7 +451,8 @@ ${rendered_read_ports[read_port]}
             .StrbWidth           ( StrbWidth          ),
             .ComputeEnable       ( ComputeOps         ),
             .ComputeTuning       ( ComputeTuning      ),
-            .BufferDepth         ( BufferDepth        )
+            .BufferDepth         ( BufferDepth        ),
+            .InReg               ( TimingCuts.mx_in_reg     )
         ) i_idma_otf_compute (
             .clk_i,
             .rst_ni,
@@ -466,7 +467,7 @@ ${rendered_read_ports[read_port]}
             .beat_valid_o ( cmp_beat_valid           ),
             .beat_ready_i ( cmp_beat_ready           ),
             .lane_valid_o ( cmp_lane_valid           ),
-            .mx_data_i    ( buffer_in_shifted        ),
+            .mx_data_i    ( buffer_in                ),
             .mx_tag_i     ( cmp_tag                  ),
             .mx_push_i    ( buffer_in_valid[0] & r_dp_req_i.mx.mx ),
             .mx_ready_o   ( cmp_mx_ready             ),
@@ -512,6 +513,8 @@ ${rendered_read_ports[read_port]}
                 clk_i, !rst_ni, "MX beats are read whole")
         `ASSERT(ComputeMxNoShift, cmp_w_mx |-> w_dp_req_i.shift == '0, clk_i, !rst_ni,
                 "MX output bypasses the write shifter")
+        `ASSERT(ComputeMxNoReadShift, r_dp_req_i.mx.mx & (|buffer_in_valid) |->
+                r_dp_req_i.shift == '0, clk_i, !rst_ni, "MX input bypasses the read shifter")
         `ASSERT(ComputeMxWPop, cmp_w_mx |->
                 ((buffer_out_valid_shifted[0] & w_dp_valid_i & w_chan_ready_o) ==
                  (w_chan_valid_o & w_chan_ready_o)), clk_i, !rst_ni,

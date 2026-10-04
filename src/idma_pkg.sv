@@ -164,6 +164,8 @@ package idma_pkg;
 
     /// Opt-in timing cuts of the backend; '0 is the stock datapath
     typedef struct packed {
+        /// MX beats enter their engine through a one-beat register stage, which takes one input entry
+        logic mx_in_reg;
         /// Dataflow element ready from flops, no same-cycle refill of a full lane; one more entry
         logic dfe_ready_cut;
         /// Dataflow element lanes with registered full/empty flags, pointers without enables

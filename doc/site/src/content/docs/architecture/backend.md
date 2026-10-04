@@ -52,6 +52,7 @@ dataflow element pointers, `r_ready` and the request FIFOs. Each field is indepe
 | Field | Effect | Cost |
 |-------|--------|------|
 | `dfe_ready_cut` | A full dataflow lane takes a new beat only in a cycle without a write-side pop. `r_ready` and the dataflow push no longer depend on the write datapath. Implies `dfe_reg_flags` | One more dataflow entry per byte lane (`BufferDepth + 1`), one more MX input queue entry per engine |
+| `mx_in_reg` | MX beats enter their engine through a one-beat register stage whose data and tag load in every cycle it can take a beat, so the read handshake and data paths end at the stage instead of the engine input queues | One cycle more from R to W for MX beats; the stage takes one input queue entry of each engine |
 | `dfe_reg_flags` | Dataflow lanes keep full/empty in flops, update their pointers without load enables and write the free slot every cycle the lane can accept. Cycle-identical | A few flops per lane |
 | `wdp_head_spill` | A spill register on the head of the write datapath request FIFO, so the write datapath starts from flops instead of the FIFO read mux | +1 cycle from the legalizer to the write datapath; `MetaFifoDepth` +2 |
 | `outst_cnt_reg` | The outstanding-transfer counter of `RejectZeroTransfers` counts an accepted request one cycle late, so it does not depend on `req_ready_o`. Cycle-identical | One flop |
