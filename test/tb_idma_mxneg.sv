@@ -92,7 +92,11 @@ module tb_idma_mxneg
   // an op that is not elaborated, assertions off: expect a plain copy of its length
   task automatic copy_of(input idma_pkg::compute_op_e op);
     automatic int unsigned bad = 0;
+`ifdef VERILATOR
+    $fatal(1, "[MXNEG] case %0d needs $assertoff, which Verilator 5.020 lacks", NegCase);
+`else
     $assertoff(0, tb_idma_mxneg.i_idma_backend);
+`endif
     issue(Src, Dst, 4 * StrbWidth, op, idma_pkg::AXI, idma_pkg::AXI, 1'b1);
     for (int unsigned i = 0; i < 4 * StrbWidth; i++)
       if (i_axi_sim_mem.mem[Dst + i] !== 8'(i)) bad++;

@@ -113,6 +113,7 @@ module tb_idma_mxnd
   task automatic rows_of(input job_t j, output addr_t s [$], output addr_t d [$],
                          output addr_t c [$]);
     automatic addr_t sa = j.src, da = j.dst, ca = j.scl;
+    s = {}; d = {}; c = {};
     for (int unsigned t = 0; t < j.reps[1]; t++)
       for (int unsigned r = 0; r < j.reps[0]; r++) begin
         s.push_back(sa); d.push_back(da); c.push_back(ca);
@@ -230,23 +231,23 @@ module tb_idma_mxnd
     repeat (5) @(posedge clk);
 
     // MXCore-like A tile on padded rows: 1 block per row, 16 rows x 2 k-tiles, a scale line per row
-    js.push_back('{"q16 1-block rows", 0, 1, 0, 0, 0, 1, '{16, 2},
+    js.push_back(job_t'{"q16 1-block rows", 0, 1, 0, 0, 0, 1, '{16, 2},
                    'h0001_0000, 'h0010_0000, 'h0018_0000,
                    '{2048, 64 - 15 * 2048}, '{bw, 1024 - 15 * bw}, '{64, 1024 - 15 * 64}});
     // full G64 rows: a contiguous [rows][64] scale plane
-    js.push_back('{"q32 64-block rows", 0, 0, 0, 0, 0, 64, '{4, 1},
+    js.push_back(job_t'{"q32 64-block rows", 0, 0, 0, 0, 0, 64, '{4, 1},
                    'h0002_0000, 'h0020_0000, 'h0028_0000,
                    '{8192, 0}, '{2048, 0}, '{64, 0}});
     // odd-sized G32 E4M3 RCEIL rows, scale lines walking down
-    js.push_back('{"q16 33-block G32 rows", 0, 1, 1, 1, 1, 33, '{3, 2},
+    js.push_back(job_t'{"q16 33-block G32 rows", 0, 1, 1, 1, 1, 33, '{3, 2},
                    'h0004_0000, 'h0030_0000, 'h0038_0000,
                    '{4096, 4096}, '{1088, 1088}, '{-128, -256}});
     // dequant, one block per row
-    js.push_back('{"dq32 1-block rows", 1, 0, 0, 0, 0, 1, '{16, 1},
+    js.push_back(job_t'{"dq32 1-block rows", 1, 0, 0, 0, 0, 1, '{16, 1},
                    'h0040_0000, 'h0048_0000, 'h0044_0000,
                    '{bw, 0}, '{256, 0}, '{64, 0}});
     // dequant, odd G32 rows (half beat at 512 bit)
-    js.push_back('{"dq16 3-block G32 E4M3 rows", 1, 1, 1, 1, 0, 3, '{5, 2},
+    js.push_back(job_t'{"dq16 3-block G32 E4M3 rows", 1, 1, 1, 1, 0, 3, '{5, 2},
                    'h0050_0000, 'h0058_0000, 'h0054_0000,
                    '{256, 4096}, '{512, 4096}, '{192, -64}});
     foreach (js[k]) begin
