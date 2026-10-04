@@ -71,6 +71,7 @@ def render_read_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
                 read_meta_ready = 'ar_ready_o'
                 buffer_in = 'buffer_in'
                 buffer_in_valid = 'buffer_in_valid'
+                buffer_in_beat = 'buffer_in_beat'
             else:
                 if num_heads == 1:
                     read_dp_valid_in = f'''\
@@ -112,6 +113,7 @@ ar_valid_i\
                 read_meta_ready = f'{rp}_ar_ready{mh_bus}'
                 buffer_in = f'{rp}_buffer_in{mh_bus}'
                 buffer_in_valid = f'{rp}_buffer_in_valid{mh_bus}'
+                buffer_in_beat = f'{rp}_buffer_in_beat{mh_bus}'
 
             read_port_context = {
                 'database': db,
@@ -129,6 +131,7 @@ ar_valid_i\
                 'read_response': f'{rp}_read_rsp_{read_port_dir_rsp_str}{mh_bus}',
                 'buffer_in': buffer_in,
                 'buffer_in_valid': buffer_in_valid,
+                'buffer_in_beat': buffer_in_beat,
                 'mh': mh
             }
 

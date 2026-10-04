@@ -65,8 +65,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   counter off `req_ready_o`). `idma_inst64_top` passes it to its backends. `mx_in_reg` (MX beats
   enter their engine through a one-beat register stage; one cycle more MX latency) and
   `dfe_ready_ahead` (dataflow element ready from flops; one more entry per lane, taken only when
-  the next write beat pops the lane; new write port output `buffer_out_offer_o`) are added as
-  leading fields, so the values of the earlier fields are unchanged.
+  the next write beat pops the lane; new write port output `buffer_out_offer_o`) and
+  `mx_beat_push` (MX engine push on the AXI read beat without the byte-lane masks; `idma_axi_read`
+  output `buffer_in_beat_o`) are added as leading fields, so the values of the earlier fields are
+  unchanged.
 - The register-map tables of the register frontend page and the DMOPC opcode table of the
   Snitch page are generated from the RDL and `idma_dmopc.yml` (`make idma_doc_tables`);
   `make idma_verify_codegen` fails when a page differs.

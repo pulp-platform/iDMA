@@ -212,10 +212,18 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if not one_read_port:
     % for p in used_read_protocols:
     strb_t ${mh_format['ar'][p]}${p}_buffer_in_valid;
+        % if p == 'axi':
+    logic  ${mh_format['ar'][p]}${p}_buffer_in_beat;
+        % endif
     % endfor
 % endif
     strb_t buffer_in_valid;
     strb_t buffer_in_ready;
+    // an AXI read beat before the buffer masks (MX transfers read AXI only)
+    logic  buffer_in_beat;
+% if one_read_port and used_read_protocols[0] != 'axi':
+    assign buffer_in_beat = 1'b0;
+% endif
 
     // outbound control signals of the buffer: controlled by the write process
     strb_t buffer_out_valid;
@@ -334,6 +342,11 @@ ${rendered_read_ports[read_port]}
 
                 buffer_in       = ${rp}_buffer_in;
                 buffer_in_valid = ${rp}_buffer_in_valid;
+        % if rp == 'axi':
+                buffer_in_beat  = ${rp}_buffer_in_beat;
+        % else:
+                buffer_in_beat  = 1'b0;
+        % endif
             end
     % else:
             idma_pkg::${database[rp]['protocol_enum']}: begin
@@ -343,6 +356,11 @@ ${rendered_read_ports[read_port]}
 
                 buffer_in       = ${rp}_buffer_in [r_dp_req_i.src_head];
                 buffer_in_valid = ${rp}_buffer_in_valid [r_dp_req_i.src_head];
+        % if rp == 'axi':
+                buffer_in_beat  = ${rp}_buffer_in_beat [r_dp_req_i.src_head];
+        % else:
+                buffer_in_beat  = 1'b0;
+        % endif
             end
     % endif
 % endfor
@@ -353,6 +371,7 @@ ${rendered_read_ports[read_port]}
 
                 buffer_in       = '0;
                 buffer_in_valid = '0;
+                buffer_in_beat  = 1'b0;
             end
             endcase
         end else begin
@@ -362,6 +381,7 @@ ${rendered_read_ports[read_port]}
 
             buffer_in       = '0;
             buffer_in_valid = '0;
+            buffer_in_beat  = 1'b0;
         end
     end
 
@@ -380,7 +400,7 @@ ${rendered_read_ports[read_port]}
 % if compute_eligible:
     // compute builds: MX beats go from the read side to their engine, past the dataflow element
     strb_t dfe_in_valid, dfe_in_ready;
-    logic  cmp_mx_ready;
+    logic  cmp_mx_ready, mx_push;
 
     if (EnableCompute) begin : gen_dataflow_mx
         assign dfe_in_valid    = r_dp_req_i.mx.mx ? '0 : buffer_in_valid;
@@ -449,6 +469,13 @@ ${rendered_read_ports[read_port]}
         logic                  cmp_w_mx;
         idma_pkg::mx_tag_t     cmp_tag;
 
+        // MX beats are whole beats: the beat push may skip the byte-lane masks
+        if (TimingCuts.mx_beat_push) begin : gen_mx_beat_push
+            assign mx_push = buffer_in_beat & cmp_mx_ready & r_dp_req_i.mx.mx;
+        end else begin : gen_mx_masked_push
+            assign mx_push = buffer_in_valid[0] & r_dp_req_i.mx.mx;
+        end
+
         // the MX tag rides with each read beat
         always_comb begin
             cmp_tag      = r_dp_req_i.mx;
@@ -478,7 +505,7 @@ ${rendered_read_ports[read_port]}
             .lane_valid_o ( cmp_lane_valid           ),
             .mx_data_i    ( buffer_in                ),
             .mx_tag_i     ( cmp_tag                  ),
-            .mx_push_i    ( buffer_in_valid[0] & r_dp_req_i.mx.mx ),
+            .mx_push_i    ( mx_push                  ),
             .mx_ready_o   ( cmp_mx_ready             ),
             .w_data_i     ( wr_beat                  ),
             .w_valid_i    ( wr_beat_valid            ),
@@ -525,6 +552,8 @@ ${rendered_read_ports[read_port]}
                 clk_i, !rst_ni, "MX beats are read whole")
         `ASSERT(ComputeMxNoShift, cmp_w_mx |-> w_dp_req_i.shift == '0, clk_i, !rst_ni,
                 "MX output bypasses the write shifter")
+        `ASSERT(ComputeMxBeatPush, mx_push == (buffer_in_valid[0] & r_dp_req_i.mx.mx), clk_i,
+                !rst_ni, "MX push differs from the masked read beat")
         `ASSERT(ComputeMxNoReadShift, r_dp_req_i.mx.mx & (|buffer_in_valid) |->
                 r_dp_req_i.shift == '0, clk_i, !rst_ni, "MX input bypasses the read shifter")
         `ASSERT(ComputeMxWPop, cmp_w_mx |->
