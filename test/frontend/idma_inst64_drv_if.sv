@@ -66,7 +66,7 @@ interface idma_inst64_drv_if #(
     // acc_res_o pops on the posedge, so sample it in a clocked process
     acc_rsp_item_t rsp_queue [$];
 
-    always_ff @(posedge clk) begin : proc_capture_rsp
+    always @(posedge clk) begin : proc_capture_rsp
         // built in a variable first: verilator rejects an assignment pattern as an argument
         automatic acc_rsp_item_t rsp_item;
         if (rst_n && acc_res_valid && acc_res_ready) begin
