@@ -187,8 +187,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     localparam int unsigned ComputeFifoDepth = 32'd0;
 % endif
 
-    /// Dataflow element depth; the ready cut needs one more entry for the same rate
-    localparam int unsigned DfeDepth = BufferDepth + 32'(TimingCuts.dfe_ready_cut);
+    /// Dataflow element depth; each ready cut needs one more entry for the same rate
+    localparam int unsigned DfeDepth = BufferDepth + 32'(TimingCuts.dfe_ready_cut) +
+        32'(TimingCuts.dfe_ready_ahead);
 
     /// The localparam MetaFifoDepth holds the maximum number of transfers that can be
     /// in-flight under any circumstances.

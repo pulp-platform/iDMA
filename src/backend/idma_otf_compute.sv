@@ -177,6 +177,7 @@ module idma_otf_compute #(
       .data_i  ( qb_in                          ),
       .valid_i ( in_push & ~in_tag.dequant      ),
       .ready_o ( qb_rdy                         ),
+      .ahead_i ( '0                             ),
       .data_o  ( qb_out                         ),
       .valid_o ( qb_v                           ),
       .ready_i ( qb_v & mq_ready                )

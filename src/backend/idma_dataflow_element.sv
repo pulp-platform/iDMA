@@ -6,6 +6,8 @@
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 // - Tobias Senti <tsenti@ethz.ch>
 
+`include "common_cells/registers.svh"
+
 /// A byte-granular buffer holding data while it is copied.
 module idma_dataflow_element #(
     /// The depth of the buffer
@@ -14,6 +16,8 @@ module idma_dataflow_element #(
     parameter bit SameCycleRW = 1'b1,
     /// Lanes with registered full/empty flags and pointers without load enables
     parameter bit RegFlags = 1'b0,
+    /// Registered flags; a lane takes its last entry only while `ahead_i` (its pending pop)
+    parameter bit AheadSlot = 1'b0,
     /// The width of the buffer in bytes
     parameter int unsigned StrbWidth = 32'd1,
     /// Print the info of the FIFO configuration
@@ -29,6 +33,7 @@ module idma_dataflow_element #(
     input  byte_t [StrbWidth-1:0] data_i,
     input  strb_t valid_i,
     output strb_t ready_o,
+    input  strb_t ahead_i,
 
     output byte_t [StrbWidth-1:0] data_o,
     output strb_t valid_o,
@@ -37,7 +42,7 @@ module idma_dataflow_element #(
 
     // buffer is implemented as an array of FIFOs
     for (genvar i = 0; i < StrbWidth; i++) begin : gen_fifo_buffer
-        if (!RegFlags) begin : gen_stock
+        if (!RegFlags && !AheadSlot) begin : gen_stock
             cc_passthrough_stream_fifo #(
                 .data_t       ( byte_t        ),
                 .Depth        ( BufferDepth   ),
@@ -62,9 +67,10 @@ module idma_dataflow_element #(
             byte_t [BufferDepth-1:0] mem_q;
             logic  [PtrW-1:0]        wptr_q, rptr_q, wptr_inc, rptr_inc;
             logic  [CntW-1:0]        cnt_q, cnt_d;
-            logic                    full_q, empty_q, push, pop;
+            logic                    full_q, empty_q, low_q, last_q, push, pop;
 
-            assign ready_o[i] = ~full_q | (SameCycleRW & pop);
+            assign ready_o[i] = AheadSlot ? low_q | (last_q & ahead_i[i]) :
+                                            ~full_q | (SameCycleRW & pop);
             assign valid_o[i] = ~empty_q;
             assign data_o[i]  = mem_q[rptr_q];
             assign push       = valid_i[i] & ready_o[i];
@@ -88,6 +94,20 @@ module idma_dataflow_element #(
                     empty_q <= cnt_d == '0;
                 end
             end
+
+            if (AheadSlot) begin : gen_ahead
+                `FF(low_q,  cnt_d <  CntW'(BufferDepth - 1), BufferDepth > 32'd1,  clk_i, rst_ni)
+                `FF(last_q, cnt_d == CntW'(BufferDepth - 1), BufferDepth == 32'd1, clk_i, rst_ni)
+            end else begin : gen_no_ahead
+                assign low_q  = 1'b0;
+                assign last_q = 1'b0;
+            end
+
+            // pragma translate_off
+            always @(posedge clk_i) if (rst_ni)
+                assert (!(push && !pop && full_q))
+                    else $fatal(1, "idma_dataflow_element: push into a full lane");
+            // pragma translate_on
 
             // the slot at the write pointer takes the input every cycle the lane can accept
             for (genvar k = 0; k < BufferDepth; k++) begin : gen_slot

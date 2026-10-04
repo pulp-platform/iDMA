@@ -194,6 +194,7 @@ def render_write_mgr_inst(prot_id: str, prot_ids: dict, db: dict) -> dict:
                 w_chan_ready = 'w_chan_ready_o'
                 w_chan_first = 'w_chan_first_o'
                 buffer_out_ready = 'buffer_out_ready'
+                buffer_out_offer = 'buffer_out_offer'
                 buffer_out_consumed = 'buffer_out_consumed'
             else:
                 if num_heads == 1:
@@ -228,6 +229,7 @@ aw_valid_i\
                 w_chan_ready = f'{wp}_w_chan_ready{mh_bus}'
                 w_chan_first = f'{wp}_w_chan_first{mh_bus}'
                 buffer_out_ready = f'{wp}_buffer_out_ready{mh_bus}'
+                buffer_out_offer = f'{wp}_buffer_out_offer{mh_bus}'
                 buffer_out_consumed = f'{wp}_buffer_out_consumed{mh_bus}'
 
             write_port_context = {
@@ -248,6 +250,7 @@ aw_valid_i\
                 'w_chan_ready': w_chan_ready,
                 'w_chan_first': w_chan_first,
                 'buffer_out_ready': buffer_out_ready,
+                'buffer_out_offer': buffer_out_offer,
                 'buffer_out_consumed': buffer_out_consumed,
                 'mh': mh
             }

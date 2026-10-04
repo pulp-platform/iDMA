@@ -80,6 +80,8 @@ module idma_tilelink_write #(
     input  strb_t buffer_out_valid_i,
     /// Ready to buffer
     output strb_t buffer_out_ready_o,
+    /// Lanes the next write beat pops, from the request and the burst state only
+    output strb_t buffer_out_offer_o,
     /// Logical byte positions consumed by an accepted write
     output strb_t buffer_out_consumed_o
 );
@@ -88,7 +90,7 @@ module idma_tilelink_write #(
     strb_t w_last_mask;
 
     // corresponds to the strobe: the write aligned data that is currently valid in the buffer
-    strb_t mask_out;
+    strb_t mask_out, offer_mask;
 
     // write signals: is this the first / last element in a burst?
     logic first_w;
@@ -171,6 +173,12 @@ module idma_tilelink_write #(
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
+    // the next beat's lanes without the buffer state: first while the beat counter is unloaded
+    always_comb begin : proc_offer_mask
+        offer_mask = (w_dp_req_i.is_single | ~w_cnt_valid_q) ? w_first_mask : '1;
+        if (w_dp_req_i.tailer != '0 & last_w) offer_mask = offer_mask & w_last_mask;
+    end
+    assign buffer_out_offer_o = (write_meta_valid_i & w_dp_valid_i) ? offer_mask : '0;
     assign buffer_out_consumed_o = buffer_out_ready_o;
 
     // signal the bus that we are ready

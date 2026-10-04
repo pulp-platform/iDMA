@@ -198,6 +198,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     localparam int unsigned StrbWidth   = DataWidth / 8;
     /// Dataflow element lanes with registered flags
     localparam bit DfeRegFlags = TimingCuts.dfe_ready_cut | TimingCuts.dfe_reg_flags;
+    /// Dataflow element ready from flops, refilled while the write side reads it
+    localparam bit DfeReadyCut = TimingCuts.dfe_ready_cut | TimingCuts.dfe_ready_ahead;
 
     /// Data type
     typedef logic [DataWidth-1:0] data_t;
@@ -222,12 +224,15 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     % for p in used_write_protocols:
     strb_t ${mh_format['aw'][p]}${p}_buffer_out_ready;
     strb_t ${mh_format['aw'][p]}${p}_buffer_out_consumed;
+    strb_t ${mh_format['aw'][p]}${p}_buffer_out_offer;
     % endfor
 % endif
     strb_t buffer_out_ready;
     strb_t buffer_out_ready_shifted;
     strb_t buffer_out_consumed;
     strb_t buffer_out_consumed_shifted;
+    // lanes the offered write beat pops, and the dataflow lanes that may take their extra entry
+    strb_t buffer_out_offer, buffer_out_offer_shifted, dfe_ahead;
 
     // shifted data flowing into the buffer
 % if not one_read_port:
@@ -387,8 +392,9 @@ ${rendered_read_ports[read_port]}
 
     idma_dataflow_element #(
         .BufferDepth   ( BufferDepth   ),
-        .SameCycleRW   ( !TimingCuts.dfe_ready_cut ),
+        .SameCycleRW   ( !DfeReadyCut  ),
         .RegFlags      ( DfeRegFlags   ),
+        .AheadSlot     ( TimingCuts.dfe_ready_ahead ),
         .StrbWidth     ( StrbWidth     ),
         .PrintFifoInfo ( PrintFifoInfo ),
         .strb_t        ( strb_t        ),
@@ -399,6 +405,7 @@ ${rendered_read_ports[read_port]}
         .data_i      ( buffer_in_shifted        ),
         .valid_i     ( dfe_in_valid             ),
         .ready_o     ( dfe_in_ready             ),
+        .ahead_i     ( dfe_ahead                ),
         .data_o      ( buffer_out               ),
         .valid_o     ( buffer_out_valid         ),
         .ready_i     ( dataflow_ready_in        )
@@ -406,8 +413,9 @@ ${rendered_read_ports[read_port]}
 % else:
     idma_dataflow_element #(
         .BufferDepth   ( BufferDepth   ),
-        .SameCycleRW   ( !TimingCuts.dfe_ready_cut ),
+        .SameCycleRW   ( !DfeReadyCut  ),
         .RegFlags      ( DfeRegFlags   ),
+        .AheadSlot     ( TimingCuts.dfe_ready_ahead ),
         .StrbWidth     ( StrbWidth     ),
         .PrintFifoInfo ( PrintFifoInfo ),
         .strb_t        ( strb_t        ),
@@ -418,6 +426,7 @@ ${rendered_read_ports[read_port]}
         .data_i      ( buffer_in_shifted        ),
         .valid_i     ( buffer_in_valid          ),
         .ready_o     ( buffer_in_ready          ),
+        .ahead_i     ( dfe_ahead                ),
         .data_o      ( buffer_out               ),
         .valid_o     ( buffer_out_valid         ),
         .ready_i     ( dataflow_ready_in        )
@@ -451,7 +460,7 @@ ${rendered_read_ports[read_port]}
             .StrbWidth           ( StrbWidth          ),
             .ComputeEnable       ( ComputeOps         ),
             .ComputeTuning       ( ComputeTuning      ),
-            .BufferDepth         ( BufferDepth        ),
+            .BufferDepth         ( BufferDepth - 32'(TimingCuts.dfe_ready_ahead) ),
             .InReg               ( TimingCuts.mx_in_reg     )
         ) i_idma_otf_compute (
             .clk_i,
@@ -505,6 +514,9 @@ ${rendered_read_ports[read_port]}
         for (genvar i = 0; i < StrbWidth; i++) begin : gen_dataflow_ready
             assign dataflow_ready_in[i] = cmp_active ? (&buffer_out_valid) & cmp_in_ready :
                                           ~cmp_w_mx & buffer_out_ready_shifted[i];
+            // a lane the pending pop reads, without the write handshake
+            assign dfe_ahead[i]         = cmp_active ? (&buffer_out_valid) & cmp_in_ready :
+                                          ~cmp_w_mx & buffer_out_offer_shifted[i];
         end
 
         `ASSERT(ComputeConsumeValid, cmp_consumed_this_cycle != '0 |-> cmp_beat_valid, clk_i, !rst_ni, "Write datapath consumed bytes without a valid atomic compute result")
@@ -529,12 +541,14 @@ ${rendered_read_ports[read_port]}
         assign mask_ext_shifted         = wr_beat_mask;
         assign cmp_busy                 = 1'b0;
         assign cmp_mx_ready             = 1'b0;
+        assign dfe_ahead                = buffer_out_offer_shifted;
     end
 % else:
     assign wr_data                  = buffer_out;
     assign wr_valid                 = buffer_out_valid;
     assign wr_strb                  = '1;
     assign dataflow_ready_in        = buffer_out_ready_shifted;
+    assign dfe_ahead                = buffer_out_offer_shifted;
     assign buffer_out_shifted       = wr_beat;
     assign buffer_out_valid_shifted = wr_beat_valid;
     assign mask_ext_shifted         = wr_beat_mask;
@@ -550,6 +564,8 @@ ${rendered_read_ports[read_port]}
     assign wr_beat_valid            = strb_t'({wr_valid, wr_valid} >>   w_dp_req_i.shift);
     assign wr_beat_mask             = strb_t'({wr_strb, wr_strb} >>   w_dp_req_i.shift);
     assign buffer_out_ready_shifted = strb_t'({buffer_out_ready, buffer_out_ready} >> - w_dp_req_i.shift);
+    assign buffer_out_offer_shifted =
+        strb_t'({buffer_out_offer, buffer_out_offer} >> - w_dp_req_i.shift);
     assign buffer_out_consumed_shifted =
         strb_t'({buffer_out_consumed, buffer_out_consumed} >> -w_dp_req_i.shift);
 
@@ -583,6 +599,7 @@ ${rendered_read_ports[read_port]}
             w_chan_ready_o   = ${wp}_w_chan_ready;
             w_chan_first_o   = ${wp}_w_chan_first;
             buffer_out_consumed = ${wp}_buffer_out_consumed;
+            buffer_out_offer = ${wp}_buffer_out_offer;
     % else:
             w_dp_req_ready   = ${wp}_w_dp_ready [w_dp_req_i.dst_head];
             buffer_out_ready = ${wp}_buffer_out_ready [w_dp_req_i.dst_head];
@@ -590,6 +607,7 @@ ${rendered_read_ports[read_port]}
             w_chan_ready_o   = ${wp}_w_chan_ready [w_dp_req_i.dst_head];
             w_chan_first_o   = ${wp}_w_chan_first [w_dp_req_i.dst_head];
             buffer_out_consumed = ${wp}_buffer_out_consumed [w_dp_req_i.dst_head];
+            buffer_out_offer = ${wp}_buffer_out_offer [w_dp_req_i.dst_head];
     % endif
         end
 % endfor
@@ -600,6 +618,7 @@ ${rendered_read_ports[read_port]}
             w_chan_ready_o   = 1'b0;
             w_chan_first_o   = 1'b0;
             buffer_out_consumed = '0;
+            buffer_out_offer = '0;
         end
         endcase
     end
