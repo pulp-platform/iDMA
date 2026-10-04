@@ -22,7 +22,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/apt-debs
-          key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v2
+          key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v3
       -
         name: Download packages
         if: steps.debs.outputs.cache-hit != 'true'
@@ -31,7 +31,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y -d \
             -o Dir::Cache::archives="$HOME/.cache/apt-debs" \
-            ccache
+            ccache mold
           ls -1 "$HOME/.cache/apt-debs"/*.deb | wc -l
       -
         name: Checkout
