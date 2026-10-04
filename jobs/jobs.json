@@ -590,7 +590,7 @@
         "verify" : {
             "expect" : "fail",
             "defines" : ["INC_ASSERT"],
-            "token" : "clear with in-flight state",
+            "token" : "pop of an empty output queue",
             "legs" : [
                 { "tag" : "mxclear_1", "params" : { "Quant" : 1 } },
                 { "tag" : "mxclear_0", "params" : { "Quant" : 0 } }
