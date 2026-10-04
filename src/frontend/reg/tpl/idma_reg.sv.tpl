@@ -39,6 +39,8 @@ module idma_${identifier} #(
   parameter int unsigned StreamWidth    = cc_pkg::idx_width(NumStreams),
   /// Backend data width; MX data planes, lengths and strides must fit its beats
   parameter int unsigned DataWidth      = 32'd512,
+  /// Compute ops of the backend; a launch of any other op is refused
+  parameter idma_pkg::compute_enable_t ComputeOps = '1,
 % if _fam == 'apb':
   /// APB4 request type
   parameter type         apb_req_t      = logic,
@@ -193,17 +195,28 @@ module idma_${identifier} #(
         end
     end
 
-    // an MX launch needs an elaborated format, beat-aligned planes (scale: 64 B) and whole blocks
+    // a compute launch needs an elaborated op; MX also an elaborated format, beat-aligned planes
+    // (scale: 64 B), whole blocks and a written length that fits the length field
     always_comb begin : proc_launch_ok
       launch_ok = 1'b1;
       if (nxt_dma_req${sep}opt.compute.enable &&
+          (nxt_dma_req${sep}opt.compute.op != idma_pkg::COMPUTE_NONE) &&
+          !idma_pkg::compute_op_supported(ComputeOps, nxt_dma_req${sep}opt.compute.op)) begin
+        launch_ok = 1'b0;
+      end
+      if (nxt_dma_req${sep}opt.compute.enable &&
           idma_pkg::compute_op_is_mx(nxt_dma_req${sep}opt.compute.op)) begin
-        launch_ok = idma_pkg::mx_elem_legal(nxt_dma_req${sep}opt.compute.params.mx.elem_fmt) &&
-                    (nxt_dma_req${sep}scale_addr[ScaleAlignWidth-1:0] == '0) &&
-                    (nxt_dma_req${sep}src_addr[BeatAlignWidth-1:0] == '0) &&
-                    (nxt_dma_req${sep}dst_addr[BeatAlignWidth-1:0] == '0) &&
-                    ((nxt_dma_req${sep}length &
-                      (idma_pkg::compute_in_bytes(nxt_dma_req${sep}opt.compute.op) - 1)) == '0);
+        if (!idma_pkg::mx_elem_legal(nxt_dma_req${sep}opt.compute.params.mx.elem_fmt) ||
+            (nxt_dma_req${sep}scale_addr[ScaleAlignWidth-1:0] != '0) ||
+            (nxt_dma_req${sep}src_addr[BeatAlignWidth-1:0] != '0) ||
+            (nxt_dma_req${sep}dst_addr[BeatAlignWidth-1:0] != '0) ||
+            ((nxt_dma_req${sep}length &
+              (idma_pkg::compute_in_bytes(nxt_dma_req${sep}opt.compute.op) - 1)) != '0) ||
+            !idma_pkg::compute_out_len_fits(nxt_dma_req${sep}opt.compute.op,
+                                            64'(nxt_dma_req${sep}length),
+                                            $bits(nxt_dma_req${sep}length))) begin
+          launch_ok = 1'b0;
+        end
 % for nd in range(0, num_dim-1):
         if (nxt_dma_req.d_req[${nd}].reps > 'd1 &&
             ((nxt_dma_req.d_req[${nd}].scale_strides[ScaleAlignWidth-1:0] != '0) ||

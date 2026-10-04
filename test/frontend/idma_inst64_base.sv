@@ -19,6 +19,8 @@ module idma_inst64_base #(
     parameter bit          EnableTcdmObi = 1'b1,
     /// Elaborate the backend on-the-fly compute datapath
     parameter bit          EnableCompute = 1'b0,
+    /// Compute ops of the backend and the frontend
+    parameter idma_pkg::compute_enable_t ComputeOps = '1,
     /// TCDM (OBI) window; every address outside it decodes to ToSoC, i.e. AXI
     parameter logic [63:0] TcdmStart = idma_inst64_tb_pkg::TcdmStart,
     parameter logic [63:0] TcdmEnd   = idma_inst64_tb_pkg::TcdmEnd,
@@ -74,6 +76,7 @@ module idma_inst64_base #(
         .EnableTcdmObi   ( EnableTcdmObi   ),
         .DMATracing      ( DMATracing      ),
         .EnableCompute   ( EnableCompute   ),
+        .ComputeOps      ( ComputeOps      ),
         .axi_ar_chan_t   ( axi_ar_chan_t   ),
         .axi_aw_chan_t   ( axi_aw_chan_t   ),
         .axi_req_t       ( axi_req_t       ),

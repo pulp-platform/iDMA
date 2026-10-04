@@ -210,6 +210,18 @@ package idma_pkg;
         endcase
     endfunction
 
+    /// Does the written length of `len` input bytes fit a `w`-bit length field?
+    function automatic logic compute_out_len_fits(compute_op_e op, logic [63:0] len,
+                                                  int unsigned w);
+        unique case (op)
+            COMPUTE_MXDEQUANT:
+                return (len >> (w - $clog2(MxFp32BlockBytes / MxDataBlockBytes))) == '0;
+            COMPUTE_MXDEQUANT_FP16:
+                return (len >> (w - $clog2(MxFp16BlockBytes / MxDataBlockBytes))) == '0;
+            default: return 1'b1;
+        endcase
+    endfunction
+
     /// Blocks per scale group
     function automatic int unsigned compute_mx_group_blocks(compute_options_t c);
         return (c.params.mx.group == MX_GROUP_G32) ? 32'd32 : 32'd64;

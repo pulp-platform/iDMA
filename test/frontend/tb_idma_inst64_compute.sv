@@ -13,6 +13,8 @@ module tb_idma_inst64_compute #(
     parameter bit          EnableTcdmObi = 1'b0,
     /// 0 runs the compute test; 1 latches an undecodable DMOPC byte
     parameter int unsigned NegCase       = 32'd0,
+    /// Compute ops of the DUT (idma_pkg::compute_enable_t bits)
+    parameter logic [3:0]  ComputeOpsMask = 4'hF,
     parameter int unsigned DMATracing    = idma_inst64_tb_pkg::DMATracing
 );
     import idma_inst64_tb_pkg::*;
@@ -27,6 +29,7 @@ module tb_idma_inst64_compute #(
     idma_inst64_base #(
         .EnableCompute ( EnableCompute ),
         .EnableTcdmObi ( EnableTcdmObi ),
+        .ComputeOps    ( idma_pkg::compute_enable_t'(ComputeOpsMask) ),
         .DMATracing    ( DMATracing    )
     ) harness ();
 
@@ -310,12 +313,15 @@ module tb_idma_inst64_compute #(
                 errors++;
             end
         end
-        // Planes off a beat, a partial block or a 2D stride off a beat are refused too
-        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
-        for (int unsigned c = 0; c < 6; c++) begin
+        // Planes off a beat or in the TCDM window, a partial block, a 2D stride off a beat, an op
+        // that is not elaborated or a dequant output beyond the length field are refused too
+        for (int unsigned c = 0; c < 11; c++) begin
             automatic addr_t       src = SrcAddr, dst = QuantAddr, len = addr_t'(SrcBytes);
             automatic logic [31:0] sst = 'h1000, dst_st = 'h1000;
             automatic logic [1:0]  cfg = 2'b00;
+            automatic logic [7:0]  opc = 8'(idma_inst64_compute_pkg::OpcMxQuant);
+            if (c inside {[6:8]} && !EnableTcdmObi) continue;
+            if (c == 9 && ComputeOpsMask[0]) continue;
             unique case (c)
                 0: src = SrcAddr + HalfBeat;
                 1: dst = QuantAddr + HalfBeat;
@@ -323,8 +329,17 @@ module tb_idma_inst64_compute #(
                 3: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
                 4: begin cfg = 2'b10; dst_st = 'h1000 + HalfBeat; end
                 5: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
+                6: src = addr_t'(idma_inst64_tb_pkg::TcdmStart);
+                7: dst = addr_t'(idma_inst64_tb_pkg::TcdmStart);
+                8: harness.drv_if.dma_set_scale(addr_t'(idma_inst64_tb_pkg::TcdmStart));
+                9: opc = 8'(idma_inst64_compute_pkg::OpcMxQuantFp16);
+                10: begin
+                    opc = 8'(idma_inst64_compute_pkg::OpcMxDequant);
+                    len = addr_t'(1) << 62;
+                end
                 default: ;
             endcase
+            harness.drv_if.dma_set_compute(32'(opc));
             harness.drv_if.dma_set_source(src);
             harness.drv_if.dma_set_dest(dst);
             harness.drv_if.dma_set_strides(sst, dst_st);
@@ -336,6 +351,7 @@ module tb_idma_inst64_compute #(
                        refused.error, refused.data);
                 errors++;
             end
+            harness.drv_if.dma_set_scale(QuantAddr + PlScaleOff[1] * 64);
         end
         harness.drv_if.dma_set_source(SrcAddr);
         harness.drv_if.dma_set_strides('0, '0);
@@ -346,7 +362,9 @@ module tb_idma_inst64_compute #(
                 if (errors < 20) $error("refused DMCPY wrote at %0d", i);
                 errors++;
             end
-        $display("[TB] DMCPY refused: reserved MX format, plane off a beat, partial block");
+        $display("[TB] DMCPY refused: reserved MX format, plane off a beat%s, partial block%s",
+                 EnableTcdmObi ? " or in the TCDM window" : "",
+                 ComputeOpsMask[0] ? "" : ", FP16 quant not elaborated");
 
         // Back to a plain copy: the latched op must not leak into the next transfer
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));

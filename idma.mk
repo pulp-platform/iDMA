@@ -448,7 +448,8 @@ idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 .PHONY: idma_sim_tb_idma_reg_frontend
 idma_sim_tb_idma_reg_frontend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
-	cd $(IDMA_VSIM_DIR); for g in "-gNumStreams=1" "-gNumStreams=2" "-gNumStreams=2 -gNumRegs=2"; do \
+	cd $(IDMA_VSIM_DIR); for g in "-gNumStreams=1" "-gNumStreams=2" "-gNumStreams=2 -gNumRegs=2" \
+	  "-gComputeOpsMask=12"; do \
 	  $(VSIM) -c -t 1ps -voptargs=+acc $$g tb_idma_reg_frontend -logfile reg_frontend.log \
 	    -do "run -all; quit" && grep -q "RESULT     : PASS" reg_frontend.log || exit 1; done
 
@@ -495,12 +496,13 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	cd $(IDMA_VSIM_DIR); for t in "0 axi" "1 obi"; do set -- $$t; \
-	  $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=$$1 tb_idma_inst64_compute \
-	    tb_idma_inst64_mon_$$2 -logfile inst64_compute_$$2.log -do "run -all; quit"; \
-	  ! grep -qE "Error:|Fatal:" inst64_compute_$$2.log || exit 1; \
-	  grep -q "TEST PASSED" inst64_compute_$$2.log || exit 1; \
-	  grep -q "\[AXIMON\] transfers=[1-9].*violations=0" inst64_compute_$$2.log || exit 1; done
+	cd $(IDMA_VSIM_DIR); for t in "0 axi 15" "1 obi 15" "1 obi 14"; do set -- $$t; \
+	  log=inst64_compute_$$2_$$3.log; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=$$1 -gComputeOpsMask=$$3 \
+	    tb_idma_inst64_compute tb_idma_inst64_mon_$$2 -logfile $$log -do "run -all; quit"; \
+	  ! grep -qE "Error:|Fatal:" $$log || exit 1; \
+	  grep -q "TEST PASSED" $$log || exit 1; \
+	  grep -q "\[AXIMON\] transfers=[1-9].*violations=0" $$log || exit 1; done
 	# the guard must fire; a silent fallback to a plain copy would pass the run above
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=1 \
 		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true

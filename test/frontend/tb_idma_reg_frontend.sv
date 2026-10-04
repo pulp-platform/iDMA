@@ -18,7 +18,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // number of streams the elaborated DUT exposes (checked at instantiation)
   parameter int unsigned NumStreams = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
-  parameter int unsigned NumRegs    = 32'd1
+  parameter int unsigned NumRegs    = 32'd1,
+  // compute ops of the frontend (idma_pkg::compute_enable_t bits)
+  parameter logic [3:0]  ComputeOpsMask = 4'hF
 );
 
   // --------------------------------------------------------------------------
@@ -191,6 +193,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
       .IdCounterWidth ( IdCounterWidth ),
+      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
       .apb_req_t      ( cfg_apb_req_t  ),
       .apb_rsp_t      ( cfg_apb_rsp_t  ),
       .dma_req_t      ( idma_nd_req_t  )
@@ -213,6 +216,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
       .IdCounterWidth ( IdCounterWidth ),
+      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
       .apb_req_t      ( cfg_apb_req_t  ),
       .apb_rsp_t      ( cfg_apb_rsp_t  ),
       .dma_req_t      ( idma_nd_req_t  )
@@ -237,6 +241,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
       .IdCounterWidth ( IdCounterWidth ),
+      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
       .apb_req_t      ( cfg_apb_req_t  ),
       .apb_rsp_t      ( cfg_apb_rsp_t  ),
       .dma_req_t      ( idma_req_t     )
@@ -813,6 +818,20 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
                       .sst1(32'h2000)));
       cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 1, 32'h40, 0, 1,
                       "misaligned unused dim0 data strides", .st0(32'h420), .sst0(32'h420)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0040, 1, 0,
+                      0, 1, "FP32 dequant, output fills the length field", .len(32'h3FFF_FFE0)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0040, 1, 0,
+                      0, 0, "FP32 dequant, output overflows the length field",
+                      .len(32'h4000_0000)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 1,
+                      "FP16 dequant, output fills the length field", .len(32'h7FFF_FFE0)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 0,
+                      "FP16 dequant, output overflows the length field", .len(32'h8000_0000)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'd6 << 1), 32'h0, 32'h4000_0040, 1, 0, 0, 0,
+                      "reserved op 6"));
+      cs.push_back(mc(32'h0, 32'h1 | (32'd15 << 1), 32'h0, 32'h4000_0040, 1, 0, 0, 0,
+                      "reserved op 15"));
+      cs.push_back(mc(32'h0, 32'h1, 32'h0, 32'h4000_0040, 1, 0, 0, 1, "enabled, no op"));
       cs.push_back(mc(32'h0, Quant16 & ~32'h1, 32'hC, 32'h4000_0001, 1, 0, 0, 1,
                       "compute disabled: MX fields ignored", .src(32'h1000_0001)));
       cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_TRANSPOSE) << 1) | (32'h1 << 7) | (32'h1 << 19),
@@ -820,6 +839,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       foreach (cs[k]) begin
         logic [31:0] got;
         int unsigned acc_before;
+        if (cs[k].cmp[0] && cs[k].cmp[4:1] != 4'(COMPUTE_NONE) &&
+            !compute_op_supported(compute_enable_t'(ComputeOpsMask), compute_op_e'(cs[k].cmp[4:1])))
+          cs[k].ok = 1'b0;
         captured_q.delete();
         program_transfer(cs[k].src, cs[k].dst, cs[k].len);
         apb_write(RegConf,     cs[k].conf);

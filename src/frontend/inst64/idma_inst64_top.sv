@@ -216,6 +216,7 @@ module idma_inst64_top #(
     logic [NoIndices-1:0] idx_dst;
     logic                        idx_dst_valid;
     logic                        idx_dst_error;
+    logic [NoIndices-1:0] idx_scale;
 
     //--------------------------------------
     // Backend instantiation
@@ -567,10 +568,25 @@ module idma_inst64_top #(
         .en_default_idx_i ( 1'b1                                               ),
         .default_idx_i    ( idma_pkg::ToSoC                                              )
         );
+        cc_addr_decode #(
+        .NoIndices  ( NoIndices ),
+        .addr_t     ( addr_t           ),
+        .NoRules    ( NumAddrRules   ),
+        .rule_t     ( addr_rule_t      )
+        ) i_idma_scale_decode (
+        .addr_i           ( idma_fe_req_q.burst_req.scale_addr[AxiAddrWidth-1:0] ),
+        .addr_map_i       ( addr_map_i                                           ),
+        .idx_o            ( idx_scale                                            ),
+        .dec_valid_o      ( /* unused */                                         ),
+        .dec_error_o      ( /* unused */                                         ),
+        .en_default_idx_i ( 1'b1                                                 ),
+        .default_idx_i    ( idma_pkg::ToSoC                                      )
+        );
     end else begin : gen_no_tcdm_decode
         // Every address routes to AXI, so addr_map_i and the decode status are unused.
-        assign idx_src = idma_pkg::ToSoC;
-        assign idx_dst = idma_pkg::ToSoC;
+        assign idx_src   = idma_pkg::ToSoC;
+        assign idx_dst   = idma_pkg::ToSoC;
+        assign idx_scale = idma_pkg::ToSoC;
     end
 
 
@@ -896,20 +912,27 @@ module idma_inst64_top #(
          idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
          idma_fe_dmopc & ~idma_fe_setter, '0)
 
-    // DMCPY refuses an MX copy with a reserved format, planes off a beat or a partial block
-    logic idma_fe_mx_twod;
+    // DMCPY refuses an unelaborated op, and an MX copy with a reserved format, planes off a beat or
+    // in the TCDM window, a partial block or a written length that overflows the length field
+    logic idma_fe_mx_twod, idma_fe_op_bad, idma_fe_mx_bad;
     assign idma_fe_mx_twod   = (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMCPYI) ?
                                acc_req_i.data_op[21] : acc_req_i.data_argb[1];
-    assign idma_fe_mx_refuse = idma_fe_compute_q.enable &
-                               idma_pkg::compute_op_is_mx(idma_fe_compute_q.op) &
-                               (~idma_pkg::mx_elem_legal(idma_fe_compute_q.params.mx.elem_fmt) |
-                                (idma_fe_req_q.burst_req.src_addr[OffsetWidth-1:0] != '0) |
-                                (idma_fe_req_q.burst_req.dst_addr[OffsetWidth-1:0] != '0) |
-                                ((acc_req_i.data_arga &
-                                  (idma_pkg::compute_in_bytes(idma_fe_compute_q.op) - 1)) != '0) |
-                                (idma_fe_mx_twod & (idma_fe_req_q.d_req[0].reps > 'd1) &
-                                 ((idma_fe_req_q.d_req[0].src_strides[OffsetWidth-1:0] != '0) |
-                                  (idma_fe_req_q.d_req[0].dst_strides[OffsetWidth-1:0] != '0))));
+    assign idma_fe_op_bad    = (idma_fe_compute_q.op != idma_pkg::COMPUTE_NONE) &
+                               ~idma_pkg::compute_op_supported(ComputeOps, idma_fe_compute_q.op);
+    assign idma_fe_mx_bad    = ~idma_pkg::mx_elem_legal(idma_fe_compute_q.params.mx.elem_fmt) |
+                               (idx_src == idma_pkg::TCDMDMA) | (idx_dst == idma_pkg::TCDMDMA) |
+                               (idx_scale == idma_pkg::TCDMDMA) |
+                               (idma_fe_req_q.burst_req.src_addr[OffsetWidth-1:0] != '0) |
+                               (idma_fe_req_q.burst_req.dst_addr[OffsetWidth-1:0] != '0) |
+                               ((acc_req_i.data_arga &
+                                 (idma_pkg::compute_in_bytes(idma_fe_compute_q.op) - 1)) != '0) |
+                               ~idma_pkg::compute_out_len_fits(idma_fe_compute_q.op,
+                                   64'(acc_req_i.data_arga), TFLenWidth) |
+                               (idma_fe_mx_twod & (idma_fe_req_q.d_req[0].reps > 'd1) &
+                                ((idma_fe_req_q.d_req[0].src_strides[OffsetWidth-1:0] != '0) |
+                                 (idma_fe_req_q.d_req[0].dst_strides[OffsetWidth-1:0] != '0)));
+    assign idma_fe_mx_refuse = idma_fe_compute_q.enable & (idma_fe_op_bad |
+                               (idma_pkg::compute_op_is_mx(idma_fe_compute_q.op) & idma_fe_mx_bad));
 
 
     //--------------------------------------
