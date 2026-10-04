@@ -35,6 +35,7 @@ module tb_idma_mxplanar
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   localparam bit Fp16 = StrbWidth <= 64;
 

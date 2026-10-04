@@ -38,6 +38,7 @@ module tb_idma_mxrand
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   // random-stall shim: a channel's go bit may rise any cycle but only falls after its handshake
   logic aw_go, w_go, ar_go, b_go, r_go;

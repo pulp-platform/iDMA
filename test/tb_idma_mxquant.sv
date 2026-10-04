@@ -31,6 +31,7 @@ module tb_idma_mxquant
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   localparam int unsigned BlkInBytes = 64; // 32 FP16 elems
   localparam int unsigned Canary     = 64;

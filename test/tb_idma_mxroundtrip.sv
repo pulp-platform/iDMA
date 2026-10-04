@@ -38,6 +38,7 @@ module tb_idma_mxroundtrip
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   localparam int unsigned NumBlocks = 2 * StrbWidth;
   // scale planes 96 x 64 B above their data planes

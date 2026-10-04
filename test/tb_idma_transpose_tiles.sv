@@ -266,6 +266,8 @@ module tb_idma_transpose_tiles #(
   parameter int unsigned MinRunsGainPct = 120
 );
 
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
+
   idma_transpose_tiles_bench #(.DataWidth(DataWidth), .FullDuplex(1'b0)) i_fd0 ();
   idma_transpose_tiles_bench #(.DataWidth(DataWidth), .FullDuplex(1'b1)) i_fd1 ();
 

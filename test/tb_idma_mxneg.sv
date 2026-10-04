@@ -28,6 +28,7 @@ module tb_idma_mxneg
 );
 
   `include "include/tb_idma_mx_common.svh"
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   assign axi_req_mem = axi_req;
   assign axi_rsp     = axi_rsp_mem;

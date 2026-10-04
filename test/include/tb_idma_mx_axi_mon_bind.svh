@@ -5,7 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Binds the AXI protocol and MX plane monitor into every AXI backend of the including testbench.
+// Binds the AXI protocol and MX plane monitor into every AXI backend; include once per top.
 
 `ifndef IDMA_MX_AXI_MON_BIND
 `define IDMA_MX_AXI_MON_BIND(backend) \
