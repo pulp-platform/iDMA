@@ -538,6 +538,7 @@ idma_sim_tb_idma_transpose_tiles: $(IDMA_VSIM_DIR)/compile.tcl
 	    -logfile transpose_tiles_$$dw.log -do "run -all; quit"; \
 	  if grep -qE "Error:|Fatal:" transpose_tiles_$$dw.log; then exit 1; fi; \
 	  grep -q "ALL PASS" transpose_tiles_$$dw.log; \
+	  test "$$(grep -c '\[AXIMON\] transfers=' transpose_tiles_$$dw.log)" = 2; \
 	done
 
 # MX sim over data widths; $(3) tags the log, $(4) adds elaboration parameters
@@ -548,6 +549,8 @@ define idma_run_mx_sim
 	  if grep -qE "Error:|Fatal:" $(1)_$(3)$$dw.log; then \
 	    echo "$(1) $(3)DW=$$dw FAILED (see $(1)_$(3)$$dw.log)"; \
 	    tail -40 $(1)_$(3)$$dw.log; exit 1; fi; \
+	  test "$$(grep -c '\[AXIMON\] transfers=' $(1)_$(3)$$dw.log)" = 1 || { \
+	    echo "$(1) $(3)DW=$$dw: not exactly one AXI monitor"; exit 1; }; \
 	done
 endef
 
