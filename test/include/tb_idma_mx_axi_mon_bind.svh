@@ -41,7 +41,7 @@ bind backend idma_mx_axi_mon #( \
   .aw_burst_i(axi_write_req_o.aw.burst), .w_valid_i(axi_write_req_o.w_valid), \
   .w_ready_i(axi_write_rsp_i.w_ready), .w_data_i(axi_write_req_o.w.data), \
   .w_strb_i(axi_write_req_o.w.strb), .w_last_i(axi_write_req_o.w.last), \
-  .b_valid_i(axi_write_rsp_i.b_valid), .b_ready_i(axi_write_req_o.b_ready) \
+  .b_valid_i(axi_write_rsp_i.b_valid), .b_ready_i(axi_write_req_o.b_ready), .busy_i(busy_o) \
 );
 `endif
 
