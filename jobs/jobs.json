@@ -630,7 +630,8 @@
             "exclude" : [
                 { "case" : 21, "why" : "plain copy, unelaborated op: idma_sim_tb_idma_mxneg" },
                 { "case" : 22, "why" : "plain copy, reserved op: idma_sim_tb_idma_mxneg" },
-                { "case" : 23, "why" : "plain copy, unelaborated op: idma_sim_tb_idma_mxneg" }
+                { "case" : 23, "why" : "plain copy, unelaborated op: idma_sim_tb_idma_mxneg" },
+                { "case" : 24, "why" : "plain copy, unelaborated op: idma_sim_tb_idma_mxneg" }
             ]
         }
     },
