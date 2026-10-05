@@ -157,6 +157,11 @@ interface idma_inst64_drv_if #(
                   {{(64-(AxiAddrWidth-32)){1'b0}}, addr[AxiAddrWidth-1:32]});
     endtask
 
+    task automatic dma_set_user(input logic [63:0] user);
+        acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMUSER),
+                  {32'b0, user[31:0]}, {32'b0, user[63:32]});
+    endtask
+
     /// DMOPC; both operands are sign-extended from bit 31 as an RV32 core drives them.
     task automatic dma_set_compute(input logic [31:0] opcode, input logic [31:0] params = 32'b0);
         acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMOPC),

@@ -174,10 +174,10 @@ module tb_idma_inst64_tcdm_copy;
         $display("[TB] inst64 TCDM user-tagged write: 0x%0h -> 0x%0h, %0d B",
                  AxiSrc, TcdmUser, CopySize);
         wr_after_stage = obi_wr_beats;
-        harness.drv_if.acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMUSER), 64'd1, 64'd0);
+        harness.drv_if.dma_set_user(64'd1);
         sentinel_axi(TcdmUser, CopySize);
         run_copy(AxiSrc, TcdmUser);
-        harness.drv_if.acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMUSER), 64'd0, 64'd0);
+        harness.drv_if.dma_set_user(64'd0);
         check_axi(TcdmUser, CopySize, 9'h100);
         if (obi_wr_beats != wr_after_stage) begin
             $fatal(1, "user-tagged write leaked %0d OBI beats", obi_wr_beats - wr_after_stage);
