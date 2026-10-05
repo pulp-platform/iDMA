@@ -162,6 +162,27 @@ module tb_idma_mxquant
                  num_blocks, errs);
   endtask
 
+  // FP32 rounding ties against the golden: subnormal sticky, short mantissas, an E5M2 gap-30 tie
+  localparam int unsigned TieBlocks = 6;
+  task automatic do_round_ties(input addr_t src, input addr_t dst, input mx_elem_e elem,
+                               output int unsigned errs);
+    automatic logic [31:0] tv [TieBlocks] = '{32'h0008_8000, 32'h0008_9000, 32'h0044_0000,
+                                               32'h3F8C_0000, 32'h3F94_0000, 32'h3F80_0000};
+    automatic logic [31:0] w;
+    for (int unsigned el = 0; el < TieBlocks*32; el++) begin
+      w = tv[el / 32];
+      if (el / 32 == TieBlocks - 1 && el % 32 != 0) w = (el % 32 == 1) ? 32'h30A0_0000 : 32'h0;
+      for (int unsigned b = 0; b < 4; b++) begin
+        wr_mem(src + el*4 + b, w[b*8 +: 8]);
+        gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
+      end
+    end
+    gm_mxquant_cfg(int'(TieBlocks), 0, int'(elem), 0, 0);
+    fill_planes(dst, 64, TieBlocks);
+    mx_req(src, dst, TieBlocks * 128, COMPUTE_MXQUANT, 64, elem, 1'b0, 1'b0);
+    check_planes($sformatf("ties %s", elem.name()), dst, 64, TieBlocks, errs);
+  endtask
+
   // OCP MX E8M0 conformance: directed FP32 blocks against hand-computed bytes (no DPI)
   localparam int unsigned ConfBlocks = 10;
   task automatic do_conform(input addr_t src, input addr_t dst, input logic pdis,
@@ -281,7 +302,7 @@ module tb_idma_mxquant
   endtask
 
   initial begin
-    automatic int unsigned total = 0, e1, e2, e3, e4, e5;
+    automatic int unsigned total = 0, e1, e2, e3, e4, e5, t1, t2;
     automatic int unsigned c [8];
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
     @(posedge rst_n);
@@ -308,6 +329,9 @@ module tb_idma_mxquant
     do_mxquant_fp32('h0006_0000, 'h0006_8000, 8, c[6], MX_E4M3, 1'b1);
     do_mxquant_fp32('h0007_0000, 'h0007_8000, 8, c[7], MX_E4M3, 1'b0);
     for (int unsigned k = 0; k < 8; k++) total += c[k];
+    do_round_ties('h0008_0000, 'h0008_8000, MX_E4M3, t1);
+    do_round_ties('h0009_0000, 'h0009_8000, MX_E5M2, t2);
+    total += t1 + t2;
 
     if (total == 0) $display("[MXQ] ALL PASS (StrbWidth=%0d)", StrbWidth);
     else            $fatal(1, "[MXQ] FAIL: %0d mismatches", total);
