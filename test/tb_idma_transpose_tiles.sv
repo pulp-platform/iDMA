@@ -32,8 +32,20 @@ module idma_transpose_tiles_bench
 
   localparam logic [7:0] Guard = 8'hC5;
 
-  assign axi_req_mem = axi_req;
-  assign axi_rsp     = axi_rsp_mem;
+  // the first StallW W beats after reset wait one cycle each without WREADY
+  localparam int unsigned StallW = 3;
+  int unsigned wseen;
+  logic        wstall;
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) wseen <= 0;
+    else if (axi_req.w_valid && wseen < StallW) wseen <= wseen + 1;
+  assign wstall = axi_req.w_valid && (wseen < StallW);
+  always_comb begin
+    axi_req_mem         = axi_req;
+    axi_req_mem.w_valid = axi_req.w_valid & ~wstall;
+    axi_rsp             = axi_rsp_mem;
+    axi_rsp.w_ready     = axi_rsp_mem.w_ready & ~wstall;
+  end
 
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
