@@ -29,12 +29,14 @@ module tb_idma_inst64_tcdm_copy;
     localparam addr_t AxiSrc  = 64'h8000_0000;
     localparam addr_t AxiDst  = 64'h9000_0000;
     localparam addr_t AxiInit = 64'h9001_0000;
+    localparam addr_t TcdmUser = addr_t'(TcdmStart + 64'h4000);
 
     int unsigned errors        = 0;
     int unsigned obi_rd_beats  = 0;
     int unsigned obi_wr_beats  = 0;
     int unsigned ev_rd_beats   = 0;
     int unsigned ev_wr_beats   = 0;
+    int unsigned axi_user_aws  = 0;
 
     dma_events_t ev;
     obi_req_t    obi_req;
@@ -64,6 +66,10 @@ module tb_idma_inst64_tcdm_copy;
 
     always_ff @(posedge harness.clk) begin : proc_count_obi
         if (harness.rst_n) begin
+            if (harness.axi_req[0].aw_valid && harness.axi_res[0].aw_ready &&
+                harness.axi_req[0].aw.user != '0 &&
+                harness.axi_req[0].aw.addr >= TcdmStart && harness.axi_req[0].aw.addr < TcdmEnd)
+                axi_user_aws++;
             if (exp_obi_wr_req) obi_wr_beats++;
             if (exp_obi_rd_req) obi_rd_beats++;
             if (ev.obi_wr_req)  ev_wr_beats++;
@@ -163,6 +169,20 @@ module tb_idma_inst64_tcdm_copy;
         sentinel_axi(AxiInit, CopySize);
         run_copy(TcdmBuf, AxiInit);
         check_axi(AxiInit, CopySize, {1'b0, MemsetByte});
+
+        // A user-tagged (multicast) write into the window must stay on AXI to keep its user
+        $display("[TB] inst64 TCDM user-tagged write: 0x%0h -> 0x%0h, %0d B",
+                 AxiSrc, TcdmUser, CopySize);
+        wr_after_stage = obi_wr_beats;
+        harness.drv_if.acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMUSER), 64'd1, 64'd0);
+        sentinel_axi(TcdmUser, CopySize);
+        run_copy(AxiSrc, TcdmUser);
+        harness.drv_if.acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMUSER), 64'd0, 64'd0);
+        check_axi(TcdmUser, CopySize, 9'h100);
+        if (obi_wr_beats != wr_after_stage) begin
+            $fatal(1, "user-tagged write leaked %0d OBI beats", obi_wr_beats - wr_after_stage);
+        end
+        if (axi_user_aws == 0) $fatal(1, "user-tagged write issued no AXI AW with its user");
 
         // The counters must have moved, otherwise every compare above was vacuous
         if (obi_wr_beats != 2*ExpObiBeats) begin
