@@ -97,9 +97,14 @@ module tb_idma_mxrand
   int unsigned rsp_cnt;
   always @(posedge clk) if (rsp_valid && rsp_ready) rsp_cnt <= rsp_cnt + 1;
 
+  // a coupled copy (decouple_aw = 0) must not issue its first AW before its first R beat
+  int unsigned cpl_errs = 0;
+
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
                          input logic en, input idma_pkg::compute_op_e op,
-                         input idma_pkg::mx_options_t mxo = '0, input int soff = 0);
+                         input idma_pkg::mx_options_t mxo = '0, input int soff = 0,
+                         input logic daw = 1'b1);
+    automatic int unsigned t = 0, tr = 0, taw = 0;
     #(TA);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
@@ -110,7 +115,7 @@ module tb_idma_mxrand
     idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
     idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
     idma_req.opt.beo.decouple_rw = 1'b1;
-    idma_req.opt.beo.decouple_aw = 1'b1;
+    idma_req.opt.beo.decouple_aw = daw;
     idma_req.opt.compute.enable  = en;
     idma_req.opt.compute.op      = op;
     if (en) idma_req.opt.compute.params.mx = mxo;
@@ -121,7 +126,16 @@ module tb_idma_mxrand
     #(TA);
     req_valid = 1'b0;
     idma_req = '0;
-    while (!(rsp_valid && rsp_ready)) @(posedge clk);
+    while (!(rsp_valid && rsp_ready)) begin
+      @(posedge clk);
+      t++;
+      if (tr == 0 && axi_rsp.r_valid && axi_req.r_ready) tr = t;
+      if (taw == 0 && axi_req.aw_valid && axi_rsp.aw_ready) taw = t;
+    end
+    if (!daw && taw <= tr) begin
+      cpl_errs++;
+      $display("[MXRD] coupled copy: first AW in cycle %0d, first R in cycle %0d", taw, tr);
+    end
     repeat (10) @(posedge clk);
   endtask
 
@@ -155,7 +169,7 @@ module tb_idma_mxrand
       soff = $urandom_range(1) ? int'($urandom_range(256, 320)) : -int'($urandom_range(256, 320));
       nb = 0;
       case (op)
-        0: begin  // plain copy, arbitrary alignment, compute idle
+        0: begin  // plain copy, arbitrary alignment, a stale op code, R-AW coupled every other
           L  = $urandom_range(1, 1000); WL = L;
           src = SrcBase + $urandom_range(4095);
           dst = DstBase + $urandom_range(4095);
@@ -211,7 +225,7 @@ module tb_idma_mxrand
       for (int unsigned i = 0; i < WL + 2 * Margin; i++) wr_mem(dst - Margin + i, 8'hC5);
 
       case (op)
-        0:       do_xfer(src, dst, L, 1'b0, idma_pkg::COMPUTE_NONE);
+        0:       do_xfer(src, dst, L, 1'b0, idma_pkg::compute_op_e'((x / 2) % 6), '0, 0, x[0]);
         1:       do_xfer(src, dst, L, 1'b1,
                          fp16 ? idma_pkg::COMPUTE_MXQUANT_FP16 : idma_pkg::COMPUTE_MXQUANT, mxo,
                          soff);
@@ -340,6 +354,7 @@ module tb_idma_mxrand
         end
     end
 
+    errs += cpl_errs;
     if (errs == 0) $display("[MXRD] ALL PASS (%0d transfers, StrbWidth=%0d, StallPct=%0d)",
                             NumXfers, StrbWidth, StallPct);
     else           $fatal(1, "[MXRD] FAIL: %0d mismatches", errs);
