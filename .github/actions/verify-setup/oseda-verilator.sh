@@ -8,7 +8,8 @@
 
 # Copies Verilator out of the OSEDA image into its install prefix, where its paths point
 set -euo pipefail
-image=${OSEDA_IMAGE:-hpretl/iic-osic-tools:2026.09}
+digest=sha256:b87b3f1af9ba72d9486466ea777cf4248e96e20d9dba76d67259bc185db3859c
+image=${OSEDA_IMAGE:-hpretl/iic-osic-tools:2026.09@$digest}
 docker pull -q "$image"
 id=$(docker create "$image")
 trap 'docker rm "$id" > /dev/null' EXIT
