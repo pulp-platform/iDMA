@@ -37,10 +37,10 @@ module idma_otf_mxquant
   localparam int unsigned PhW    = (Nb32 > 1) ? $clog2(Nb32) : 1;
   localparam int unsigned DatB   = idma_pkg::MxDataBlockBytes;
   localparam int unsigned NumGrp = MxBlockSize / 4;
-  // blocks per output entry, entries per block, and the queue depth covering the credit loop
+  // blocks per output entry, entries per block; depth: credit loop + 1 entry to run ahead of W
   localparam int unsigned BpE    = (StrbWidth > DatB) ? StrbWidth / DatB : 1;
   localparam int unsigned EpB    = (StrbWidth < DatB) ? DatB / StrbWidth : 1;
-  localparam int unsigned Depth  = EpB + 4;
+  localparam int unsigned Depth  = EpB + 5;
   localparam int unsigned PtrW   = $clog2(Depth);
   localparam int unsigned CntW   = $clog2(Depth + 1);
   // scale queue: 64 B lines, one per group, read in sub-beats; the tail line fills in place
