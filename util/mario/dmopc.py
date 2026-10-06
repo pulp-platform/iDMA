@@ -50,7 +50,9 @@ def _context(db: dict) -> dict:
             'signal': operands[operand],
             'lsb': lsb,
             'width': width,
-            'sv_width': field.get('sv_width'),
+            'sv_width': field.get('sv_width') or (
+                f"$bits({field['sv_type']})" if field.get('sv_type') else None),
+            'sv_type': field.get('sv_type'),
             'mask': format((1 << width) - 1, 'x')
         })
     _unique([f['key'] for f in fields], 'field')
@@ -78,12 +80,49 @@ def _context(db: dict) -> dict:
             'enable': opcode.get('enable', True),
             'params': params
         })
-    _unique([o['sv'] for o in opcodes], 'opcode')
-    _unique([o['byte'] for o in opcodes], 'opcode byte')
+    # setters: an opcode byte that loads a frontend register from operand fields
+    setters = []
+    for setter in db.get('setters') or []:
+        parts = []
+        for key in setter['fields']:
+            if key not in by_key:
+                raise ValueError(f'setter {setter["name"]}: unknown field {key}')
+            parts.append(by_key[key])
+        shift = int(setter.get('shift', 0))
+        if sum(f['width'] for f in parts) + shift > operand_width:
+            raise ValueError(f'setter {setter["name"]}: value wider than {operand_width} b')
+        byte = int(setter['byte'])
+        if not 0 <= byte < (1 << opcode_width):
+            raise ValueError(f'setter {setter["name"]}: byte {byte:#x} outside the opcode width')
+        setters.append({
+            'sv': 'Opc' + _camel(setter['name']),
+            'c': setter['name'].upper(),
+            'fn': 'opc_' + setter['name'],
+            'byte': byte,
+            'hex': format(byte, f'0{(opcode_width + 3) // 4}x'),
+            'fields': parts,
+            'shift': shift,
+            'signed': bool(setter.get('signed', False))
+        })
+    _unique([o['sv'] for o in opcodes + setters], 'opcode')
+    _unique([o['byte'] for o in opcodes + setters], 'opcode byte')
 
-    # per-operand fields in layout order; the disjointness guard compares neighbours
+    # per-operand fields in layout order
     operand_fields = {name: sorted([f for f in fields if f['operand'] == name],
                                    key=lambda f: f['lsb']) for name in operands}
+
+    # the disjointness guard compares neighbours among the fields one opcode reads
+    disjoint_pairs, seen_pairs = [], set()
+    reads = [[p['field'] for p in o['params']] for o in opcodes] + [s['fields'] for s in setters]
+    for read in reads:
+        used = [by_key[db['opcode_field']]] + read
+        for name in operands:
+            ordered = sorted({f['key']: f for f in used if f['operand'] == name}.values(),
+                             key=lambda f: f['lsb'])
+            for lo, hi in zip(ordered, ordered[1:]):
+                if (lo['key'], hi['key']) not in seen_pairs:
+                    seen_pairs.add((lo['key'], hi['key']))
+                    disjoint_pairs.append((lo, hi))
 
     if db['opcode_field'] not in by_key:
         raise ValueError(f'unknown opcode field {db["opcode_field"]}')
@@ -97,7 +136,9 @@ def _context(db: dict) -> dict:
         'operands': operands,
         'fields': fields,
         'operand_fields': operand_fields,
+        'disjoint_pairs': disjoint_pairs,
         'opcodes': opcodes,
+        'setters': setters,
         'name_width': max(len(f['sv']) for f in fields) + len('Width')
     }
 

@@ -214,7 +214,8 @@ log2dimension = $(shell echo $$(( $$( echo "obase=2;$$(($(1)-1))" | bc | wc -c )
 IDMA_LICENSE   := Copyright 2026 ETH Zurich and University of Bologna.\nSolderpad Hardware License, Version 0.51, see LICENSE for details.\nSPDX-License-Identifier: SHL-0.51
 IDMA_C_HDR_LIC := // $(subst \n,\n// ,$(IDMA_LICENSE))\n
 
-$(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv $(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv:
+$(IDMA_RTL_DIR)/idma_reg%d_reg_pkg.sv $(IDMA_RTL_DIR)/idma_reg%d_reg_top.sv \
+$(IDMA_RTL_DIR)/idma_reg%d_addrmap_pkg.sv: $(IDMA_FE_DIR)/reg/idma_reg.rdl
 	$(PEAKRDL) regblock $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $(IDMA_RTL_DIR) \
 	  --default-reset arst_n --cpuif $(IDMA_REG_CPUIF) \
 	  --module-name idma_reg$*d_reg_top \
@@ -257,7 +258,7 @@ $(IDMA_HTML_DIR)/regs/idma_desc64_reg/index.html:
 	$(PEAKRDL) html $(IDMA_FE_DIR)/desc64/idma_desc64_reg.rdl -o $(IDMA_HTML_DIR)/regs/idma_desc64_reg
 
 # C header
-$(IDMA_SW_DIR)/idma_reg%d_regs.h :
+$(IDMA_SW_DIR)/idma_reg%d_regs.h : $(IDMA_FE_DIR)/reg/idma_reg.rdl
 	$(PEAKRDL) c-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
 	  -b ltoh --type-style hier --rename idma_reg$*d \
 	  -P SysAddrWidth=$(call regwidth,$*) \
@@ -270,7 +271,7 @@ $(IDMA_SW_DIR)/idma_reg%d_regs_unpacked.h : $(IDMA_SW_DIR)/idma_reg%d_regs.h
 	sed -e "s/__attribute__ ((__packed__)) //" $^ > $@
 
 
-$(IDMA_SW_DIR)/idma_reg%d_raw_regs.h:
+$(IDMA_SW_DIR)/idma_reg%d_raw_regs.h: $(IDMA_FE_DIR)/reg/idma_reg.rdl
 	$(PEAKRDL) raw-header $(IDMA_FE_DIR)/reg/idma_reg.rdl -o $@ \
 	  --format c \
 	  --license_str="$(IDMA_LICENSE)" \
@@ -455,9 +456,10 @@ idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 .PHONY: idma_sim_tb_idma_reg_frontend
 idma_sim_tb_idma_reg_frontend: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=1 tb_idma_reg_frontend -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 tb_idma_reg_frontend -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNumStreams=2 -gNumRegs=2 tb_idma_reg_frontend -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); for g in "-gNumStreams=1" "-gNumStreams=2" "-gNumStreams=2 -gNumRegs=2" \
+	  "-gComputeOpsMask=12"; do \
+	  $(VSIM) -c -t 1ps -voptargs=+acc $$g tb_idma_reg_frontend -logfile reg_frontend.log \
+	    -do "run -all; quit" && grep -q "RESULT     : PASS" reg_frontend.log || exit 1; done
 
 .PHONY: idma_sim_tb_idma_inst64_axi_copy
 idma_sim_tb_idma_inst64_axi_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_axi_copy.tcl
@@ -502,15 +504,13 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc tb_idma_inst64_compute \
-		-logfile inst64_compute.log -do "run -all; quit"
-	# Questa does not propagate $$fatal to the exit code; gate on the transcript
-	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute.log
-	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute.log
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=0 tb_idma_inst64_compute \
-		-logfile inst64_compute_axi_only.log -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_compute_axi_only.log
-	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_compute_axi_only.log
+	cd $(IDMA_VSIM_DIR); for t in "0 axi 15" "1 obi 15" "1 obi 14"; do set -- $$t; \
+	  log=inst64_compute_$$2_$$3.log; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gEnableTcdmObi=$$1 -gComputeOpsMask=$$3 \
+	    tb_idma_inst64_compute tb_idma_inst64_mon_$$2 -logfile $$log -do "run -all; quit"; \
+	  ! grep -qE "Error:|Fatal:" $$log || exit 1; \
+	  grep -q "TEST PASSED" $$log || exit 1; \
+	  grep -q "\[AXIMON\] transfers=[1-9].*violations=0" $$log || exit 1; done
 	# the guard must fire; a silent fallback to a plain copy would pass the run above
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=1 \
 		tb_idma_inst64_compute -logfile inst64_compute_neg.log -do "run -all; quit" || true
@@ -546,6 +546,7 @@ idma_sim_tb_idma_transpose_tiles: $(IDMA_VSIM_DIR)/compile.tcl
 	    -logfile transpose_tiles_$$dw.log -do "run -all; quit"; \
 	  if grep -qE "Error:|Fatal:" transpose_tiles_$$dw.log; then exit 1; fi; \
 	  grep -q "ALL PASS" transpose_tiles_$$dw.log; \
+	  test "$$(grep -c '\[AXIMON\] transfers=' transpose_tiles_$$dw.log)" = 2; \
 	done
 
 # MX sim over data widths; $(3) tags the log, $(4) adds elaboration parameters
@@ -556,6 +557,8 @@ define idma_run_mx_sim
 	  if grep -qE "Error:|Fatal:" $(1)_$(3)$$dw.log; then \
 	    echo "$(1) $(3)DW=$$dw FAILED (see $(1)_$(3)$$dw.log)"; \
 	    tail -40 $(1)_$(3)$$dw.log; exit 1; fi; \
+	  test "$$(grep -c '\[AXIMON\] transfers=' $(1)_$(3)$$dw.log)" = 1 || { \
+	    echo "$(1) $(3)DW=$$dw: not exactly one AXI monitor"; exit 1; }; \
 	done
 endef
 
@@ -563,27 +566,46 @@ endef
 idma_sim_tb_idma_mxquant: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mxquant,32 64 256 512 1024,,)
+	$(call idma_run_mx_sim,tb_idma_mxquant,32 64 256 512,,)
 
 .PHONY: idma_sim_tb_idma_mxroundtrip
 idma_sim_tb_idma_mxroundtrip: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
 	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,fp16_,-gQuantFp16=1)
-	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512 1024,fp32_,-gQuantFp16=0)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,fp32_,-gQuantFp16=0)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,e4m3_fp16_,-gQuantFp16=1 -gElemFmt=1)
+	$(call idma_run_mx_sim,tb_idma_mxroundtrip,32 64 256 512,e4m3_fp32_,-gQuantFp16=0 -gElemFmt=1)
+
+.PHONY: idma_sim_tb_idma_mxplanar
+idma_sim_tb_idma_mxplanar: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	$(call idma_run_mx_sim,tb_idma_mxplanar,32 64 256 512,,)
+	$(call idma_run_mx_sim,tb_idma_mxplanar,64 512,ax50_,-gAxStallPct=50)
+	$(call idma_run_mx_sim,tb_idma_mxplanar,64 512,rsp50_,-gRspStallPct=50)
+
+.PHONY: idma_sim_tb_idma_mxnd
+idma_sim_tb_idma_mxnd: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	$(call idma_run_mx_sim,tb_idma_mxnd,32 64 256 512,,)
 
 .PHONY: idma_sim_tb_idma_mx_obi
 idma_sim_tb_idma_mx_obi: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 256 512 1024,,)
-	$(call idma_run_mx_sim,tb_idma_mx_obi,64 512,nostall_,-gStallObi=0)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 128 256 512,,)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,64 512,nostall_,-gStallPct=0)
+	# Cuts 64: mx_beat_push alone; 127: every timing cut
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 512,beatpush_,-gCuts=64)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 512,cuts_,-gCuts=127)
 
 .PHONY: idma_sim_tb_idma_mxrand
 idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mxrand,32 64 256 512 1024,,)
+	$(call idma_run_mx_sim,tb_idma_mxrand,32 64 256 512,,)
 
 .PHONY: idma_sim_tb_idma_mxperf
 idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
@@ -594,25 +616,28 @@ idma_sim_tb_idma_mxperf: $(IDMA_VSIM_DIR)/compile.tcl
 idma_sim_tb_idma_mxclear: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); set -e; \
-	for c in "1 quant" "0 dequant"; do \
+	for c in "1 quant pop.of.an.empty.output.queue" "0 dequant pop.of.an.empty.output.queue"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gQuant=$$1 tb_idma_mxclear -do "run -all; quit" > mxclear_$$2.log 2>&1 || true; \
-	  if grep -qE "clear.with.in-flight.state" mxclear_$$2.log; then echo "[MXCLR] $$2 clear-guard FIRED"; \
-	  else echo "[MXCLR] $$2 clear-guard DID NOT FIRE (see mxclear_$$2.log)"; exit 1; fi; \
+	  if grep -qE "$$3" mxclear_$$2.log; then echo "[MXCLR] $$2 guard FIRED"; \
+	  else echo "[MXCLR] $$2 guard DID NOT FIRE (see mxclear_$$2.log)"; exit 1; fi; \
 	done
 
-# each case must print its guard assert; case 6 needs the op compiled out, case 4 a 1024-bit bus
+# each case must print its guard assert; cases 6 and 13 need the op compiled out
 .PHONY: idma_sim_tb_idma_mxneg
 idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); set -e; \
 	for c in "1 ComputeSizeAligned 64 1 1" "2 ComputeSrcAligned 64 1 1" \
-	         "3 ComputeDstAligned 64 1 1" "4 ComputeMxFp16Width 1024 1 1" \
-	         "5 ComputeMxdequantBeatAligned 64 1 1" "6 ComputeOpUnsupported 64 0 1" \
+	         "3 ComputeDstAligned 64 1 1" "6 ComputeOpUnsupported 64 0 1" \
 	         "7 ComputeMxSrcProtocol 64 1 1" "8 ComputeMxDstProtocol 64 1 1" \
 	         "10 ComputeTransposeShape 64 1 1" "11 ComputeMxdequantLengthFits 64 1 1" \
-	         "12 ComputeMxFp16Width 1024 1 1" "13 not.elaborated 64 1 0" \
-	         "14 ComputeTransposeShape 64 1 1" "15 ComputeTransposeDstStrobe 64 1 1"; do \
+	         "13 not.elaborated 64 1 0" "14 ComputeTransposeShape 64 1 1" \
+	         "15 ComputeTransposeDstStrobe 64 1 1" \
+	         "17 ComputeSizeAligned 64 1 1" "18 ComputeMxElemFmt 64 1 1" \
+	         "19 ComputeMxScaleAligned 64 1 1" "20 ComputeMxScaleAligned 64 1 1" \
+	         "21 COPY_OK 64 0 1" "22 COPY_OK 64 1 1" "23 COPY_OK 64 1 0" \
+	         "24 COPY_OK 64 1 0" "24 COPY_OK 64 0 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \
@@ -724,7 +749,7 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_axi_copy:-GDMATracing=1 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
-                    tb_idma_inst64_compute:-GEnableTcdmObi=0 \
+                    tb_idma_inst64_compute:-GEnableTcdmObi=1 \
                     tb_idma_inst64_txid:-GNumChannels=2
 
 .PHONY: idma_lint_inst64
@@ -803,9 +828,15 @@ idma_trace_clean:
 # Doc
 # ---------------
 
-.PHONY: idma_doc_site idma_doc_clean
+.PHONY: idma_doc_site idma_doc_clean idma_doc_tables
 
 IDMA_SITE_DIR := $(IDMA_ROOT)/doc/site
+# Docs pages with register-map and DMOPC tables rendered from the RDL and idma_dmopc.yml
+IDMA_DOC_GEN_PAGES := $(addprefix $(IDMA_SITE_DIR)/src/content/docs/architecture/frontend/, \
+                        register.md snitch.md)
+
+idma_doc_tables:
+	$(PYTHON) $(IDMA_UTIL_DIR)/gen_doc_tables.py $(IDMA_DOC_GEN_PAGES)
 
 # Copy the generated hierarchy graphs into the Astro site's static assets
 idma_doc_site: $(IDMA_RTL_DOC_ALL)

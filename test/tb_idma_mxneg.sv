@@ -9,6 +9,7 @@
 // the matching legalizer guard assert to report (compile with +define+INC_ASSERT).
 // The runner greps the transcript for the assert name; case 9 provokes transfer
 // overlap and expects the mxquant sub-unit's clear-with-in-flight-state fatal.
+// Cases 21-24 run an op that is not elaborated with assertions off and expect a plain copy.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -27,6 +28,7 @@ module tb_idma_mxneg
 );
 
   `include "include/tb_idma_mx_common.svh"
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   assign axi_req_mem = axi_req;
   assign axi_rsp     = axi_rsp_mem;
@@ -54,10 +56,14 @@ module tb_idma_mxneg
     .axi_write_req_o(axi_write_req), .axi_write_rsp_i(axi_write_rsp), .busy_o(busy)
   );
 
+  idma_pkg::mx_elem_e neg_elem  = idma_pkg::MX_E5M2;
+  addr_t              neg_scale = 'h0009_0000;
+
   task automatic issue(input addr_t src, input addr_t dst, input int unsigned L,
                        input idma_pkg::compute_op_e op,
                        input idma_pkg::protocol_e src_prot, input idma_pkg::protocol_e dst_prot,
                        input bit wait_done);
+    #(TA);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
     idma_req.src_addr = src;
@@ -70,15 +76,33 @@ module tb_idma_mxneg
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = (op != idma_pkg::COMPUTE_NONE);
     idma_req.opt.compute.op      = op;
+    if (idma_pkg::compute_op_is_mx(op)) idma_req.opt.compute.params.mx.elem_fmt = neg_elem;
+    idma_req.scale_addr = neg_scale;
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
+    #(TA);
     req_valid = 1'b0;
     idma_req = '0;
     if (wait_done) while (!(rsp_valid && rsp_ready)) @(posedge clk);
   endtask
 
   localparam addr_t Src = 'h0001_0000, Dst = 'h0005_0000;
+
+  // an op that is not elaborated, assertions off: expect a plain copy of its length
+  task automatic copy_of(input idma_pkg::compute_op_e op);
+    automatic int unsigned bad = 0;
+`ifdef VERILATOR
+    $fatal(1, "[MXNEG] case %0d needs $assertoff, which Verilator 5.020 lacks", NegCase);
+`else
+    $assertoff(0, tb_idma_mxneg.i_idma_backend);
+`endif
+    issue(Src, Dst, 4 * StrbWidth, op, idma_pkg::AXI, idma_pkg::AXI, 1'b1);
+    for (int unsigned i = 0; i < 4 * StrbWidth; i++)
+      if (i_axi_sim_mem.mem[Dst + i] !== 8'(i)) bad++;
+    if (bad == 0) $display("[MXNEG] case %0d COPY_OK", NegCase);
+    else $display("[MXNEG] case %0d: %0d bytes differ from a copy", NegCase, bad);
+  endtask
 
   initial begin
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
@@ -90,9 +114,7 @@ module tb_idma_mxneg
       1: issue(Src, Dst, 100, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       2: issue(Src + 1, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       3: issue(Src, Dst + 1, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      4: issue(Src, Dst, 64, idma_pkg::COMPUTE_MXQUANT_FP16, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      5: issue(Src, Dst, 33, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      6: issue(Src, Dst, 33 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT,
+      6: issue(Src, Dst, 32 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT,
                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       7: issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI_STREAM, idma_pkg::AXI,
                1'b0);
@@ -102,14 +124,29 @@ module tb_idma_mxneg
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       11: issue(Src, Dst, 32'd264 << 22, idma_pkg::COMPUTE_MXDEQUANT,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
-      12: issue(Src, Dst, 33 * StrbWidth, idma_pkg::COMPUTE_MXDEQUANT_FP16,
-                idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       13: issue(Src, Dst, 64, idma_pkg::COMPUTE_MXQUANT_FP16,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       14: issue(Src, Dst + 1, StrbWidth * StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::AXI, 1'b0);
       15: issue(Src, Dst, StrbWidth, idma_pkg::COMPUTE_TRANSPOSE,
                 idma_pkg::AXI, idma_pkg::INIT, 1'b0);
+      17: issue(Src, Dst, 48, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      18: begin
+        neg_elem = idma_pkg::MX_E2M1;
+        issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      end
+      19: begin
+        neg_scale = 'h0009_0020;
+        issue(Src, Dst, 128, idma_pkg::COMPUTE_MXQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      end
+      20: begin
+        neg_scale = 'h0009_0001;
+        issue(Src, Dst, 64, idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::AXI, idma_pkg::AXI, 1'b0);
+      end
+      21: copy_of(idma_pkg::COMPUTE_MXDEQUANT);
+      22: copy_of(idma_pkg::compute_op_e'(6));
+      23: copy_of(idma_pkg::COMPUTE_MXQUANT_FP16);
+      24: copy_of(idma_pkg::COMPUTE_MXDEQUANT_FP16);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 

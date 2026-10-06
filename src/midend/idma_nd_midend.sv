@@ -92,6 +92,7 @@ module idma_nd_midend #(
     // the current address pointers
     addr_t src_addr_d, src_addr_q;
     addr_t dst_addr_d, dst_addr_q;
+    addr_t scale_addr_d, scale_addr_q;
 
     // assign the handshaking signals on the input
     assign stage_done[0]  = nd_req_valid_i;
@@ -192,6 +193,18 @@ module idma_nd_midend #(
         end
     end
 
+    always_comb begin : scale_addr_calc
+        if (stride_sel_q == NumDim - 1) begin
+            scale_addr_d = nd_req_i.burst_req.scale_addr;
+        end else begin
+            if (burst_sent_q) begin
+                scale_addr_d = scale_addr_q + nd_req_i.d_req[stride_sel_q].scale_strides;
+            end else begin
+                scale_addr_d = scale_addr_q;
+            end
+        end
+    end
+
 
     //--------------------------------------
     // Request update
@@ -202,6 +215,7 @@ module idma_nd_midend #(
         // adapt the addresses
         burst_req_o.src_addr = src_addr_d;
         burst_req_o.dst_addr = dst_addr_d;
+        burst_req_o.scale_addr = scale_addr_d;
         burst_req_o.opt.last = last;
     end
 
@@ -240,6 +254,7 @@ module idma_nd_midend #(
     `FFL(stride_sel_q, stride_sel_d, nd_req_valid_i, NumDim - 'd1, clk_i, rst_ni)
     `FFL(src_addr_q,   src_addr_d,   nd_req_valid_i, '0,           clk_i, rst_ni)
     `FFL(dst_addr_q,   dst_addr_d,   nd_req_valid_i, '0,           clk_i, rst_ni)
+    `FFL(scale_addr_q, scale_addr_d, nd_req_valid_i, '0,           clk_i, rst_ni)
     `FF (burst_sent_q, burst_sent_d,                 '0,           clk_i, rst_ni)
 
     //--------------------------------------

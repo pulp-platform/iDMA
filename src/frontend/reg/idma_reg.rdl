@@ -29,31 +29,31 @@ addrmap idma_reg #(
         default sw = rw;
         default hw = r;
         field {
-            desc = "Decouple R-AW";
+            desc = "R-AW coupling: hold write addresses until the read data arrives";
         } decouple_aw [0:0] = 0;
         field {
-            desc = "Decouple R-W";
+            desc = "Fully decouple the read and write channels";
         } decouple_rw [1:1] = 0;
         field {
-            desc = "Reduce maximal source burst length";
+            desc = "Shorten source bursts to src_max_llen";
         } src_reduce_len [2:2] = 0;
         field {
-            desc = "Reduce maximal destination burst length";
+            desc = "Shorten destination bursts to dst_max_llen";
         } dst_reduce_len [3:3] = 0;
         field {
-            desc = "Maximal logarithmic source burst length";
+            desc = "Maximal source burst length as log2(beats)";
         } src_max_llen [6:4] = 0;
         field {
-            desc = "Maximal logarithmic destination burst length";
+            desc = "Maximal destination burst length as log2(beats)";
         } dst_max_llen [9:7] = 0;
         field {
-            desc = "ND-extension enabled";
+            desc = "Dimensions in use beyond the first (0: 1D)";
         } enable_nd [10+Log2NumDims:10] = 0;
         field {
-            desc = "Selection of the source protocol";
+            desc = "Source protocol (idma_pkg::protocol_e)";
          } src_protocol [NumProtBits+11+Log2NumDims-1:11+Log2NumDims] = 0;
         field {
-            desc = "Selection of the destination protocol";
+            desc = "Destination protocol (idma_pkg::protocol_e)";
          } dst_protocol [2*NumProtBits+11+Log2NumDims-1:11+Log2NumDims+NumProtBits] = 0;
     };
 
@@ -156,10 +156,16 @@ addrmap idma_reg #(
     enum compute_op {
         none           = 4'd0 { desc = "No compute (plain copy)."; };
         transpose      = 4'd1 { desc = "Tiled transpose."; };
-        mxquant        = 4'd2 { desc = "MX quant, FP32 source (128B -> 33B per 32-element block)."; };
-        mxquant_fp16   = 4'd3 { desc = "MX quant, FP16 source (64B -> 33B per 32-element block)."; };
-        mxdequant      = 4'd4 { desc = "MX dequant, FP32 destination (33B -> 128B per 32-element block)."; };
-        mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (33B -> 64B per 32-element block)."; };
+        mxquant        = 4'd2 { desc = "MX quant, FP32 source (128B -> 32B + 1B scale)."; };
+        mxquant_fp16   = 4'd3 { desc = "MX quant, FP16 source (64B -> 32B + 1B scale)."; };
+        mxdequant      = 4'd4 { desc = "MX dequant, FP32 destination (32B + 1B scale -> 128B)."; };
+        mxdequant_fp16 = 4'd5 { desc = "MX dequant, FP16 destination (32B + 1B scale -> 64B)."; };
+    };
+
+    // Blocks per scale group G; idma_pkg::mx_group_e derives from it
+    enum mx_group {
+        g64 = 1'd0 { desc = "G = 64 blocks (one 64 B scale beat at 512 bit)."; };
+        g32 = 1'd1 { desc = "G = 32 blocks (half a 64 B scale beat)."; };
     };
 
     reg compute_cfg {
@@ -188,6 +194,51 @@ addrmap idma_reg #(
         } transpose_compact [31:31] = 0;
     };
 
+    reg mx_cfg {
+        name = "mx_cfg";
+        desc = "MX options of an MX compute_op, sampled with compute_cfg.";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "Keep Inf/NaN blocks finite instead of poisoning them (0xFF scale, NaN lanes)";
+        } mx_poison_dis [0:0] = 0;
+        field {
+            desc = "Round the block scale up (RCEIL) instead of down (FLOOR).";
+        } mx_rceil [1:1] = 0;
+        field {
+            desc = "MX element format (0: E5M2, 1: E4M3; 2 E2M1 and 3 reserved).";
+        } mx_elem_fmt [3:2] = 0;
+        field {
+            desc = "Blocks per scale group; a group's scale bytes move as one chunk.";
+            encode = mx_group;
+        } mx_group [4:4] = 0;
+    };
+
+    reg scale_addr {
+        name = "scale_addr";
+        desc = "MX scale plane address, 64 B aligned. Sampled with compute_cfg.";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "MX scale plane address, 64 B aligned.";
+        } scale_addr [31:0] = 0;
+    };
+
+    reg scale_stride {
+        name = "scale_stride";
+        desc = "MX scale plane stride, a multiple of 64 B";
+        default sw = rw;
+        default hw = r;
+        field {
+            desc = "MX scale plane stride, a multiple of 64 B";
+        } scale_stride [31:0] = 0;
+    };
+
+    regfile mx_dim {
+        scale_stride scale_stride[SysAddrWidth/32];
+        ispresent = NumDims > 1;
+    };
+
     regfile dim {
         dst_stride dst_stride[SysAddrWidth/32];
         src_stride src_stride[SysAddrWidth/32];
@@ -204,6 +255,9 @@ addrmap idma_reg #(
              length   length[SysAddrWidth/32];
              dim      dim[NumDims-1 | NumDims == 1];
              compute_cfg compute_cfg;
+             mx_cfg   mx_cfg;
+             scale_addr scale_addr[SysAddrWidth/32];
+             mx_dim   mx_dim[NumDims-1 | NumDims == 1];
 };
 
 `endif // IDMA_REG_RDL

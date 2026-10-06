@@ -72,6 +72,8 @@ module idma_init_write #(
     input  strb_t buffer_out_valid_i,
     /// Ready to buffer
     output strb_t buffer_out_ready_o,
+    /// Lanes the next write beat pops, from the request and the burst state only
+    output strb_t buffer_out_offer_o,
     /// Logical byte positions consumed by an accepted write
     output strb_t buffer_out_consumed_o
 );
@@ -114,6 +116,7 @@ module idma_init_write #(
 
     // the main buffer is conditionally to the write mask popped
     assign buffer_out_ready_o = write_happening ? mask_out : '0;
+    assign buffer_out_offer_o = (write_meta_valid_i & w_dp_valid_i) ? mask_out : '0;
     assign buffer_out_consumed_o = buffer_out_ready_o;
 
     // signal the bus that we are ready

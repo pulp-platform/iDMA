@@ -46,29 +46,29 @@ legalizer_read_meta_channel: |
     };
 legalizer_write_meta_channel: |
     w_req_o.aw_req.axi.aw_chan = '{
-        id: opt_tf_q.axi_id,
+        id: opt_w_q.axi_id,
         addr: { w_tf_q.addr[AddrWidth-1:OffsetWidth], {{OffsetWidth}{1'b0}} },
         len: ((w_num_bytes + w_addr_offset - 'd1) >> OffsetWidth),
         size: axi_pkg::size_t'(OffsetWidth),
-        burst: opt_tf_q.dst_axi_opt.burst,
-        lock: opt_tf_q.dst_axi_opt.lock,
-        cache: opt_tf_q.dst_axi_opt.cache,
-        prot: opt_tf_q.dst_axi_opt.prot,
-        qos: opt_tf_q.dst_axi_opt.qos,
-        region: opt_tf_q.dst_axi_opt.region,
+        burst: opt_w_q.dst_axi_opt.burst,
+        lock: opt_w_q.dst_axi_opt.lock,
+        cache: opt_w_q.dst_axi_opt.cache,
+        prot: opt_w_q.dst_axi_opt.prot,
+        qos: opt_w_q.dst_axi_opt.qos,
+        region: opt_w_q.dst_axi_opt.region,
         user: w_tf_q.user,
         atop: '0
     };
 legalizer_write_data_path: |
     w_req_o.w_dp_req = '{
-        dst_protocol: opt_tf_q.dst_protocol,
-        dst_head: opt_tf_q.dst_head,
+        dst_protocol: opt_w_q.dst_protocol,
+        dst_head: opt_w_q.dst_head,
         offset: w_addr_offset,
         tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
-        shift: opt_tf_q.write_shift,
+        shift: opt_w_q.write_shift,
         num_beats: w_req_o.aw_req.axi.aw_chan.len,
         is_single: w_req_o.aw_req.axi.aw_chan.len == '0,
-        compute: opt_tf_q.compute
+        compute: opt_w_q.compute
     };
 read_template: |
     idma_axi_read #(
@@ -96,6 +96,7 @@ read_template: |
         .read_rsp_i        ( ${read_response} ),
         .buffer_in_o       ( ${buffer_in} ),
         .buffer_in_valid_o ( ${buffer_in_valid} ),
+        .buffer_in_beat_o  ( ${buffer_in_beat} ),
         .buffer_in_ready_i ( buffer_in_ready )
     );
 write_template: |
@@ -131,6 +132,7 @@ write_template: |
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} ),
+        .buffer_out_offer_o ( ${buffer_out_offer} ),
         .buffer_out_consumed_o ( ${buffer_out_consumed} ),
         .mask_ext_i         ( mask_ext_shifted )
     );

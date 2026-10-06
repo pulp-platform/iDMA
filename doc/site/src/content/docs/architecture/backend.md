@@ -34,6 +34,7 @@ The most important parameters for a new integration are `DataWidth` (match your 
 | `RejectZeroTransfers` | 1 | Reject zero-length transfers with a `BACKEND` error response |
 | `ErrorCap` | `NO_ERROR_HANDLING` | Error handling capability: `NO_ERROR_HANDLING` or `ERROR_HANDLING` |
 | `PrintFifoInfo` | 0 | Print FIFO configuration during elaboration |
+| `TimingCuts` | `'0` | Opt-in timing cuts (`idma_pkg::timing_cuts_t`), see [Timing cuts](#timing-cuts). `'0` is the stock datapath |
 
 The maximum number of transfers in-flight at any point is:
 
@@ -42,6 +43,23 @@ MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth
 ```
 
 This determines how many 1D bursts can be in-flight simultaneously - `BufferDepth` entries in the data buffer, `NumAxInFlight` transactions on the bus, and `MemSysDepth` stages in the external memory system.
+
+### Timing cuts
+
+`TimingCuts` shortens the paths from the write-side handshake to the read side, which end at the
+dataflow element pointers, `r_ready` and the request FIFOs. Each field is independent:
+
+| Field | Effect | Cost |
+|-------|--------|------|
+| `dfe_ready_cut` | A full dataflow lane takes a new beat only in a cycle without a write-side pop. `r_ready` and the dataflow push no longer depend on the write datapath. Implies `dfe_reg_flags` | One more dataflow entry per byte lane (`BufferDepth + 1`), one more MX input queue entry per engine |
+| `mx_beat_push` | An MX beat enters its engine queue on the read beat of any read port (its response valid and the read response side ready) and the queue's ready, without the byte-lane masks and the masked buffer-ready reduction of the read port: MX beats are whole beats (asserted). The MX push no longer depends on the read datapath request offsets, the read shift or the last beat flag. Cycle-identical | None |
+| `dfe_ready_ahead` | The dataflow element's ready comes from its registered lane flags and from the lanes the next write beat pops: each write port reports them from the request head and its burst counters (`buffer_out_offer_o`), without the W handshake; a transpose reports its pending pop; an MX burst none. A lane takes its one extra entry only in such a cycle, so a full element refills in the cycle the write side starts to drain it and `r_ready` no longer depends on the write-side handshake. The MX input queues keep their depth. Combines with `dfe_ready_cut` (one entry each) | One more dataflow entry per byte lane |
+| `mx_in_reg` | MX beats enter their engine through a one-beat register stage whose data and tag load in every cycle it can take a beat, so the read handshake and data paths end at the stage instead of the engine input queues | One cycle more from R to W for MX beats; the stage takes one input queue entry of each engine |
+| `dfe_reg_flags` | Dataflow lanes keep full/empty in flops, update their pointers without load enables and write the free slot every cycle the lane can accept. Cycle-identical | A few flops per lane |
+| `wdp_head_spill` | A spill register on the head of the write datapath request FIFO, so the write datapath starts from flops instead of the FIFO read mux | +1 cycle from the legalizer to the write datapath; `MetaFifoDepth` +2 |
+| `outst_cnt_reg` | The outstanding-transfer counter of `RejectZeroTransfers` counts an accepted request one cycle late, so it does not depend on `req_ready_o`. Cycle-identical | One flop |
+
+`MetaFifoDepth` grows by each extra dataflow entry and by two with `wdp_head_spill`.
 
 ## Interface
 
@@ -98,7 +116,7 @@ Each variant also gets its own tracer header, `idma/tracer_<id>.svh`, holding th
 
 ## Legalizer
 
-The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. It operates as two coupled state machines - one for the read side, one for the write side - that track the remaining bytes and current address of each transfer independently.
+The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. It operates as two coupled state machines - one for the read side, one for the write side - that track the remaining bytes and current address of each transfer independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
 
 The legalizer is pure control path: it does not touch the data. It computes page/burst boundaries, splits transfers accordingly, and emits `offset`, `tailer`, and `shift` values that the transport layer uses for data realignment.
 
@@ -132,7 +150,7 @@ When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple
 
 ### Architecture
 
-The transport layer is responsible for moving data from source to destination, handling the byte-lane realignment that arises when source and destination addresses have different bus-word offsets. It contains the read channel, byte-granular data buffer, and write channel. Data flows as: **read port** -> **read barrel shifter** -> **dataflow element (buffer)** -> **write barrel shifter** -> **write port**.
+The transport layer is responsible for moving data from source to destination, handling the byte-lane realignment that arises when source and destination addresses have different bus-word offsets. It contains the read channel, byte-granular data buffer, and write channel. Data flows as: **read port** -> **read barrel shifter** -> **dataflow element (buffer)** -> **write barrel shifter** -> **write port**. With compute, MX beats go from the read barrel shifter to the input queue of their engine and do not enter the dataflow element (see [Compute](../compute/)).
 
 The buffer (`idma_dataflow_element`) is an array of independent FIFOs, one per byte lane (`StrbWidth` = `DataWidth / 8`, i.e., the number of byte lanes; `StrbWidth` FIFOs of depth `BufferDepth`). This byte-granular design allows data to enter and leave the buffer at arbitrary byte-lane positions, enabling misaligned transfers without additional alignment stages.
 

@@ -8,7 +8,8 @@
 // Shared skeleton for the MX compute testbenches: parameter-derived types,
 // clock/reset, R/W join, the AXI memory (on the axi_*_mem pair) and byte
 // accessors. The including testbench couples axi_req/axi_rsp to the *_mem
-// pair (directly or through a stall shim) and instantiates the backend.
+// pair (directly or through a stall shim) and instantiates the backend; its
+// top includes tb_idma_mx_axi_mon_bind.svh once.
 // Expects DataWidth/AddrWidth/UserWidth/AxiIdWidth/TFLenWidth parameters.
 
 localparam time TA = 1ns, TT = 9ns, TCK = 10ns;
@@ -37,7 +38,7 @@ typedef struct packed { axi_read_meta_channel_t axi; } read_meta_channel_t;
 typedef struct packed { axi_aw_chan_t aw_chan; } axi_write_meta_channel_t;
 typedef struct packed { axi_write_meta_channel_t axi; } write_meta_channel_t;
 
-logic clk, rst_n;
+logic clk, rst_n, rst_gen_n, rst_dly_n;
 idma_req_t    idma_req;    logic req_valid, req_ready;
 idma_rsp_t    idma_rsp;    logic rsp_valid, rsp_ready;
 idma_eh_req_t idma_eh_req; logic eh_req_valid, eh_req_ready;
@@ -48,7 +49,11 @@ idma_busy_t busy;
 assign idma_eh_req = '0;
 assign eh_req_valid = 1'b0;
 
-clk_rst_gen #(.ClkPeriod(TCK), .RstClkCycles(1)) i_clk_rst_gen (.clk_o(clk), .rst_no(rst_n));
+clk_rst_gen #(.ClkPeriod(TCK), .RstClkCycles(1)) i_clk_rst_gen (.clk_o(clk), .rst_no(rst_gen_n));
+
+// clk_rst_gen releases on a clock edge; TA later no flop races the release
+assign #(TA) rst_dly_n = rst_gen_n;
+assign rst_n = rst_gen_n & rst_dly_n;
 
 axi_rw_join #(.axi_req_t(axi_req_t), .axi_resp_t(axi_rsp_t)) i_axi_rw_join (
   .clk_i(clk), .rst_ni(rst_n),
@@ -72,4 +77,20 @@ axi_sim_mem #(
 task automatic wr_mem(input addr_t a, input logic [7:0] d); i_axi_sim_mem.mem[a] = d; endtask
 function automatic logic [7:0] rd_mem(input addr_t a);
   return i_axi_sim_mem.mem.exists(a) ? i_axi_sim_mem.mem[a] : 8'hxx;
+endfunction
+
+// MX planes: block k at data + 32 k, its scale byte at (data's 64 B line + soff lines) + k
+function automatic addr_t mx_scale_base(input addr_t data, input int soff);
+  return (data & ~addr_t'(idma_pkg::MxScaleSlotBytes - 1)) + addr_t'(soff * 64);
+endfunction
+// scale plane address of a request: `soff` lines from the compressed side (quant dst, dequant src)
+function automatic addr_t mx_scale_of(input idma_pkg::compute_op_e op, input addr_t src,
+                                      input addr_t dst, input int soff);
+  return mx_scale_base((op inside {idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::COMPUTE_MXDEQUANT_FP16})
+                       ? src : dst, soff);
+endfunction
+// planar address of byte i of the [scale][32 elements] block sequence of an expectation table
+function automatic addr_t mx_pl_addr(input addr_t data, input int soff, input int unsigned i);
+  return (i % 33 == 0) ? mx_scale_base(data, soff) + addr_t'(i / 33)
+                       : data + addr_t'((i / 33) * 32 + i % 33 - 1);
 endfunction

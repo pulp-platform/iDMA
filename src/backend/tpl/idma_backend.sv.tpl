@@ -43,6 +43,8 @@ module idma_backend_${name_uniqueifier} #(
     /// Implementation tuning knobs for the compute engines
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
 % endif
+    /// Opt-in timing cuts
+    parameter idma_pkg::timing_cuts_t TimingCuts = '0,
     /// Should the `R`-`AW` coupling hardware be present? (recommended)
     parameter bit          RAWCouplingAvail = 1'b\
 % if one_read_port and one_write_port and ('axi' in used_read_protocols) and ('axi' in used_write_protocols):
@@ -185,9 +187,14 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     localparam int unsigned ComputeFifoDepth = 32'd0;
 % endif
 
+    /// Dataflow element depth; each ready cut needs one more entry for the same rate
+    localparam int unsigned DfeDepth = BufferDepth + 32'(TimingCuts.dfe_ready_cut) +
+        32'(TimingCuts.dfe_ready_ahead);
+
     /// The localparam MetaFifoDepth holds the maximum number of transfers that can be
     /// in-flight under any circumstances.
-    localparam int unsigned MetaFifoDepth = BufferDepth + NumAxInFlight + MemSysDepth + ComputeFifoDepth;
+    localparam int unsigned MetaFifoDepth = DfeDepth + NumAxInFlight + MemSysDepth +
+        ComputeFifoDepth + 32'd2 * 32'(TimingCuts.wdp_head_spill);
 
     /// Address type
     typedef logic [AddrWidth-1:0]   addr_t;
@@ -212,6 +219,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     /// - `shift`: The amount the data needs to be shifted
     /// - `decouple_aw`: If the transfer has the AW decoupled from the R
     /// - `is_single`: Is this transfer just one beat long? `(len == 0)`
+% if compute_eligible:
+    /// - `mx`: MX tag of the burst's beats (`last`: last burst of the transfer)
+% endif
     typedef struct packed {
         idma_pkg::protocol_e  src_protocol;
         idma_pkg::multihead_t src_head;  // ignored unless multi-head (one head: tied 0)
@@ -220,6 +230,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         offset_t              shift;
         logic                 decouple_aw;
         logic                 is_single;
+% if compute_eligible:
+        idma_pkg::mx_tag_t    mx;
+% endif
     } r_dp_req_t;
 
     /// The datapath read response type provides feedback from the read part of the datapath:
@@ -358,6 +371,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic r_dp_req_out_ready, w_dp_req_out_ready;
     r_dp_req_t r_dp_req_out;
     w_dp_req_t w_dp_req_out;
+    logic      w_dp_req_head_valid, w_dp_req_head_ready, w_dp_busy;
+    w_dp_req_t w_dp_req_head;
+    // decouple_aw tag of the R-AW coupler, kept with the write datapath request head
+    logic      w_decouple_aw_out, w_decouple_aw_head;
 
     // datapah responses
     r_dp_rsp_t r_dp_rsp;
@@ -408,7 +425,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         typedef logic [$clog2(MetaFifoDepth + 32'd2)-1:0] num_outst_t;
 
         num_outst_t num_outst_q;
-        logic       tf_accept, tf_complete;
+        logic       tf_accept, tf_complete, outst;
         logic       zero_len_accept, zero_rsp_pending_q;
 
         // is the current transfer length 0?
@@ -418,16 +435,35 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         assign req_valid = is_length_zero ? 1'b0 : req_valid_i;
 
         // Stall a zero-length request while a response or an older rejection is still owed
-        assign zero_len_stall = is_length_zero & (zero_rsp_pending_q | (num_outst_q != '0));
+        assign zero_len_stall = is_length_zero & (zero_rsp_pending_q | outst);
 
         // outstanding transfer counter; mirrors the one in the error handler
         assign tf_accept   = req_valid & req_ready_o;
         assign tf_complete = rsp_valid & rsp_ready & ~idma_rsp.error;
 
-        always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
-            if (!rst_ni)                        num_outst_q <= '0;
-            else if (tf_accept & ~tf_complete)  num_outst_q <= num_outst_q + 'd1;
-            else if (tf_complete & ~tf_accept)  num_outst_q <= num_outst_q - 'd1;
+        if (TimingCuts.outst_cnt_reg) begin : gen_outst_cnt_reg
+            // the accept of the last cycle is counted now, so the counter needs no req_ready_o
+            logic tf_accept_q;
+            assign outst = (num_outst_q != '0) | tf_accept_q;
+
+            always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
+                if (!rst_ni) begin
+                    num_outst_q <= '0;
+                    tf_accept_q <= 1'b0;
+                end else begin
+                    num_outst_q <= num_outst_q + num_outst_t'(tf_accept_q) -
+                                   num_outst_t'(tf_complete);
+                    tf_accept_q <= tf_accept;
+                end
+            end
+        end else begin : gen_outst_cnt
+            assign outst = num_outst_q != '0;
+
+            always_ff @(posedge clk_i or negedge rst_ni) begin : proc_num_outst
+                if (!rst_ni)                        num_outst_q <= '0;
+                else if (tf_accept & ~tf_complete)  num_outst_q <= num_outst_q + 'd1;
+                else if (tf_complete & ~tf_accept)  num_outst_q <= num_outst_q - 'd1;
+            end
         end
 
         // the rejection is a proper stream: it is held until the consumer accepts it
@@ -476,13 +512,16 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     logic req_valid_leg, leg_ready;
 % if compute_eligible:
     if (EnableCompute) begin : gen_compute_cfg_gate
-        // a request whose compute config differs from the last accepted one waits
-        // until the datapath drained: its reads must not race a draining engine
+        // a transpose config change (to or from transpose) waits until the datapath drained
         idma_pkg::compute_options_t cmp_cfg_q;
-        logic backend_active, cmp_cfg_stall;
+        logic backend_active, cmp_cfg_stall, cmp_cfg_tp;
         assign backend_active = busy_o.buffer_busy | busy_o.r_dp_busy | busy_o.w_dp_busy |
                                 busy_o.r_leg_busy | busy_o.w_leg_busy | busy_o.raw_coupler_busy;
-        assign cmp_cfg_stall  = req_valid & (idma_req_i.opt.compute != cmp_cfg_q) & backend_active;
+        assign cmp_cfg_tp     = (idma_req_i.opt.compute.enable &
+                                 (idma_req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE)) |
+                                (cmp_cfg_q.enable & (cmp_cfg_q.op == idma_pkg::COMPUTE_TRANSPOSE));
+        assign cmp_cfg_stall  = req_valid & cmp_cfg_tp & (idma_req_i.opt.compute != cmp_cfg_q) &
+                                backend_active;
         assign req_valid_leg  = req_valid & ~cmp_cfg_stall;
         assign req_ready_o    = leg_ready & ~cmp_cfg_stall & ~zero_len_stall;
         always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -563,7 +602,13 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             tailer:       OffsetWidth'(idma_req_i.length + idma_req_i.src_addr[OffsetWidth-1:0]),
             shift:        OffsetWidth'(idma_req_i.src_addr[OffsetWidth-1:0]),
             decouple_aw:  idma_req_i.opt.beo.decouple_aw,
+% if compute_eligible:
+            is_single:    len == '0,
+            mx:           EnableCompute ? idma_pkg::mx_tag(ComputeOps, idma_req_i.opt.compute,
+                                                           1'b0, 1'b0, 1'b1) : '0
+% else:
             is_single:    len == '0
+% endif
         };
 
         // assemble write datapath request
@@ -718,6 +763,41 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .ready_i    ( w_dp_req_out_ready  )
     );
 
+    typedef struct packed {
+        logic      decouple_aw;
+        w_dp_req_t w_dp_req;
+    } w_dp_head_t;
+    w_dp_head_t w_dp_head_in, w_dp_head_out;
+
+    assign w_dp_head_in       = '{decouple_aw: w_decouple_aw_out, w_dp_req: w_dp_req_out};
+    assign w_dp_req_head      = w_dp_head_out.w_dp_req;
+    assign w_decouple_aw_head = w_dp_head_out.decouple_aw;
+
+    cc_spill_register #(
+        .data_t ( w_dp_head_t                ),
+        .Bypass ( !TimingCuts.wdp_head_spill )
+    ) i_w_dp_req_head (
+        .clk_i   ( clk_i               ),
+        .rst_ni  ( rst_ni              ),
+        .clr_i   ( 1'b0                ),
+        .valid_i ( w_dp_req_out_valid  ),
+        .ready_o ( w_dp_req_out_ready  ),
+        .data_i  ( w_dp_head_in        ),
+        .valid_o ( w_dp_req_head_valid ),
+        .ready_i ( w_dp_req_head_ready ),
+        .data_o  ( w_dp_head_out       )
+    );
+
+    // with the head register, busy comes from valid flops (a datapath pop implies valid)
+    assign busy_o.w_dp_busy = TimingCuts.wdp_head_spill ?
+                              (w_dp_req_head_valid | w_dp_req_out_valid) : w_dp_busy;
+
+    `IDMA_NONSYNTH_BLOCK(
+    always @(posedge clk_i) if (rst_ni && TimingCuts.wdp_head_spill)
+        assert (!w_dp_req_head_ready || w_dp_req_head_valid) else
+            $fatal(1, "The write datapath popped a request it did not hold!");
+    )
+
     // Add fall-through register to allow the input to be ready if the output is not. This
     // does not add a cycle of delay
 % if not one_read_port:
@@ -782,13 +862,14 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     idma_transport_layer_${name_uniqueifier} #(
         .NumAxInFlight               ( NumAxInFlight               ),
         .DataWidth                   ( DataWidth                   ),
-        .BufferDepth                 ( BufferDepth                 ),
+        .BufferDepth                 ( DfeDepth                    ),
         .MaskInvalidData             ( MaskInvalidData             ),
 % if compute_eligible:
         .EnableCompute               ( EnableCompute               ),
         .ComputeOps                  ( ComputeOps                  ),
         .ComputeTuning               ( ComputeTuning               ),
 % endif
+        .TimingCuts                  ( TimingCuts                  ),
         .PrintFifoInfo               ( PrintFifoInfo               ),
         .r_dp_req_t                  ( r_dp_req_t                  ),
         .w_dp_req_t                  ( w_dp_req_t                  ),
@@ -849,9 +930,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .r_dp_rsp_o      ( r_dp_rsp             ),
         .r_dp_valid_o    ( r_dp_rsp_valid       ),
         .r_dp_ready_i    ( r_dp_rsp_ready       ),
-        .w_dp_req_i      ( w_dp_req_out         ),
-        .w_dp_valid_i    ( w_dp_req_out_valid   ),
-        .w_dp_ready_o    ( w_dp_req_out_ready   ),
+        .w_dp_req_i      ( w_dp_req_head        ),
+        .w_dp_valid_i    ( w_dp_req_head_valid  ),
+        .w_dp_ready_o    ( w_dp_req_head_ready  ),
         .w_dp_rsp_o      ( w_dp_rsp             ),
         .w_dp_valid_o    ( w_dp_rsp_valid       ),
         .w_dp_ready_i    ( w_dp_rsp_ready       ),
@@ -863,7 +944,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_busy            ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .w_chan_valid_o  ( w_chan_valid         ),
         .w_chan_ready_o  ( w_chan_ready         ),
@@ -883,9 +964,6 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
     if (RAWCouplingAvail) begin : gen_r_aw_coupler
 % if one_read_port and one_write_port and (used_read_protocols[0] == used_write_protocols[0]):
-        // per-transfer decouple_aw tag travelling with the write datapath request
-        logic w_decouple_aw_out;
-
         // mirrors i_w_dp_req exactly: same depth, same push valid, same pop ready
         cc_stream_fifo_optimal_wrap #(
             .Depth     ( NumAxInFlight + ComputeFifoDepth ),
@@ -924,7 +1002,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
             .w_req_valid_i    ( w_chan_valid                ),
             .w_req_ready_i    ( w_chan_ready                ),
             .w_req_first_i    ( w_chan_first                ),
-            .w_decouple_aw_i  ( w_decouple_aw_out           ),
+            .w_decouple_aw_i  ( w_decouple_aw_head          ),
             .aw_decouple_aw_i ( \
 % if one_write_port:
 w_req.decouple_aw\
@@ -958,8 +1036,10 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
             $fatal(1, "Channel Coupler only implemented for AXI DMAs!");
         end
         )
+        assign w_decouple_aw_out = 1'b0;
 % endif
     end else begin : gen_r_aw_bypass
+        assign w_decouple_aw_out = 1'b0;
 % if combined_aw_and_w:
     % if compute_eligible:
         // combined aw+w read-meta buffer; deepened for the compute engine tile read-ahead (cf. i_w_dp_req)

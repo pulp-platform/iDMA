@@ -59,7 +59,7 @@ legalizer_write_meta_channel: |
         be: '0,
         we: 1,
         wdata: '0,
-        aid: opt_tf_q.axi_id,
+        aid: opt_w_q.axi_id,
         a_optional: '0
     };
 read_template: |
@@ -86,6 +86,7 @@ read_template: |
         .read_rsp_i        ( ${read_response} ),
         .buffer_in_o       ( ${buffer_in} ),
         .buffer_in_valid_o ( ${buffer_in_valid} ),
+        .buffer_in_beat_o  ( ${buffer_in_beat} ),
         .buffer_in_ready_i ( buffer_in_ready )
     );
 write_template: |
@@ -119,6 +120,7 @@ write_template: |
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} ),
+        .buffer_out_offer_o ( ${buffer_out_offer} ),
         .buffer_out_consumed_o ( ${buffer_out_consumed} ),
         .mask_ext_i         ( mask_ext_shifted )
     );

@@ -5,11 +5,7 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// Constrained-random MX compute campaign: back-to-back transfers with a random
-// op per iteration (FP16/FP32 quant, dequant, plain copy), random block counts
-// and beat-aligned addresses biased toward 4K-crossing writes, all through an
-// AXI shim that injects random per-channel stalls. Byte-exact against the DPI-C
-// golden; canary bytes around each destination catch out-of-bounds writes.
+// Constrained-random MX ops and options back to back under random AXI stalls, byte-exact.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -31,11 +27,18 @@ module tb_idma_mxrand
   import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
   import "DPI-C" function void gm_mxdequant(input int num_blocks);
   import "DPI-C" function void gm_mxdequant_fp16(input int num_blocks);
+  import "DPI-C" function void gm_mxquant_cfg(input int num_blocks, input int fp16, input int elem,
+                                              input int rceil, input int poison_dis);
+  import "DPI-C" function void gm_mxdequant_cfg(input int num_blocks, input int fp16,
+                                                input int elem);
   import "DPI-C" function int  gm_get(input int idx);
+  import "DPI-C" function int  gm_get_scale(input int idx);
+  import "DPI-C" function void gm_load_scale(input int idx, input int val);
   import "DPI-C" function int  gm_stim_fp16(input int e, input int total, input int salt);
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
+  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   // random-stall shim: a channel's go bit may rise any cycle but only falls after its handshake
   logic aw_go, w_go, ar_go, b_go, r_go;
@@ -94,8 +97,15 @@ module tb_idma_mxrand
   int unsigned rsp_cnt;
   always @(posedge clk) if (rsp_valid && rsp_ready) rsp_cnt <= rsp_cnt + 1;
 
+  // a coupled copy (decouple_aw = 0) must not issue its first AW before its first R beat
+  int unsigned cpl_errs = 0;
+
   task automatic do_xfer(input addr_t src, input addr_t dst, input int unsigned L,
-                         input logic en, input idma_pkg::compute_op_e op);
+                         input logic en, input idma_pkg::compute_op_e op,
+                         input idma_pkg::mx_options_t mxo = '0, input int soff = 0,
+                         input logic daw = 1'b1);
+    automatic int unsigned t = 0, tr = 0, taw = 0;
+    #(TA);
     idma_req = '0;
     idma_req.length   = tf_len_t'(L);
     idma_req.src_addr = src;
@@ -105,15 +115,27 @@ module tb_idma_mxrand
     idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
     idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
     idma_req.opt.beo.decouple_rw = 1'b1;
-    idma_req.opt.beo.decouple_aw = 1'b1;
+    idma_req.opt.beo.decouple_aw = daw;
     idma_req.opt.compute.enable  = en;
     idma_req.opt.compute.op      = op;
+    if (en) idma_req.opt.compute.params.mx = mxo;
+    if (en) idma_req.scale_addr = mx_scale_of(op, src, dst, soff);
     idma_req.opt.last            = 1'b1;
     req_valid = 1'b1;
     do @(posedge clk); while (!req_ready);
+    #(TA);
     req_valid = 1'b0;
     idma_req = '0;
-    while (!(rsp_valid && rsp_ready)) @(posedge clk);
+    while (!(rsp_valid && rsp_ready)) begin
+      @(posedge clk);
+      t++;
+      if (tr == 0 && axi_rsp.r_valid && axi_req.r_ready) tr = t;
+      if (taw == 0 && axi_req.aw_valid && axi_rsp.aw_ready) taw = t;
+    end
+    if (!daw && taw <= tr) begin
+      cpl_errs++;
+      $display("[MXRD] coupled copy: first AW in cycle %0d, first R in cycle %0d", taw, tr);
+    end
     repeat (10) @(posedge clk);
   endtask
 
@@ -127,7 +149,10 @@ module tb_idma_mxrand
     automatic logic [31:0] w;
     automatic addr_t src, dst;
     automatic int unsigned op, nb, L, WL, salt;
+    automatic int soff;
+    automatic addr_t sb;
     automatic bit fp16;
+    automatic idma_pkg::mx_options_t mxo;
     req_valid = 1'b0; rsp_ready = 1'b1; idma_req = '0;
     @(posedge rst_n);
     repeat (5) @(posedge clk);
@@ -135,8 +160,16 @@ module tb_idma_mxrand
     for (int unsigned x = 0; x < NumXfers; x++) begin
       salt = x * 4099;
       op = $urandom_range(2);
+      mxo = '0;
+      mxo.elem_fmt   = idma_pkg::mx_elem_e'($urandom_range(1));
+      mxo.rceil      = (op == 1) && $urandom_range(1);
+      mxo.poison_dis = (op == 1) && ($urandom_range(3) == 0);
+      mxo.group      = mx_group_e'($urandom_range(1));
+      // scale plane 16-20 KiB above or below the data plane
+      soff = $urandom_range(1) ? int'($urandom_range(256, 320)) : -int'($urandom_range(256, 320));
+      nb = 0;
       case (op)
-        0: begin  // plain copy, arbitrary alignment, compute idle
+        0: begin  // plain copy, arbitrary alignment, a stale op code, R-AW coupled every other
           L  = $urandom_range(1, 1000); WL = L;
           src = SrcBase + $urandom_range(4095);
           dst = DstBase + $urandom_range(4095);
@@ -148,7 +181,7 @@ module tb_idma_mxrand
         1: begin  // MX quant, FP16 below 1024b else FP32, dst biased toward 4K crossings
           fp16 = (StrbWidth <= 64) && $urandom_range(1);
           nb   = $urandom_range(1, 24);
-          L    = nb * (fp16 ? 64 : 128); WL = nb * 33;
+          L    = nb * (fp16 ? 64 : 128); WL = nb * 32;
           src  = SrcBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
           dst  = $urandom_range(1) ? DstBase + 'h1000 - StrbWidth * $urandom_range(1, 4)
                                    : DstBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
@@ -165,30 +198,40 @@ module tb_idma_mxrand
               end
             end
           end
-          if (fp16) gm_mxquant(int'(nb)); else gm_mxquant_fp32(int'(nb));
+          gm_mxquant_cfg(int'(nb), int'(fp16), int'(mxo.elem_fmt), int'(mxo.rceil),
+                         int'(mxo.poison_dis));
         end
-        default: begin  // MX dequant, k blocks with k % StrbWidth == 0; FP16 out at <=512b
+        default: begin  // MX dequant from a data plane and a scale plane; FP16 out at <=512b
           fp16 = (StrbWidth <= 64) && $urandom_range(1);
-          nb = StrbWidth * ((StrbWidth >= 64) ? 1 : $urandom_range(1, 2));
-          L  = nb * 33; WL = nb * (fp16 ? 64 : 128);
+          nb = $urandom_range(1, 24);
+          L  = nb * 32; WL = nb * (fp16 ? 64 : 128);
           src = SrcBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
           dst = DstBase + StrbWidth * $urandom_range(4096 / StrbWidth - 1);
           for (int unsigned i = 0; i < L; i++) begin
             wr_mem(src + i, 8'((salt + i * 197) ^ (i >> 2)));
             gm_load(int'(i), int'(8'((salt + i * 197) ^ (i >> 2))));
           end
-          if (fp16) gm_mxdequant_fp16(int'(nb)); else gm_mxdequant(int'(nb));
+          for (int unsigned k = 0; k < nb; k++) begin
+            wr_mem(mx_scale_base(src, soff) + k, 8'((salt >> 3) + k * 29));
+            gm_load_scale(int'(k), int'(8'((salt >> 3) + k * 29)));
+          end
+          gm_mxdequant_cfg(int'(nb), int'(fp16), int'(mxo.elem_fmt));
         end
       endcase
 
+      sb = mx_scale_base(dst, soff);
+      if (op == 1)
+        for (int unsigned i = 0; i < nb + 2 * Margin; i++) wr_mem(sb - Margin + i, 8'hC5);
       for (int unsigned i = 0; i < WL + 2 * Margin; i++) wr_mem(dst - Margin + i, 8'hC5);
 
       case (op)
-        0:       do_xfer(src, dst, L, 1'b0, idma_pkg::COMPUTE_NONE);
+        0:       do_xfer(src, dst, L, 1'b0, idma_pkg::compute_op_e'((x / 2) % 6), '0, 0, x[0]);
         1:       do_xfer(src, dst, L, 1'b1,
-                         fp16 ? idma_pkg::COMPUTE_MXQUANT_FP16 : idma_pkg::COMPUTE_MXQUANT);
+                         fp16 ? idma_pkg::COMPUTE_MXQUANT_FP16 : idma_pkg::COMPUTE_MXQUANT, mxo,
+                         soff);
         default: do_xfer(src, dst, L, 1'b1,
-                         fp16 ? idma_pkg::COMPUTE_MXDEQUANT_FP16 : idma_pkg::COMPUTE_MXDEQUANT);
+                         fp16 ? idma_pkg::COMPUTE_MXDEQUANT_FP16 : idma_pkg::COMPUTE_MXDEQUANT,
+                         mxo, soff);
       endcase
 
       for (int unsigned i = 0; i < WL; i++) begin
@@ -206,12 +249,27 @@ module tb_idma_mxrand
             $display("[MXRD] x%0d op%0d canary hit near dst=%08h WL=%0d", x, op, dst, WL);
         end
       end
+      if (op == 1) begin
+        for (int unsigned k = 0; k < nb; k++)
+          if (rd_mem(sb + k) !== 8'(gm_get_scale(int'(k)))) begin
+            errs++;
+            if (errs <= 8) $display("[MXRD] x%0d scale[%0d]=%02h exp %02h", x, k,
+                                    rd_mem(sb + k), 8'(gm_get_scale(int'(k))));
+          end
+        for (int unsigned i = 0; i < Margin; i++)
+          if (rd_mem(sb - Margin + i) !== 8'hC5 || rd_mem(sb + nb + i) !== 8'hC5) begin
+            errs++;
+            if (errs <= 8) $display("[MXRD] x%0d scale canary hit near %08h", x, sb);
+          end
+      end
     end
 
-    // pipelined same-config quant stream: lane-exact tail retire across transfer boundaries
+    // pipelined quant stream, element format and rounding switching per transfer
     begin
       localparam int unsigned BK = 6, BNb = 24;
-      automatic logic [7:0] bgold [BK][BNb*33];
+      localparam int BSoff [2] = '{16, -8};
+      automatic logic [7:0] bgold [BK][BNb*32];
+      automatic logic [7:0] bsgold [BK][BNb];
       for (int unsigned k = 0; k < BK; k++) begin
         for (int unsigned el = 0; el < BNb * 32; el++) begin
           w = 32'(gm_stim_fp32(int'(el), int'(BNb*32), int'(k * 7919)));
@@ -220,10 +278,13 @@ module tb_idma_mxrand
             gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
           end
         end
-        gm_mxquant_fp32(int'(BNb));
-        for (int unsigned i = 0; i < BNb * 33; i++) bgold[k][i] = 8'(gm_get(int'(i)));
-        for (int unsigned i = 0; i < BNb * 33 + 2 * Margin; i++)
+        gm_mxquant_cfg(int'(BNb), 0, int'(k % 2), int'((k / 2) % 2), 0);
+        for (int unsigned i = 0; i < BNb * 32; i++) bgold[k][i] = 8'(gm_get(int'(i)));
+        for (int unsigned i = 0; i < BNb; i++) bsgold[k][i] = 8'(gm_get_scale(int'(i)));
+        for (int unsigned i = 0; i < BNb * 32 + 2 * Margin; i++)
           wr_mem(DstBase + k * 'h2000 - Margin + i, 8'hC5);
+        for (int unsigned i = 0; i < BNb + 2 * Margin; i++)
+          wr_mem(mx_scale_base(DstBase + k * 'h2000, BSoff[k % 2]) - Margin + i, 8'hC5);
       end
       for (int unsigned i = 0; i < 512; i++) begin
         wr_mem(SrcBase + 'hC000 + i, 8'((i * 89 + 5) ^ (i >> 3)));
@@ -231,6 +292,7 @@ module tb_idma_mxrand
       end
       rsp_cnt = 0;
       for (int unsigned k = 0; k <= BK; k++) begin
+        #(TA);
         idma_req = '0;
         if (k < BK) begin
           idma_req.length   = tf_len_t'(BNb * 128);
@@ -238,6 +300,10 @@ module tb_idma_mxrand
           idma_req.dst_addr = DstBase + k * 'h2000;
           idma_req.opt.compute.enable = 1'b1;
           idma_req.opt.compute.op     = idma_pkg::COMPUTE_MXQUANT;
+          idma_req.opt.compute.params.mx.elem_fmt  = idma_pkg::mx_elem_e'(k % 2);
+          idma_req.opt.compute.params.mx.rceil     = (k / 2) % 2;
+          idma_req.opt.compute.params.mx.group     = mx_group_e'(k / 3);
+          idma_req.scale_addr = mx_scale_base(idma_req.dst_addr, BSoff[k % 2]);
         end else begin
           // different config issued pipelined: the hardware interlock must drain first
           idma_req.length   = tf_len_t'(512);
@@ -254,20 +320,29 @@ module tb_idma_mxrand
         req_valid = 1'b1;
         do @(posedge clk); while (!req_ready);
       end
+      #(TA);
       req_valid = 1'b0;
       idma_req = '0;
       while (rsp_cnt < BK + 1) @(posedge clk);
       repeat (20) @(posedge clk);
       for (int unsigned k = 0; k < BK; k++) begin
-        for (int unsigned i = 0; i < BNb * 33; i++)
+        automatic addr_t bsb = mx_scale_base(DstBase + k * 'h2000, BSoff[k % 2]);
+        for (int unsigned i = 0; i < BNb * 32; i++)
           if (rd_mem(DstBase + k * 'h2000 + i) !== bgold[k][i]) begin
             errs++;
             if (errs <= 8) $display("[MXRD] b2b k%0d dst[%0d]=%02h exp %02h",
                                     k, i, rd_mem(DstBase + k * 'h2000 + i), bgold[k][i]);
           end
+        for (int unsigned i = 0; i < BNb; i++)
+          if (rd_mem(bsb + i) !== bsgold[k][i]) begin
+            errs++;
+            if (errs <= 8) $display("[MXRD] b2b k%0d scale[%0d]=%02h exp %02h",
+                                    k, i, rd_mem(bsb + i), bsgold[k][i]);
+          end
         for (int unsigned i = 0; i < Margin; i++)
           if (rd_mem(DstBase + k * 'h2000 - Margin + i) !== 8'hC5 ||
-              rd_mem(DstBase + k * 'h2000 + BNb * 33 + i) !== 8'hC5) begin
+              rd_mem(DstBase + k * 'h2000 + BNb * 32 + i) !== 8'hC5 ||
+              rd_mem(bsb - Margin + i) !== 8'hC5 || rd_mem(bsb + BNb + i) !== 8'hC5) begin
             errs++;
             if (errs <= 8) $display("[MXRD] b2b k%0d canary hit", k);
           end
@@ -279,6 +354,7 @@ module tb_idma_mxrand
         end
     end
 
+    errs += cpl_errs;
     if (errs == 0) $display("[MXRD] ALL PASS (%0d transfers, StrbWidth=%0d, StallPct=%0d)",
                             NumXfers, StrbWidth, StallPct);
     else           $fatal(1, "[MXRD] FAIL: %0d mismatches", errs);

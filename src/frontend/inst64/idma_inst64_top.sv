@@ -27,6 +27,7 @@ module idma_inst64_top #(
     parameter bit          EnableCompute   = 1'b0,
     parameter idma_pkg::compute_enable_t ComputeOps    = '1,
     parameter idma_pkg::compute_tuning_t ComputeTuning = '1,
+    parameter idma_pkg::timing_cuts_t    TimingCuts    = '0,
     parameter type         axi_ar_chan_t   = logic,
     parameter type         axi_aw_chan_t   = logic,
     parameter type         axi_req_t       = logic,
@@ -184,6 +185,8 @@ module idma_inst64_top #(
     // frontend state
     idma_pkg::compute_options_t idma_fe_compute_q;
     logic                       idma_fe_dmopc;
+    logic                       idma_fe_setter;
+    logic                       idma_fe_mx_refuse;
     logic [1:0] idma_fe_cfg;
     logic [1:0] idma_fe_init_cfg;
     logic [1:0] idma_fe_status;
@@ -213,6 +216,7 @@ module idma_inst64_top #(
     logic [NoIndices-1:0] idx_dst;
     logic                        idx_dst_valid;
     logic                        idx_dst_error;
+    logic [NoIndices-1:0] idx_scale;
 
     //--------------------------------------
     // Backend instantiation
@@ -232,6 +236,7 @@ module idma_inst64_top #(
                 .EnableCompute        ( EnableCompute               ),
                 .ComputeOps           ( ComputeOps                  ),
                 .ComputeTuning        ( ComputeTuning               ),
+                .TimingCuts           ( TimingCuts                  ),
                 .RAWCouplingAvail     ( 1'b0                        ),
                 .MaskInvalidData      ( 1'b0                        ),
                 .HardwareLegalizer    ( 1'b1                        ),
@@ -288,6 +293,7 @@ module idma_inst64_top #(
                 .EnableCompute        ( EnableCompute                 ),
                 .ComputeOps           ( ComputeOps                    ),
                 .ComputeTuning        ( ComputeTuning                 ),
+                .TimingCuts           ( TimingCuts                    ),
                 .RAWCouplingAvail     ( 1'b1                          ),
                 .MaskInvalidData      ( 1'b0                          ),
                 .HardwareLegalizer    ( 1'b1                          ),
@@ -562,10 +568,25 @@ module idma_inst64_top #(
         .en_default_idx_i ( 1'b1                                               ),
         .default_idx_i    ( idma_pkg::ToSoC                                              )
         );
+        cc_addr_decode #(
+        .NoIndices  ( NoIndices ),
+        .addr_t     ( addr_t           ),
+        .NoRules    ( NumAddrRules   ),
+        .rule_t     ( addr_rule_t      )
+        ) i_idma_scale_decode (
+        .addr_i           ( idma_fe_req_q.burst_req.scale_addr[AxiAddrWidth-1:0] ),
+        .addr_map_i       ( addr_map_i                                           ),
+        .idx_o            ( idx_scale                                            ),
+        .dec_valid_o      ( /* unused */                                         ),
+        .dec_error_o      ( /* unused */                                         ),
+        .en_default_idx_i ( 1'b1                                                 ),
+        .default_idx_i    ( idma_pkg::ToSoC                                      )
+        );
     end else begin : gen_no_tcdm_decode
         // Every address routes to AXI, so addr_map_i and the decode status are unused.
-        assign idx_src = idma_pkg::ToSoC;
-        assign idx_dst = idma_pkg::ToSoC;
+        assign idx_src   = idma_pkg::ToSoC;
+        assign idx_dst   = idma_pkg::ToSoC;
+        assign idx_scale = idma_pkg::ToSoC;
     end
 
 
@@ -680,7 +701,12 @@ module idma_inst64_top #(
                     // 3. wait for twod transfer to be accepted (ready)
                     // 4. send acc response (pvalid)
                     // 5. acknowledge acc request (qready)
-                    if (acc_res_ready) begin
+                    if (acc_res_ready && idma_fe_mx_refuse) begin
+                        // an illegal MX configuration is not launched: id 0 and the error bit
+                        acc_res.id      = acc_req_i.id;
+                        acc_res_valid   = 1'b1;
+                        acc_req_ready_o = 1'b1;
+                    end else if (acc_res_ready) begin
                         idma_fe_req_valid[idma_fe_sel_chan] = 1'b1;
                         if (idma_fe_req_ready[idma_fe_sel_chan]) begin
                             acc_res.id      = acc_req_i.id;
@@ -803,8 +829,20 @@ module idma_inst64_top #(
                     dma_op_name     = "DMUSER";
                 end
 
-                // latch the on-the-fly compute configuration, registered below
+                // latch the on-the-fly compute configuration (registered below) or a setter
                 idma_inst64_snitch_pkg::DMOPC : begin
+                    unique case (acc_req_i.data_arga[idma_inst64_compute_pkg::Rs1OpcByteLsb +:
+                                                     idma_inst64_compute_pkg::Rs1OpcByteWidth])
+                        idma_inst64_compute_pkg::OpcMxScaleAddr:
+                            idma_fe_req_d.burst_req.scale_addr = addr_t'(
+                                idma_inst64_compute_pkg::opc_mx_scale_addr(acc_req_i.data_arga,
+                                                                           acc_req_i.data_argb));
+                        idma_inst64_compute_pkg::OpcMxScaleStride:
+                            idma_fe_req_d.d_req[0].scale_strides = strides_t'(
+                                idma_inst64_compute_pkg::opc_mx_scale_stride(acc_req_i.data_arga,
+                                                                             acc_req_i.data_argb));
+                        default: ;
+                    endcase
                     acc_req_ready_o = 1'b1;
                     is_dma_op       = 1'b1;
                     dma_op_name     = "DMOPC";
@@ -868,11 +906,40 @@ module idma_inst64_top #(
     `FF(idma_fe_req_q, idma_fe_req_d, '0)
 
     // DMOPC persists across transfers until the next DMOPC; reset is a plain copy
-    assign idma_fe_dmopc = acc_req_valid_i & acc_req_ready_o &
-                           (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMOPC);
+    assign idma_fe_dmopc  = acc_req_valid_i & acc_req_ready_o &
+                            (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMOPC);
+    assign idma_fe_setter = idma_inst64_compute_pkg::opc_is_setter(
+                                acc_req_i.data_arga[idma_inst64_compute_pkg::Rs1OpcByteLsb +:
+                                                    idma_inst64_compute_pkg::Rs1OpcByteWidth]);
     `FFL(idma_fe_compute_q,
          idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
-         idma_fe_dmopc, '0)
+         idma_fe_dmopc & ~idma_fe_setter, '0)
+
+    // DMCPY refuses an unelaborated op and an illegal MX copy (snitch.md lists the cases)
+    logic idma_fe_mx_twod, idma_fe_op_bad, idma_fe_mx_bad, idma_fe_mx_port_obi;
+    assign idma_fe_mx_twod   = (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMCPYI) ?
+                               acc_req_i.data_op[21] : acc_req_i.data_argb[1];
+    assign idma_fe_op_bad    = (idma_fe_compute_q.op != idma_pkg::COMPUTE_NONE) &
+                               ~idma_pkg::compute_op_supported(ComputeOps, idma_fe_compute_q.op);
+    // the scale plane travels on the port of the plane it belongs to (dequant: source)
+    assign idma_fe_mx_port_obi =
+        ((idma_fe_compute_q.op inside {idma_pkg::COMPUTE_MXDEQUANT,
+                                       idma_pkg::COMPUTE_MXDEQUANT_FP16}) ?
+         idma_fe_req_d.burst_req.opt.src_protocol :
+         idma_fe_req_d.burst_req.opt.dst_protocol) == idma_pkg::OBI;
+    assign idma_fe_mx_bad    = ~idma_pkg::mx_elem_legal(idma_fe_compute_q.params.mx.elem_fmt) |
+                               (idma_fe_mx_port_obi != (idx_scale == idma_pkg::TCDMDMA)) |
+                               (idma_fe_req_q.burst_req.src_addr[OffsetWidth-1:0] != '0) |
+                               (idma_fe_req_q.burst_req.dst_addr[OffsetWidth-1:0] != '0) |
+                               ((acc_req_i.data_arga &
+                                 (idma_pkg::compute_in_bytes(idma_fe_compute_q.op) - 1)) != '0) |
+                               ~idma_pkg::compute_out_len_fits(idma_fe_compute_q.op,
+                                   64'(acc_req_i.data_arga), TFLenWidth) |
+                               (idma_fe_mx_twod & (idma_fe_req_q.d_req[0].reps > 'd1) &
+                                ((idma_fe_req_q.d_req[0].src_strides[OffsetWidth-1:0] != '0) |
+                                 (idma_fe_req_q.d_req[0].dst_strides[OffsetWidth-1:0] != '0)));
+    assign idma_fe_mx_refuse = idma_fe_compute_q.enable & (idma_fe_op_bad |
+                               (idma_pkg::compute_op_is_mx(idma_fe_compute_q.op) & idma_fe_mx_bad));
 
 
     //--------------------------------------
@@ -944,6 +1011,13 @@ module idma_inst64_top #(
     // Overlapping DMOPC fields alias onto each other and silently corrupt the decode.
     if (!idma_inst64_compute_pkg::LayoutDisjoint) begin : gen_compute_overlap_check
         $fatal(1, "idma_inst64_top: the DMOPC operand layout has overlapping fields");
+    end
+
+    // The DMOPC scale setters must keep the scale plane on its 64 B line by construction.
+    if ((32'd1 << idma_inst64_compute_pkg::MxScaleAddrUnitLog2) % idma_pkg::MxScaleSlotBytes != 0 ||
+        (32'd1 << idma_inst64_compute_pkg::MxScaleStrideUnitLog2) % idma_pkg::MxScaleSlotBytes != 0)
+    begin : gen_compute_scale_unit_check
+        $fatal(1, "idma_inst64_top: the DMOPC scale setters do not keep 64 B alignment");
     end
 
     // A compute op the RDL adds but DMOPC never encodes is unreachable, not a plain copy.

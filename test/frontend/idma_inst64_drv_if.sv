@@ -166,6 +166,20 @@ interface idma_inst64_drv_if #(
                   {{32{opcode[31]}}, opcode}, {{32{params[31]}}, params});
     endtask
 
+    /// DMOPC setter of the MX scale plane address (64 B units, `rs1[31:8]` low, `rs2` high)
+    task automatic dma_set_scale(input addr_t addr);
+        logic [63:0] a;
+        a = 64'(addr) >> idma_inst64_compute_pkg::MxScaleAddrUnitLog2;
+        dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxScaleAddr) |
+                            (32'(a[23:0]) << idma_inst64_compute_pkg::Rs1MxSaddrLoLsb),
+                        a[55:24]);
+    endtask
+
+    /// DMOPC setter of the ND scale plane stride (64 B units, signed)
+    task automatic dma_set_scale_stride(input logic [31:0] stride_lines);
+        dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxScaleStride), stride_lines);
+    endtask
+
     task automatic dma_set_strides(
         input logic [31:0] src_stride,
         input logic [31:0] dst_stride
@@ -192,6 +206,32 @@ interface idma_inst64_drv_if #(
                   length, {59'b0, channel, cfg});
         acc_get_rsp(item);
         transfer_id = item.data[31:0];
+    endtask
+
+    /// Register-form copy returning the raw response, for a launch the frontend refuses
+    task automatic dma_try_copy(
+        input  addr_t          length,
+        input  logic [1:0]     cfg,
+        input  logic [2:0]     channel,
+        output acc_rsp_item_t  item
+    );
+        acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMCPY), length, {59'b0, channel, cfg});
+        acc_get_rsp_raw(item);
+    endtask
+
+    /// Immediate-form copy returning the raw response, for a launch the frontend refuses
+    task automatic dma_try_copy_imm(
+        input  addr_t          length,
+        input  logic [1:0]     cfg,
+        input  logic [2:0]     channel,
+        output acc_rsp_item_t  item
+    );
+        logic [31:0] encoding;
+        encoding        = inst_encoding(idma_inst64_snitch_pkg::DMCPYI);
+        encoding[21:20] = cfg;
+        encoding[24:22] = channel;
+        acc_issue(encoding, length, 64'b0);
+        acc_get_rsp_raw(item);
     endtask
 
     /// Immediate-form copy; data_op[21:20] = cfg, data_op[24:22] = channel

@@ -5,19 +5,17 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-/// On-the-fly compute through the tightly-coupled `inst64` frontend. A `DMOPC` selects
-/// MX quantization, the following `DMCPY` is checked byte-exact against the DPI-C golden,
-/// and a second `DMOPC` returns the frontend to a plain copy. With `EnableTcdmObi` the TCDM
-/// legs then quantize into and dequantize out of the TCDM (OBI) window and transpose a padded
-/// edge tile into and out of it, so partial and all-zero write strobes reach the OBI port.
-/// `NegCase` 1 proves the unknown-opcode guard fires instead of silently degrading to a copy.
+/// inst64 DMOPC: MX quant to both planes byte-exact per group size, then a copy; NegCase 1 guard.
+/// With EnableTcdmObi, MX planes and a padded transpose tile also go into and out of the TCDM.
 module tb_idma_inst64_compute #(
     /// Elaborate the backend compute datapath; 0 must fail the golden compare
     parameter bit          EnableCompute = 1'b1,
-    /// Topology under test; 0 runs the AXI legs only
-    parameter bit          EnableTcdmObi = 1'b1,
+    /// Topology under test (1: TCDM over OBI); run with the matching monitor bind top
+    parameter bit          EnableTcdmObi = 1'b0,
     /// 0 runs the compute test; 1 latches an undecodable DMOPC byte
     parameter int unsigned NegCase       = 32'd0,
+    /// Compute ops of the DUT (idma_pkg::compute_enable_t bits)
+    parameter logic [3:0]  ComputeOpsMask = 4'hF,
     parameter int unsigned DMATracing    = idma_inst64_tb_pkg::DMATracing
 );
     import idma_inst64_tb_pkg::*;
@@ -26,40 +24,51 @@ module tb_idma_inst64_compute #(
     import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
     import "DPI-C" function void gm_mxdequant(input int num_blocks);
     import "DPI-C" function int  gm_get(input int idx);
+    import "DPI-C" function int  gm_get_scale(input int idx);
+    import "DPI-C" function void gm_load_scale(input int idx, input int val);
     import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
     idma_inst64_base #(
         .EnableCompute ( EnableCompute ),
         .EnableTcdmObi ( EnableTcdmObi ),
+        .ComputeOps    ( idma_pkg::compute_enable_t'(ComputeOpsMask) ),
         .DMATracing    ( DMATracing    )
     ) harness ();
 
     localparam int unsigned TimeoutCycles = 32'd200000;
 
-    // OCP MX geometry; the FP32 source granule is 128 B, the compressed block 33 B
+    // OCP MX geometry; the FP32 source granule is 128 B, a block 32 B of data and 1 B of scale
     localparam int unsigned NumBlocks   = 32'd8;
     localparam int unsigned BlkInBytes  = 32'd128;
-    localparam int unsigned BlkOutBytes = 32'd33;
     localparam int unsigned SrcBytes    = NumBlocks * BlkInBytes;
-    localparam int unsigned QuantBytes  = NumBlocks * BlkOutBytes;
+    localparam int unsigned QuantBytes  = NumBlocks * 33;
 
     localparam int unsigned GuardBytes = 32'd64;
+    // scale planes 6 and 10 x 64 B above the data plane, inside the sentinel window
+    localparam int unsigned PlScaleOff [2] = '{32'd6, 32'd10};
     localparam logic [7:0]  Sentinel   = 8'h5A;
+    localparam int unsigned HalfBeat   = AxiDataWidth / 16;
+    // highest scale address bit + 1 the DMOPC setter reaches
+    localparam int unsigned ScaleTop   = (AxiAddrWidth < 62) ? AxiAddrWidth : 62;
 
     // Outside the TCDM window in both topologies, so every endpoint decodes to AXI
     localparam addr_t SrcAddr   = 64'h8000_0000;
     localparam addr_t QuantAddr = 64'h9000_0000;
     localparam addr_t CopyAddr  = 64'hA000_0000;
 
-    // TCDM legs: dequant input must be a whole number of beats of blocks
+    // TCDM legs: two scale groups, the second partial, each plane in the TCDM and over AXI
     localparam int unsigned StrbBytes    = AxiDataWidth / 32'd8;
-    localparam int unsigned RtBlocks     = StrbBytes;
+    localparam int unsigned RtBlocks     = 32'd67;
     localparam int unsigned RtSrcBytes   = RtBlocks * BlkInBytes;
-    localparam int unsigned RtQuantBytes = RtBlocks * BlkOutBytes;
+    localparam int unsigned RtQuantBytes = RtBlocks * 32;
     localparam addr_t RtSrcAddr   = 64'hB000_0000;
     localparam addr_t TcdmQuant   = addr_t'(TcdmStart + 64'h0100);
+    localparam addr_t TcdmScale   = addr_t'(TcdmStart + 64'h1000);
     localparam addr_t TcdmDequant = addr_t'(TcdmStart + 64'h2000);
+    localparam addr_t TcdmFp32    = addr_t'(TcdmStart + 64'h8000);
     localparam addr_t AxiDequant  = 64'hC000_0000;
+    localparam addr_t AxiQuant    = 64'hC100_0000;
+    localparam addr_t AxiScale    = 64'hC200_0000;
 
     // Transpose leg: one padded FP32 tile, edges masked on both axes
     localparam int unsigned TpMode      = 32'd2;
@@ -98,45 +107,6 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
-    task automatic check_quant_payload();
-        logic [7:0] actual;
-        logic [7:0] expected;
-        for (int unsigned i = 0; i < QuantBytes; i++) begin
-            actual   = harness.mem_read_byte(QuantAddr + i);
-            expected = 8'(gm_get(int'(i)));
-            bytes_checked++;
-            if (actual !== expected) begin
-                if (errors < 10) begin
-                    $error("mxquant mismatch at %0d (blk%0d.%0d): expected 0x%02x, got 0x%02x",
-                           i, i/BlkOutBytes, i%BlkOutBytes, expected, actual);
-                end
-                errors++;
-            end
-            // a plain copy would land the source byte here instead
-            if (actual !== harness.mem_read_byte(SrcAddr + i)) bytes_differ++;
-        end
-    endtask
-
-    /// Everything past the compressed length must still hold the sentinel.
-    task automatic check_quant_extent();
-        logic [7:0] tail;
-        for (int unsigned i = QuantBytes; i < SrcBytes + GuardBytes; i++) begin
-            tail = harness.mem_read_byte(QuantAddr + i);
-            if (tail !== Sentinel) begin
-                if (errors < 20) $error("mxquant wrote past %0d B at +%0d: 0x%02x",
-                                        QuantBytes, i, tail);
-                errors++;
-            end
-        end
-        for (int unsigned i = 1; i <= GuardBytes; i++) begin
-            tail = harness.mem_read_byte(QuantAddr - i);
-            if (tail !== Sentinel) begin
-                $error("mxquant underrun at -%0d: 0x%02x", i, tail);
-                errors++;
-            end
-        end
-    endtask
-
     /// Latch a transpose DMOPC and read back what the frontend decoded.
     task automatic check_transpose_cfg(
         input logic [idma_inst64_compute_pkg::TpModeWidth-1:0] mode,
@@ -171,6 +141,86 @@ module tb_idma_inst64_compute #(
         end
     endtask
 
+    /// Latch an MX DMOPC and read back the decoded MX options.
+    task automatic check_mx_cfg(input logic [7:0] opc, input idma_pkg::mx_options_t exp);
+        idma_pkg::compute_options_t got;
+        harness.drv_if.dma_set_compute(
+            32'(opc) |
+                (32'(exp.poison_dis) << idma_inst64_compute_pkg::Rs1MxPoisonDisLsb) |
+                (32'(exp.rceil)      << idma_inst64_compute_pkg::Rs1MxRceilLsb) |
+                (32'(exp.elem_fmt)   << idma_inst64_compute_pkg::Rs1MxElemFmtLsb) |
+                (32'(exp.group)      << idma_inst64_compute_pkg::Rs1MxGroupLsb));
+        repeat (4) @(posedge harness.clk);
+        got = harness.i_dut.idma_fe_compute_q;
+        if (!got.enable || got.params.mx !== exp) begin
+            $error("DMOPC 0x%02x MX options: expected %h, got %h (enable=%0b)", opc, exp,
+                   got.params.mx, got.enable);
+            errors++;
+        end
+    endtask
+
+    /// Latch a scale address and stride with the DMOPC setters and read back the frontend state.
+    task automatic check_scale_cfg(input addr_t saddr, input logic [31:0] stride_lines);
+        addr_t got_a;
+        addr_t got_s;
+        harness.drv_if.dma_set_scale(saddr);
+        harness.drv_if.dma_set_scale_stride(stride_lines);
+        repeat (4) @(posedge harness.clk);
+        got_a = harness.i_dut.idma_fe_req_q.burst_req.scale_addr;
+        got_s = harness.i_dut.idma_fe_req_q.d_req[0].scale_strides;
+        if (got_a !== saddr) begin
+            $error("DMOPC scale address: expected %h, got %h", saddr, got_a);
+            errors++;
+        end
+        if (got_s !== addr_t'($signed(stride_lines)) << 6) begin
+            $error("DMOPC scale stride: expected %h lines, got %h B", stride_lines, got_s);
+            errors++;
+        end
+    endtask
+
+    /// Data plane at `QuantAddr`, scale plane `soff` x 64 B above, the rest still sentinel.
+    task automatic check_planar_payload(input int unsigned soff);
+        bytes_checked = 0;
+        bytes_differ  = 0;
+        for (int unsigned k = 0; k < NumBlocks; k++) begin
+            for (int unsigned i = 0; i < 33; i++) begin
+                automatic addr_t a = (i == 0) ? QuantAddr + soff * 64 + k
+                                              : QuantAddr + k * 32 + i - 1;
+                automatic logic [7:0] e = (i == 0) ? 8'(gm_get_scale(int'(k)))
+                                                   : 8'(gm_get(int'(k * 32 + i - 1)));
+                bytes_checked++;
+                if (harness.mem_read_byte(a) !== e) begin
+                    if (errors < 10) $error("planar mismatch blk%0d.%0d at %0h: 0x%02x exp 0x%02x",
+                                            k, i, a, harness.mem_read_byte(a), e);
+                    errors++;
+                end
+                // a plain copy would land the source byte here instead
+                if (harness.mem_read_byte(a) !== harness.mem_read_byte(SrcAddr + a - QuantAddr))
+                    bytes_differ++;
+            end
+        end
+        for (int unsigned i = NumBlocks * 32; i < soff * 64; i++)
+            if (harness.mem_read_byte(QuantAddr + i) !== Sentinel) begin
+                if (errors < 20) $error("planar data plane overrun at +%0d", i);
+                errors++;
+            end
+        for (int unsigned i = soff * 64 + NumBlocks; i < SrcBytes + GuardBytes; i++)
+            if (harness.mem_read_byte(QuantAddr + i) !== Sentinel) begin
+                if (errors < 20) $error("planar scale plane overrun at +%0d", i);
+                errors++;
+            end
+        for (int unsigned i = 1; i <= GuardBytes; i++)
+            if (harness.mem_read_byte(QuantAddr - i) !== Sentinel) begin
+                if (errors < 20) $error("mxquant underrun at -%0d", i);
+                errors++;
+            end
+        // A bypassed compute path leaves the source bytes; name that instead of a diff dump.
+        if (bytes_differ == 0)
+            $fatal(1, "quantized planes are byte-identical to the source: compute did not run");
+        if (bytes_checked != QuantBytes)
+            $fatal(1, "compare loop ran %0d times, expected %0d", bytes_checked, QuantBytes);
+    endtask
+
     task automatic check_copy_payload();
         logic [7:0] actual;
         logic [7:0] expected;
@@ -199,6 +249,7 @@ module tb_idma_inst64_compute #(
         logic [63:0] next_id_before;
         logic [63:0] next_id_opc;
         logic [63:0] next_id_after;
+        acc_rsp_item_t refused;
 
         @(posedge harness.rst_n);
         repeat (10) @(posedge harness.clk);
@@ -226,6 +277,27 @@ module tb_idma_inst64_compute #(
         $display("[TB] DMOPC transpose operands round-trip over the full %0d-bit range",
                  idma_pkg::TransposeDimWidth);
 
+        // Walking ones over every MX option bit above the reserved ones, both quant opcodes
+        for (int unsigned i = idma_pkg::MxOptResvWidth; i < $bits(idma_pkg::mx_options_t); i++)
+        begin
+            check_mx_cfg(8'(idma_inst64_compute_pkg::OpcMxQuant),
+                         idma_pkg::mx_options_t'(1 << i));
+            check_mx_cfg(8'(idma_inst64_compute_pkg::OpcMxQuantFp16),
+                         idma_pkg::mx_options_t'(~(1 << i) &
+                                                 ~((1 << idma_pkg::MxOptResvWidth) - 1)));
+        end
+        if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC MX option decode errors", errors);
+        $display("[TB] DMOPC MX options round-trip over all %0d option bits",
+                 $bits(idma_pkg::mx_options_t) - idma_pkg::MxOptResvWidth);
+
+        // Walking ones over every scale address bit DMOPC carries (64 B lines, 62-bit space)
+        for (int unsigned i = 6; i < ScaleTop; i++)
+            check_scale_cfg(addr_t'(1) << i, 32'(1) << (i % 32));
+        check_scale_cfg(addr_t'({(ScaleTop-6){1'b1}}) << 6, 32'hFFFF_FFFF);
+        if (errors != 0) $fatal(1, "TEST FAILED: %0d DMOPC scale setter errors", errors);
+        $display("[TB] DMOPC scale address and stride round-trip over %0d address bits",
+                 ScaleTop - 6);
+
         $display("[TB] inst64 DMOPC mxquant (EnableCompute=%0d, EnableTcdmObi=%0d): %0d B -> %0d B",
                  EnableCompute, EnableTcdmObi, SrcBytes, QuantBytes);
         seed_source();
@@ -234,6 +306,7 @@ module tb_idma_inst64_compute #(
 
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_before);
 
+        harness.drv_if.dma_set_scale(QuantAddr + PlScaleOff[0] * 64);
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
         // DMOPC only latches state; it must not launch a transfer of its own
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_opc);
@@ -246,17 +319,84 @@ module tb_idma_inst64_compute #(
         harness.drv_if.dma_set_dest(QuantAddr);
         harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, quant_id);
         harness.drv_if.dma_wait(quant_id, 3'd0);
+        check_planar_payload(PlScaleOff[0]);
 
-        check_quant_payload();
-        check_quant_extent();
+        // The same blocks in scale groups of 32, scale plane further up
+        poison_destination(QuantAddr);
+        harness.drv_if.dma_set_scale(QuantAddr + PlScaleOff[1] * 64);
+        harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant) |
+            (32'(idma_pkg::MX_GROUP_G32) << idma_inst64_compute_pkg::Rs1MxGroupLsb));
+        harness.drv_if.dma_set_dest(QuantAddr);
+        harness.drv_if.dma_start_copy(addr_t'(SrcBytes), 2'b00, 3'd0, quant_id);
+        harness.drv_if.dma_wait(quant_id, 3'd0);
+        check_planar_payload(PlScaleOff[1]);
 
-        // A bypassed compute path leaves the source bytes; name that instead of a diff dump.
-        if (bytes_differ == 0) begin
-            $fatal(1, "quantized block is byte-identical to the source: compute did not run");
+        // A reserved element format is refused at DMCPY: id 0, error set, nothing written
+        poison_destination(QuantAddr);
+        for (int unsigned f = 2; f < 4; f++) begin
+            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant) |
+                (32'(f) << idma_inst64_compute_pkg::Rs1MxElemFmtLsb));
+            harness.drv_if.dma_try_copy(addr_t'(SrcBytes), 2'b00, 3'd0, refused);
+            if (!refused.error || refused.data !== '0) begin
+                $error("elem_fmt %0d: DMCPY not refused (error=%0b id=%0d)", f, refused.error,
+                       refused.data);
+                errors++;
+            end
         end
-        if (bytes_checked != QuantBytes) begin
-            $fatal(1, "compare loop ran %0d times, expected %0d", bytes_checked, QuantBytes);
+        // every other MX launch refusal of the frontend
+        for (int unsigned c = 0; c < 11; c++) begin
+            automatic addr_t       src = SrcAddr, dst = QuantAddr, len = addr_t'(SrcBytes);
+            automatic logic [31:0] sst = 'h1000, dst_st = 'h1000;
+            automatic logic [1:0]  cfg = 2'b00;
+            automatic logic [7:0]  opc = 8'(idma_inst64_compute_pkg::OpcMxQuant);
+            if (c inside {[6:8]} && !EnableTcdmObi) continue;
+            if (c == 9 && ComputeOpsMask[0]) continue;
+            unique case (c)
+                0: src = SrcAddr + HalfBeat;
+                1: dst = QuantAddr + HalfBeat;
+                2: len = addr_t'(SrcBytes - BlkInBytes / 2);
+                3: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
+                4: begin cfg = 2'b10; dst_st = 'h1000 + HalfBeat; end
+                5: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
+                6: begin
+                    opc = 8'(idma_inst64_compute_pkg::OpcMxDequant);
+                    src = addr_t'(idma_inst64_tb_pkg::TcdmStart);
+                end
+                7: dst = addr_t'(idma_inst64_tb_pkg::TcdmStart);
+                8: harness.drv_if.dma_set_scale(addr_t'(idma_inst64_tb_pkg::TcdmStart));
+                9: opc = 8'(idma_inst64_compute_pkg::OpcMxQuantFp16);
+                10: begin
+                    opc = 8'(idma_inst64_compute_pkg::OpcMxDequant);
+                    len = addr_t'(1) << 62;
+                end
+                default: ;
+            endcase
+            harness.drv_if.dma_set_compute(32'(opc));
+            harness.drv_if.dma_set_source(src);
+            harness.drv_if.dma_set_dest(dst);
+            harness.drv_if.dma_set_strides(sst, dst_st);
+            harness.drv_if.dma_set_reps(32'd2);
+            if (c == 5) harness.drv_if.dma_try_copy_imm(len, cfg, 3'd0, refused);
+            else        harness.drv_if.dma_try_copy(len, cfg, 3'd0, refused);
+            if (!refused.error || refused.data !== '0) begin
+                $error("MX launch check %0d: DMCPY not refused (error=%0b id=%0d)", c,
+                       refused.error, refused.data);
+                errors++;
+            end
+            harness.drv_if.dma_set_scale(QuantAddr + PlScaleOff[1] * 64);
         end
+        harness.drv_if.dma_set_source(SrcAddr);
+        harness.drv_if.dma_set_strides('0, '0);
+        harness.drv_if.dma_set_reps(32'd1);
+        repeat (200) @(posedge harness.clk);
+        for (int unsigned i = 0; i < SrcBytes + GuardBytes; i++)
+            if (harness.mem_read_byte(QuantAddr - GuardBytes + i) !== Sentinel) begin
+                if (errors < 20) $error("refused DMCPY wrote at %0d", i);
+                errors++;
+            end
+        $display("[TB] DMCPY refused: reserved MX format, plane off a beat%s, partial block%s",
+                 EnableTcdmObi ? " or a scale plane off its data plane's port" : "",
+                 ComputeOpsMask[0] ? "" : ", FP16 quant not elaborated");
 
         // Back to a plain copy: the latched op must not leak into the next transfer
         harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));
@@ -267,8 +407,8 @@ module tb_idma_inst64_compute #(
         check_copy_payload();
 
         harness.drv_if.dma_poll_status(2'b01, 3'd0, next_id_after);
-        if (next_id_after !== next_id_before + 2) begin
-            $fatal(1, "next_id moved %0d -> %0d, expected exactly two transfers",
+        if (next_id_after !== next_id_before + 3) begin
+            $fatal(1, "next_id moved %0d -> %0d, expected exactly three transfers",
                    next_id_before, next_id_after);
         end
         if (harness.drv_if.rsp_pending() != 0) begin
@@ -336,36 +476,109 @@ module tb_idma_inst64_compute #(
             end
         endtask
 
-        /// AXI FP32 -> TCDM MXFP8, TCDM -> TCDM FP32, TCDM -> AXI FP32
+        /// Compare [base, base+n) to the golden scale plane and a guard band either side
+        task automatic check_scale(input string what, input addr_t base, input int unsigned n);
+            for (int unsigned k = 0; k < n; k++) begin
+                if (rd_byte(base + k) !== 8'(gm_get_scale(int'(k)))) begin
+                    if (errors < 20) $error("%s scale %0d: expected 0x%02x, got 0x%02x", what, k,
+                                            8'(gm_get_scale(int'(k))), rd_byte(base + k));
+                    errors++;
+                end
+            end
+            for (int unsigned i = 1; i <= GuardBytes; i++) begin
+                if (rd_byte(base - i) !== Sentinel || rd_byte(base + n + i - 1) !== Sentinel) begin
+                    if (errors < 20) $error("%s scale guard band clobbered at +/-%0d", what, i);
+                    errors++;
+                end
+            end
+        endtask
+
+        /// One MX DMCPY with its scale plane
+        task automatic run_mx(input logic [7:0] opc, input addr_t src, input addr_t dst,
+                              input addr_t scl, input int unsigned len);
+            harness.drv_if.dma_set_scale(scl);
+            harness.drv_if.dma_set_compute(32'(opc));
+            run_copy(src, dst, len);
+        endtask
+
+        /// Quant both ways across the TCDM, then dequant out of and into it
         task automatic check_mx_tcdm();
             logic [31:0] w;
             for (int unsigned el = 0; el < RtBlocks * 32; el++) begin
                 w = 32'(gm_stim_fp32(int'(el), int'(RtBlocks * 32), 1));
                 for (int unsigned b = 0; b < 4; b++) begin
                     wr_byte(RtSrcAddr + el*4 + b, w[b*8 +: 8]);
+                    wr_byte(TcdmFp32 + el*4 + b, w[b*8 +: 8]);
                     gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
                 end
             end
             gm_mxquant_fp32(int'(RtBlocks));
             fill(TcdmQuant - GuardBytes, RtQuantBytes + 2*GuardBytes, Sentinel);
-            fill(TcdmDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
-            fill(AxiDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            fill(TcdmScale - GuardBytes, RtBlocks + 2*GuardBytes, Sentinel);
+            fill(AxiQuant - GuardBytes, RtQuantBytes + 2*GuardBytes, Sentinel);
+            fill(AxiScale - GuardBytes, RtBlocks + 2*GuardBytes, Sentinel);
 
-            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
-            run_copy(RtSrcAddr, TcdmQuant, RtSrcBytes);
+            run_mx(idma_inst64_compute_pkg::OpcMxQuant, RtSrcAddr, TcdmQuant, TcdmScale,
+                   RtSrcBytes);
             check_golden("mxquant AXI->TCDM", TcdmQuant, RtQuantBytes);
+            check_scale("mxquant AXI->TCDM", TcdmScale, RtBlocks);
+            run_mx(idma_inst64_compute_pkg::OpcMxQuant, TcdmFp32, AxiQuant, AxiScale, RtSrcBytes);
+            check_golden("mxquant TCDM->AXI", AxiQuant, RtQuantBytes);
+            check_scale("mxquant TCDM->AXI", AxiScale, RtBlocks);
 
             for (int unsigned i = 0; i < RtQuantBytes; i++) begin
                 gm_load(int'(i), int'(rd_byte(TcdmQuant + i)));
             end
+            for (int unsigned k = 0; k < RtBlocks; k++) begin
+                gm_load_scale(int'(k), int'(rd_byte(TcdmScale + k)));
+            end
             gm_mxdequant(int'(RtBlocks));
-            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxDequant));
-            run_copy(TcdmQuant, TcdmDequant, RtQuantBytes);
+            fill(TcdmDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            fill(AxiDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            run_mx(idma_inst64_compute_pkg::OpcMxDequant, TcdmQuant, TcdmDequant, TcdmScale,
+                   RtQuantBytes);
             check_golden("mxdequant TCDM->TCDM", TcdmDequant, RtSrcBytes);
-            run_copy(TcdmQuant, AxiDequant, RtQuantBytes);
+            run_mx(idma_inst64_compute_pkg::OpcMxDequant, TcdmQuant, AxiDequant, TcdmScale,
+                   RtQuantBytes);
             check_golden("mxdequant TCDM->AXI", AxiDequant, RtSrcBytes);
-            $display("[TB] MX over the TCDM: %0d blocks quantized into and dequantized out of OBI",
+            fill(TcdmDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            run_mx(idma_inst64_compute_pkg::OpcMxDequant, AxiQuant, TcdmDequant, AxiScale,
+                   RtQuantBytes);
+            check_golden("mxdequant AXI->TCDM", TcdmDequant, RtSrcBytes);
+            $display("[TB] MX over the TCDM: %0d blocks quantized and dequantized on both ports",
                      RtBlocks);
+        endtask
+
+        /// A non-zero user moves a quant to AXI: its scale plane must decode outside the TCDM too
+        task automatic check_mx_user();
+            acc_rsp_item_t r;
+            for (int unsigned i = 0; i < RtSrcBytes; i++)
+                gm_load(int'(i), int'(rd_byte(RtSrcAddr + i)));
+            gm_mxquant_fp32(int'(RtBlocks));
+            harness.drv_if.dma_set_user(64'h1);
+            harness.drv_if.dma_set_scale(TcdmScale);
+            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
+            harness.drv_if.dma_set_source(RtSrcAddr);
+            harness.drv_if.dma_set_dest(TcdmQuant);
+            harness.drv_if.dma_try_copy(addr_t'(RtSrcBytes), 2'b00, 3'd0, r);
+            if (!r.error || r.data !== '0) begin
+                $error("user quant with a TCDM scale plane not refused (error=%0b id=%0d)",
+                       r.error, r.data);
+                errors++;
+            end
+            for (int unsigned i = 0; i < RtQuantBytes + 2*GuardBytes; i++)
+                harness.mem_write_byte(TcdmQuant - GuardBytes + i, Sentinel);
+            fill(AxiScale - GuardBytes, RtBlocks + 2*GuardBytes, Sentinel);
+            run_mx(idma_inst64_compute_pkg::OpcMxQuant, RtSrcAddr, TcdmQuant, AxiScale, RtSrcBytes);
+            harness.drv_if.dma_set_user(64'h0);
+            for (int unsigned i = 0; i < RtQuantBytes; i++) begin
+                if (harness.mem_read_byte(TcdmQuant + i) !== 8'(gm_get(int'(i)))) begin
+                    if (errors < 20) $error("user quant data %0d not on AXI", i);
+                    errors++;
+                end
+            end
+            check_scale("user quant", AxiScale, RtBlocks);
+            $display("[TB] MX quant with a non-zero user: TCDM scale refused, planes on AXI");
         endtask
 
         /// A padded tile transposed with M and N short of NE: rows past N are all-zero strobes
@@ -412,6 +625,7 @@ module tb_idma_inst64_compute #(
         initial begin : tcdm_sequence
             wait (axi_done);
             check_mx_tcdm();
+            check_mx_user();
             check_transpose("AXI->TCDM", TpAxiSrc, TpTcdmDst);
             check_transpose("TCDM->AXI", TpTcdmSrc, TpAxiDst);
             harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));
@@ -426,4 +640,13 @@ module tb_idma_inst64_compute #(
         $fatal(1, "simulation timeout after %0d cycles", TimeoutCycles);
     end
 
+endmodule
+
+/// Monitor bind tops: `tb_idma_inst64_mon_axi` for the AXI topology, `_obi` for EnableTcdmObi
+module tb_idma_inst64_mon_axi;
+`include "include/tb_idma_mx_axi_mon_bind.svh"
+endmodule
+
+module tb_idma_inst64_mon_obi;
+`IDMA_MX_AXI_MON_BIND(idma_backend_r_init_rw_axi_rw_obi)
 endmodule

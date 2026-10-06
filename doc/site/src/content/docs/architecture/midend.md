@@ -39,6 +39,7 @@ typedef struct packed {
     reps_t    reps;         // Number of repetitions for this dimension
     strides_t src_strides;  // Source address stride (bytes)
     strides_t dst_strides;  // Destination address stride (bytes)
+    strides_t scale_strides;  // MX scale plane address stride (bytes, a multiple of 64)
 } idma_d_req_t;
 
 `IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)
@@ -48,6 +49,10 @@ typedef struct packed {
     idma_d_req_t [NumDim-2:0] d_req;           // Per-dimension descriptors
 } idma_nd_req_t;
 ```
+
+The midend steps `burst_req.scale_addr` with `scale_strides` exactly as it steps the source and
+destination addresses, so an MX transfer's rows each get their own scale plane (see
+[MX planes](../compute/#mx-planes)).
 
 ### Worked Example: 2D Transfer
 

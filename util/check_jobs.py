@@ -15,8 +15,8 @@ still describe the same design:
   c) every testbench and synth_top named by jobs.json exists in the sources,
   d) the workflow fans out over every backend id,
   e) every negative-test case the testbench defines is either run or named as
-     skipped, and every legalizer compute guard is either proven to fire by some
-     case or named as untested. Without (e) a new case or a new guard is added to
+     skipped, and every compute guard of the generated legalizers is either proven
+     to fire by some case or named as untested. Without (e) a new case or a new guard is added to
      the design and silently exercised by nothing.
 
 The simulation matrix is not checked: CI fans it out over jobs/jobs.json, the
@@ -67,8 +67,8 @@ def main():
                      help='jobs/jobs.json; the run set and its named exclusions')
     par.add_argument('--mxneg-tb', default=None,
                      help='negative-test testbench; its case labels must all be accounted for')
-    par.add_argument('--mxneg-guard-src', default=None,
-                     help='source declaring the compute guards, e.g. the legalizer template')
+    par.add_argument('--mxneg-guard-src', default=None, nargs='+',
+                     help='sources declaring the compute guards: the generated legalizers')
     args = par.parse_args()
 
     patterns = args.source or ['target/rtl/*.sv', 'src/**/*.sv', 'test/**/*.sv']
@@ -177,20 +177,22 @@ def main():
                               'case'.format(name))
 
     if args.mxneg_guard_src and db:
-        with open(args.mxneg_guard_src, 'r', errors='replace') as handle:
-            guard_text = handle.read()
-        declared = set(re.findall(r'`ASSERT_NEVER\(\s*(Compute\w+)', guard_text))
+        declared = set()
+        for src in args.mxneg_guard_src:
+            with open(src, 'r', errors='replace') as handle:
+                declared |= set(re.findall(r'`ASSERT_NEVER\(\s*(Compute\w+)', handle.read()))
+        guard_src = ' '.join(os.path.basename(src) for src in args.mxneg_guard_src)
         tested = {r['token'] for r in mxneg.get('runs', []) if r.get('token')}
         waived = {e['guard'] for e in db.get('guards_untested', [])}
         for guard in sorted(declared - tested - waived):
             errors.append('{}: guard {} has no negative test and is not named in '
-                          'guards_untested'.format(args.mxneg_guard_src, guard))
+                          'guards_untested'.format(guard_src, guard))
         for guard in sorted(waived - declared):
             errors.append('guard {} is named in guards_untested but is not declared in '
-                          '{}'.format(guard, args.mxneg_guard_src))
+                          '{}'.format(guard, guard_src))
         for guard in sorted(tested - declared):
             errors.append('guard {} is claimed by a mxneg run but is not declared in '
-                          '{}'.format(guard, args.mxneg_guard_src))
+                          '{}'.format(guard, guard_src))
 
     for message in errors:
         print('error: ' + message)

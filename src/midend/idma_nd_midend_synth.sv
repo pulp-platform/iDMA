@@ -367,6 +367,7 @@ module idma_nd_midend_synth #(
     assign nd_req.burst_req.opt.beo.decouple_aw    = req_decouple_aw_i;
     assign nd_req.burst_req.opt.last               = req_last_i;
     assign nd_req.burst_req.opt.compute            = '0;
+    assign nd_req.burst_req.scale_addr             = '0;
 
     for (genvar d = 0; d < NumDim-1; d++) begin : gen_nd_connect
         // local signal
@@ -374,6 +375,7 @@ module idma_nd_midend_synth #(
         assign d_req.reps        = req_reps_i[d];
         assign d_req.src_strides = req_src_strides_i[d];
         assign d_req.dst_strides = req_dst_strides_i[d];
+        assign d_req.scale_strides = '0;
         // connection
         assign nd_req.d_req[d]   = d_req;
     end

@@ -24,12 +24,14 @@ A thin wrapper (`src/frontend/reg/tpl/idma_reg.sv.tpl`, rendered by MARIO for th
 | `NumRegs` | 1 | Number of configuration register ports (parallel access points) |
 | `NumStreams` | 1 | Number of independent DMA streams (max 16). Each stream has its own transfer ID counter |
 | `IdCounterWidth` | 32 | Width of the transfer ID counter (max 32-bit) |
+| `DataWidth` | 512 | Backend data width; MX data planes, strides and lengths are checked against its beats |
+| `ComputeOps` | all | Compute ops of the backend (`idma_pkg::compute_enable_t`); a launch of any other op is refused |
 
 ## Programming Sequence
 
 1. **Write transfer parameters**: Set `src_addr`, `length`, `dst_addr`, and optionally `reps`/`src_stride`/`dst_stride` for 2D mode
 2. **Write configuration**: Set `conf` with the desired decouple flags, protocol selection, and ND mode enable. For an on-the-fly compute transfer also set `compute_cfg` (see below). Stream selection is implicit in which `next_id[stream]` register you read in the next step
-3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID (0 if the transfer was not set up correctly)
+3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID. It returns 0 and launches nothing if the transfer is not set up correctly: a compute op that `ComputeOps` does not name (reserved op codes included), or an MX launch that breaks a rule of [MX Scale Plane Registers](#mx-scale-plane-registers)
 4. **Poll `done_id[stream]`**: Wait until `done_id >= next_id` to confirm completion
 
 :::caution[Side-effect read]
@@ -41,7 +43,7 @@ Reading the `next_id` register has a side effect - it atomically samples the con
 The register file provides direct access to all fields of the `idma_req_t` / `idma_nd_req_t` structs. Software writes the transfer parameters, then reads `next_id` to atomically submit the request:
 
 :::note[32-bit registers]
-Registers are 32 bits wide. 64-bit values (addresses, lengths, strides) occupy a `[SysAddrWidth/32]` array of 32-bit words (a low/high pair on a 64-bit system, e.g. `dst_addr[0]`/`dst_addr[1]`). The simplified names in the table below refer to the logical fields; the address-map package (`target/rtl/idma_reg64_2d_addrmap_pkg.sv`) and the PeakRDL HTML register description hold exact offsets and bit layouts. On the 64-bit map `dst_addr` starts at `0xD0`, followed by `src_addr` and `length`.
+Registers are 32 bits wide. 64-bit values (addresses, lengths, strides) occupy a `[SysAddrWidth/32]` array of 32-bit words (a low/high pair on a 64-bit system, e.g. `dst_addr[0]`/`dst_addr[1]`). The simplified names in the tables below refer to the logical fields; the offsets of every variant are in [Offsets](#offsets).
 :::
 
 **Transfer Parameters** - set these before launching a transfer:
@@ -76,30 +78,100 @@ Registers are 32 bits wide. 64-bit values (addresses, lengths, strides) occupy a
 
 ### Configuration Register (`conf`)
 
-| Bits | Field | Description |
-|------|-------|-------------|
-| 0 | `decouple_aw` | Enable R-AW coupling (hold write addresses until read data arrives) |
-| 1 | `decouple_rw` | Fully decouple read and write channels |
-| 2 | `src_reduce_len` | Shorten source bursts beyond page-boundary splitting |
-| 3 | `dst_reduce_len` | Shorten destination bursts |
-| 6:4 | `src_max_llen` | Max source burst length as log2(beats) |
-| 9:7 | `dst_max_llen` | Max destination burst length as log2(beats) |
-| 10 | `enable_nd` | Enable ND mode (use previously set `reps`/`src_stride`/`dst_stride`) |
-| 13:11 | `src_protocol` | Source protocol select (`protocol_e` enum) |
-| 16:14 | `dst_protocol` | Destination protocol select (`protocol_e` enum) |
+The bit positions of `enable_nd` and the protocol fields depend on the number of dimensions.
+
+<!-- BEGIN GENERATED reg_conf -->
+| Bits `reg32_3d` | Bits `reg64_1d` | Bits `reg64_2d` | Field | Description |
+|---|---|---|---|---|
+| 0 | 0 | 0 | `decouple_aw` | R-AW coupling: hold write addresses until the read data arrives |
+| 1 | 1 | 1 | `decouple_rw` | Fully decouple the read and write channels |
+| 2 | 2 | 2 | `src_reduce_len` | Shorten source bursts to src_max_llen |
+| 3 | 3 | 3 | `dst_reduce_len` | Shorten destination bursts to dst_max_llen |
+| 6:4 | 6:4 | 6:4 | `src_max_llen` | Maximal source burst length as log2(beats) |
+| 9:7 | 9:7 | 9:7 | `dst_max_llen` | Maximal destination burst length as log2(beats) |
+| 12:10 | 10 | 11:10 | `enable_nd` | Dimensions in use beyond the first (0: 1D) |
+| 15:13 | 13:11 | 14:12 | `src_protocol` | Source protocol (idma_pkg::protocol_e) |
+| 18:16 | 16:14 | 17:15 | `dst_protocol` | Destination protocol (idma_pkg::protocol_e) |
+<!-- END GENERATED reg_conf -->
 
 ### Compute Configuration Register (`compute_cfg`)
 
 Present when on-the-fly [compute](../compute/) is elaborated (`EnableCompute`). The fields are sampled together with the transfer parameters when `next_id` is read. Leave `compute_enable` at 0 for a plain copy.
 
+<!-- BEGIN GENERATED reg_compute_cfg -->
 | Bits | Field | Description |
 |------|-------|-------------|
-| 0 | `compute_enable` | Enable on-the-fly compute for the launched transfer |
-| 4:1 | `compute_op` | Op selector (`idma_pkg::compute_op_e`): `transpose`, `mxquant`, `mxquant_fp16`, `mxdequant`, `mxdequant_fp16` |
-| 6:5 | `transpose_mode` | Transpose element size: `1 << transpose_mode` bytes (8/16/32/64 bit) |
-| 18:7 | `transpose_tensor_m` | Transpose M dimension in elements (non-zero when transpose enabled) |
-| 30:19 | `transpose_tensor_n` | Transpose N dimension in elements (non-zero when transpose enabled) |
-| 31 | - | Reserved |
+| 0 | `compute_enable` | Enable on-the-fly compute for the launched transfer. |
+| 4:1 | `compute_op` | Compute operation selector (idma_pkg::compute_op_e). |
+| 6:5 | `transpose_mode` | Transpose element-size mode. The element size is 1 << transpose_mode bytes, encoding 8b, 16b, 32b, and 64b elements. |
+| 18:7 | `transpose_tensor_m` | Transpose tensor M dimension in elements. Must be non-zero when transpose is enabled. |
+| 30:19 | `transpose_tensor_n` | Transpose tensor N dimension in elements. Must be non-zero when transpose is enabled. |
+| 31 | `transpose_compact` | Use compact row-major output storage. When clear, transpose uses the legacy tile-padded layout. |
+<!-- END GENERATED reg_compute_cfg -->
+
+### MX Configuration Register (`mx_cfg`)
+
+Follows `compute_cfg` and is sampled with it; used when `compute_op` is an MX op.
+
+<!-- BEGIN GENERATED reg_mx_cfg -->
+| Bits | Field | Description |
+|------|-------|-------------|
+| 0 | `mx_poison_dis` | Keep Inf/NaN blocks finite instead of poisoning them (0xFF scale, NaN lanes) |
+| 1 | `mx_rceil` | Round the block scale up (RCEIL) instead of down (FLOOR). |
+| 3:2 | `mx_elem_fmt` | MX element format (0: E5M2, 1: E4M3; 2 E2M1 and 3 reserved). |
+| 4 | `mx_group` | Blocks per scale group; a group's scale bytes move as one chunk. |
+| 31:5 | - | Reserved |
+<!-- END GENERATED reg_mx_cfg -->
+
+See [MX planes](../../compute/#mx-planes) for the data and scale plane layout.
+
+### MX Scale Plane Registers
+
+| Register | Access | Description |
+|----------|--------|-------------|
+| `scale_addr` | R/W | Scale plane address of the next MX transfer, 64 B aligned; sampled with `compute_cfg` |
+| `mx_dim[d].scale_stride` | R/W | ND only: scale plane stride of dimension `d`, a multiple of 64 B, applied as `dim[d]` applies its strides |
+
+An MX launch is refused (`next_id` reads 0 and no transfer starts) when it carries a reserved
+element format, its scale plane or a used dimension's scale stride is off a 64 B line, its data
+planes or a used dimension's source or destination stride are off a beat of the frontend's
+`DataWidth` parameter (default 512 bit), its length is not a whole number of blocks, or its
+written length (a dequant writes 4x or 2x its length) does not fit the length field.
+
+### Offsets
+
+Byte offsets in the three frontend variants; a 64-bit value is a `[0]`/`[1]` word pair.
+
+<!-- BEGIN GENERATED reg_map -->
+| Register | `reg32_3d` | `reg64_1d` | `reg64_2d` |
+|---|---|---|---|
+| `conf` | `0x000` | `0x000` | `0x000` |
+| `status[0..15]` | `0x004` | `0x004` | `0x004` |
+| `next_id[0..15]` | `0x044` | `0x044` | `0x044` |
+| `done_id[0..15]` | `0x084` | `0x084` | `0x084` |
+| `dst_addr[0]` | `0x0D0` | `0x0D0` | `0x0D0` |
+| `dst_addr[1]` | - | `0x0D4` | `0x0D4` |
+| `src_addr[0]` | `0x0D4` | `0x0D8` | `0x0D8` |
+| `src_addr[1]` | - | `0x0DC` | `0x0DC` |
+| `length[0]` | `0x0D8` | `0x0E0` | `0x0E0` |
+| `length[1]` | - | `0x0E4` | `0x0E4` |
+| `dim[0].dst_stride[0]` | `0x0E0` | - | `0x100` |
+| `dim[0].dst_stride[1]` | - | - | `0x104` |
+| `dim[0].src_stride[0]` | `0x0E4` | - | `0x108` |
+| `dim[0].src_stride[1]` | - | - | `0x10C` |
+| `dim[0].reps[0]` | `0x0E8` | - | `0x110` |
+| `dim[0].reps[1]` | - | - | `0x114` |
+| `compute_cfg` | `0x0F8` | `0x118` | `0x118` |
+| `mx_cfg` | `0x0FC` | `0x11C` | `0x11C` |
+| `scale_addr[0]` | `0x100` | `0x120` | `0x120` |
+| `scale_addr[1]` | - | `0x124` | `0x124` |
+| `mx_dim[0].scale_stride[0]` | `0x104` | - | `0x128` |
+| `mx_dim[0].scale_stride[1]` | - | - | `0x12C` |
+| `dim[1].dst_stride[0]` | `0x0EC` | - | - |
+| `dim[1].src_stride[0]` | `0x0F0` | - | - |
+| `dim[1].reps[0]` | `0x0F4` | - | - |
+| `mx_dim[1].scale_stride[0]` | `0x108` | - | - |
+<!-- END GENERATED reg_map -->
 
 ## Multi-Port Arbitration
 

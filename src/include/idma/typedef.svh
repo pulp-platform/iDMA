@@ -42,6 +42,7 @@
         tf_len_t   length;                                               \
         axi_addr_t src_addr;                                             \
         axi_addr_t dst_addr;                                             \
+        axi_addr_t scale_addr;                                           \
         user_t     user;                                                 \
         options_t  opt;                                                  \
     } idma_req_t;
@@ -80,6 +81,7 @@
         reps_t    reps;                                                  \
         strides_t src_strides;                                           \
         strides_t dst_strides;                                           \
+        strides_t scale_strides;                                         \
     } idma_d_req_t;
 `define IDMA_TYPEDEF_ND_REQ_T(idma_nd_req_t, idma_req_t, idma_d_req_t)   \
     typedef struct packed {                                              \

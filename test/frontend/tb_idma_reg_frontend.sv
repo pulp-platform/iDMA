@@ -18,7 +18,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // number of streams the elaborated DUT exposes (checked at instantiation)
   parameter int unsigned NumStreams = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
-  parameter int unsigned NumRegs    = 32'd1
+  parameter int unsigned NumRegs    = 32'd1,
+  // compute ops of the frontend (idma_pkg::compute_enable_t bits)
+  parameter logic [3:0]  ComputeOpsMask = 4'hF
 );
 
   // --------------------------------------------------------------------------
@@ -51,6 +53,17 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   localparam logic [31:0] RegDstAddr  = 32'h0000_00D0;
   localparam logic [31:0] RegSrcAddr  = 32'h0000_00D4;
   localparam logic [31:0] RegLength   = 32'h0000_00D8;
+  localparam logic [31:0] RegDim0Dst  = 32'h0000_00E0;
+  localparam logic [31:0] RegDim0Src  = 32'h0000_00E4;
+  localparam logic [31:0] RegDim0Reps = 32'h0000_00E8;
+  localparam logic [31:0] RegDim1Dst  = 32'h0000_00EC;
+  localparam logic [31:0] RegDim1Src  = 32'h0000_00F0;
+  localparam logic [31:0] RegDim1Reps = 32'h0000_00F4;
+  localparam logic [31:0] RegCompute  = 32'h0000_00F8;
+  localparam logic [31:0] RegMxCfg    = 32'h0000_00FC;
+  localparam logic [31:0] RegScale    = 32'h0000_0100;
+  localparam logic [31:0] RegSStride0 = 32'h0000_0104;
+  localparam logic [31:0] RegSStride1 = 32'h0000_0108;
 
   function automatic logic [31:0] reg_next_id(input int unsigned s);
     return RegNextId0 + 32'(s) * 32'h4;
@@ -180,6 +193,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
       .IdCounterWidth ( IdCounterWidth ),
+      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
       .apb_req_t      ( cfg_apb_req_t  ),
       .apb_rsp_t      ( cfg_apb_rsp_t  ),
       .dma_req_t      ( idma_nd_req_t  )
@@ -202,6 +216,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
       .IdCounterWidth ( IdCounterWidth ),
+      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
       .apb_req_t      ( cfg_apb_req_t  ),
       .apb_rsp_t      ( cfg_apb_rsp_t  ),
       .dma_req_t      ( idma_nd_req_t  )
@@ -226,6 +241,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .NumRegs        ( NumRegs        ),
       .NumStreams     ( NumStreams     ),
       .IdCounterWidth ( IdCounterWidth ),
+      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
       .apb_req_t      ( cfg_apb_req_t  ),
       .apb_rsp_t      ( cfg_apb_rsp_t  ),
       .dma_req_t      ( idma_req_t     )
@@ -345,6 +361,31 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     if (!rst_n) launch_accept_count <= 0;
     else if (backend_cb.issue) launch_accept_count <= launch_accept_count + 1;
   end
+
+  // Test 6 case: conf, compute, mx_cfg, scale plane, dim0 reps, dim0/1 scale, dst and src strides
+  typedef struct {
+    logic [31:0] conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1, sst0, sst1;
+    bit          ok;
+    string       name;
+  } mx_case_t;
+  localparam logic [31:0] Quant16 = 32'h1 | (32'(COMPUTE_MXQUANT_FP16) << 1);
+  localparam logic [31:0] Dq16    = 32'h1 | (32'(COMPUTE_MXDEQUANT_FP16) << 1);
+  function automatic mx_case_t mc(input logic [31:0] conf, input logic [31:0] cmp,
+                                  input logic [31:0] mx, input logic [31:0] sa,
+                                  input logic [31:0] reps, input logic [31:0] ss0,
+                                  input logic [31:0] ss1,
+                                  input bit ok, input string name,
+                                  input logic [31:0] src = 32'h1000_0000,
+                                  input logic [31:0] dst = 32'h2000_0000,
+                                  input logic [31:0] len = 32'h400,
+                                  input logic [31:0] reps1 = 32'd1,
+                                  input logic [31:0] st0 = 32'h400,
+                                  input logic [31:0] st1 = 32'h1000,
+                                  input logic [31:0] sst0 = 32'h400,
+                                  input logic [31:0] sst1 = 32'h1000);
+    return '{conf, cmp, mx, sa, reps, ss0, ss1, src, dst, len, reps1, st0, st1, sst0, sst1, ok,
+             name};
+  endfunction
 
   // Test 5 scoreboard: each port programs a src_addr encoding its identity
   logic [31:0] sb_addr_stream0;          // src_addr programmed for stream 0's port
@@ -724,6 +765,124 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       $display("[ ok ] Test5 concurrent arbitration: %0d mismatches", sb_mismatch);
     end else begin
       $display("\n--- Test 5: skipped (needs NumRegs>1 and NumStreams>1) ---");
+    end
+
+    // Test 6: an illegal MX setup is refused: next_id reads 0, nothing launches
+    $display("\n--- Test 6: MX launch checks ---");
+    backend_auto_retire = 1'b1;
+    set_req_ready(1'b1);
+    begin
+      mx_case_t cs[$];
+      cs.push_back(mc(32'h400, Quant16, 32'h4, 32'h4000_0040, 4, 32'h40, 32'h20, 1,
+                      "E4M3 ND, aligned plane and stride, misaligned unused dim1 stride"));
+      cs.push_back(mc(32'h400, Quant16, 32'h8, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 2"));
+      cs.push_back(mc(32'h400, Quant16, 32'hC, 32'h4000_0040, 4, 32'h40, 0, 0, "elem_fmt 3"));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0020, 1, 0, 0, 0, "scale plane off 64 B"));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0001, 1, 0, 0, 0, "scale plane off 1 B"));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h60, 0, 0,
+                      "scale stride off 64 B"));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0010, 1, 0,
+                      0, 0, "dequant scale plane off 64 B"));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h80, 1,
+                      "3D, aligned dim1 scale stride", .reps1(3)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h20, 0,
+                      "3D, dim1 scale stride off 64 B", .reps1(3)));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "quant src off a beat",
+                      .src(32'h1000_0020)));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "quant dst off a beat",
+                      .dst(32'h2000_0020)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "dequant dst off a beat",
+                      .dst(32'h2000_0020)));
+      cs.push_back(mc(32'h0, Quant16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "quant partial block",
+                      .len(32'h420)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 1, "dequant 33 blocks",
+                      .len(32'h420)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 0, "dequant partial block",
+                      .len(32'h410)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 0,
+                      "dim0 data strides off a beat", .st0(32'h420), .sst0(32'h420)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 0,
+                      "dim0 src stride off a beat", .sst0(32'h420)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 0,
+                      "dim0 dst stride off a beat", .st0(32'h420)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 4, 32'h40, 0, 1,
+                      "dim0 src and dst strides on distinct beats", .st0(32'h440), .sst0(32'h800)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 0,
+                      "dim1 data strides off a beat", .reps1(3), .st1(32'h1020), .sst1(32'h1020)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 0,
+                      "dim1 src stride off a beat", .reps1(3), .sst1(32'h1020)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 0,
+                      "dim1 dst stride off a beat", .reps1(3), .st1(32'h1020)));
+      cs.push_back(mc(32'h800, Quant16, 32'h0, 32'h4000_0040, 2, 32'h40, 32'h40, 1,
+                      "dim1 src and dst strides on distinct beats", .reps1(3), .st1(32'h1040),
+                      .sst1(32'h2000)));
+      cs.push_back(mc(32'h400, Quant16, 32'h0, 32'h4000_0040, 1, 32'h40, 0, 1,
+                      "misaligned unused dim0 data strides", .st0(32'h420), .sst0(32'h420)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0040, 1, 0,
+                      0, 1, "FP32 dequant, output fills the length field", .len(32'h3FFF_FFE0)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_MXDEQUANT) << 1), 32'h0, 32'h4000_0040, 1, 0,
+                      0, 0, "FP32 dequant, output overflows the length field",
+                      .len(32'h4000_0000)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 1,
+                      "FP16 dequant, output fills the length field", .len(32'h7FFF_FFE0)));
+      cs.push_back(mc(32'h0, Dq16, 32'h0, 32'h4000_0040, 1, 0, 0, 0,
+                      "FP16 dequant, output overflows the length field", .len(32'h8000_0000)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'd6 << 1), 32'h0, 32'h4000_0040, 1, 0, 0, 0,
+                      "reserved op 6"));
+      cs.push_back(mc(32'h0, 32'h1 | (32'd15 << 1), 32'h0, 32'h4000_0040, 1, 0, 0, 0,
+                      "reserved op 15"));
+      cs.push_back(mc(32'h0, 32'h1, 32'h0, 32'h4000_0040, 1, 0, 0, 1, "enabled, no op"));
+      cs.push_back(mc(32'h0, Quant16 & ~32'h1, 32'hC, 32'h4000_0001, 1, 0, 0, 1,
+                      "compute disabled: MX fields ignored", .src(32'h1000_0001)));
+      cs.push_back(mc(32'h0, 32'h1 | (32'(COMPUTE_TRANSPOSE) << 1) | (32'h1 << 7) | (32'h1 << 19),
+                      32'hC, 32'h4000_0001, 1, 0, 0, 1, "transpose: MX fields ignored"));
+      foreach (cs[k]) begin
+        logic [31:0] got;
+        int unsigned acc_before;
+        if (cs[k].cmp[0] && cs[k].cmp[4:1] != 4'(COMPUTE_NONE) &&
+            !compute_op_supported(compute_enable_t'(ComputeOpsMask), compute_op_e'(cs[k].cmp[4:1])))
+          cs[k].ok = 1'b0;
+        captured_q.delete();
+        program_transfer(cs[k].src, cs[k].dst, cs[k].len);
+        apb_write(RegConf,     cs[k].conf);
+        apb_write(RegDim0Src,  cs[k].sst0);
+        apb_write(RegDim0Dst,  cs[k].st0);
+        apb_write(RegDim1Src,  cs[k].sst1);
+        apb_write(RegDim1Dst,  cs[k].st1);
+        apb_write(RegDim1Reps, cs[k].reps1);
+        apb_write(RegCompute,  cs[k].cmp);
+        apb_write(RegMxCfg,    cs[k].mx);
+        apb_write(RegScale,    cs[k].sa);
+        apb_write(RegDim0Reps, cs[k].reps);
+        apb_write(RegSStride0, cs[k].ss0);
+        apb_write(RegSStride1, cs[k].ss1);
+        exp_id     = next_id;
+        acc_before = launch_accept_count;
+        launch(got, rcyc);
+        repeat (8) @(backend_cb);
+        if (cs[k].ok) begin
+          check_eq(got, exp_id, $sformatf("Test6 %s: launch id", cs[k].name));
+          check_eq(launch_accept_count, acc_before + 1,
+                   $sformatf("Test6 %s: launched", cs[k].name));
+          if (captured_q.size() > 0) begin
+            check_eq(captured_q[0].burst_req.scale_addr, cs[k].sa,
+                     $sformatf("Test6 %s: scale_addr", cs[k].name));
+            check_eq(captured_q[0].d_req[0].scale_strides, cs[k].ss0,
+                     $sformatf("Test6 %s: scale stride", cs[k].name));
+            if (compute_op_is_mx(compute_op_e'(cs[k].cmp[4:1])))
+              check_eq(captured_q[0].burst_req.opt.compute.params.mx.elem_fmt, cs[k].mx[3:2],
+                       $sformatf("Test6 %s: elem_fmt", cs[k].name));
+          end
+          prev_id = got;
+          poll_done(got);
+        end else begin
+          check_eq(got, 32'd0, $sformatf("Test6 %s: next_id reads 0", cs[k].name));
+          check_eq(launch_accept_count, acc_before, $sformatf("Test6 %s: nothing launched",
+                                                              cs[k].name));
+          check_eq(next_id, exp_id, $sformatf("Test6 %s: id not consumed", cs[k].name));
+        end
+      end
+      apb_write(RegCompute, 32'h0);
     end
 
     // ------------------------------------------------------------------

@@ -37,6 +37,10 @@ module idma_${identifier} #(
   parameter int unsigned IdCounterWidth = 32'd32,
   /// Dependent parameter: Stream Idx
   parameter int unsigned StreamWidth    = cc_pkg::idx_width(NumStreams),
+  /// Backend data width; MX data planes, lengths and strides must fit its beats
+  parameter int unsigned DataWidth      = 32'd512,
+  /// Compute ops of the backend; a launch of any other op is refused
+  parameter idma_pkg::compute_enable_t ComputeOps = '1,
 % if _fam == 'apb':
   /// APB4 request type
   parameter type         apb_req_t      = logic,
@@ -89,6 +93,8 @@ module idma_${identifier} #(
   /// needs to be adapted too.
   localparam int unsigned MaxNumStreams = 32'd16;
   localparam int unsigned RegAddrWidth  = idma_${identifier}_reg_pkg::IDMA_${identifier.upper()}_REG_TOP_MIN_ADDR_WIDTH;
+  localparam int unsigned ScaleAlignWidth = $clog2(idma_pkg::MxScaleSlotBytes);
+  localparam int unsigned BeatAlignWidth  = $clog2(DataWidth / 8);
 
   // register connections
   idma_${identifier}_reg_pkg::idma_reg__out_t dma_reg2hw [NumRegs-1:0];
@@ -176,16 +182,50 @@ module idma_${identifier} #(
     logic     read_happens;
     stream_t  read_stream;
     dma_req_t nxt_dma_req;
+    logic     launch_ok;
 
     always_comb begin : proc_launch
         read_happens = 1'b0;
         read_stream  = '0;
         for (int c = 0; c < NumStreams; c++) begin
             if (dma_reg2hw[i].next_id[c].next_id.rd_swacc) begin
-                read_happens = 1'b1;
+                read_happens = launch_ok;
                 read_stream  = c;
             end
         end
+    end
+
+    // a compute launch needs an elaborated op; MX also an elaborated format, beat-aligned planes
+    // (scale: 64 B), whole blocks and a written length that fits the length field
+    always_comb begin : proc_launch_ok
+      launch_ok = 1'b1;
+      if (nxt_dma_req${sep}opt.compute.enable &&
+          (nxt_dma_req${sep}opt.compute.op != idma_pkg::COMPUTE_NONE) &&
+          !idma_pkg::compute_op_supported(ComputeOps, nxt_dma_req${sep}opt.compute.op)) begin
+        launch_ok = 1'b0;
+      end
+      if (nxt_dma_req${sep}opt.compute.enable &&
+          idma_pkg::compute_op_is_mx(nxt_dma_req${sep}opt.compute.op)) begin
+        if (!idma_pkg::mx_elem_legal(nxt_dma_req${sep}opt.compute.params.mx.elem_fmt) ||
+            (nxt_dma_req${sep}scale_addr[ScaleAlignWidth-1:0] != '0) ||
+            (nxt_dma_req${sep}src_addr[BeatAlignWidth-1:0] != '0) ||
+            (nxt_dma_req${sep}dst_addr[BeatAlignWidth-1:0] != '0) ||
+            ((nxt_dma_req${sep}length &
+              (idma_pkg::compute_in_bytes(nxt_dma_req${sep}opt.compute.op) - 1)) != '0) ||
+            !idma_pkg::compute_out_len_fits(nxt_dma_req${sep}opt.compute.op,
+                                            64'(nxt_dma_req${sep}length),
+                                            $bits(nxt_dma_req${sep}length))) begin
+          launch_ok = 1'b0;
+        end
+% for nd in range(0, num_dim-1):
+        if (nxt_dma_req.d_req[${nd}].reps > 'd1 &&
+            ((nxt_dma_req.d_req[${nd}].scale_strides[ScaleAlignWidth-1:0] != '0) ||
+             (nxt_dma_req.d_req[${nd}].src_strides[BeatAlignWidth-1:0] != '0) ||
+             (nxt_dma_req.d_req[${nd}].dst_strides[BeatAlignWidth-1:0] != '0))) begin
+          launch_ok = 1'b0;
+        end
+% endfor
+      end
     end
 
     // set on the read strobe (or an accept-and-reload in the same cycle), clear on accept
@@ -217,10 +257,13 @@ module idma_${identifier} #(
       nxt_dma_req${sep}length   = dma_reg2hw[i].length[0].length.value;
       nxt_dma_req${sep}src_addr = dma_reg2hw[i].src_addr[0].src_addr.value;
       nxt_dma_req${sep}dst_addr = dma_reg2hw[i].dst_addr[0].dst_addr.value;
+      nxt_dma_req${sep}scale_addr = dma_reg2hw[i].scale_addr[0].scale_addr.value;
 % else:
       nxt_dma_req${sep}length   = {dma_reg2hw[i].length[1].length.value,     dma_reg2hw[i].length[0].length.value};
       nxt_dma_req${sep}src_addr = {dma_reg2hw[i].src_addr[1].src_addr.value, dma_reg2hw[i].src_addr[0].src_addr.value};
       nxt_dma_req${sep}dst_addr = {dma_reg2hw[i].dst_addr[1].dst_addr.value, dma_reg2hw[i].dst_addr[0].dst_addr.value};
+      nxt_dma_req${sep}scale_addr = {dma_reg2hw[i].scale_addr[1].scale_addr.value,
+                                    dma_reg2hw[i].scale_addr[0].scale_addr.value};
 % endif
 
       // Protocols
@@ -257,6 +300,17 @@ module idma_${identifier} #(
       // Compact mode removes tile padding from destination rows.
       nxt_dma_req${sep}opt.compute.params.transpose.compact  =
           dma_reg2hw[i].compute_cfg.transpose_compact.value;
+      if (idma_pkg::compute_op_is_mx(nxt_dma_req${sep}opt.compute.op)) begin
+        nxt_dma_req${sep}opt.compute.params                = '0;
+        nxt_dma_req${sep}opt.compute.params.mx.poison_dis  =
+            dma_reg2hw[i].mx_cfg.mx_poison_dis.value;
+        nxt_dma_req${sep}opt.compute.params.mx.rceil       =
+            dma_reg2hw[i].mx_cfg.mx_rceil.value;
+        nxt_dma_req${sep}opt.compute.params.mx.elem_fmt    =
+            idma_pkg::mx_elem_e'(dma_reg2hw[i].mx_cfg.mx_elem_fmt.value);
+        nxt_dma_req${sep}opt.compute.params.mx.group       =
+            dma_reg2hw[i].mx_cfg.mx_group.value;
+      end
 
 % if num_dim != 1:
       // ND connections
@@ -265,6 +319,8 @@ module idma_${identifier} #(
       nxt_dma_req.d_req[${nd}].reps = dma_reg2hw[i].dim[${nd}].reps[0].reps.value;
       nxt_dma_req.d_req[${nd}].src_strides = dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value;
       nxt_dma_req.d_req[${nd}].dst_strides = dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value;
+      nxt_dma_req.d_req[${nd}].scale_strides =
+          dma_reg2hw[i].mx_dim[${nd}].scale_stride[0].scale_stride.value;
 % else:
       nxt_dma_req.d_req[${nd}].reps = {dma_reg2hw[i].dim[${nd}].reps[1].reps.value,
                                       dma_reg2hw[i].dim[${nd}].reps[0].reps.value };
@@ -272,6 +328,9 @@ module idma_${identifier} #(
                                              dma_reg2hw[i].dim[${nd}].src_stride[0].src_stride.value};
       nxt_dma_req.d_req[${nd}].dst_strides = {dma_reg2hw[i].dim[${nd}].dst_stride[1].dst_stride.value,
                                              dma_reg2hw[i].dim[${nd}].dst_stride[0].dst_stride.value};
+      nxt_dma_req.d_req[${nd}].scale_strides =
+          {dma_reg2hw[i].mx_dim[${nd}].scale_stride[1].scale_stride.value,
+           dma_reg2hw[i].mx_dim[${nd}].scale_stride[0].scale_stride.value};
 % endif
 % endfor
 
@@ -294,7 +353,7 @@ module idma_${identifier} #(
     // observational registers: drive .next (read-side launch is the rd_swacc strobe above)
     for (genvar c = 0; c < NumStreams; c++) begin : gen_hw2reg_connections
         assign dma_hw2reg[i].status[c].busy.next     = {midend_busy_i[c], busy_i[c]};
-        assign dma_hw2reg[i].next_id[c].next_id.next = next_id_i;
+        assign dma_hw2reg[i].next_id[c].next_id.next = launch_ok ? next_id_i : '0;
         assign dma_hw2reg[i].done_id[c].done_id.next = done_id_i[c];
     end
 
@@ -305,6 +364,12 @@ module idma_${identifier} #(
         assign dma_hw2reg[i].done_id[c].done_id.next = '0;
     end
 
+  end
+
+  // the RDL MX fields and idma_pkg::mx_options_t must agree
+  if ($bits(dma_reg2hw[0].mx_cfg.mx_elem_fmt.value) != $bits(idma_pkg::mx_elem_e))
+  begin : gen_mx_cfg_check
+    $fatal(1, "idma_${identifier}: mx_cfg fields do not match idma_pkg::mx_options_t");
   end
 
   // arbitration

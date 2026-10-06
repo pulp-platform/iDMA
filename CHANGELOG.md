@@ -12,6 +12,84 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   instead of two's complement; the shared exponent clamps to [-127, 127] and a `0xFF` scale
   dequantizes to NaN. MX blocks written by earlier versions decode differently
   [#259](https://github.com/pulp-platform/iDMA/issues/259).
+- **Breaking:** MX quant poisons a block holding an Inf or NaN (scale `0xFF`, every element
+  `0x7D`); the per-transfer `mx_options_t.poison_dis` bit (`mx_cfg` register, DMOPC `rs1[18]`)
+  restores the finite-lane behaviour.
+- MX dequant to FP32 is exact: FP32 subnormal results instead of a flush to zero, Inf instead of
+  saturation.
+- The MX quantizer is a four-stage pipeline on whole beats with an output queue of destination
+  beats. Its reg2reg paths close at 0.45 ns in GF12 (1.17 ns before).
+- MX dequant is a beat-granular pipeline (input buffer, extract, expand lanes, output queue)
+  that retires one output beat per cycle.
+- MX ops left the compute config interlock: every MX beat carries its config in a beat tag
+  (`r_dp_req_t.mx`), so transfers with different MX ops and copies stream back to back without
+  draining. MX beats go from the read side to their engine past the dataflow element: the quant
+  engine has an input queue of `BufferDepth` beats (one more with `dfe_ready_cut`), the dequant
+  input buffer holds three more, and the dataflow element carries copy and transpose beats only,
+  so a copy or a waiting dequant input does not block the next transfer's input. Both engines take
+  whole beats on a registered credit and have no transfer-boundary clear; the write side
+  selects the burst's output queue after the write shifter and pops it on the W handshake. The
+  interlock remains for transpose. `tb_idma_mxclear` checks the empty-queue pop guard of both
+  engines.
+- **Breaking:** MX transfers use a data plane (32 B of elements per block) and a separate
+  scale plane (one E8M0 byte per block) in one pass; the inline 33 B block layout is removed.
+  `mx_options_t` (`compute_params_t.mx`, register `mx_cfg`, DMOPC `rs1` fields generated
+  from the same database) carries `poison_dis`, `rceil`, `elem_fmt` and `group` (G = 64 or 32
+  blocks per scale chunk); the scale plane address is `idma_req_t.scale_addr`. The legalizer
+  interleaves data bursts and per-group scale bursts on the write side (quant) and scale-first
+  reads on the read side (dequant). The dequant `length` is the data-plane length.
+  `idma_pkg::MxBlockBytes` is gone, and the `idma_mx_golden.h` quant/dequant helpers take a data
+  and a scale buffer.
+- **Breaking:** MX compute needs `StrbWidth <= 64`; wider MX builds stop at elaboration.
+- **Breaking:** `IDMA_TYPEDEF_REQ_T` adds `scale_addr`, the MX scale plane address, 64 B
+  aligned (`ComputeMxScaleAligned`), and `IDMA_TYPEDEF_D_REQ_T` adds `scale_strides`; code that
+  builds these structs field by field must drive them (zero outside MX). The ND midend steps
+  `scale_addr` per row with `scale_strides`. The register frontend has `scale_addr` and
+  per-dimension `mx_dim[d].scale_stride` registers after `mx_cfg`, inst64 sets them with the
+  DMOPC setters `0x28` and `0x29`.
+
+### Added
+- The register frontend refuses an MX launch with a reserved element format, a scale plane that
+  is not 64 B aligned, a used dimension's scale stride that is not a multiple of 64, a data plane
+  or a used dimension's data stride off a beat (new parameter `DataWidth`, default 512) or a
+  length that is not a whole number of blocks: `next_id` reads 0 and no transfer starts. inst64
+  refuses such a `DMCPY` with id 0 and the error bit.
+- Both frontends also refuse a compute op the backend does not elaborate (register frontend:
+  new parameter `ComputeOps`) or a reserved op code, and an MX dequant whose written length does
+  not fit the length field; inst64 refuses an MX `DMCPY` with a plane in the TCDM window. The
+  backend runs an op that is not elaborated as a plain copy instead of hanging.
+- Backend parameter `TimingCuts` (`idma_pkg::timing_cuts_t`, default `'0` = unchanged):
+  `dfe_ready_cut` (dataflow element without same-cycle refill on write-side pops, one more entry),
+  `dfe_reg_flags` (registered dataflow flags, pointers without load enables), `wdp_head_spill`
+  (spill register on the write datapath request head) and `outst_cnt_reg` (outstanding-transfer
+  counter off `req_ready_o`). `idma_inst64_top` passes it to its backends. `mx_in_reg` (MX beats
+  enter their engine through a one-beat register stage; one cycle more MX latency) and
+  `dfe_ready_ahead` (dataflow element ready from flops; one more entry per lane, taken only when
+  the next write beat pops the lane; new write port output `buffer_out_offer_o`) and
+  `mx_beat_push` (MX engine push on the AXI read beat without the byte-lane masks; `idma_axi_read`
+  output `buffer_in_beat_o`) are added as leading fields, so the values of the earlier fields are
+  unchanged.
+- The register-map tables of the register frontend page and the DMOPC opcode table of the
+  Snitch page are generated from the RDL and `idma_dmopc.yml` (`make idma_doc_tables`);
+  `make idma_verify_codegen` fails when a page differs.
+- MX quant and dequant support E4M3 elements next to E5M2, selected per transfer by
+  `mx_options_t.elem_fmt` (E4M3: max normal 448 = `0x7E`, NaN `0x7F`, no Inf); a poisoned E4M3
+  block has `0x7F` elements.
+- Per-transfer RCEIL scale rounding (`mx_options_t.rceil`): the shared exponent is
+  `ceil(log2(amax / max_normal))` instead of `floor(log2(amax)) - emax`, so the block max never
+  saturates. FLOOR (OCP MX v1.0) stays the default.
+
+### Fixed
+- MX quant of FP32 subnormal inputs dropped the leading zeros (implicit 1), e.g. 32 x 2^-127
+  quantized to 1.5 instead of 1.0.
+- The legalizer took a request only when both its read and write sides had emitted the previous
+  one, so a stream of one-block MX quant transfers (two write bursts per read burst) left the
+  read channel no lead and lost cycles after every read stall. The write side now queues up to
+  three requests (`MxWqDepth`) behind an MX transfer while the read side runs ahead; the read
+  and write sides keep separate MX plane state, so a dequant behind a short quant reads at once.
+- `make idma_verify_codegen` takes the compute guards from the generated legalizers, and every
+  one of them has a negative test: mxneg case 11 now runs (`ComputeMxdequantLengthFits`), and
+  `ComputeDstTilelink` is only generated for variants with a TileLink write port.
 
 ## 0.7.3 - 2026-10-01
 

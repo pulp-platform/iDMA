@@ -254,8 +254,9 @@ idma_verify_codegen:
 	  --verify-db $(IDMA_VERIFY_DB) \
 	  --matrix-file $(IDMA_ROOT)/.github/workflows/elaborate.yml \
 	  --mxneg-tb $(IDMA_ROOT)/test/tb_idma_mxneg.sv \
-	  --mxneg-guard-src $(IDMA_ROOT)/src/backend/tpl/idma_legalizer.sv.tpl \
+	  --mxneg-guard-src $(IDMA_RTL_DIR)/idma_legalizer_*.sv \
 	  $(IDMA_SOURCE_GLOBS)
+	$(PYTHON) $(IDMA_UTIL_DIR)/gen_doc_tables.py --check $(IDMA_DOC_GEN_PAGES)
 	mkdir -p $(IDMA_VERIFY_DIR)
 	set -o pipefail; md5sum $(IDMA_GEN_FILES) | sort -k2 > $(IDMA_VERIFY_DIR)/gen1.md5
 	$(MAKE) idma_rtl_clean idma_reg_clean
