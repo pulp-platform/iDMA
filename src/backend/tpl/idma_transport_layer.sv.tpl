@@ -212,18 +212,13 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if not one_read_port:
     % for p in used_read_protocols:
     strb_t ${mh_format['ar'][p]}${p}_buffer_in_valid;
-        % if p == 'axi':
     logic  ${mh_format['ar'][p]}${p}_buffer_in_beat;
-        % endif
     % endfor
 % endif
     strb_t buffer_in_valid;
     strb_t buffer_in_ready;
-    // an AXI read beat before the buffer masks (MX transfers read AXI only)
+    // a read beat before the buffer masks
     logic  buffer_in_beat;
-% if one_read_port and used_read_protocols[0] != 'axi':
-    assign buffer_in_beat = 1'b0;
-% endif
 
     // outbound control signals of the buffer: controlled by the write process
     strb_t buffer_out_valid;
@@ -342,11 +337,7 @@ ${rendered_read_ports[read_port]}
 
                 buffer_in       = ${rp}_buffer_in;
                 buffer_in_valid = ${rp}_buffer_in_valid;
-        % if rp == 'axi':
                 buffer_in_beat  = ${rp}_buffer_in_beat;
-        % else:
-                buffer_in_beat  = 1'b0;
-        % endif
             end
     % else:
             idma_pkg::${database[rp]['protocol_enum']}: begin
@@ -356,11 +347,7 @@ ${rendered_read_ports[read_port]}
 
                 buffer_in       = ${rp}_buffer_in [r_dp_req_i.src_head];
                 buffer_in_valid = ${rp}_buffer_in_valid [r_dp_req_i.src_head];
-        % if rp == 'axi':
                 buffer_in_beat  = ${rp}_buffer_in_beat [r_dp_req_i.src_head];
-        % else:
-                buffer_in_beat  = 1'b0;
-        % endif
             end
     % endif
 % endfor

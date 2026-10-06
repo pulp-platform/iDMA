@@ -58,6 +58,8 @@ module idma_axis_read #(
     output byte_t [StrbWidth-1:0] buffer_in_o,
     /// Valid to Buffer
     output strb_t buffer_in_valid_o,
+    /// A response beat the read side can take, before the buffer masks and readiness
+    output logic buffer_in_beat_o,
     /// Ready from Buffer
     input  strb_t buffer_in_ready_i
 );
@@ -117,6 +119,7 @@ module idma_axis_read #(
     // be sure the response channel is ready
     assign in_valid          = read_req_i.tvalid & in_ready & r_dp_rsp_ready_i  & r_dp_req_valid_i;
     assign buffer_in_valid_o = in_valid ? mask_in : '0;
+    assign buffer_in_beat_o  = read_req_i.tvalid & r_dp_rsp_ready_i & r_dp_req_valid_i;
 
     // r_dp_ready_o is triggered by the last element arriving from the read
     assign r_dp_req_ready_o = r_dp_req_valid_i & r_dp_rsp_ready_i & read_req_i.tvalid & in_ready;

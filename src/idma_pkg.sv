@@ -164,7 +164,7 @@ package idma_pkg;
 
     /// Opt-in timing cuts of the backend; '0 is the stock datapath
     typedef struct packed {
-        /// MX beats enter their engine on the AXI read beat, past the byte-lane masks (whole beats)
+        /// MX beats enter their engine on the read beat, past the byte-lane masks (whole beats)
         logic mx_beat_push;
         /// Dataflow element ready from flops; a lane's extra entry fills only on a pending W pop
         logic dfe_ready_ahead;
