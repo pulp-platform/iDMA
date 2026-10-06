@@ -595,8 +595,11 @@ idma_sim_tb_idma_mxnd: $(IDMA_VSIM_DIR)/compile.tcl
 idma_sim_tb_idma_mx_obi: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
-	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 256 512 1024,,)
-	$(call idma_run_mx_sim,tb_idma_mx_obi,64 512,nostall_,-gStallObi=0)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 128 256 512,,)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,64 512,nostall_,-gStallPct=0)
+	# Cuts 64: mx_beat_push alone; 127: every timing cut
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 512,beatpush_,-gCuts=64)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 512,cuts_,-gCuts=127)
 
 .PHONY: idma_sim_tb_idma_mxrand
 idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
