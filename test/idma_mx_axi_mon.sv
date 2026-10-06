@@ -5,8 +5,8 @@
 // Authors:
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
-// AXI protocol and MX plane monitor for the AXI ports of a backend: bursts, beats, strobes, planes,
-// burst lengths under reduce_len and the AXI attributes of every AR/AW/R/B against its request.
+// AXI protocol, MX plane and busy monitor of a backend: bursts, beats, strobes, planes, reduce_len
+// lengths, AR/AW/R/B attributes against the request, busy flags while bytes are outstanding.
 
 module idma_mx_axi_mon #(
   parameter int unsigned StrbWidth  = 32'd8,
@@ -64,7 +64,8 @@ module idma_mx_axi_mon #(
   input logic [StrbWidth-1:0]         w_strb_i,
   input logic                         w_last_i,
   input logic                         b_valid_i,
-  input logic                         b_ready_i
+  input logic                         b_ready_i,
+  input idma_pkg::idma_busy_t         busy_i
 );
 
   // pragma translate_off
@@ -76,9 +77,10 @@ module idma_mx_axi_mon #(
 
   typedef logic [StrbWidth-1:0] strb_t;
   typedef struct packed { u64_t lo, hi; } seg_t;
-  typedef struct packed { u64_t addr, lo, hi; int len, k; int x; id_t id; } bur_t;
+  typedef struct packed { u64_t addr, lo, hi; int len, k; int x, seg; id_t id; } bur_t;
   typedef struct packed { strb_t strb; bit last; } wb_t;
-  typedef struct packed { int len; id_t id; } rb_t;
+  typedef struct packed { u64_t addr, lo, hi; int len, k; int x, seg; id_t id; } rb_t;
+  typedef enum int { K_NONE, K_COPY, K_QUANT, K_DEQUANT } kind_e;
 
   class xfer_c;
     int   idx;
@@ -90,9 +92,20 @@ module idma_mx_axi_mon #(
     id_t  id;
     idma_pkg::axi_options_t opt [2];
     logic [UserWidth-1:0] user;
+    // buffer accounting: FP element bytes, dequant element range, bytes owed to the write side
+    kind_e   kind;
+    int      eb;
+    u64_t    elo, ehi;
+    longint  owed, qin, qdat, qscl;
   endclass
 
   xfer_c  xq [2][$];
+  xfer_c  xs [$];
+  longint held;
+  bit     need_buf, need_r, need_w;
+  int     nbusy;
+  int     ax_x, ax_seg;
+  u64_t   ax_lo, ax_hi;
   bur_t   wq [$];
   wb_t    wpend [$];
   rb_t    rq [$];
@@ -124,12 +137,16 @@ module idma_mx_axi_mon #(
     sb = scl;
     op = (c.enable && EnableCompute && idma_pkg::compute_op_supported(ComputeOps, c.op)) ?
          c.op : idma_pkg::COMPUTE_NONE;
+    x.kind = K_NONE;
     unique case (op)
       idma_pkg::COMPUTE_NONE: begin
+        x.kind = K_COPY;
         x.seg[0].push_back(seg_t'{src, src + len});
         x.seg[1].push_back(seg_t'{dst, dst + len});
       end
       idma_pkg::COMPUTE_MXQUANT, idma_pkg::COMPUTE_MXQUANT_FP16: begin
+        x.kind = K_QUANT;
+        x.eb   = (c.op == idma_pkg::COMPUTE_MXQUANT) ? 4 : 2;
         nb = len / ((c.op == idma_pkg::COMPUTE_MXQUANT) ? 128 : 64);
         x.seg[0].push_back(seg_t'{src, src + len});
         for (u64_t b = 0; b < nb; b += g) begin
@@ -141,6 +158,10 @@ module idma_mx_axi_mon #(
       idma_pkg::COMPUTE_MXDEQUANT, idma_pkg::COMPUTE_MXDEQUANT_FP16: begin
         nb   = len / 32;
         drem = up(len);
+        x.kind = K_DEQUANT;
+        x.eb   = (c.op == idma_pkg::COMPUTE_MXDEQUANT) ? 4 : 2;
+        x.elo  = src;
+        x.ehi  = src + nb * 32;
         for (u64_t b = 0; drem > 0; b += g) begin
           automatic u64_t n = (nb - b < g) ? nb - b : g;
           sg = (drem > g * 32) ? g * 32 : drem;
@@ -166,6 +187,7 @@ module idma_mx_axi_mon #(
     u64_t   e = dn(a) + (u64_t'(len) + 1) * S, n, na;
     string  ch = s ? "AW" : "AR";
     nbur[s]++;
+    ax_x = -1;
     // the legalizer issues full-width beats only; strobes are checked against whole beats
     if (size != LgS) err($sformatf("%s size %0d, the bus beat is size %0d", ch, size, LgS));
     if (bt == axi_pkg::BURST_INCR && ((a >> 12) != ((e - 1) >> 12)))
@@ -175,7 +197,7 @@ module idma_mx_axi_mon #(
       err($sformatf("%s WRAP with len %0d", ch, len));
     if (bt == axi_pkg::BURST_FIXED && len > 15) err($sformatf("%s FIXED with len %0d", ch, len));
     if (atop != '0) err($sformatf("%s ATOP %0h", ch, atop));
-    if (s) wq.push_back(bur_t'{addr: a, lo: a, hi: e, len: len, k: 0, x: -1, id: id});
+    if (s) wq.push_back(bur_t'{addr: a, lo: a, hi: e, len: len, k: 0, x: -1, seg: -1, id: id});
     if (!planes) return;
     if (xq[s].size() == 0) begin
       err($sformatf("%s %0h len %0d without an open transfer", ch, a, len));
@@ -204,15 +226,50 @@ module idma_mx_axi_mon #(
                     x.seg[s][x.si[s]].lo, x.seg[s][x.si[s]].hi));
     if (s) begin
       automatic bur_t b = wq.pop_back();
-      b.lo = na; b.hi = na + n; b.x = x.idx;
+      b.lo = na; b.hi = na + n; b.x = x.idx; b.seg = x.si[s];
       wq.push_back(b);
     end
+    ax_x = x.idx; ax_seg = x.si[s]; ax_lo = na; ax_hi = na + n;
     x.na[s] = na + n;
     if (x.na[s] >= x.seg[s][x.si[s]].hi) begin
       x.si[s]++;
       if (x.si[s] < x.seg[s].size()) x.na[s] = x.seg[s][x.si[s]].lo;
       else void'(xq[s].pop_front());
     end
+  endfunction
+
+  function automatic u64_t overlap(u64_t a, u64_t b, u64_t lo, u64_t hi);
+    u64_t l = (a > lo) ? a : lo, h = (b < hi) ? b : hi;
+    return (h > l) ? h - l : 0;
+  endfunction
+
+  // owed: quant elements not yet written plus scale bytes of written blocks, else counted bytes
+  function automatic longint owed_of(xfer_c x);
+    if (x.kind == K_QUANT) return (x.qin - x.qdat) + (x.qdat / 32 - x.qscl);
+    return x.owed;
+  endfunction
+
+  // R (rd) or W bytes of segment seg; dequant reads and quant writes alternate data and scale
+  function automatic void account(int xi, int seg, u64_t ba, u64_t lo, u64_t hi, bit rd);
+    xfer_c  x;
+    longint p;
+    if (xi < 0 || xi >= xs.size()) return;
+    x = xs[xi];
+    held -= owed_of(x);
+    p = longint'(overlap(ba, ba + S, lo, hi));
+    unique case (x.kind)
+      K_COPY: x.owed += rd ? p : -p;
+      K_DEQUANT:
+        if (!rd) x.owed -= p;
+        else if (seg % 2 != 0) x.owed += longint'(overlap(ba, ba + S, (lo > x.elo) ? lo : x.elo,
+                                                            (hi < x.ehi) ? hi : x.ehi)) * x.eb;
+      K_QUANT:
+        if (rd) x.qin += p / longint'(x.eb);
+        else if (seg % 2 != 0) x.qscl += p;
+        else x.qdat += p;
+      default: ;
+    endcase
+    held += owed_of(x);
   endfunction
 
   // one W beat against the head AW burst: strobes inside the addressed bytes and the plane, WLAST
@@ -227,6 +284,10 @@ module idma_mx_axi_mon #(
     if (planes && wq[0].x >= 0 && w.strb != ex)
       err($sformatf("x%0d W beat %0d of AW %0h: strobe %0h, plane bytes %0h", wq[0].x, wq[0].k,
                     wq[0].addr, w.strb, ex));
+    if (planes && wq[0].x >= 0) begin
+      for (int i = 0; i < StrbWidth; i++) if (!w.strb[i]) ex[i] = 1'b0;
+      account(wq[0].x, wq[0].seg, ba, ba, ba + u64_t'($countones(ex)), 1'b0);
+    end
     if (w.last != (wq[0].k == wq[0].len))
       err($sformatf("W beat %0d of AW %0h len %0d: WLAST %0d", wq[0].k, wq[0].addr, wq[0].len,
                     w.last));
@@ -256,7 +317,7 @@ module idma_mx_axi_mon #(
           ar_len_i, ar_size_i, ar_burst_i, ar_id_i, ar_opt_i, ar_user_i, r_valid_i, r_ready_i,
           r_last_i, r_id_i, aw_valid_i, aw_ready_i, aw_addr_i, aw_len_i, aw_size_i, aw_burst_i,
           aw_id_i, aw_opt_i, aw_user_i, aw_atop_i, w_valid_i, w_ready_i, w_data_i, w_strb_i,
-          w_last_i, b_valid_i, b_ready_i, b_id_i;
+          w_last_i, b_valid_i, b_ready_i, b_id_i, busy_i;
   endclocking
 
   function automatic bit wdata_same(logic [StrbWidth-1:0][7:0] a, logic [StrbWidth-1:0][7:0] b,
@@ -289,6 +350,13 @@ module idma_mx_axi_mon #(
         err("R dropped or changed before R ready");
       if (hold_b && !(cb.b_valid_i && cb.b_id_i == bid_q))
         err("B dropped or changed before B ready");
+      // busy in the cycle after bytes became outstanding (documented: idle when all flags are 0)
+      if (need_buf && !cb.busy_i.buffer_busy)
+        busy_err($sformatf("buffer_busy low while the buffer holds %0d bytes", held));
+      if (need_r && !(cb.busy_i.r_leg_busy || cb.busy_i.r_dp_busy))
+        busy_err("r_leg_busy and r_dp_busy low while read bursts or R beats are outstanding");
+      if (need_w && !(cb.busy_i.w_leg_busy || cb.busy_i.w_dp_busy))
+        busy_err("w_leg_busy and w_dp_busy low while write bursts or W beats are outstanding");
       hold_ar = cb.ar_valid_i && !cb.ar_ready_i;
       hold_aw = cb.aw_valid_i && !cb.aw_ready_i;
       hold_w  = cb.w_valid_i && !cb.w_ready_i;
@@ -312,6 +380,7 @@ module idma_mx_axi_mon #(
         x.user     = cb.req_user_i;
         plan(x, u64_t'(cb.req_len_i), u64_t'(cb.req_src_i), u64_t'(cb.req_dst_i),
              u64_t'(cb.req_scale_i), c);
+        xs.push_back(x);
         x.base[0] = u64_t'(cb.req_src_i);
         x.base[1] = u64_t'(cb.req_dst_i);
         for (int s = 0; s < 2; s++) begin
@@ -322,7 +391,8 @@ module idma_mx_axi_mon #(
       if (cb.ar_valid_i && cb.ar_ready_i) begin
         burst(0, u64_t'(ar.addr), int'(ar.len), int'(ar.size), ar.burst, ar.id, ar.opt, ar.user,
               '0);
-        rq.push_back(rb_t'{len: int'(ar.len), id: ar.id});
+        rq.push_back(rb_t'{addr: u64_t'(ar.addr), lo: ax_lo, hi: ax_hi, len: int'(ar.len), k: 0,
+                           x: ax_x, seg: ax_seg, id: ar.id});
       end
       if (cb.aw_valid_i && cb.aw_ready_i) begin
         burst(1, u64_t'(aw.addr), int'(aw.len), int'(aw.size), aw.burst, aw.id, aw.opt, aw.user,
@@ -343,8 +413,10 @@ module idma_mx_axi_mon #(
         else begin
           if (cb.r_last_i != (rq[i].len == 0))
             err($sformatf("RLAST %0d with %0d beats left", cb.r_last_i, rq[i].len));
+          if (planes) account(rq[i].x, rq[i].seg, dn(rq[i].addr) + u64_t'(rq[i].k) * S, rq[i].lo,
+                              rq[i].hi, 1'b1);
           if (rq[i].len == 0) rq.delete(i);
-          else rq[i].len--;
+          else begin rq[i].len--; rq[i].k++; end
         end
       end
       if (cb.b_valid_i && cb.b_ready_i) begin
@@ -353,8 +425,17 @@ module idma_mx_axi_mon #(
         if (i == bq.size()) err($sformatf("B id %0h without a completed write burst", cb.b_id_i));
         else bq.delete(i);
       end
-    end
+      need_buf = planes && held > 0;
+      need_r   = (planes && xq[0].size() > 0) || rq.size() > 0;
+      need_w   = (planes && xq[1].size() > 0) || wq.size() > 0 || wpend.size() > 0;
+    end else {need_buf, need_r, need_w} = '0;
   end
+
+  function automatic void busy_err(string m);
+    nbusy++;
+    if (nbusy <= 8) err(m);
+    else nerr++;
+  endfunction
 
   final begin
     if (planes && (xq[0].size() || xq[1].size()))
@@ -363,6 +444,7 @@ module idma_mx_axi_mon #(
     if (wq.size() || wpend.size() || rq.size())
       err($sformatf("open at the end: %0d AW bursts, %0d W beats, %0d AR bursts", wq.size(),
                     wpend.size(), rq.size()));
+    if (planes && held != 0) err($sformatf("%0d bytes held in the buffer at the end", held));
     $display("[AXIMON] transfers=%0d AR=%0d AW=%0d R=%0d W=%0d planes=%0d violations=%0d", nx,
              nbur[0], nbur[1], nbeat[0], nbeat[1], planes, nerr);
   end

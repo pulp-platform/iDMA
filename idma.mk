@@ -633,7 +633,8 @@ idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	         "15 ComputeTransposeDstStrobe 64 1 1" \
 	         "17 ComputeSizeAligned 64 1 1" "18 ComputeMxElemFmt 64 1 1" \
 	         "19 ComputeMxScaleAligned 64 1 1" "20 ComputeMxScaleAligned 64 1 1" \
-	         "21 COPY_OK 64 0 1" "22 COPY_OK 64 1 1" "23 COPY_OK 64 1 0"; do \
+	         "21 COPY_OK 64 0 1" "22 COPY_OK 64 1 1" "23 COPY_OK 64 1 0" \
+	         "24 COPY_OK 64 1 0" "24 COPY_OK 64 0 1"; do \
 	  set -- $$c; \
 	  $(VSIM) -c -t 1ps -voptargs=+acc -gNegCase=$$1 -gDataWidth=$$3 -gEnDequant=$$4 -gEnFp16=$$5 \
 	    tb_idma_mxneg -do "run -all; quit" > mxneg_$$1.log 2>&1 || true; \

@@ -139,7 +139,8 @@ module tb_idma_mxroundtrip
   localparam bit E4m3 = (ElemFmt == 1);
 
   task automatic do_dequant_directed(output int unsigned errs_lit, output int unsigned errs_gm);
-    automatic addr_t src = 'h0007_0000, dst = 'h0009_0000;
+    // dequant source and scale planes with the top address bit set
+    automatic addr_t src = 'h8007_0000, dst = 'h0009_0000;
     automatic int unsigned nb = StrbWidth, ob = QuantFp16 ? 2 : 4;
     automatic logic [31:0] exp_w, got_w;
     automatic logic [7:0]  el;
@@ -179,7 +180,8 @@ module tb_idma_mxroundtrip
   endtask
 
   initial begin
-    automatic addr_t src = 'h0001_0000, mid = 'h0003_0000, dst = 'h0005_0000;
+    // the MX planes between quant and dequant with the top address bit set
+    automatic addr_t src = 'h0001_0000, mid = 'h8003_0000, dst = 'h0005_0000;
     automatic int unsigned qL  = NumBlocks * QuantInBytes;
     automatic int unsigned mL  = NumBlocks * 32;
     automatic int unsigned dL  = NumBlocks * (QuantFp16 ? 64 : 128);

@@ -9,7 +9,7 @@
 // the matching legalizer guard assert to report (compile with +define+INC_ASSERT).
 // The runner greps the transcript for the assert name; case 9 provokes transfer
 // overlap and expects the mxquant sub-unit's clear-with-in-flight-state fatal.
-// Cases 21-23 run an op that is not elaborated with assertions off and expect a plain copy.
+// Cases 21-24 run an op that is not elaborated with assertions off and expect a plain copy.
 
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
@@ -146,6 +146,7 @@ module tb_idma_mxneg
       21: copy_of(idma_pkg::COMPUTE_MXDEQUANT);
       22: copy_of(idma_pkg::compute_op_e'(6));
       23: copy_of(idma_pkg::COMPUTE_MXQUANT_FP16);
+      24: copy_of(idma_pkg::COMPUTE_MXDEQUANT_FP16);
       default: $fatal(1, "[MXNEG] unknown NegCase %0d", NegCase);
     endcase
 
