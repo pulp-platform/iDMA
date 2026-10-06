@@ -541,6 +541,8 @@ ${rendered_read_ports[read_port]}
                 "MX output bypasses the write shifter")
         `ASSERT(ComputeMxBeatPush, mx_push == (buffer_in_valid[0] & r_dp_req_i.mx.mx), clk_i,
                 !rst_ni, "MX push differs from the masked read beat")
+        `ASSERT(ComputeMxPushBusy, mx_push |-> r_dp_busy_o, clk_i, !rst_ni,
+                "MX beat pushed while the read datapath is not busy")
         `ASSERT(ComputeMxNoReadShift, r_dp_req_i.mx.mx & (|buffer_in_valid) |->
                 r_dp_req_i.shift == '0, clk_i, !rst_ni, "MX input bypasses the read shifter")
         `ASSERT(ComputeMxWPop, cmp_w_mx & w_chan_valid_o & w_chan_ready_o |->
