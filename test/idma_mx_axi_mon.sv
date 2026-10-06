@@ -34,6 +34,8 @@ module idma_mx_axi_mon #(
   input idma_pkg::axi_options_t       req_src_opt_i,
   input idma_pkg::axi_options_t       req_dst_opt_i,
   input logic [UserWidth-1:0]         req_user_i,
+  input idma_pkg::protocol_e          req_src_prot_i,
+  input idma_pkg::protocol_e          req_dst_prot_i,
   input logic [IdWidth-1:0]           ar_id_i,
   input idma_pkg::axi_options_t       ar_opt_i,
   input logic [UserWidth-1:0]         ar_user_i,
@@ -313,7 +315,8 @@ module idma_mx_axi_mon #(
     default input #1step;
     input rst_ni, req_valid_i, req_ready_i, req_len_i, req_src_i, req_dst_i, req_scale_i,
           req_src_burst_i, req_dst_burst_i, req_decouple_rw_i, req_cmp_i, req_beo_i, req_id_i,
-          req_src_opt_i, req_dst_opt_i, req_user_i, ar_valid_i, ar_ready_i, ar_addr_i,
+          req_src_opt_i, req_dst_opt_i, req_user_i, req_src_prot_i, req_dst_prot_i, ar_valid_i,
+          ar_ready_i, ar_addr_i,
           ar_len_i, ar_size_i, ar_burst_i, ar_id_i, ar_opt_i, ar_user_i, r_valid_i, r_ready_i,
           r_last_i, r_id_i, aw_valid_i, aw_ready_i, aw_addr_i, aw_len_i, aw_size_i, aw_burst_i,
           aw_id_i, aw_opt_i, aw_user_i, aw_atop_i, w_valid_i, w_ready_i, w_data_i, w_strb_i,
@@ -368,8 +371,11 @@ module idma_mx_axi_mon #(
       if (cb.req_valid_i && cb.req_ready_i && cb.req_len_i != '0) begin
         automatic xfer_c x = new();
         automatic idma_pkg::compute_options_t c = cb.req_cmp_i;
+        // only the AXI sides of a transfer are seen here
+        automatic bit ax [2] = '{cb.req_src_prot_i == idma_pkg::AXI,
+                                 cb.req_dst_prot_i == idma_pkg::AXI};
         x.idx      = nx++;
-        x.coupled  = !cb.req_decouple_rw_i && !c.enable;
+        x.coupled  = !cb.req_decouple_rw_i && !c.enable && ax[0] && ax[1];
         x.burst[0] = cb.req_src_burst_i;
         x.burst[1] = cb.req_dst_burst_i;
         x.ps[0]    = page(cb.req_beo_i.src_reduce_len, cb.req_beo_i.src_max_llen);
@@ -380,12 +386,13 @@ module idma_mx_axi_mon #(
         x.user     = cb.req_user_i;
         plan(x, u64_t'(cb.req_len_i), u64_t'(cb.req_src_i), u64_t'(cb.req_dst_i),
              u64_t'(cb.req_scale_i), c);
+        if (!(ax[0] && ax[1])) x.kind = K_NONE;
         xs.push_back(x);
         x.base[0] = u64_t'(cb.req_src_i);
         x.base[1] = u64_t'(cb.req_dst_i);
         for (int s = 0; s < 2; s++) begin
           x.na[s] = x.seg[s].size() ? x.seg[s][0].lo : 0;
-          if (planes) xq[s].push_back(x);
+          if (planes && ax[s]) xq[s].push_back(x);
         end
       end
       if (cb.ar_valid_i && cb.ar_ready_i) begin
