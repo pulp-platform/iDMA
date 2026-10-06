@@ -83,6 +83,9 @@ module idma_nd_midend #(
 
     logic burst_sent_d, burst_sent_q;
 
+    // a zero transfer advances on the response handshake, any other on the backend's
+    logic adv;
+
     // signal signaling all zeros
     logic zero;
 
@@ -96,10 +99,11 @@ module idma_nd_midend #(
     // assign the handshaking signals on the input
     assign stage_done[0]  = nd_req_valid_i;
     assign last           = &(stage_done[NumDim-1:0]);
-    assign nd_req_ready_o = last & nd_req_valid_i & burst_req_ready_i;
+    assign nd_req_ready_o = last & nd_req_valid_i & adv;
 
     // all stages are zero
     assign zero = &(stage_zero);
+    assign adv  = zero ? nd_rsp_ready_i : burst_req_ready_i;
 
     // assign handshake on the output
     assign burst_req_valid_o = nd_req_valid_i & !zero;
@@ -121,8 +125,8 @@ module idma_nd_midend #(
         logic                local_overflow;
 
         // dataflow: stage needs to be enabled and target ready
-        assign stage_en   [d-2] = &(stage_done[d-2:0]) & burst_req_ready_i;
-        assign stage_clear[d-2] = &(stage_done[d-1:0]) & burst_req_ready_i;
+        assign stage_en   [d-2] = &(stage_done[d-2:0]) & adv;
+        assign stage_clear[d-2] = &(stage_done[d-1:0]) & adv;
 
         // size conversion
         assign local_rep = nd_req_valid_i ? nd_req_i.d_req[d-2].reps[RepWidth-1:0] : '0;
@@ -216,7 +220,7 @@ module idma_nd_midend #(
         burst_rsp_ready_o = nd_rsp_ready_i;
 
         // a zero transfer happens
-        if (zero & nd_req_valid_i & nd_req_ready_o) begin
+        if (zero & nd_req_valid_i) begin
             // block backend
             burst_rsp_ready_o = 1'b0;
             // generate new response
