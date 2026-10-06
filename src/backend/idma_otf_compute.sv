@@ -155,11 +155,12 @@ module idma_otf_compute #(
   logic                      mq_valid, mq_ready, mq_busy, qb_v;
   logic [StrbWidth-1:0][7:0] mq_data;
 
+  typedef struct packed {
+    idma_pkg::mx_tag_t         tag;
+    logic [StrbWidth-1:0][7:0] data;
+  } qb_t;
+
   if (ComputeEnable.mxquant) begin : gen_mxquant
-    typedef struct packed {
-      idma_pkg::mx_tag_t         tag;
-      logic [StrbWidth-1:0][7:0] data;
-    } qb_t;
     qb_t [0:0] qb_in, qb_out;
 
     assign qb_in[0] = '{tag: in_tag, data: in_data};

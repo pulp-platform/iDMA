@@ -420,10 +420,10 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     //--------------------------------------
     // Reject Zero Length Transfers
     //--------------------------------------
-    if (RejectZeroTransfers) begin : gen_reject_zero_transfers
-        /// number of accepted transfers that still owe a response
-        typedef logic [$clog2(MetaFifoDepth + 32'd2)-1:0] num_outst_t;
+    /// number of accepted transfers that still owe a response
+    typedef logic [$clog2(MetaFifoDepth + 32'd2)-1:0] num_outst_t;
 
+    if (RejectZeroTransfers) begin : gen_reject_zero_transfers
         num_outst_t num_outst_q;
         logic       tf_accept, tf_complete, outst;
         logic       zero_len_accept, zero_rsp_pending_q;
