@@ -150,7 +150,6 @@ module idma_otf_compute #(
     assign in_v       = mx_push_i;
     assign in_data    = mx_data_i;
     assign in_tag     = mx_tag_i;
-    // a beat still on the read side is busy there (r_dp_busy); busy stays off the read handshake
     assign in_busy    = 1'b0;
   end
 
