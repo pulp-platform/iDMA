@@ -10,6 +10,7 @@ IDMA_VLT_TESTBENCHES := \
 	tb_idma_transpose_b2b \
 	tb_idma_transpose_midend \
 	tb_idma_nd_midend_b2b \
+	tb_idma_nd_midend_zero \
 	tb_idma_reg_frontend \
 	tb_idma_rt_midend
 
@@ -18,6 +19,7 @@ IDMA_VLT_SUFFIXES_tb_idma_transpose_nd := dw32 dw64
 IDMA_VLT_SUFFIXES_tb_idma_transpose_b2b := dw32 dw64
 IDMA_VLT_SUFFIXES_tb_idma_transpose_midend := dw64 dw512
 IDMA_VLT_SUFFIXES_tb_idma_nd_midend_b2b := default
+IDMA_VLT_SUFFIXES_tb_idma_nd_midend_zero := default
 IDMA_VLT_SUFFIXES_tb_idma_reg_frontend := ns1_nr1 ns2_nr1 ns2_nr2
 IDMA_VLT_SUFFIXES_tb_idma_rt_midend := default
 
