@@ -656,7 +656,7 @@ ${rendered_write_ports[write_port]}
     // Module Control
     //--------------------------------------
     assign r_dp_busy_o   = r_dp_valid_i;
-    assign w_dp_busy_o   = w_dp_valid_i | w_dp_ready_o;
+    assign w_dp_busy_o   = w_dp_valid_i;
     assign buffer_busy_o = |buffer_out_valid;
 
 endmodule
