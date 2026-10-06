@@ -143,8 +143,9 @@ group. The legalizer also forces `decouple_rw` / `decouple_aw` on for any comput
 | `ComputeSrcAligned` / `ComputeDstAligned` | src/dst addresses are beat-aligned for size-changing ops |
 | `ComputeMxElemFmt` | `elem_fmt` is E5M2 or E4M3 (E2M1 is not elaborated) |
 | `ComputeMxScaleAligned` | `scale_addr` of an MX transfer is 64 B aligned |
-| `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops are AXI-only on src and dst (OBI is a TODO) |
+| `ComputeMxSrcProtocol` / `ComputeMxDstProtocol` | size-changing ops run on AXI or OBI src and dst; the other ports are not validated |
 | `ComputeDstTilelink` | compute retires per beat, so a TileLink destination is not supported (variants with a TileLink write port) |
+| `ComputeTransposeDstStrobe` | transpose edge strobes need a write port that takes the compute byte mask (AXI or OBI) |
 | `ComputeMxdequantLengthFits` | dequant output length must fit the `length` field width |
 
 ## Source Files

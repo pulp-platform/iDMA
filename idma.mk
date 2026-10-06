@@ -439,6 +439,14 @@ idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_nd -do "run -all; quit"
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_nd -do "run -all; quit"
 
+# OBI-destination transpose: the write strobe must mask edge tiles and padding
+.PHONY: idma_sim_tb_idma_transpose_obi
+idma_sim_tb_idma_transpose_obi: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	# the TB sweeps the geometry list internally; one run per bus width
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_obi -do "run -all; quit"
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_obi -do "run -all; quit"
+
 # Back-to-back: the ND midend must reload each transfer base address
 .PHONY: idma_sim_tb_idma_nd_midend_b2b
 idma_sim_tb_idma_nd_midend_b2b: $(IDMA_VSIM_DIR)/compile.tcl
@@ -491,7 +499,7 @@ idma_sim_tb_idma_inst64_tcdm_copy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_tcdm_
 	cd $(IDMA_VSIM_DIR); ! grep -qE "Error:|Fatal:" inst64_tcdm_copy.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_tcdm_copy.log
 
-# DMOPC mxquant against the DPI-C golden, plus the unknown-opcode guard
+# DMOPC MX and transpose against the golden, on both topologies, plus the unknown-opcode guard
 .PHONY: idma_sim_tb_idma_inst64_compute
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
@@ -583,6 +591,13 @@ idma_sim_tb_idma_mxnd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
 	$(call idma_run_mx_sim,tb_idma_mxnd,32 64 256 512,,)
 
+.PHONY: idma_sim_tb_idma_mx_obi
+idma_sim_tb_idma_mx_obi: $(IDMA_VSIM_DIR)/compile.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(VLOG) -sv $(abspath $(IDMA_ROOT)/test/idma_mxquant_dpi.c)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,32 64 256 512 1024,,)
+	$(call idma_run_mx_sim,tb_idma_mx_obi,64 512,nostall_,-gStallObi=0)
+
 .PHONY: idma_sim_tb_idma_mxrand
 idma_sim_tb_idma_mxrand: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -615,6 +630,7 @@ idma_sim_tb_idma_mxneg: $(IDMA_VSIM_DIR)/compile.tcl
 	         "7 ComputeMxSrcProtocol 64 1 1" "8 ComputeMxDstProtocol 64 1 1" \
 	         "10 ComputeTransposeShape 64 1 1" "11 ComputeMxdequantLengthFits 64 1 1" \
 	         "13 not.elaborated 64 1 0" "14 ComputeTransposeShape 64 1 1" \
+	         "15 ComputeTransposeDstStrobe 64 1 1" \
 	         "17 ComputeSizeAligned 64 1 1" "18 ComputeMxElemFmt 64 1 1" \
 	         "19 ComputeMxScaleAligned 64 1 1" "20 ComputeMxScaleAligned 64 1 1" \
 	         "21 COPY_OK 64 0 1" "22 COPY_OK 64 1 1" "23 COPY_OK 64 1 0"; do \

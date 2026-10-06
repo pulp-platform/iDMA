@@ -6,6 +6,7 @@
 // - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 /// inst64 DMOPC: MX quant to both planes byte-exact per group size, then a copy; NegCase 1 guard.
+/// With EnableTcdmObi, MX planes and a padded transpose tile also go into and out of the TCDM.
 module tb_idma_inst64_compute #(
     /// Elaborate the backend compute datapath; 0 must fail the golden compare
     parameter bit          EnableCompute = 1'b1,
@@ -21,10 +22,11 @@ module tb_idma_inst64_compute #(
 
     import "DPI-C" function void gm_load(input int idx, input int val);
     import "DPI-C" function void gm_mxquant_fp32(input int num_blocks);
+    import "DPI-C" function void gm_mxdequant(input int num_blocks);
     import "DPI-C" function int  gm_get(input int idx);
     import "DPI-C" function int  gm_get_scale(input int idx);
+    import "DPI-C" function void gm_load_scale(input int idx, input int val);
     import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
-
 
     idma_inst64_base #(
         .EnableCompute ( EnableCompute ),
@@ -54,9 +56,34 @@ module tb_idma_inst64_compute #(
     localparam addr_t QuantAddr = 64'h9000_0000;
     localparam addr_t CopyAddr  = 64'hA000_0000;
 
+    // TCDM legs: dequant input must be a whole number of beats of blocks
+    localparam int unsigned StrbBytes    = AxiDataWidth / 32'd8;
+    localparam int unsigned RtBlocks     = StrbBytes;
+    localparam int unsigned RtSrcBytes   = RtBlocks * BlkInBytes;
+    localparam int unsigned RtQuantBytes = RtBlocks * 32;
+    localparam addr_t RtSrcAddr   = 64'hB000_0000;
+    localparam addr_t TcdmQuant   = addr_t'(TcdmStart + 64'h0100);
+    localparam addr_t TcdmScale   = addr_t'(TcdmStart + 64'h1000);
+    localparam addr_t TcdmDequant = addr_t'(TcdmStart + 64'h2000);
+    localparam addr_t AxiDequant  = 64'hC000_0000;
+
+    // Transpose leg: one padded FP32 tile, edges masked on both axes
+    localparam int unsigned TpMode      = 32'd2;
+    localparam int unsigned TpElemBytes = 32'd1 << TpMode;
+    localparam int unsigned TpNe        = StrbBytes / TpElemBytes;
+    localparam int unsigned TpTileBytes = TpNe * StrbBytes;
+    localparam int unsigned TpM         = TpNe - 32'd5;
+    localparam int unsigned TpN         = TpNe - 32'd11;
+    localparam addr_t TpAxiSrc  = 64'hD000_0000;
+    localparam addr_t TpTcdmDst = addr_t'(TcdmStart + 64'h5000);
+    localparam addr_t TpTcdmSrc = addr_t'(TcdmStart + 64'h7000);
+    localparam addr_t TpAxiDst  = 64'hE000_0000;
+
     int unsigned errors        = 0;
     int unsigned bytes_checked = 0;
     int unsigned bytes_differ  = 0;
+    bit          axi_done      = 1'b0;
+    bit          tcdm_done     = 1'b0;
 
     task automatic seed_source();
         logic [31:0] w;
@@ -385,10 +412,171 @@ module tb_idma_inst64_compute #(
         end
 
         if (errors != 0) $fatal(1, "TEST FAILED: %0d errors", errors);
+
+        axi_done = 1'b1;
+        wait (tcdm_done);
+
+        if (errors != 0) $fatal(1, "TEST FAILED: %0d errors", errors);
         $display({"[TB] TEST PASSED: %0d B quantized byte-exact (%0d of them differ from the ",
                   "source), %0d B copied back through a passthrough DMOPC"},
                  bytes_checked, bytes_differ, SrcBytes);
         $finish;
+    end
+
+    // The OBI memory and its accessors only exist in the TCDM topology
+    if (EnableTcdmObi) begin : gen_tcdm_legs
+        function automatic bit in_tcdm(input addr_t a);
+            return (a >= addr_t'(TcdmStart)) && (a < addr_t'(TcdmEnd));
+        endfunction
+
+        task automatic wr_byte(input addr_t a, input logic [7:0] d);
+            if (in_tcdm(a)) harness.gen_obi_access.obi_mem_write_byte(a, d);
+            else            harness.mem_write_byte(a, d);
+        endtask
+
+        function automatic logic [7:0] rd_byte(input addr_t a);
+            return in_tcdm(a) ? harness.gen_obi_access.obi_mem_read_byte(a)
+                              : harness.mem_read_byte(a);
+        endfunction
+
+        task automatic fill(input addr_t base, input int unsigned n, input logic [7:0] d);
+            for (int unsigned i = 0; i < n; i++) wr_byte(base + i, d);
+        endtask
+
+        /// One DMCPY under the latched DMOPC
+        task automatic run_copy(input addr_t src, input addr_t dst, input int unsigned len);
+            tf_id_t tid;
+            harness.drv_if.dma_set_source(src);
+            harness.drv_if.dma_set_dest(dst);
+            harness.drv_if.dma_start_copy(addr_t'(len), 2'b00, 3'd0, tid);
+            harness.drv_if.dma_wait(tid, 3'd0);
+        endtask
+
+        /// Compare [base, base+n) to the DPI golden and a guard band either side to the sentinel
+        task automatic check_golden(input string what, input addr_t base, input int unsigned n);
+            logic [7:0] actual;
+            for (int unsigned i = 0; i < n; i++) begin
+                actual = rd_byte(base + i);
+                if (actual !== 8'(gm_get(int'(i)))) begin
+                    if (errors < 20) $error("%s mismatch at %0d: expected 0x%02x, got 0x%02x",
+                                            what, i, 8'(gm_get(int'(i))), actual);
+                    errors++;
+                end
+            end
+            for (int unsigned i = 1; i <= GuardBytes; i++) begin
+                if (rd_byte(base - i) !== Sentinel || rd_byte(base + n + i - 1) !== Sentinel) begin
+                    if (errors < 20) $error("%s guard band clobbered at +/-%0d", what, i);
+                    errors++;
+                end
+            end
+        endtask
+
+        /// Compare [base, base+n) to the golden scale plane and a guard band either side
+        task automatic check_scale(input string what, input addr_t base, input int unsigned n);
+            for (int unsigned k = 0; k < n; k++) begin
+                if (rd_byte(base + k) !== 8'(gm_get_scale(int'(k)))) begin
+                    if (errors < 20) $error("%s scale %0d: expected 0x%02x, got 0x%02x", what, k,
+                                            8'(gm_get_scale(int'(k))), rd_byte(base + k));
+                    errors++;
+                end
+            end
+            for (int unsigned i = 1; i <= GuardBytes; i++) begin
+                if (rd_byte(base - i) !== Sentinel || rd_byte(base + n + i - 1) !== Sentinel) begin
+                    if (errors < 20) $error("%s scale guard band clobbered at +/-%0d", what, i);
+                    errors++;
+                end
+            end
+        endtask
+
+        /// AXI FP32 -> TCDM MXFP8 planes, TCDM planes -> TCDM FP32 and -> AXI FP32
+        task automatic check_mx_tcdm();
+            logic [31:0] w;
+            for (int unsigned el = 0; el < RtBlocks * 32; el++) begin
+                w = 32'(gm_stim_fp32(int'(el), int'(RtBlocks * 32), 1));
+                for (int unsigned b = 0; b < 4; b++) begin
+                    wr_byte(RtSrcAddr + el*4 + b, w[b*8 +: 8]);
+                    gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
+                end
+            end
+            gm_mxquant_fp32(int'(RtBlocks));
+            fill(TcdmQuant - GuardBytes, RtQuantBytes + 2*GuardBytes, Sentinel);
+            fill(TcdmScale - GuardBytes, RtBlocks + 2*GuardBytes, Sentinel);
+            fill(TcdmDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            fill(AxiDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+
+            harness.drv_if.dma_set_scale(TcdmScale);
+            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
+            run_copy(RtSrcAddr, TcdmQuant, RtSrcBytes);
+            check_golden("mxquant AXI->TCDM", TcdmQuant, RtQuantBytes);
+            check_scale("mxquant AXI->TCDM", TcdmScale, RtBlocks);
+
+            for (int unsigned i = 0; i < RtQuantBytes; i++) begin
+                gm_load(int'(i), int'(rd_byte(TcdmQuant + i)));
+            end
+            for (int unsigned k = 0; k < RtBlocks; k++) begin
+                gm_load_scale(int'(k), int'(rd_byte(TcdmScale + k)));
+            end
+            gm_mxdequant(int'(RtBlocks));
+            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxDequant));
+            run_copy(TcdmQuant, TcdmDequant, RtQuantBytes);
+            check_golden("mxdequant TCDM->TCDM", TcdmDequant, RtSrcBytes);
+            run_copy(TcdmQuant, AxiDequant, RtQuantBytes);
+            check_golden("mxdequant TCDM->AXI", AxiDequant, RtSrcBytes);
+            $display("[TB] MX over the TCDM: %0d blocks quantized into and dequantized out of OBI",
+                     RtBlocks);
+        endtask
+
+        /// A padded tile transposed with M and N short of NE: rows past N are all-zero strobes
+        task automatic check_transpose(input string what, input addr_t src, input addr_t dst);
+            logic [7:0] actual, expected;
+            bit         live;
+            for (int unsigned i = 0; i < TpTileBytes; i++) wr_byte(src + i, 8'(i * 7 + 3));
+            fill(dst - GuardBytes, TpTileBytes + 2*GuardBytes, Sentinel);
+            harness.drv_if.dma_set_compute(
+                32'(idma_inst64_compute_pkg::OpcTranspose) |
+                    (32'(TpMode) << idma_inst64_compute_pkg::Rs1TpModeLsb),
+                (32'(TpM) << idma_inst64_compute_pkg::Rs2TpTensorMLsb) |
+                    (32'(TpN) << idma_inst64_compute_pkg::Rs2TpTensorNLsb));
+            run_copy(src, dst, TpTileBytes);
+            // out[n][m] = in[m][n]; masked lanes and rows keep the sentinel
+            for (int unsigned n = 0; n < TpNe; n++) begin
+                for (int unsigned m = 0; m < TpNe; m++) begin
+                    for (int unsigned b = 0; b < TpElemBytes; b++) begin
+                        live     = (m < TpM) && (n < TpN);
+                        actual   = rd_byte(dst + n*StrbBytes + m*TpElemBytes + b);
+                        expected = live ? rd_byte(src + m*StrbBytes + n*TpElemBytes + b)
+                                        : Sentinel;
+                        if (actual !== expected) begin
+                            if (errors < 20) begin
+                                $error("%s out[%0d][%0d].%0d: expected 0x%02x, got 0x%02x",
+                                       what, n, m, b, expected, actual);
+                            end
+                            errors++;
+                        end
+                    end
+                end
+            end
+            for (int unsigned i = 1; i <= GuardBytes; i++) begin
+                if (rd_byte(dst - i) !== Sentinel ||
+                    rd_byte(dst + TpTileBytes + i - 1) !== Sentinel) begin
+                    if (errors < 20) $error("%s guard band clobbered at +/-%0d", what, i);
+                    errors++;
+                end
+            end
+            $display("[TB] transpose %s: %0dx%0d of a %0dx%0d tile, %0d all-zero-strobe rows",
+                     what, TpM, TpN, TpNe, TpNe, TpNe - TpN);
+        endtask
+
+        initial begin : tcdm_sequence
+            wait (axi_done);
+            check_mx_tcdm();
+            check_transpose("AXI->TCDM", TpAxiSrc, TpTcdmDst);
+            check_transpose("TCDM->AXI", TpTcdmSrc, TpAxiDst);
+            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));
+            tcdm_done = 1'b1;
+        end
+    end else begin : gen_no_tcdm_legs
+        initial tcdm_done = 1'b1;
     end
 
     initial begin : watchdog

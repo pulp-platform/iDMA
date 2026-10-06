@@ -622,6 +622,7 @@
                 { "tag" : "mxneg_11", "params" : { "NegCase" : 11, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxdequantLengthFits" },
                 { "tag" : "mxneg_13", "params" : { "NegCase" : 13, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 0 }, "token" : "ComputeOpUnsupported" },
                 { "tag" : "mxneg_14", "params" : { "NegCase" : 14, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeShape" },
+                { "tag" : "mxneg_15", "params" : { "NegCase" : 15, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeTransposeDstStrobe" },
                 { "tag" : "mxneg_17", "params" : { "NegCase" : 17, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeSizeAligned" },
                 { "tag" : "mxneg_18", "params" : { "NegCase" : 18, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxElemFmt" },
                 { "tag" : "mxneg_19", "params" : { "NegCase" : 19, "DataWidth" : 64, "EnDequant" : 1, "EnFp16" : 1 }, "token" : "ComputeMxScaleAligned" },
@@ -688,6 +689,10 @@
             { "top" : "tb_idma_mxrand",
               "why" : "verilator only: transfer 1 never completes, even at NumXfers=1 StallPct=0" },
             { "top" : "tb_idma_rt_midend", "why" : "fails under --assert on cc_rr_arb_tree lock" },
+            { "top" : "tb_idma_transpose_obi",
+              "why" : "verilator only: obi_sim_mem sits in the obi test target; Questa runs it" },
+            { "top" : "tb_idma_mx_obi",
+              "why" : "verilator only: obi_sim_mem sits in the obi test target; Questa runs it" },
             { "top" : "the directed backend job runs", "why" : "verilator cannot drive the class-based stimulus" }
         ]
     }

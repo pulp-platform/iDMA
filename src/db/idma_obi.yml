@@ -120,7 +120,8 @@ write_template: |
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} ),
         .buffer_out_offer_o ( ${buffer_out_offer} ),
-        .buffer_out_consumed_o ( ${buffer_out_consumed} )
+        .buffer_out_consumed_o ( ${buffer_out_consumed} ),
+        .mask_ext_i         ( mask_ext_shifted )
     );
 synth_wrapper_ports_write: |
     output logic                   obi_write_req_a_req_o,
