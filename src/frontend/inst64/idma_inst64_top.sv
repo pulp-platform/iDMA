@@ -912,16 +912,20 @@ module idma_inst64_top #(
          idma_inst64_compute_pkg::opc_decode(acc_req_i.data_arga, acc_req_i.data_argb),
          idma_fe_dmopc & ~idma_fe_setter, '0)
 
-    // DMCPY refuses an unelaborated op, and an MX copy with a reserved format, planes off a beat or
-    // in the TCDM window, a partial block or a written length that overflows the length field
-    logic idma_fe_mx_twod, idma_fe_op_bad, idma_fe_mx_bad;
+    // DMCPY refuses an unelaborated op and an illegal MX copy (snitch.md lists the cases)
+    logic idma_fe_mx_twod, idma_fe_op_bad, idma_fe_mx_bad, idma_fe_mx_port_obi;
     assign idma_fe_mx_twod   = (acc_req_i.data_op ==? idma_inst64_snitch_pkg::DMCPYI) ?
                                acc_req_i.data_op[21] : acc_req_i.data_argb[1];
     assign idma_fe_op_bad    = (idma_fe_compute_q.op != idma_pkg::COMPUTE_NONE) &
                                ~idma_pkg::compute_op_supported(ComputeOps, idma_fe_compute_q.op);
+    // the scale plane travels on the port of the plane it belongs to (dequant: source)
+    assign idma_fe_mx_port_obi =
+        ((idma_fe_compute_q.op inside {idma_pkg::COMPUTE_MXDEQUANT,
+                                       idma_pkg::COMPUTE_MXDEQUANT_FP16}) ?
+         idma_fe_req_d.burst_req.opt.src_protocol :
+         idma_fe_req_d.burst_req.opt.dst_protocol) == idma_pkg::OBI;
     assign idma_fe_mx_bad    = ~idma_pkg::mx_elem_legal(idma_fe_compute_q.params.mx.elem_fmt) |
-                               (idx_src == idma_pkg::TCDMDMA) | (idx_dst == idma_pkg::TCDMDMA) |
-                               (idx_scale == idma_pkg::TCDMDMA) |
+                               (idma_fe_mx_port_obi != (idx_scale == idma_pkg::TCDMDMA)) |
                                (idma_fe_req_q.burst_req.src_addr[OffsetWidth-1:0] != '0) |
                                (idma_fe_req_q.burst_req.dst_addr[OffsetWidth-1:0] != '0) |
                                ((acc_req_i.data_arga &

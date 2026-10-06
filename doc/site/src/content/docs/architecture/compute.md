@@ -114,7 +114,7 @@ Placement rules:
   number of blocks (`ComputeSizeAligned`), whose ND data strides move a plane off a beat, whose
   written length overflows the length field (`ComputeMxdequantLengthFits`), or that carries a
   reserved `elem_fmt` (register frontend: `next_id` reads 0; inst64: `DMCPY` returns id 0 with
-  the error bit; inst64 also refuses planes in the TCDM window), so no such request reaches the
+  the error bit; inst64 also refuses a scale plane that does not decode to its data plane's port), so no such request reaches the
   backend from them. The register frontend
   checks beats of its `DataWidth` parameter (default 512 bit, the widest MX backend). The backend
   itself checks the rules only with the simulation assertions above; a request from another

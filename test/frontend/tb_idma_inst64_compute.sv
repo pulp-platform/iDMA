@@ -56,16 +56,19 @@ module tb_idma_inst64_compute #(
     localparam addr_t QuantAddr = 64'h9000_0000;
     localparam addr_t CopyAddr  = 64'hA000_0000;
 
-    // TCDM legs: dequant input must be a whole number of beats of blocks
+    // TCDM legs: two scale groups, the second partial, each plane in the TCDM and over AXI
     localparam int unsigned StrbBytes    = AxiDataWidth / 32'd8;
-    localparam int unsigned RtBlocks     = StrbBytes;
+    localparam int unsigned RtBlocks     = 32'd67;
     localparam int unsigned RtSrcBytes   = RtBlocks * BlkInBytes;
     localparam int unsigned RtQuantBytes = RtBlocks * 32;
     localparam addr_t RtSrcAddr   = 64'hB000_0000;
     localparam addr_t TcdmQuant   = addr_t'(TcdmStart + 64'h0100);
     localparam addr_t TcdmScale   = addr_t'(TcdmStart + 64'h1000);
     localparam addr_t TcdmDequant = addr_t'(TcdmStart + 64'h2000);
+    localparam addr_t TcdmFp32    = addr_t'(TcdmStart + 64'h8000);
     localparam addr_t AxiDequant  = 64'hC000_0000;
+    localparam addr_t AxiQuant    = 64'hC100_0000;
+    localparam addr_t AxiScale    = 64'hC200_0000;
 
     // Transpose leg: one padded FP32 tile, edges masked on both axes
     localparam int unsigned TpMode      = 32'd2;
@@ -340,8 +343,7 @@ module tb_idma_inst64_compute #(
                 errors++;
             end
         end
-        // Planes off a beat or in the TCDM window, a partial block, a 2D stride off a beat, an op
-        // that is not elaborated or a dequant output beyond the length field are refused too
+        // every other MX launch refusal of the frontend
         for (int unsigned c = 0; c < 11; c++) begin
             automatic addr_t       src = SrcAddr, dst = QuantAddr, len = addr_t'(SrcBytes);
             automatic logic [31:0] sst = 'h1000, dst_st = 'h1000;
@@ -356,7 +358,10 @@ module tb_idma_inst64_compute #(
                 3: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
                 4: begin cfg = 2'b10; dst_st = 'h1000 + HalfBeat; end
                 5: begin cfg = 2'b10; sst = 'h1000 + HalfBeat; end
-                6: src = addr_t'(idma_inst64_tb_pkg::TcdmStart);
+                6: begin
+                    opc = 8'(idma_inst64_compute_pkg::OpcMxDequant);
+                    src = addr_t'(idma_inst64_tb_pkg::TcdmStart);
+                end
                 7: dst = addr_t'(idma_inst64_tb_pkg::TcdmStart);
                 8: harness.drv_if.dma_set_scale(addr_t'(idma_inst64_tb_pkg::TcdmStart));
                 9: opc = 8'(idma_inst64_compute_pkg::OpcMxQuantFp16);
@@ -390,7 +395,7 @@ module tb_idma_inst64_compute #(
                 errors++;
             end
         $display("[TB] DMCPY refused: reserved MX format, plane off a beat%s, partial block%s",
-                 EnableTcdmObi ? " or in the TCDM window" : "",
+                 EnableTcdmObi ? " or a scale plane off its data plane's port" : "",
                  ComputeOpsMask[0] ? "" : ", FP16 quant not elaborated");
 
         // Back to a plain copy: the latched op must not leak into the next transfer
@@ -488,27 +493,38 @@ module tb_idma_inst64_compute #(
             end
         endtask
 
-        /// AXI FP32 -> TCDM MXFP8 planes, TCDM planes -> TCDM FP32 and -> AXI FP32
+        /// One MX DMCPY with its scale plane
+        task automatic run_mx(input logic [7:0] opc, input addr_t src, input addr_t dst,
+                              input addr_t scl, input int unsigned len);
+            harness.drv_if.dma_set_scale(scl);
+            harness.drv_if.dma_set_compute(32'(opc));
+            run_copy(src, dst, len);
+        endtask
+
+        /// Quant both ways across the TCDM, then dequant out of and into it
         task automatic check_mx_tcdm();
             logic [31:0] w;
             for (int unsigned el = 0; el < RtBlocks * 32; el++) begin
                 w = 32'(gm_stim_fp32(int'(el), int'(RtBlocks * 32), 1));
                 for (int unsigned b = 0; b < 4; b++) begin
                     wr_byte(RtSrcAddr + el*4 + b, w[b*8 +: 8]);
+                    wr_byte(TcdmFp32 + el*4 + b, w[b*8 +: 8]);
                     gm_load(int'(el*4 + b), int'(w[b*8 +: 8]));
                 end
             end
             gm_mxquant_fp32(int'(RtBlocks));
             fill(TcdmQuant - GuardBytes, RtQuantBytes + 2*GuardBytes, Sentinel);
             fill(TcdmScale - GuardBytes, RtBlocks + 2*GuardBytes, Sentinel);
-            fill(TcdmDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
-            fill(AxiDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            fill(AxiQuant - GuardBytes, RtQuantBytes + 2*GuardBytes, Sentinel);
+            fill(AxiScale - GuardBytes, RtBlocks + 2*GuardBytes, Sentinel);
 
-            harness.drv_if.dma_set_scale(TcdmScale);
-            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
-            run_copy(RtSrcAddr, TcdmQuant, RtSrcBytes);
+            run_mx(idma_inst64_compute_pkg::OpcMxQuant, RtSrcAddr, TcdmQuant, TcdmScale,
+                   RtSrcBytes);
             check_golden("mxquant AXI->TCDM", TcdmQuant, RtQuantBytes);
             check_scale("mxquant AXI->TCDM", TcdmScale, RtBlocks);
+            run_mx(idma_inst64_compute_pkg::OpcMxQuant, TcdmFp32, AxiQuant, AxiScale, RtSrcBytes);
+            check_golden("mxquant TCDM->AXI", AxiQuant, RtQuantBytes);
+            check_scale("mxquant TCDM->AXI", AxiScale, RtBlocks);
 
             for (int unsigned i = 0; i < RtQuantBytes; i++) begin
                 gm_load(int'(i), int'(rd_byte(TcdmQuant + i)));
@@ -517,12 +533,19 @@ module tb_idma_inst64_compute #(
                 gm_load_scale(int'(k), int'(rd_byte(TcdmScale + k)));
             end
             gm_mxdequant(int'(RtBlocks));
-            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxDequant));
-            run_copy(TcdmQuant, TcdmDequant, RtQuantBytes);
+            fill(TcdmDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            fill(AxiDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            run_mx(idma_inst64_compute_pkg::OpcMxDequant, TcdmQuant, TcdmDequant, TcdmScale,
+                   RtQuantBytes);
             check_golden("mxdequant TCDM->TCDM", TcdmDequant, RtSrcBytes);
-            run_copy(TcdmQuant, AxiDequant, RtQuantBytes);
+            run_mx(idma_inst64_compute_pkg::OpcMxDequant, TcdmQuant, AxiDequant, TcdmScale,
+                   RtQuantBytes);
             check_golden("mxdequant TCDM->AXI", AxiDequant, RtSrcBytes);
-            $display("[TB] MX over the TCDM: %0d blocks quantized into and dequantized out of OBI",
+            fill(TcdmDequant - GuardBytes, RtSrcBytes + 2*GuardBytes, Sentinel);
+            run_mx(idma_inst64_compute_pkg::OpcMxDequant, AxiQuant, TcdmDequant, AxiScale,
+                   RtQuantBytes);
+            check_golden("mxdequant AXI->TCDM", TcdmDequant, RtSrcBytes);
+            $display("[TB] MX over the TCDM: %0d blocks quantized and dequantized on both ports",
                      RtBlocks);
         endtask
 
