@@ -96,7 +96,8 @@ module idma_nd_midend #(
     // assign the handshaking signals on the input
     assign stage_done[0]  = nd_req_valid_i;
     assign last           = &(stage_done[NumDim-1:0]);
-    assign nd_req_ready_o = last & nd_req_valid_i & burst_req_ready_i;
+    // a zero transfer retires with its error response, not with a burst
+    assign nd_req_ready_o = last & nd_req_valid_i & (zero ? nd_rsp_ready_i : burst_req_ready_i);
 
     // all stages are zero
     assign zero = &(stage_zero);
@@ -122,7 +123,7 @@ module idma_nd_midend #(
 
         // dataflow: stage needs to be enabled and target ready
         assign stage_en   [d-2] = &(stage_done[d-2:0]) & burst_req_ready_i;
-        assign stage_clear[d-2] = &(stage_done[d-1:0]) & burst_req_ready_i;
+        assign stage_clear[d-2] = &(stage_done[d-1:0]) & (burst_req_ready_i | zero);
 
         // size conversion
         assign local_rep = nd_req_valid_i ? nd_req_i.d_req[d-2].reps[RepWidth-1:0] : '0;
@@ -216,7 +217,7 @@ module idma_nd_midend #(
         burst_rsp_ready_o = nd_rsp_ready_i;
 
         // a zero transfer happens
-        if (zero & nd_req_valid_i & nd_req_ready_o) begin
+        if (zero & nd_req_valid_i) begin
             // block backend
             burst_rsp_ready_o = 1'b0;
             // generate new response

@@ -128,6 +128,7 @@ sources:
       - test/future/TLToAXI4.v
       - test/midend/tb_idma_nd_midend.sv
       - test/midend/tb_idma_nd_midend_b2b.sv
+      - test/midend/tb_idma_nd_midend_zero.sv
       - test/midend/tb_idma_rt_midend.sv
       - test/midend/tb_idma_transpose_midend.sv
       # Level 2
