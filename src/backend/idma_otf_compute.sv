@@ -120,7 +120,7 @@ module idma_otf_compute #(
   end
 
   // MX input: straight from the read side, or a register stage loaded whenever it can accept
-  logic                      in_v, in_rdy, in_push, dq_ready, qb_rdy;
+  logic                      in_v, in_rdy, in_push, in_busy, dq_ready, qb_rdy;
   logic [StrbWidth-1:0][7:0] in_data;
   idma_pkg::mx_tag_t         in_tag;
   assign in_rdy  = in_tag.dequant ? dq_ready : qb_rdy;
@@ -144,22 +144,25 @@ module idma_otf_compute #(
     assign in_v    = v_q;
     assign in_data = data_q;
     assign in_tag  = tag_q;
+    assign in_busy = v_q;
   end else begin : gen_in_direct
     assign mx_ready_o = in_rdy;
     assign in_v       = mx_push_i;
     assign in_data    = mx_data_i;
     assign in_tag     = mx_tag_i;
+    assign in_busy    = 1'b0;
   end
 
   // MX quant sub-unit behind its input queue, which refills in the cycle the engine takes its head
   logic                      mq_valid, mq_ready, mq_busy, qb_v;
   logic [StrbWidth-1:0][7:0] mq_data;
 
+  typedef struct packed {
+    idma_pkg::mx_tag_t         tag;
+    logic [StrbWidth-1:0][7:0] data;
+  } qb_t;
+
   if (ComputeEnable.mxquant) begin : gen_mxquant
-    typedef struct packed {
-      idma_pkg::mx_tag_t         tag;
-      logic [StrbWidth-1:0][7:0] data;
-    } qb_t;
     qb_t [0:0] qb_in, qb_out;
 
     assign qb_in[0] = '{tag: in_tag, data: in_data};
@@ -233,7 +236,7 @@ module idma_otf_compute #(
   assign w_data_o  = w_mxq ? mq_data : w_mxdq ? dq_data : w_data_i;
   assign w_valid_o = w_mxq ? {StrbWidth{mq_valid}} : w_mxdq ? {StrbWidth{dq_valid}} : w_valid_i;
   assign w_mask_o  = w_mx_o ? '1 : w_mask_i;
-  assign busy_o    = in_v | qb_v | mq_busy | dq_busy;
+  assign busy_o    = in_busy | qb_v | mq_busy | dq_busy;
 
   // pragma translate_off
   // an op that is not elaborated must never be presented (legalizer fence reports first)
