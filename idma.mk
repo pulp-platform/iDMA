@@ -502,6 +502,20 @@ idma_sim_tb_idma_inst64_gather: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_gather.t
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_gather_axi.log
 	cd $(IDMA_VSIM_DIR); grep -q "TEST PASSED" inst64_gather_tcdm.log
 
+# Plain copies through the gather midend; legs are <EnableGather>_<Case>
+IDMA_GATHER_PLAIN_LEGS ?= 0_0 0_1 1_0 1_1 1_2
+
+.PHONY: idma_sim_tb_idma_inst64_gather_plain
+idma_sim_tb_idma_inst64_gather_plain: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_gather_plain.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_gather_plain.tcl; quit"
+	cd $(IDMA_VSIM_DIR); $(foreach l,$(IDMA_GATHER_PLAIN_LEGS),$(VSIM) -c -t 1ps -voptargs=+acc \
+		-gEnableGather=$(word 1,$(subst _, ,$(l))) -gCase=$(word 2,$(subst _, ,$(l))) \
+		tb_idma_inst64_gather_plain -logfile inst64_gather_plain_$(l).log -do "run -all; quit";) true
+	cd $(IDMA_VSIM_DIR); rc=0; for l in $(IDMA_GATHER_PLAIN_LEGS); do \
+	  if grep -q "TEST PASSED" inst64_gather_plain_$$l.log && \
+	     ! grep -qE "Error:|Fatal:" inst64_gather_plain_$$l.log; then echo "PASS $$l"; \
+	  else echo "FAIL $$l"; rc=1; fi; done; exit $$rc
+
 .PHONY: idma_sim_tb_idma_inst64_compute
 idma_sim_tb_idma_inst64_compute: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_compute.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_compute.tcl; quit"
@@ -684,7 +698,7 @@ idma_lint_clean:
 # inst64 gate: the only public concrete bindings of idma_inst64_top
 IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
                     tb_idma_inst64_tcdm_copy tb_idma_inst64_compute \
-                    tb_idma_inst64_gather
+                    tb_idma_inst64_gather tb_idma_inst64_gather_plain
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
 
@@ -694,7 +708,8 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
                     tb_idma_inst64_compute:-GEnableTcdmObi=1 \
-                    tb_idma_inst64_gather:-GEnableTcdmObi=1
+                    tb_idma_inst64_gather:-GEnableTcdmObi=1 \
+                    tb_idma_inst64_gather_plain:-GEnableGather=0
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:

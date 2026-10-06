@@ -165,6 +165,7 @@ sources:
       - test/frontend/tb_idma_inst64_tcdm_copy.sv
       - test/frontend/tb_idma_inst64_compute.sv
       - test/frontend/tb_idma_inst64_gather.sv
+      - test/frontend/tb_idma_inst64_gather_plain.sv
 
   # Multi-head directed backend testbenches
   - target: multihead

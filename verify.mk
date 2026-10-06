@@ -197,7 +197,7 @@ idma_verify_multihead: $(IDMA_VERIFY_DIR)/multihead_ids.list
 # Public simulation (verilator)
 # ---------------
 
-IDMA_VLT_SIM_T     := -t rtl -t idma_test -t simulation -t synth
+IDMA_VLT_SIM_T     := -t rtl -t idma_test -t simulation -t synth -t test -t snitch_cluster
 IDMA_VLT_MAKEFLAGS ?=
 
 # verilator --timing lowers to C++20 coroutines; g++ 11 miscompiles them

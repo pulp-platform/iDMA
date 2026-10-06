@@ -139,7 +139,8 @@ module tb_idma_gather_midend #(
         input addr_t       idx_base,
         input bit          reject,
         input bit          misalign,
-        input int          err_at
+        input int          err_at,
+        input int          err_at2 = -1
     );
         idma_gather_req_t r;
         idma_nd_req_t     e;
@@ -183,8 +184,9 @@ module tb_idma_gather_midend #(
                                        addr_t'(i) * r.nd_req.d_req[0].dst_strides;
                 e.d_req[0].reps = reps_t'(1);
                 exp_req_q.push_back(e);
-                inj_err_q.push_back(err_at == int'(i));
-                if (err_at == int'(i)) begin
+                inj_err_q.push_back(err_at == int'(i) || err_at2 == int'(i));
+                // the first error of a gather is the one reported
+                if ((err_at == int'(i) || err_at2 == int'(i)) && !x.error) begin
                     x.error      = 1'b1;
                     x.burst_addr = e.burst_req.src_addr;
                 end
@@ -387,9 +389,10 @@ module tb_idma_gather_midend #(
     //--------------------------------------
     initial begin : proc_test
         longint unsigned t0, t1;
-        int unsigned     perf_arg;
+        int unsigned     perf_arg, err2_arg;
         perf = 1'b0;
         if ($value$plusargs("PERF=%d", perf_arg)) perf = (perf_arg != 0);
+        if (!$value$plusargs("ERR2=%d", err2_arg)) err2_arg = 0;
         rst_n = 1'b0;
         repeat (5) @(posedge clk);
         rst_n <= 1'b1;
@@ -397,6 +400,9 @@ module tb_idma_gather_midend #(
         if (perf) begin
             // one long 16-bit gather with no stalls
             add_gather(PerfIdx, 1, 0, addr_t'(256), addr_t'(64'h2000_0000), 1'b0, 1'b0, -1);
+        end else if (err2_arg != 0) begin
+            // errors on the first and the last row
+            add_gather(8, 1, 0, addr_t'(64), addr_t'(64'h2000_0000), 1'b0, 1'b0, 0, 7);
         end else begin
             build_cases();
         end
