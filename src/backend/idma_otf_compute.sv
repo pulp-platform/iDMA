@@ -52,7 +52,7 @@ module idma_otf_compute #(
   output logic [StrbWidth-1:0]      w_valid_o,
   output logic [StrbWidth-1:0]      w_mask_o,
   output logic                      w_mx_o,
-  /// W channel ready while a write burst is open; a whole MX beat retires on it
+  /// W beat handshake of the write port; a whole MX beat retires on it
   input  logic                      w_ready_i,
   output logic                      busy_o
 );

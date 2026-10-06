@@ -501,7 +501,7 @@ ${rendered_read_ports[read_port]}
             .w_valid_o    ( buffer_out_valid_shifted ),
             .w_mask_o     ( mask_ext_shifted         ),
             .w_mx_o       ( cmp_w_mx                 ),
-            .w_ready_i    ( w_dp_valid_i & w_chan_ready_o ),
+            .w_ready_i    ( w_chan_valid_o & w_chan_ready_o ),
             .busy_o       ( cmp_busy                 )
         );
 
@@ -543,10 +543,8 @@ ${rendered_read_ports[read_port]}
                 !rst_ni, "MX push differs from the masked read beat")
         `ASSERT(ComputeMxNoReadShift, r_dp_req_i.mx.mx & (|buffer_in_valid) |->
                 r_dp_req_i.shift == '0, clk_i, !rst_ni, "MX input bypasses the read shifter")
-        `ASSERT(ComputeMxWPop, cmp_w_mx |->
-                ((buffer_out_valid_shifted[0] & w_dp_valid_i & w_chan_ready_o) ==
-                 (w_chan_valid_o & w_chan_ready_o)), clk_i, !rst_ni,
-                "MX queue pop differs from the W handshake")
+        `ASSERT(ComputeMxWPop, cmp_w_mx & w_chan_valid_o & w_chan_ready_o |->
+                buffer_out_valid_shifted[0], clk_i, !rst_ni, "MX W beat without an engine beat")
     end else begin : gen_no_compute
         assign wr_data                  = buffer_out;
         assign wr_valid                 = buffer_out_valid;
