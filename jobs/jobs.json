@@ -564,6 +564,19 @@
             ]
         }
     },
+    "nd_midend_zero" : {
+        "jobs" : {
+        },
+        "params" : {
+        },
+        "testbench" : "tb_idma_nd_midend_zero",
+        "verify" : {
+            "token" : "[NDZ] ALL PASS",
+            "legs" : [
+                { "tag" : "nd_midend_zero" }
+            ]
+        }
+    },
     "transpose_midend" : {
         "jobs" : {
         },

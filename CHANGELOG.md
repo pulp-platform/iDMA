@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+### Fixed
+- Hold the ND midend's zero-transfer rejection until it is accepted. It was lost when the response
+  side was not ready, and a rejection taken while the backend stalled left the next transfer
+  starting from the rejected transfer's address.
+
 ### Changed
 - **Breaking:** the MX block scale byte is now OCP E8M0 (unsigned, bias 127, `0xFF` = NaN)
   instead of two's complement; the shared exponent clamps to [-127, 127] and a `0xFF` scale
