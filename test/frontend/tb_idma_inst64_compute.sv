@@ -549,6 +549,38 @@ module tb_idma_inst64_compute #(
                      RtBlocks);
         endtask
 
+        /// A non-zero user moves a quant to AXI: its scale plane must decode outside the TCDM too
+        task automatic check_mx_user();
+            acc_rsp_item_t r;
+            for (int unsigned i = 0; i < RtSrcBytes; i++)
+                gm_load(int'(i), int'(rd_byte(RtSrcAddr + i)));
+            gm_mxquant_fp32(int'(RtBlocks));
+            harness.drv_if.dma_set_user(64'h1);
+            harness.drv_if.dma_set_scale(TcdmScale);
+            harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcMxQuant));
+            harness.drv_if.dma_set_source(RtSrcAddr);
+            harness.drv_if.dma_set_dest(TcdmQuant);
+            harness.drv_if.dma_try_copy(addr_t'(RtSrcBytes), 2'b00, 3'd0, r);
+            if (!r.error || r.data !== '0) begin
+                $error("user quant with a TCDM scale plane not refused (error=%0b id=%0d)",
+                       r.error, r.data);
+                errors++;
+            end
+            for (int unsigned i = 0; i < RtQuantBytes + 2*GuardBytes; i++)
+                harness.mem_write_byte(TcdmQuant - GuardBytes + i, Sentinel);
+            fill(AxiScale - GuardBytes, RtBlocks + 2*GuardBytes, Sentinel);
+            run_mx(idma_inst64_compute_pkg::OpcMxQuant, RtSrcAddr, TcdmQuant, AxiScale, RtSrcBytes);
+            harness.drv_if.dma_set_user(64'h0);
+            for (int unsigned i = 0; i < RtQuantBytes; i++) begin
+                if (harness.mem_read_byte(TcdmQuant + i) !== 8'(gm_get(int'(i)))) begin
+                    if (errors < 20) $error("user quant data %0d not on AXI", i);
+                    errors++;
+                end
+            end
+            check_scale("user quant", AxiScale, RtBlocks);
+            $display("[TB] MX quant with a non-zero user: TCDM scale refused, planes on AXI");
+        endtask
+
         /// A padded tile transposed with M and N short of NE: rows past N are all-zero strobes
         task automatic check_transpose(input string what, input addr_t src, input addr_t dst);
             logic [7:0] actual, expected;
@@ -593,6 +625,7 @@ module tb_idma_inst64_compute #(
         initial begin : tcdm_sequence
             wait (axi_done);
             check_mx_tcdm();
+            check_mx_user();
             check_transpose("AXI->TCDM", TpAxiSrc, TpTcdmDst);
             check_transpose("TCDM->AXI", TpTcdmSrc, TpAxiDst);
             harness.drv_if.dma_set_compute(32'(idma_inst64_compute_pkg::OpcPassthrough));
