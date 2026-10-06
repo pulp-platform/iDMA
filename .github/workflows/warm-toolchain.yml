@@ -22,7 +22,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/apt-debs
-          key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v3
+          key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v4
       -
         name: Download packages
         if: steps.debs.outputs.cache-hit != 'true'
@@ -31,22 +31,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y -d \
             -o Dir::Cache::archives="$HOME/.cache/apt-debs" \
-            ccache mold
+            ccache
           ls -1 "$HOME/.cache/apt-debs"/*.deb | wc -l
       -
         name: Checkout
         uses: actions/checkout@v4
       -
-        name: Prepare the OSEDA tool prefix
-        run: sudo mkdir -p /foss/tools && sudo chown "$USER" /foss/tools
-      -
-        name: Restore the OSEDA Verilator
-        id: oseda
+        name: Restore Verilator
+        id: verilator
         uses: actions/cache@v4
         with:
-          path: /foss/tools/verilator
-          key: oseda-verilator-2026.09-${{ runner.arch }}-v1
+          path: ~/.cache/verilator
+          key: verilator-${{ runner.arch }}-${{ hashFiles('.github/actions/verify-setup/*.sh') }}
       -
-        name: Copy Verilator out of the OSEDA 2026.09 image
-        if: steps.oseda.outputs.cache-hit != 'true'
-        run: .github/actions/verify-setup/oseda-verilator.sh
+        name: Copy Verilator out of its official image
+        if: steps.verilator.outputs.cache-hit != 'true'
+        run: .github/actions/verify-setup/verilator.sh

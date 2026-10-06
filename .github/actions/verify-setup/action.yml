@@ -6,10 +6,10 @@
 # - Daniel Keller <dankeller@iis.ee.ethz.ch>
 
 name: Set up the public verification toolchain
-description: Bender database cache, uv, Bender and optionally Verilator (OSEDA 2026.09)
+description: Bender database cache, uv, Bender and optionally Verilator
 inputs:
   verilator:
-    description: Install Verilator 5.052 from OSEDA 2026.09, ccache and mold from apt
+    description: Install Verilator 5.052 from its official image and ccache from apt
     default: 'false'
   bender-version:
     description: Bender release to install
@@ -52,9 +52,9 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.cache/apt-debs
-        key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v3
+        key: apt-debs-ubuntu-24.04-${{ runner.arch }}-v4
 
-    # OSEDA's verilated.mk links with -fuse-ld=mold, as the OSEDA image does
+    # verilated.mk of the official image sets OBJCACHE ?= ccache
     - if: inputs.verilator == 'true'
       shell: bash
       run: |
@@ -63,27 +63,23 @@ runs:
         else
           echo "apt-debs cache miss; installing from the archive"
           sudo apt-get update
-          sudo apt-get install -y ccache mold
+          sudo apt-get install -y ccache
         fi
         echo "CCACHE_DIR=$HOME/.cache/ccache" >> "$GITHUB_ENV"
         echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
 
-    # OSEDA installs Verilator under /foss/tools and its paths point there
     - if: inputs.verilator == 'true'
-      shell: bash
-      run: sudo mkdir -p /foss/tools && sudo chown "$USER" /foss/tools
-    - if: inputs.verilator == 'true'
-      id: oseda
+      id: verilator
       uses: actions/cache/restore@v4
       with:
-        path: /foss/tools/verilator
-        key: oseda-verilator-2026.09-${{ runner.arch }}-v1
-    - if: inputs.verilator == 'true' && steps.oseda.outputs.cache-hit != 'true'
+        path: ~/.cache/verilator
+        key: verilator-${{ runner.arch }}-${{ hashFiles('.github/actions/verify-setup/*.sh') }}
+    - if: inputs.verilator == 'true' && steps.verilator.outputs.cache-hit != 'true'
       shell: bash
-      run: ${{ github.action_path }}/oseda-verilator.sh
+      run: ${{ github.action_path }}/verilator.sh
     - if: inputs.verilator == 'true'
       shell: bash
-      run: echo "/foss/tools/verilator/bin" >> "$GITHUB_PATH"
+      run: echo "$HOME/.cache/verilator/bin" >> "$GITHUB_PATH"
     - if: inputs.verilator == 'true'
       uses: actions/cache@v4
       with:
@@ -97,8 +93,7 @@ runs:
       run: |
         verilator --version
         verilator --version | grep -qE '^Verilator 5\.052 ' || {
-          echo "expected Verilator 5.052 from OSEDA 2026.09"; exit 1; }
-        mold --version
+          echo "expected Verilator 5.052"; exit 1; }
     - if: inputs.verilator == 'true'
       shell: bash
       run: uv run --locked make idma_verify_toolchain

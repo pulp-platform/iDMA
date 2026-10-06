@@ -25,7 +25,7 @@ All DMA instructions that return a value write to `rd` (destination register). T
 | `DMSTAT` | `rd` = status value, `rs2` = {channel, status_sel} | Query status (register). Returns status in `rd` |
 | `DMSTR` | `rs1` = src_stride, `rs2` = dst_stride | Set 2D strides |
 | `DMREP` | `rs1` = repetitions | Set 2D repetition count |
-| `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits |
+| `DMUSER` | `rs1`, `rs2` | Set AXI user field. When `AxiUserWidth <= 32`, only `rs1` is used (lower bits). When `AxiUserWidth > 32`, `rs1` provides bits [31:0] and `rs2` provides the remaining upper bits. A non-zero user keeps the write on AXI regardless of `addr_map_i` |
 | `DMOPC` | `rs1` = {mode, opcode byte}, `rs2` = op parameters | Select the on-the-fly compute op applied by every following `DMCPY`/`DMCPYI`. Requires `EnableCompute`; `DMINIT` transfers stay plain memsets |
 
 **Compute opcode byte** (`DMOPC`, `rs1[7:0]`). The bytes and the operand field positions live in
@@ -49,8 +49,8 @@ The scale plane address and stride setters (`0x28`, `0x29`) load frontend state 
 following `DMCPY` sends with its request, like `DMSRC` and `DMSTR`; carried in 64 B units they
 are 64 B aligned by construction (scale addresses up to 2^62). A `DMCPY` whose latched op is not
 elaborated (`ComputeOps`), or whose latched MX op has a reserved `elem_fmt`, a scale plane that
-does not decode to the port of its data plane (the source for a dequant, the destination for a
-quant), a source or destination off a bus beat, a length that is not a whole number of blocks
+does not decode to the port its data plane takes (the source for a dequant, the destination for a
+quant, so AXI under a non-zero `DMUSER`), a source or destination off a bus beat, a length that is not a whole number of blocks
 or whose written length does not fit the length field, or (2D) a source or destination stride off
 a beat, is refused: the response carries id 0 with the error bit set and nothing is launched.
 

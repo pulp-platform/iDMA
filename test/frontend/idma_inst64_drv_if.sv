@@ -67,8 +67,6 @@ interface idma_inst64_drv_if #(
     acc_rsp_item_t rsp_queue [$];
 
     always @(posedge clk) begin : proc_capture_rsp
-        // built in a variable first: verilator rejects an assignment pattern as an argument
-        automatic acc_rsp_item_t rsp_item;
         if (rst_n && acc_res_valid && acc_res_ready) begin
             // typed pattern: verilator rejects a bare assignment pattern as a call argument
             rsp_queue.push_back(
@@ -155,6 +153,11 @@ interface idma_inst64_drv_if #(
         acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMDST),
                   {32'b0, addr[31:0]},
                   {{(64-(AxiAddrWidth-32)){1'b0}}, addr[AxiAddrWidth-1:32]});
+    endtask
+
+    task automatic dma_set_user(input logic [63:0] user);
+        acc_issue(inst_encoding(idma_inst64_snitch_pkg::DMUSER),
+                  {32'b0, user[31:0]}, {32'b0, user[63:32]});
     endtask
 
     /// DMOPC; both operands are sign-extended from bit 31 as an RV32 core drives them.

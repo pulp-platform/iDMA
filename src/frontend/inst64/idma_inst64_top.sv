@@ -885,6 +885,9 @@ module idma_inst64_top #(
                 idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
             end
         endcase
+        if (idma_fe_req_d.burst_req.user != '0) begin
+            idma_fe_req_d.burst_req.opt.dst_protocol = idma_pkg::AXI;
+        end
     end
 
     // twod handling
