@@ -5,19 +5,34 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## 0.7.4 - 2026-10-06
+
+MX changes the on-chip MX format and layout; MX has no production users yet, so they stay on 0.7.x.
+MX software written for 0.7.3 needs updating (see the MX entries below).
 
 ### Fixed
+- inst64 writes with a non-zero user (multicast, reduction) always go out on AXI, so they reach
+  the cluster router instead of the local TCDM over OBI
+  [#264](https://github.com/pulp-platform/iDMA/pull/264).
+- Remove the structural combinational loops between the backend and an `axi_to_obi` slave
+  (`w_dp_busy` no longer depends on the write port ready)
+  [#265](https://github.com/pulp-platform/iDMA/pull/265), and between the read handshake and the
+  compute busy flag; declare the compute helper types at module scope for VCS
+  [#271](https://github.com/pulp-platform/iDMA/pull/271).
+- Transpose and MX compute over OBI: transpose edge strobes reach an OBI destination
+  [#235](https://github.com/pulp-platform/iDMA/pull/235).
 - Hold the ND midend's zero-transfer rejection until it is accepted. It was lost when the response
   side was not ready, and a rejection taken while the backend stalled left the next transfer
-  starting from the rejected transfer's address.
+  starting from the rejected transfer's address
+  [#267](https://github.com/pulp-platform/iDMA/pull/267).
 
 ### Changed
-- **Breaking:** the MX block scale byte is now OCP E8M0 (unsigned, bias 127, `0xFF` = NaN)
+- Public CI takes Verilator 5.052 from its official Docker image [#263](https://github.com/pulp-platform/iDMA/pull/263).
+- **MX format:** the MX block scale byte is now OCP E8M0 (unsigned, bias 127, `0xFF` = NaN)
   instead of two's complement; the shared exponent clamps to [-127, 127] and a `0xFF` scale
   dequantizes to NaN. MX blocks written by earlier versions decode differently
   [#259](https://github.com/pulp-platform/iDMA/issues/259).
-- **Breaking:** MX quant poisons a block holding an Inf or NaN (scale `0xFF`, every element
+- **MX format:** MX quant poisons a block holding an Inf or NaN (scale `0xFF`, every element
   `0x7D`); the per-transfer `mx_options_t.poison_dis` bit (`mx_cfg` register, DMOPC `rs1[18]`)
   restores the finite-lane behaviour.
 - MX dequant to FP32 is exact: FP32 subnormal results instead of a flush to zero, Inf instead of
@@ -36,7 +51,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   selects the burst's output queue after the write shifter and pops it on the W handshake. The
   interlock remains for transpose. `tb_idma_mxclear` checks the empty-queue pop guard of both
   engines.
-- **Breaking:** MX transfers use a data plane (32 B of elements per block) and a separate
+- **MX format:** MX transfers use a data plane (32 B of elements per block) and a separate
   scale plane (one E8M0 byte per block) in one pass; the inline 33 B block layout is removed.
   `mx_options_t` (`compute_params_t.mx`, register `mx_cfg`, DMOPC `rs1` fields generated
   from the same database) carries `poison_dis`, `rceil`, `elem_fmt` and `group` (G = 64 or 32
@@ -45,8 +60,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   reads on the read side (dequant). The dequant `length` is the data-plane length.
   `idma_pkg::MxBlockBytes` is gone, and the `idma_mx_golden.h` quant/dequant helpers take a data
   and a scale buffer.
-- **Breaking:** MX compute needs `StrbWidth <= 64`; wider MX builds stop at elaboration.
-- **Breaking:** `IDMA_TYPEDEF_REQ_T` adds `scale_addr`, the MX scale plane address, 64 B
+- **MX format:** MX compute needs `StrbWidth <= 64`; wider MX builds stop at elaboration.
+- **Interface:** `IDMA_TYPEDEF_REQ_T` adds `scale_addr`, the MX scale plane address, 64 B
   aligned (`ComputeMxScaleAligned`), and `IDMA_TYPEDEF_D_REQ_T` adds `scale_strides`; code that
   builds these structs field by field must drive them (zero outside MX). The ND midend steps
   `scale_addr` per row with `scale_strides`. The register frontend has `scale_addr` and
