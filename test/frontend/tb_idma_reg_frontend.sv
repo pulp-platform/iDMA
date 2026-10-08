@@ -14,13 +14,15 @@
 
 module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // generated frontend under test, by ND dimensions: 3 = reg32_3d, 2 = reg64_2d, 1 = reg64_1d
-  parameter int unsigned RegVariant = 32'd3,
+  parameter int unsigned RegVariant      = 32'd3,
   // number of streams the elaborated DUT exposes (checked at instantiation)
-  parameter int unsigned NumStreams = 32'd1,
+  parameter int unsigned NumStreams      = 32'd1,
   // number of config-bus ports (arbitrated by the reg frontend's rr_arb_tree)
-  parameter int unsigned NumRegs    = 32'd1,
+  parameter int unsigned NumRegs         = 32'd1,
   // compute ops of the frontend (idma_pkg::compute_enable_t bits)
-  parameter logic [3:0]  ComputeOpsMask = 4'hF
+  parameter logic [3:0]  ComputeOpsMask   = 4'hF,
+  // zero directly couples accepted launches to the backend request interface
+  parameter int unsigned LaunchFifoDepth = NumRegs
 );
 
   // --------------------------------------------------------------------------
@@ -127,18 +129,20 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   logic         req_valid;
   logic         req_ready;              // driven by the backend stub
   cnt_width_t   next_id;                // from the id gen
+  cnt_width_t   req_id;                 // ID allocated with the queued request
   logic [(NumStreams>1?$clog2(NumStreams):1)-1:0] stream_idx;
   cnt_width_t   [NumStreams-1:0] done_id;
   idma_busy_t   [NumStreams-1:0] busy;
   logic         [NumStreams-1:0] midend_busy;
   logic         issue;
+  logic         id_alloc;
   logic         retire;
 
   // Sample the backend request immediately before the active edge and apply
   // backpressure after it, avoiding races with the DUT's arbitration state.
   clocking backend_cb @(posedge clk);
     default input #1step output #0;
-    input req_valid, dma_req, stream_idx, issue;
+    input req_valid, dma_req, req_id, stream_idx, issue;
     output req_ready;
   endclocking
 
@@ -171,7 +175,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   ) i_id_gen (
     .clk_i       ( clk       ),
     .rst_ni      ( rst_n     ),
-    .issue_i     ( issue     ),
+    .issue_i     ( id_alloc  ),
     .retire_i    ( retire    ),
     .next_o      ( next_id   ),
     .completed_o ( done_id[0] )
@@ -181,7 +185,8 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     assign done_id[s] = done_id[0];
   end
 
-  // an accepted launch is the arbiter handshake; also the SW "id-advance" event
+  // Request issue and software-visible ID allocation are separate: an accepted next_id read
+  // allocates the ID, while backend backpressure may delay request issue.
   assign issue = req_valid & req_ready;
 
   // --------------------------------------------------------------------------
@@ -190,13 +195,14 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // All three share the parameter and port list; reg64_1d emits a flat idma_req_t
   if (RegVariant == 32'd3) begin : gen_reg32_3d
     idma_reg32_3d #(
-      .NumRegs        ( NumRegs        ),
-      .NumStreams     ( NumStreams     ),
-      .IdCounterWidth ( IdCounterWidth ),
-      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
-      .apb_req_t      ( cfg_apb_req_t  ),
-      .apb_rsp_t      ( cfg_apb_rsp_t  ),
-      .dma_req_t      ( idma_nd_req_t  )
+      .NumRegs         ( NumRegs         ),
+      .NumStreams      ( NumStreams      ),
+      .IdCounterWidth  ( IdCounterWidth  ),
+      .LaunchFifoDepth ( LaunchFifoDepth ),
+      .ComputeOps      ( compute_enable_t'(ComputeOpsMask) ),
+      .apb_req_t       ( cfg_apb_req_t   ),
+      .apb_rsp_t       ( cfg_apb_rsp_t   ),
+      .dma_req_t       ( idma_nd_req_t   )
     ) i_dut (
       .clk_i          ( clk         ),
       .rst_ni         ( rst_n       ),
@@ -206,6 +212,8 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .req_valid_o    ( req_valid   ),
       .req_ready_i    ( req_ready   ),
       .next_id_i      ( next_id     ),
+      .req_id_o       ( req_id      ),
+      .id_alloc_o     ( id_alloc    ),
       .stream_idx_o   ( stream_idx  ),
       .done_id_i      ( done_id     ),
       .busy_i         ( busy        ),
@@ -213,13 +221,14 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     );
   end else if (RegVariant == 32'd2) begin : gen_reg64_2d
     idma_reg64_2d #(
-      .NumRegs        ( NumRegs        ),
-      .NumStreams     ( NumStreams     ),
-      .IdCounterWidth ( IdCounterWidth ),
-      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
-      .apb_req_t      ( cfg_apb_req_t  ),
-      .apb_rsp_t      ( cfg_apb_rsp_t  ),
-      .dma_req_t      ( idma_nd_req_t  )
+      .NumRegs         ( NumRegs         ),
+      .NumStreams      ( NumStreams      ),
+      .IdCounterWidth  ( IdCounterWidth  ),
+      .LaunchFifoDepth ( LaunchFifoDepth ),
+      .ComputeOps      ( compute_enable_t'(ComputeOpsMask) ),
+      .apb_req_t       ( cfg_apb_req_t   ),
+      .apb_rsp_t       ( cfg_apb_rsp_t   ),
+      .dma_req_t       ( idma_nd_req_t   )
     ) i_dut (
       .clk_i          ( clk         ),
       .rst_ni         ( rst_n       ),
@@ -229,6 +238,8 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .req_valid_o    ( req_valid   ),
       .req_ready_i    ( req_ready   ),
       .next_id_i      ( next_id     ),
+      .req_id_o       ( req_id      ),
+      .id_alloc_o     ( id_alloc    ),
       .stream_idx_o   ( stream_idx  ),
       .done_id_i      ( done_id     ),
       .busy_i         ( busy        ),
@@ -238,13 +249,14 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     idma_req_t dut_req_1d;
 
     idma_reg64_1d #(
-      .NumRegs        ( NumRegs        ),
-      .NumStreams     ( NumStreams     ),
-      .IdCounterWidth ( IdCounterWidth ),
-      .ComputeOps     ( compute_enable_t'(ComputeOpsMask) ),
-      .apb_req_t      ( cfg_apb_req_t  ),
-      .apb_rsp_t      ( cfg_apb_rsp_t  ),
-      .dma_req_t      ( idma_req_t     )
+      .NumRegs         ( NumRegs         ),
+      .NumStreams      ( NumStreams      ),
+      .IdCounterWidth  ( IdCounterWidth  ),
+      .LaunchFifoDepth ( LaunchFifoDepth ),
+      .ComputeOps      ( compute_enable_t'(ComputeOpsMask) ),
+      .apb_req_t       ( cfg_apb_req_t   ),
+      .apb_rsp_t       ( cfg_apb_rsp_t   ),
+      .dma_req_t       ( idma_req_t      )
     ) i_dut (
       .clk_i          ( clk         ),
       .rst_ni         ( rst_n       ),
@@ -254,6 +266,8 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       .req_valid_o    ( req_valid   ),
       .req_ready_i    ( req_ready   ),
       .next_id_i      ( next_id     ),
+      .req_id_o       ( req_id      ),
+      .id_alloc_o     ( id_alloc    ),
       .stream_idx_o   ( stream_idx  ),
       .done_id_i      ( done_id     ),
       .busy_i         ( busy        ),
@@ -273,6 +287,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
   // Backend stub; req_ready is controllable so the tests can hold the grant off
   // --------------------------------------------------------------------------
   idma_nd_req_t captured_q[$];          // every accepted launch, for self-check
+  cnt_width_t   captured_id_q[$];       // ID carried alongside each accepted launch
   int unsigned  outstanding;            // in-flight (not yet retired) launches
   int unsigned  retire_delay;           // clocks a launch stays in flight
   logic         backend_auto_retire;    // if 0, retirement is suppressed
@@ -304,8 +319,10 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       retire_timer <= -1;
     end else begin
       // 1) capture an accepted launch
-      if (accept)
+      if (accept) begin
         captured_q.push_back(backend_cb.dma_req);
+        captured_id_q.push_back(backend_cb.req_id);
+      end
 
       // 2) advance / fire the retire timer
       if (backend_auto_retire && retire_timer == 0) begin
@@ -528,6 +545,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     backend_auto_retire = 1'b1;
     set_req_ready(1'b1);
     captured_q.delete();
+    captured_id_q.delete();
     program_transfer(32'h1000_0000, 32'h2000_0000, 32'h0000_0040);
     // id gen resets next=2, so the very first launch must return id 2
     exp_id = next_id;
@@ -555,6 +573,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $display("\n--- Test 2: non-blocking read under backpressure ---");
     backend_auto_retire = 1'b0;       // no auto retire while we hold the stall
     captured_q.delete();
+    captured_id_q.delete();
     // model a busy backend: hold req_ready LOW so the arbiter cannot grant
     set_req_ready(1'b0);
     program_transfer(32'h3000_0000, 32'h4000_0000, 32'h0000_0080);
@@ -565,8 +584,9 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     check_eq(id1, exp_id, "Test2 launch id == pre-stall next_id");
     check_eq(id1, prev_id + 32'd1, "Test2 id monotonic after Test1");
     prev_id = id1;
-    // the launch is held pending (not yet granted): id must not have advanced yet
-    check_eq(next_id, exp_id, "Test2 id held (no issue) while req_ready low");
+    // ID allocation is tied to the successful register read, not the later backend handshake.
+    @(backend_cb);
+    check_eq(next_id, exp_id + 32'd1, "Test2 id advances while request output is stalled");
     // release backpressure — the held launch now completes exactly once
     set_req_ready(1'b1);
     wait_launch_accepted();
@@ -586,6 +606,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $display("\n--- Test 2b: launch integrity (late grant, no drop) ---");
     backend_auto_retire = 1'b0;
     captured_q.delete();
+    captured_id_q.delete();
     set_req_ready(1'b0);
     program_transfer(32'h7000_0000, 32'h8000_0000, 32'h0000_00C0);
     exp_id = next_id;
@@ -620,6 +641,49 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     $display("[ ok ] Test2b launch fired exactly once after late grant");
 
     // ------------------------------------------------------------------
+    // Test 2c: a full launch FIFO rejects a launch with ID zero
+    // ------------------------------------------------------------------
+    $display("\n--- Test 2c: full launch FIFO returns ID zero ---");
+    backend_auto_retire = 1'b0;
+    captured_q.delete();
+    captured_id_q.delete();
+    set_req_ready(1'b0);
+    exp_id = next_id;
+    begin
+      logic [31:0] accepted_ids[NumRegs];
+      logic [31:0] rejected_id;
+
+      // The centralized FIFO has NumRegs entries, matching the aggregate capacity of the former
+      // per-port pending registers. Fill it while the request output is stalled.
+      for (int unsigned k = 0; k < NumRegs; k++) begin
+        program_transfer(32'h7100_0000 + k*32'h100, 32'h8100_0000 + k*32'h100,
+                         32'h0000_0040 + k*32'h10);
+        launch(accepted_ids[k], rcyc);
+        check_eq(accepted_ids[k], exp_id + k,
+                 $sformatf("Test2c accepted id[%0d]", k));
+      end
+
+      // No FIFO entry is available: the descriptor is not captured and the ID counter is unchanged.
+      program_transfer(32'h7F00_0000, 32'h8F00_0000, 32'h0000_0040);
+      launch(rejected_id, rcyc);
+      check_eq(rejected_id, 32'd0, "Test2c rejected launch returns zero");
+      check_eq(next_id, exp_id + NumRegs, "Test2c rejected launch does not consume an ID");
+
+      set_req_ready(1'b1);
+      backend_auto_retire = 1'b1;
+      while (captured_q.size() < NumRegs) @(backend_cb);
+      check_eq(captured_q.size(), NumRegs, "Test2c only queued launches reach backend");
+      check_eq(captured_id_q.size(), NumRegs, "Test2c request and ID counts match");
+      for (int unsigned k = 0; k < NumRegs; k++) begin
+        check_eq(captured_id_q[k], accepted_ids[k],
+                 $sformatf("Test2c carried id[%0d]", k));
+      end
+      prev_id = accepted_ids[NumRegs-1];
+      poll_done(prev_id);
+    end
+    $display("[ ok ] Test2c full FIFO rejected launch without consuming an ID");
+
+    // ------------------------------------------------------------------
     // Test 3: stream_idx_o must point at the launching stream
     // ------------------------------------------------------------------
     if (NumStreams > 1) begin
@@ -629,6 +693,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       $display("\n--- Test 3: multi-stream stream_idx held until grant ---");
       backend_auto_retire = 1'b0;
       captured_q.delete();
+      captured_id_q.delete();
       set_req_ready(1'b0);
       program_transfer(32'h5000_0000, 32'h6000_0000, 32'h0000_0100);
       exp_id     = next_id;
@@ -669,6 +734,7 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     backend_auto_retire = 1'b1;
     set_req_ready(1'b1);
     captured_q.delete();
+    captured_id_q.delete();
     begin
       logic [31:0] ids[4];
       for (int unsigned k = 0; k < 4; k++) begin
@@ -695,14 +761,16 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
     end
 
     // ------------------------------------------------------------------
-    // Test 5: stream_idx must ride the arbitration across ports
+    // Test 5: concurrent register ports get one unique allocation
     // ------------------------------------------------------------------
     if (NumRegs > 1 && NumStreams > 1) begin
-      logic [31:0] id_p0, id_p1;
+      logic [31:0] id_p0, id_p1, retry_id;
       int unsigned cyc0, cyc1;
-      $display("\n--- Test 5: concurrent multi-port arbitration (stream_idx) ---");
+      int unsigned winner_port, retry_port;
+      $display("\n--- Test 5: concurrent multi-port ID allocation ---");
       backend_auto_retire = 1'b0;
       captured_q.delete();
+      captured_id_q.delete();
       set_req_ready(1'b0);
       // port 0 -> stream 0, port 1 -> stream 1, each with a unique src_addr
       sb_addr_stream0 = 32'hAAAA_0000;
@@ -710,12 +778,28 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
       program_transfer(sb_addr_stream0, 32'hCCCC_0000, 32'h0000_0040, 0);
       program_transfer(sb_addr_stream1, 32'hDDDD_0000, 32'h0000_0080, 1);
       sb_mismatch = 0;
-      // launch both ports concurrently so both latch before either is granted
+      exp_id = next_id;
+      // Only one launch can allocate the single next ID in a cycle. The loser completes its read
+      // with zero and retries on the following cycle instead of observing a duplicate ID.
       fork
         launch(id_p0, cyc0, 0, 0);       // port 0, stream 0
         launch(id_p1, cyc1, 1, 1);       // port 1, stream 1
       join
-      // rr_arb_tree presents its winner before the grant, so sample on the handshake
+
+      check_eq((id_p0 == 0) ^ (id_p1 == 0), 1'b1,
+               "Test5 exactly one simultaneous launch succeeds");
+      winner_port = (id_p0 != 0) ? 0 : 1;
+      retry_port  = 1 - winner_port;
+      check_eq((winner_port == 0) ? id_p0 : id_p1, exp_id,
+               "Test5 winner receives current ID");
+
+      launch(retry_id, rcyc, retry_port, retry_port);
+      check_eq(retry_id, exp_id + 32'd1, "Test5 rejected port receives next ID on retry");
+      @(backend_cb);
+      check_eq(next_id, exp_id + 32'd2, "Test5 two successful launches consume two IDs");
+
+      // With the output stalled, the FIFO head must consistently present the first allocated job,
+      // including its stream index and ID.
       begin
         int unsigned held_checks;
         held_checks = 0;
@@ -731,6 +815,11 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
                 sb_mismatch++;
                 $display("[Test5] MISMATCH: dma_req_o=port for stream %0d but stream_idx=%0d",
                          won_stream, backend_cb.stream_idx);
+              end
+              if (backend_cb.req_id != exp_id) begin
+                sb_mismatch++;
+                $display("[Test5] MISMATCH: FIFO head ID %0d, expected %0d",
+                         backend_cb.req_id, exp_id);
               end
             end
           end
@@ -752,17 +841,17 @@ module tb_idma_reg_frontend import idma_pkg::*; import apb_test::apb_driver; #(
         end
       end
       check_eq(captured_q.size(), 32'd2, "Test5 both launches captured");
-      begin
-        logic saw_a, saw_b;
-        saw_a = 1'b0; saw_b = 1'b0;
-        foreach (captured_q[k]) begin
-          if (captured_q[k].burst_req.src_addr == sb_addr_stream0) saw_a = 1'b1;
-          if (captured_q[k].burst_req.src_addr == sb_addr_stream1) saw_b = 1'b1;
-        end
-        check_eq(saw_a, 1'b1, "Test5 port0/stream0 transfer captured");
-        check_eq(saw_b, 1'b1, "Test5 port1/stream1 transfer captured");
-      end
-      $display("[ ok ] Test5 concurrent arbitration: %0d mismatches", sb_mismatch);
+      check_eq(captured_id_q[0], exp_id, "Test5 first allocated ID issued first");
+      check_eq(captured_id_q[1], retry_id, "Test5 retried ID issued second");
+      check_eq(captured_q[0].burst_req.src_addr,
+               (winner_port == 0) ? sb_addr_stream0 : sb_addr_stream1,
+               "Test5 winner request issued first");
+      check_eq(captured_q[1].burst_req.src_addr,
+               (retry_port == 0) ? sb_addr_stream0 : sb_addr_stream1,
+               "Test5 retried request issued second");
+      prev_id = retry_id;
+      poll_done(retry_id, retry_port);
+      $display("[ ok ] Test5 concurrent allocation: %0d mismatches", sb_mismatch);
     end else begin
       $display("\n--- Test 5: skipped (needs NumRegs>1 and NumStreams>1) ---");
     end
