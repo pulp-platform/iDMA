@@ -58,6 +58,7 @@ always_comb begin
         idma_req_o.opt.beo.dst_max_llen   = '0;
         idma_req_o.opt.beo.src_reduce_len = descriptor_i.flags[7];
         idma_req_o.opt.beo.dst_reduce_len = descriptor_i.flags[7];
+        idma_req_o.opt.beo.deadlock_free  = descriptor_i.flags[24];
 end
 
 endmodule
