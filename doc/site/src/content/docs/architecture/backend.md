@@ -116,7 +116,7 @@ Each variant also gets its own tracer header, `idma/tracer_<id>.svh`, holding th
 
 ## Legalizer
 
-The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. It operates as two coupled state machines - one for the read side, one for the write side - that track the remaining bytes and current address of each transfer independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
+The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. Separate read and write state machines track each side's remaining bytes and current address. Read and write burst lengths are chosen independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
 
 The legalizer is pure control path: it does not touch the data. It computes page/burst boundaries, splits transfers accordingly, and emits `offset`, `tailer`, and `shift` values that the transport layer uses for data realignment.
 
@@ -174,8 +174,8 @@ The mode has two parts:
    two full beats per read burst; depth 8 allows at most eight. A smaller user source
    limit still applies. The LLEN field, protocol limits, and page boundaries can
    shorten bursts further.
-   Safe mode does not change the configured write limit or the decoupling options.
-   With `decouple_rw=0`, coupled write bursts may also become shorter.
+   Safe mode changes the read limit only. The configured write limit and R-AW
+   coupling setting stay unchanged.
 2. **Reserve space before reading.** A gate between the read-address FIFO and the
    bus read module counts space already promised to earlier reads. A new read
    is allowed only if every byte-lane FIFO has enough room for its complete
@@ -197,7 +197,7 @@ queued requests use different mode settings without losing track of earlier
 reads. It does **not** make those earlier requests safe or recover a transfer
 that is already stuck. Enable the mode on all transfers that may need it.
 
-Neither `decouple_rw=0` nor R-AW coupling replaces this space check. Safe mode
+R-AW coupling does not replace this space check. Safe mode
 addresses this DMA read-buffer problem; it is not a timeout or a general cure
 for deadlocks elsewhere in the system. Memory and response consumers must still
 make progress. Smaller bursts and waiting for space can reduce throughput, so
@@ -239,9 +239,8 @@ entire buffer to drain.
 
 Smaller bursts also mean more address transactions and may reduce throughput.
 Compare the default and smaller limits on the target memory system; half depth
-is a tuning starting point, not a guaranteed optimum. With `decouple_rw=0`, a
-smaller source limit can shorten write bursts too. No hardware default is changed
-by this recommendation.
+is a tuning starting point, not a guaranteed optimum. Changing the read limit
+does not change the write limit. No hardware default is changed by this recommendation.
 
 ### Data Realignment
 

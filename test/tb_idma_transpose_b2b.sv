@@ -331,7 +331,6 @@ module tb_idma_transpose_b2b
     req.burst_req.opt.dst_protocol                      = idma_pkg::AXI;
     req.burst_req.opt.src.burst                         = axi_pkg::BURST_INCR;
     req.burst_req.opt.dst.burst                         = axi_pkg::BURST_INCR;
-    req.burst_req.opt.beo.decouple_rw                   = 1'b1;
     req.burst_req.opt.beo.decouple_aw                   = 1'b1;
     req.burst_req.opt.compute.enable                    = 1'b1;
     req.burst_req.opt.compute.op                        = idma_pkg::COMPUTE_TRANSPOSE;

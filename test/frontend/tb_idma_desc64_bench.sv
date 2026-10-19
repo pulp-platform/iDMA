@@ -134,7 +134,7 @@ module tb_idma_desc64_bench
         constraint beo_zero_c {
             burst.opt.beo.decouple_aw   == '0 && burst.opt.beo.src_max_llen == '0 &&
             burst.opt.beo.dst_max_llen == '0 && burst.opt.last           == '0 &&
-            burst.opt.beo.decouple_rw  == '0 && burst.opt.beo.deadlock_free == '0;
+            burst.opt.beo.deadlock_free == '0;
         }
         constraint axi_params_zero_src_c {
             burst.opt.src.lock == '0 && burst.opt.src.prot   == '0 &&
@@ -686,7 +686,7 @@ module tb_idma_desc64_bench
         flags[0]     = stim.do_irq;
         flags[2:1]   = stim.burst.opt.src.burst;
         flags[4:3]   = stim.burst.opt.dst.burst;
-        flags[5]     = stim.burst.opt.beo.decouple_rw;
+        flags[5]     = 1'b0;
         flags[6]     = 1'b0;
         // flags[6]     = stim.burst.opt.beo.serialize;
         flags[7]     = stim.burst.opt.beo.src_reduce_len;

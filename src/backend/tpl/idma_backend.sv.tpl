@@ -326,7 +326,6 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         idma_pkg::multihead_t   dst_head;
         offset_t                read_shift;
         offset_t                write_shift;
-        logic                   decouple_rw;
         logic                   decouple_aw;
         logic [2:0]             src_max_llen;
         logic [2:0]             dst_max_llen;

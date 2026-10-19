@@ -12,15 +12,6 @@ from mako.template import Template
 from mario.util import indent_block, eval_key, prot_key, compute_eligible
 
 
-def prot_force_decouple(used_prots: list, db: dict) -> list:
-    """Determine the prots supports a feature"""
-    res = []
-    for prot in used_prots:
-        if db[prot]['bursts'] == 'not_supported' or db[prot]['legalizer_force_decouple'] == 'true':
-            res.append(prot)
-    return res
-
-
 def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
     """Generate legalizer"""
     legalizer_rendered = ''
@@ -87,11 +78,7 @@ def render_legalizer(prot_ids: dict, db: dict, tpl_file: str) -> str:
             'used_non_bursting_write_protocols':
                 prot_key(used_write_prots, 'bursts', 'not_supported', db),
             'used_non_bursting_read_protocols':
-                prot_key(used_read_prots, 'bursts', 'not_supported', db),
-            'used_non_bursting_or_force_decouple_read_protocols':
-                prot_force_decouple(used_read_prots, db),
-            'used_non_bursting_or_force_decouple_write_protocols':
-                prot_force_decouple(used_write_prots, db)
+                prot_key(used_read_prots, 'bursts', 'not_supported', db)
         }
 
         # render

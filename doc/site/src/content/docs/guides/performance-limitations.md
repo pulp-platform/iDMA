@@ -19,8 +19,7 @@ This guide summarizes practical constraints and tradeoffs that impact performanc
 
 ## Decoupling and Deadlocks
 
-- `decouple_rw=1` lets read and write bursts use different lengths. Clearing it
-  does not guarantee that enough buffer space exists for outstanding reads.
+- Read and write burst lengths are chosen independently.
 - `decouple_aw=1` enables R-AW coupling, which can reduce bus contention but adds latency.
 - `deadlock_free=1` shortens read bursts to fit the buffer and waits for enough
   free space before issuing each one. It also counts reads whose data has not
@@ -47,8 +46,8 @@ have buffered data. More small bursts can remain outstanding without exceeding
 the buffer's total space.
 
 This trades earlier reads for more address transactions. Measure both settings;
-half depth is a starting point, not always the best choice. With `decouple_rw=0`,
-write bursts may become shorter as well. See
+half depth is a starting point, not always the best choice. Changing the read
+limit does not change the write limit. See
 [Choosing a Read Burst Limit](../../architecture/backend/#choosing-a-read-burst-limit)
 for examples and frontend controls.
 
@@ -67,7 +66,7 @@ the memory system cannot deadlock on outstanding DMA reads and writes.
 
 Compute (`EnableCompute`) applies only on compute-eligible backends (AXI or OBI on both read and write paths). Per-transfer constraints, enforced by the legalizer:
 
-- Size-changing MX ops force `decouple_rw`/`decouple_aw`, since read and write lengths differ.
+- Size-changing MX ops force `decouple_aw`, since read and write lengths differ.
 - Transfer length must be a whole multiple of the op's input granule (128 B FP32, 64 B FP16, 32 B per block of the MX data plane); source and destination must be beat-aligned.
 - MX ops require `StrbWidth <= 64` (one 64 B scale line per beat).
 - MX dequant reads whole beats: the last data beat may read up to `StrbWidth - 1` bytes past the end of the data plane, and a partial last group reads its whole 64 B scale line (never across a 4 KiB page). The memory behind both planes must be readable there.

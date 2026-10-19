@@ -44,7 +44,6 @@ package idma_test;
         halfw_t                 max_src_len;
         halfw_t                 max_dst_len;
         logic                   aw_decoupled;
-        logic                   rw_decoupled;
         id_t                    id;
         dim_t [NumDim-2:0]      n_dims;
         addr_t                  err_addr    [$];
@@ -59,7 +58,7 @@ package idma_test;
             "                        \n src:           %s\n dst:           %s",
             "                        \n src_protocol:   %s%d\n dst_protocol:   %s%d",
             "                        \n max_src_len:  %s%d\n max_dst_len:  %s%d",
-            "                        \n aw_decoupled:   %s%b\n rw_decoupled:   %s%b",
+            "                        \n aw_decoupled:   %s%b",
             "                        \n id:             %s%d \n%s errors:\n%s",
             "                        \n-----------------------------------------------"};
 
@@ -73,7 +72,6 @@ package idma_test;
             max_src_len  = '0;
             max_dst_len  = '0;
             aw_decoupled = '0;
-            rw_decoupled = '0;
             id           = '0;
             n_dims       = '0;
             err_addr     = {};
@@ -157,8 +155,6 @@ package idma_test;
                              indent(1, AddrWidth),
                              this.aw_decoupled,
                              indent(1, AddrWidth),
-                             this.rw_decoupled,
-                             indent(1, AddrWidth),
                              this.id,
                              IsND ? format_dimensions() : "",
                              format_errors()
@@ -211,37 +207,14 @@ package idma_test;
             return upper_page_boundry(addr, virt_page) + 'd1 - addr;
         endfunction
 
-        // if coupled: combined bytes remaining to break
-        function addr_t comb_bytes_remaing (
-            addr_t src_addr,
-            addr_t dst_addr,
-            addr_t src_virt_page,
-            addr_t dst_virt_page
-        );
-            return min(
-                       bytes_remaing(src_addr, src_virt_page),
-                       bytes_remaing(dst_addr, dst_virt_page)
-                      );
-        endfunction
-
         // possible length (how many bytes can a transfer be long starting from a given address)
         function addr_t poss_len (
-            addr_t src_addr,
-            addr_t dst_addr,
-            addr_t src_virt_page,
-            addr_t dst_virt_page,
-            bit    decoupled,
+            addr_t addr,
+            addr_t virt_page,
             addr_t strb_width
         );
             automatic addr_t max_len = min(256 * strb_width, 4096);
-            if (!decoupled) begin
-                return min(
-                           max_len,
-                           comb_bytes_remaing(src_addr, dst_addr, src_virt_page, dst_virt_page)
-                          );
-            end else begin
-                return min(max_len, bytes_remaing(src_addr, src_virt_page));
-            end
+            return min(max_len, bytes_remaing(addr, virt_page));
         endfunction
 
         // write memory array
@@ -284,8 +257,6 @@ package idma_test;
             halfw_t  max_src_len,
             // maximum length of a burst (in bytes)
             halfw_t  max_dst_len,
-            // is the transfer rw_decoupled?
-            logic   rw_decoupled,
             // array with the error addresses
             ref addr_t                  err_addr [$],
             // array with the error types
@@ -325,24 +296,11 @@ package idma_test;
                 src_ptr = src_addr + now;
                 dst_ptr = dst_addr + now;
 
-                // length of the transfer the current byte belongs to
-                if (rw_decoupled) begin
-                    poss_src_len = poss_len(src_ptr, '0, src_virt_page, '0, '1, StrbWidth);
-                    poss_dst_len = poss_len(dst_ptr, '0, dst_virt_page, '0, '1, StrbWidth);
-                    src_len = min(length - now, poss_src_len); // remaining bytes
-                    dst_len = min(length - now, poss_dst_len); // remaining bytes
-                end else begin
-                    poss_src_len = poss_len(
-                                            src_ptr,
-                                            dst_ptr,
-                                            src_virt_page,
-                                            dst_virt_page,
-                                            '0,
-                                            StrbWidth
-                                           );
-                    src_len = min(length - now, poss_src_len);
-                    dst_len = src_len;
-                end
+                // Read and write bursts are split at their own boundaries.
+                poss_src_len = poss_len(src_ptr, src_virt_page, StrbWidth);
+                poss_dst_len = poss_len(dst_ptr, dst_virt_page, StrbWidth);
+                src_len = min(length - now, poss_src_len);
+                dst_len = min(length - now, poss_dst_len);
 
                 // src and dst base addresses (DMA always sends size = AxiMaxSize = log(2, StrbW))
                 src_base = axi_pkg::aligned_addr(src_ptr, AxiMaxSize);
@@ -547,7 +505,6 @@ package idma_test;
                     now.max_src_len   = nd_job.max_src_len;
                     now.max_dst_len   = nd_job.max_dst_len;
                     now.aw_decoupled  = nd_job.aw_decoupled;
-                    now.rw_decoupled  = nd_job.rw_decoupled;
                     now.err_addr      = nd_job.err_addr;
                     now.err_is_read   = nd_job.err_is_read;
                     now.err_action    = nd_job.err_action;
@@ -675,7 +632,6 @@ package idma_test;
             input idma_pkg::protocol_e src_protocol,
             input idma_pkg::protocol_e dst_protocol,
             input logic       decouple_aw,
-            input logic       decouple_rw,
             input logic [2:0] src_max_llen,
             input logic [2:0] dst_max_llen,
             input logic       src_reduce_len,
@@ -698,7 +654,6 @@ package idma_test;
             idma.req.opt.dst_head           <= #TA dst_head;
             idma.req.opt.axi_id             <= #TA id;
             idma.req.opt.beo.decouple_aw    <= #TA decouple_aw;
-            idma.req.opt.beo.decouple_rw    <= #TA decouple_rw;
             idma.req.opt.beo.src_max_llen   <= #TA src_max_llen;
             idma.req.opt.beo.dst_max_llen   <= #TA dst_max_llen;
             idma.req.opt.beo.src_reduce_len <= #TA src_reduce_len;
@@ -724,7 +679,6 @@ package idma_test;
             idma.req.opt.dst_head           <= #TA '0;
             idma.req.opt.axi_id             <= #TA '0;
             idma.req.opt.beo.decouple_aw    <= #TA '0;
-            idma.req.opt.beo.decouple_rw    <= #TA '0;
             idma.req.opt.beo.src_max_llen   <= #TA '0;
             idma.req.opt.beo.dst_max_llen   <= #TA '0;
             idma.req.opt.beo.src_reduce_len <= #TA '0;
@@ -863,7 +817,6 @@ package idma_test;
             input idma_pkg::protocol_e      src_protocol,
             input idma_pkg::protocol_e      dst_protocol,
             input logic                     decouple_aw,
-            input logic                     decouple_rw,
             input logic [2:0]               src_max_llen,
             input logic [2:0]               dst_max_llen,
             input logic                     src_reduce_len,
@@ -879,7 +832,6 @@ package idma_test;
             nd_idma.req.burst_req.opt.src_head           <= #TA '0;
             nd_idma.req.burst_req.opt.dst_head           <= #TA '0;
             nd_idma.req.burst_req.opt.beo.decouple_aw    <= #TA decouple_aw;
-            nd_idma.req.burst_req.opt.beo.decouple_rw    <= #TA decouple_rw;
             nd_idma.req.burst_req.opt.beo.src_max_llen   <= #TA src_max_llen;
             nd_idma.req.burst_req.opt.beo.dst_max_llen   <= #TA dst_max_llen;
             nd_idma.req.burst_req.opt.beo.src_reduce_len <= #TA src_reduce_len;
@@ -899,7 +851,6 @@ package idma_test;
             nd_idma.req.burst_req.opt.src_head           <= #TA '0;
             nd_idma.req.burst_req.opt.dst_head           <= #TA '0;
             nd_idma.req.burst_req.opt.beo.decouple_aw    <= #TA '0;
-            nd_idma.req.burst_req.opt.beo.decouple_rw    <= #TA '0;
             nd_idma.req.burst_req.opt.beo.src_max_llen   <= #TA '0;
             nd_idma.req.burst_req.opt.beo.dst_max_llen   <= #TA '0;
             nd_idma.req.burst_req.opt.beo.src_reduce_len <= #TA '0;

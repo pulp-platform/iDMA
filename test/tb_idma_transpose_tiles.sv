@@ -118,7 +118,6 @@ module idma_transpose_tiles_bench
     r.opt.dst_protocol     = idma_pkg::AXI;
     r.opt.src.burst        = axi_pkg::BURST_INCR;
     r.opt.dst.burst        = axi_pkg::BURST_INCR;
-    r.opt.beo.decouple_rw  = 1'b1;
     r.opt.beo.decouple_aw  = 1'b1;
     r.opt.last             = 1'b1;
     return r;

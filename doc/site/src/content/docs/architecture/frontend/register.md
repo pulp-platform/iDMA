@@ -85,7 +85,7 @@ The bit positions of `enable_nd` and the protocol fields depend on the number of
 | Bits `reg32_3d` | Bits `reg64_1d` | Bits `reg64_2d` | Field | Description |
 |---|---|---|---|---|
 | 0 | 0 | 0 | `decouple_aw` | R-AW coupling: hold write addresses until the read data arrives |
-| 1 | 1 | 1 | `decouple_rw` | Fully decouple the read and write channels |
+| 1 | 1 | 1 | `reserved_1` | Reserved |
 | 2 | 2 | 2 | `src_reduce_len` | Shorten source bursts to src_max_llen |
 | 3 | 3 | 3 | `dst_reduce_len` | Shorten destination bursts to dst_max_llen |
 | 6:4 | 6:4 | 6:4 | `src_max_llen` | Maximal source burst length as log2(beats) |
@@ -114,7 +114,7 @@ allows earlier reads but adds address transactions; measure it against the defau
 See [Choosing a Read Burst Limit](../../backend/#choosing-a-read-burst-limit).
 
 The mode requires `HardwareLegalizer=1`; otherwise the bit is ignored. It is
-independent of `decouple_rw` and `decouple_aw`. It cannot rescue an earlier unsafe
+independent of `decouple_aw`. It cannot rescue an earlier unsafe
 transfer that is already stuck. See [Deadlock-Free Mode](../../backend/#deadlock-free-mode)
 for the buffer accounting and limits.
 

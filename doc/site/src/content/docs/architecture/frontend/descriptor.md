@@ -40,7 +40,7 @@ If the CPU uses a data cache, descriptors must be in an uncached or cache-cohere
 | 0 | `irq` | Trigger interrupt on completion |
 | 2:1 | `src_burst` | Source burst type: 00=FIXED, 01=INCR, 10=WRAP |
 | 4:3 | `dst_burst` | Destination burst type: 00=FIXED, 01=INCR, 10=WRAP |
-| 5 | `decouple_rw` | Fully decouple read and write channels - the backend can write without waiting for reads to complete (risk of deadlock if buffer fills) |
+| 5 | — | Reserved; must be zero |
 | 6 | `decouple_aw` | Safer decoupling: write *addresses* are held back until the first read data arrives, but once data starts flowing, reads and writes proceed independently |
 | 7 | `reduce_len` | Reduce burst length on both source and destination (`opt.beo.src_reduce_len` + `opt.beo.dst_reduce_len`) |
 | 11:8 | `src_cache` | AXI cache attributes for source (bufferable, modifiable, read-alloc, write-alloc) |
@@ -51,7 +51,7 @@ If the CPU uses a data cache, descriptors must be in an uncached or cache-cohere
 
 Set flag bit 24 to enable deadlock-free mode for that descriptor, for example
 `flags |= (1u << 24)`. It is off when the bit is clear. Leave all other flags as
-required by the transfer; safe mode does not select burst types or decoupling.
+required by the transfer; safe mode does not select burst types or enable R-AW coupling.
 
 The backend shortens read bursts to fit its buffer, then checks space before
 issuing each one. Data promised to earlier reads still counts as used space,
@@ -70,7 +70,7 @@ the protection. The flag has no effect with `HardwareLegalizer=0`. See
 [Deadlock-Free Mode](../../backend/#deadlock-free-mode) for details.
 
 **Typical flags values**: `0x0000000A` selects INCR on both sides, with no IRQ;
-`0x0000000B` also requests an IRQ; `0x0000006B` also sets both decoupling flags;
+`0x0000000B` also requests an IRQ; `0x0000004B` also enables R-AW coupling;
 `0x0100000A` selects deadlock-free INCR transfers. Set the burst fields explicitly:
 zero does not select INCR. This backend requires INCR on both sides.
 

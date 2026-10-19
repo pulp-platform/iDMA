@@ -81,7 +81,6 @@ module tb_idma_mxneg
     idma_req.opt.dst_protocol = dst_prot;
     idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
     idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.beo.decouple_rw = 1'b1;
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = (op != idma_pkg::COMPUTE_NONE);
     idma_req.opt.compute.op      = op;

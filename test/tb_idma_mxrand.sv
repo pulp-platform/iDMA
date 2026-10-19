@@ -122,7 +122,6 @@ module tb_idma_mxrand
     idma_req.opt.dst_protocol = idma_pkg::AXI;
     idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
     idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.beo.decouple_rw = 1'b1;
     idma_req.opt.beo.decouple_aw = daw;
     idma_req.opt.compute.enable  = en;
     idma_req.opt.compute.op      = op;
@@ -322,7 +321,6 @@ module tb_idma_mxrand
         idma_req.opt.dst_protocol = idma_pkg::AXI;
         idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
         idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-        idma_req.opt.beo.decouple_rw = 1'b1;
         idma_req.opt.beo.decouple_aw = 1'b1;
         idma_req.opt.last            = 1'b1;
         req_valid = 1'b1;

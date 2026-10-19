@@ -32,8 +32,8 @@ addrmap idma_reg #(
             desc = "R-AW coupling: hold write addresses until the read data arrives";
         } decouple_aw [0:0] = 0;
         field {
-            desc = "Fully decouple the read and write channels";
-        } decouple_rw [1:1] = 0;
+            desc = "Reserved";
+        } reserved_1 [1:1] = 0;
         field {
             desc = "Shorten source bursts to src_max_llen";
         } src_reduce_len [2:2] = 0;

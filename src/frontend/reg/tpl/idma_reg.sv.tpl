@@ -279,7 +279,6 @@ module idma_${identifier} #(
 
       // Backend options
       nxt_dma_req${sep}opt.beo.decouple_aw    = dma_reg2hw[i].conf.decouple_aw.value;
-      nxt_dma_req${sep}opt.beo.decouple_rw    = dma_reg2hw[i].conf.decouple_rw.value;
       nxt_dma_req${sep}opt.beo.src_max_llen   = dma_reg2hw[i].conf.src_max_llen.value;
       nxt_dma_req${sep}opt.beo.dst_max_llen   = dma_reg2hw[i].conf.dst_max_llen.value;
       nxt_dma_req${sep}opt.beo.src_reduce_len = dma_reg2hw[i].conf.src_reduce_len.value;

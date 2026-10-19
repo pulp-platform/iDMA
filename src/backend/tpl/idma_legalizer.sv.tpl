@@ -180,7 +180,6 @@ ${database[p]['max_beats_per_burst']} * StrbWidth > ${database[p]['page_size']}\
     % endif
 % endfor
     page_len_t w_num_bytes_to_pb;
-    page_len_t c_num_bytes_to_pb;
 
     // read process
     page_len_t r_num_bytes_possible;
@@ -420,51 +419,10 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
     end
 % endif
 
-    //--------------------------------------
-    // page boundary check
-    //--------------------------------------
-    // how many transfers are remaining when concerning both r/w pages?
-    // take the boundary that is closer
-    assign c_num_bytes_to_pb = (r_num_bytes_to_pb > w_num_bytes_to_pb) ?
-                                w_num_bytes_to_pb : r_num_bytes_to_pb;
-
-
-    //--------------------------------------
-    // Synchronized R/W process
-    //--------------------------------------
-    always_comb begin : proc_num_bytes_possible
-        // Default: Coupled
-        r_num_bytes_possible = c_num_bytes_to_pb;
-        w_num_bytes_possible = c_num_bytes_to_pb;
-
-        if (opt_tf_q.decouple_rw\
-    % if len(used_non_bursting_or_force_decouple_read_protocols) != 0:
-
-            || (opt_tf_q.src_protocol inside {\
-        % for index, protocol in enumerate(used_non_bursting_or_force_decouple_read_protocols):
- idma_pkg::${database[protocol]['protocol_enum']}\
-            % if index != len(used_non_bursting_or_force_decouple_read_protocols)-1:
-,\
-            % endif
-        % endfor
- })\
-    % endif
-    % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
-
-            || (opt_w_q.dst_protocol inside {\
-        % for index, protocol in enumerate(used_non_bursting_or_force_decouple_write_protocols):
- idma_pkg::${database[protocol]['protocol_enum']}\
-            % if index != len(used_non_bursting_or_force_decouple_write_protocols)-1:
-,\
-            % endif
-        % endfor
- })\
-    % endif
-) begin
-            r_num_bytes_possible = r_num_bytes_to_pb;
-            w_num_bytes_possible = w_num_bytes_to_pb;
-        end
-    end
+    // Read and write bursts are legalized independently. Buffer reservation in
+    // deadlock-free mode, rather than matched burst boundaries, prevents cycles.
+    assign r_num_bytes_possible = r_num_bytes_to_pb;
+    assign w_num_bytes_possible = w_num_bytes_to_pb;
 
     assign r_addr_offset = r_tf_q.addr[OffsetWidth-1:0];
     assign w_addr_offset = w_tf_q.addr[OffsetWidth-1:0];
@@ -555,12 +513,9 @@ w_num_bytes_to_pb = w_page_num_bytes_to_pb;
             read_shift:     '0,
             write_shift:    '0,
 % if compute_eligible:
-            decouple_rw:    req.opt.beo.decouple_rw |
-                            (EnableCompute & req.opt.compute.enable),
             decouple_aw:    req.opt.beo.decouple_aw |
                             (EnableCompute & req.opt.compute.enable),
 % else:
-            decouple_rw:    req.opt.beo.decouple_rw,
             decouple_aw:    req.opt.beo.decouple_aw,
 % endif
             src_max_llen:   req.opt.beo.deadlock_free
@@ -886,47 +841,13 @@ ${database[protocol]['legalizer_write_data_path']}
     //--------------------------------------
     // Flow Control
     //--------------------------------------
-    // only advance to next state if:
-    // * rw_coupled: both machines advance
-    // * rw_decoupled: either machine advances
-
+    // Read and write state machines make progress independently.
     always_comb begin : proc_legalizer_flow_control
-        if ( opt_tf_q.decouple_rw\
-        % if len(used_non_bursting_or_force_decouple_read_protocols) != 0:
+        r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
+        w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
 
-            || (opt_tf_q.src_protocol inside {\
-            % for index, protocol in enumerate(used_non_bursting_or_force_decouple_read_protocols):
- idma_pkg::${database[protocol]['protocol_enum']}\
-                % if index != len(used_non_bursting_or_force_decouple_read_protocols)-1:
-,\
-                % endif
-            % endfor
- })\
-        % endif
-        % if len(used_non_bursting_or_force_decouple_write_protocols) != 0:
-
-            || (opt_w_q.dst_protocol inside {\
-            % for index, protocol in enumerate(used_non_bursting_or_force_decouple_write_protocols):
- idma_pkg::${database[protocol]['protocol_enum']}\
-                % if index != len(used_non_bursting_or_force_decouple_write_protocols)-1:
-,\
-                % endif
-            % endfor
- })\
-        % endif
-) begin
-            r_tf_ena  = (r_ready_i & !flush_i) | kill_i;
-            w_tf_ena  = (w_ready_i & !flush_i) | kill_i;
-
-            r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
-            w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
-        end else begin
-            r_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
-            w_tf_ena  = (r_ready_i & w_ready_i & !flush_i) | kill_i;
-
-            r_valid_o = r_tf_q.valid & w_ready_i & r_ready_i & !flush_i;
-            w_valid_o = w_tf_q.valid & r_ready_i & w_ready_i & !flush_i;
-        end
+        r_valid_o = r_tf_q.valid & r_ready_i & !flush_i;
+        w_valid_o = w_tf_q.valid & w_ready_i & !flush_i;
     end
 
 % if compute_eligible:
@@ -934,7 +855,6 @@ ${database[protocol]['legalizer_write_data_path']}
     assign mx_wq_direct = w_done & (mx_wq_empty | kill_i);
     assign ready_o      = r_done & r_ready_i & w_ready_i & !flush_i &
                           (mx_wq_direct | (EnableCompute & ~mx_wq_full &
-                           (req_i.opt.beo.decouple_rw | req_i.opt.compute.enable) &
                            (~mx_wq_empty | (opt_w_q.compute.enable &
                                             idma_pkg::compute_op_is_mx(opt_w_q.compute.op) &
                                             idma_pkg::compute_op_supported(ComputeOps,

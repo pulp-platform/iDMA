@@ -625,7 +625,6 @@ module idma_inst64_top #(
         idma_fe_req_d.burst_req.opt.dst.qos            = 4'b0;
         idma_fe_req_d.burst_req.opt.dst.region         = 4'b0;
         idma_fe_req_d.burst_req.opt.beo.decouple_aw    = 1'b0;
-        idma_fe_req_d.burst_req.opt.beo.decouple_rw    = 1'b0;
         idma_fe_req_d.burst_req.opt.beo.src_max_llen   = 3'b0;
         idma_fe_req_d.burst_req.opt.beo.dst_max_llen   = 3'b0;
         idma_fe_req_d.burst_req.opt.beo.src_reduce_len = 1'b0;

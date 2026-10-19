@@ -285,7 +285,6 @@ module tb_idma_mx_obi
     r.opt.dst_protocol = x.dp;
     r.opt.src.burst    = axi_pkg::BURST_INCR;
     r.opt.dst.burst    = axi_pkg::BURST_INCR;
-    r.opt.beo.decouple_rw = 1'b1;
     r.opt.beo.decouple_aw = 1'b1;
     r.opt.last = 1'b1;
     if (x.cp != 0) begin
