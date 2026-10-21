@@ -51,15 +51,35 @@ dataflow element pointers, `r_ready` and the request FIFOs. Each field is indepe
 
 | Field | Effect | Cost |
 |-------|--------|------|
-| `dfe_ready_cut` | A full dataflow lane takes a new beat only in a cycle without a write-side pop. `r_ready` and the dataflow push no longer depend on the write datapath. Implies `dfe_reg_flags` | One more dataflow entry per byte lane (`BufferDepth + 1`), one more MX input queue entry per engine |
+| `dfe_ready_cut` | Every free dataflow slot is usable. A full lane accepts input only in the cycle after a pop, not during that pop. `r_ready` and the dataflow push no longer depend on the write datapath. | One more dataflow entry per byte lane (`BufferDepth + 1`), one more MX input queue entry per engine |
 | `mx_beat_push` | An MX beat enters its engine queue on the read beat of any read port (its response valid and the read response side ready) and the queue's ready, without the byte-lane masks and the masked buffer-ready reduction of the read port: MX beats are whole beats (asserted). The MX push no longer depends on the read datapath request offsets, the read shift or the last beat flag. Cycle-identical | None |
-| `dfe_ready_ahead` | The dataflow element's ready comes from its registered lane flags and from the lanes the next write beat pops: each write port reports them from the request head and its burst counters (`buffer_out_offer_o`), without the W handshake; a transpose reports its pending pop; an MX burst none. A lane takes its one extra entry only in such a cycle, so a full element refills in the cycle the write side starts to drain it and `r_ready` no longer depends on the write-side handshake. The MX input queues keep their depth. Combines with `dfe_ready_cut` (one entry each) | One more dataflow entry per byte lane |
 | `mx_in_reg` | MX beats enter their engine through a one-beat register stage whose data and tag load in every cycle it can take a beat, so the read handshake and data paths end at the stage instead of the engine input queues | One cycle more from R to W for MX beats; the stage takes one input queue entry of each engine |
-| `dfe_reg_flags` | Dataflow lanes keep full/empty in flops, update their pointers without load enables and write the free slot every cycle the lane can accept. Cycle-identical | A few flops per lane |
 | `wdp_head_spill` | A spill register on the head of the write datapath request FIFO, so the write datapath starts from flops instead of the FIFO read mux | +1 cycle from the legalizer to the write datapath; `MetaFifoDepth` +2 |
 | `outst_cnt_reg` | The outstanding-transfer counter of `RejectZeroTransfers` counts an accepted request one cycle late, so it does not depend on `req_ready_o`. Cycle-identical | One flop |
 
 `MetaFifoDepth` grows by each extra dataflow entry and by two with `wdp_head_spill`.
+
+The removed `dfe_ready_ahead` option is replaced by ordinary FIFO operation; there
+is no pending-write offer mask or reserved last slot. Configurations that did not
+use it retain their buffer depths. For a ready-path cut, use `dfe_ready_cut` and
+prefer named `timing_cuts_t` initializers over integer masks: `mx_beat_push` is now
+bit 4 (was bit 6). Removing `dfe_reg_flags` also moves `dfe_ready_cut` to bit 2
+and `mx_in_reg` to bit 3; bits 0 and 1 are unchanged. All current options enabled
+is 31, and `mx_beat_push` alone is 16.
+
+The separate registered-flag FIFO implementation (`RegFlags` and `dfe_reg_flags`)
+is also removed. All byte lanes use `cc_passthrough_stream_fifo`; `dfe_ready_cut`
+disables its `SameCycleRW` option to cut the downstream-ready path.
+
+For capacity comparisons, count physical entries rather than only `BufferDepth`.
+Previously the dataflow depth was `BufferDepth + dfe_ready_cut + dfe_ready_ahead`;
+it is now `BufferDepth + dfe_ready_cut`. Replacing ahead-only operation with
+`dfe_ready_cut` retains that dataflow depth but adds one MX input queue entry,
+whereas the removed option did not. Removing ahead from a configuration that also
+used the cut drops one dataflow entry and leaves MX input queue depth unchanged.
+Account for these differences when comparing completion times; a refusal in the
+first write-drain cycle alone does not measure transfer throughput.
+
 
 ## Interface
 

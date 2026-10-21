@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Expose the option through the register frontend's `conf` register, descriptor
   flag bit 24, and `backend_options_t`. Requests with the mode off are still
   counted, so queued transfers can use different settings.
+### Removed
+- Remove dataflow `AheadSlot`/`ahead_i`, write-port offer masks, and
+  `TimingCuts.dfe_ready_ahead`. Ordinary FIFOs use every free slot; retain
+  `dfe_ready_cut` for cutting the downstream-ready path. Existing configurations
+  without the removed option keep their buffer depths.
+- Remove `RegFlags`, `TimingCuts.dfe_reg_flags`, and the custom dataflow FIFO.
+  All byte lanes use the common-cells FIFO; `dfe_ready_cut` disables same-cycle
+  full-lane refill to cut the downstream-ready path.
+- Removing both timing bits moves `dfe_ready_cut` to bit 2, `mx_in_reg` to bit 3,
+  and `mx_beat_push` to bit 4. Bits 0 and 1 are unchanged. Prefer named timing
+  settings; the all-options mask is now 31.
 
 ## 0.7.4 - 2026-10-06
 
