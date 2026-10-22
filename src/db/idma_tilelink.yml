@@ -81,6 +81,7 @@ legalizer_write_data_path: |
     w_req_o.w_dp_req = '{
         dst_protocol: opt_w_q.dst_protocol,
         dst_head: opt_w_q.dst_head,
+        num_bytes: w_num_bytes,
         offset: w_addr_offset,
         tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
         shift: opt_w_q.write_shift,
@@ -174,13 +175,13 @@ synth_wrapper_ports_write: |
 
     input logic                    tilelink_write_rsp_a_ready_i,
     input logic                    tilelink_write_rsp_d_valid_i,
-    input logic [2:0]              tilelink_write_rsp_d_opcode_i, 
+    input logic [2:0]              tilelink_write_rsp_d_opcode_i,
     input logic [1:0]              tilelink_write_rsp_d_param_i,
     input logic [3:0]              tilelink_write_rsp_d_size_i,
     input logic [4:0]              tilelink_write_rsp_d_source_i,
     input logic                    tilelink_write_rsp_d_sink_i,
     input logic                    tilelink_write_rsp_d_denied_i,
-    input data_t                   tilelink_write_rsp_d_data_i, 
+    input data_t                   tilelink_write_rsp_d_data_i,
     input logic                    tilelink_write_rsp_d_corrupt_i,
 synth_wrapper_ports_read: |
     output logic                   tilelink_read_req_a_valid_o,
@@ -196,13 +197,13 @@ synth_wrapper_ports_read: |
 
     input logic                    tilelink_read_rsp_a_ready_i,
     input logic                    tilelink_read_rsp_d_valid_i,
-    input logic [2:0]              tilelink_read_rsp_d_opcode_i, 
+    input logic [2:0]              tilelink_read_rsp_d_opcode_i,
     input logic [1:0]              tilelink_read_rsp_d_param_i,
     input logic [3:0]              tilelink_read_rsp_d_size_i,
     input logic [4:0]              tilelink_read_rsp_d_source_i,
     input logic                    tilelink_read_rsp_d_sink_i,
     input logic                    tilelink_read_rsp_d_denied_i,
-    input data_t                   tilelink_read_rsp_d_data_i, 
+    input data_t                   tilelink_read_rsp_d_data_i,
     input logic                    tilelink_read_rsp_d_corrupt_i,
 synth_wrapper_assign_write: |
     assign tilelink_write_req_a_valid_o   = tilelink_write_req.a_valid;

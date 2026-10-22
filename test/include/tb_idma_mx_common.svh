@@ -8,8 +8,8 @@
 // Shared skeleton for the MX compute testbenches: parameter-derived types,
 // clock/reset, R/W join, the AXI memory (on the axi_*_mem pair) and byte
 // accessors. The including testbench couples axi_req/axi_rsp to the *_mem
-// pair (directly or through a stall shim) and instantiates the backend; its
-// top includes tb_idma_mx_axi_mon_bind.svh once.
+// pair (directly or through a stall shim) and instantiates the backend and
+// its monitor using IDMA_MX_AXI_MON.
 // Expects DataWidth/AddrWidth/UserWidth/AxiIdWidth/TFLenWidth parameters.
 
 localparam time TA = 1ns, TT = 9ns, TCK = 10ns;

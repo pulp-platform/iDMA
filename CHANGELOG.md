@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Added
+- Per-transfer `deadlock_free` mode. Before issuing a read burst, the backend
+  reserves enough buffer space for all bytes that burst will return. Space is
+  freed when the data leaves the buffer, not when the read response arrives.
+- In this mode, the hardware legalizer shortens read bursts to fit the buffer.
+  Smaller user burst limits still apply. The mode is off by default and has no
+  effect when `HardwareLegalizer=0`.
+- Expose the option through the register frontend's `conf` register, descriptor
+  flag bit 24, and `backend_options_t`. Requests with the mode off are still
+  counted, so queued transfers can use different settings.
+
 ## 0.7.4 - 2026-10-06
 
 MX changes the on-chip MX format and layout; MX has no production users yet, so they stay on 0.7.x.
