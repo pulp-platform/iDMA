@@ -47,11 +47,20 @@ module idma_transpose_tiles_bench
     axi_rsp.w_ready     = axi_rsp_mem.w_ready & ~wstall;
   end
 
+  localparam idma_pkg::compute_enable_t ComputeOps = '{
+    transpose: 1'b1,
+    mxquant: 1'b1,
+    default: '0
+  };
+
+  `include "include/tb_idma_mx_axi_mon.svh"
+  `IDMA_MX_AXI_MON(i_idma_backend, i_mx_axi_mon, 1'b1, ComputeOps)
+
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{transpose: 1'b1, mxquant: 1'b1, default: '0}),
+    .ComputeOps(ComputeOps),
     .ComputeTuning(idma_pkg::compute_tuning_t'{transpose_full_duplex: FullDuplex}),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth),
@@ -277,8 +286,6 @@ module tb_idma_transpose_tiles #(
   /// Same for runs of four equal tiles; a config change drains the backend between runs
   parameter int unsigned MinRunsGainPct = 120
 );
-
-  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   idma_transpose_tiles_bench #(.DataWidth(DataWidth), .FullDuplex(1'b0)) i_fd0 ();
   idma_transpose_tiles_bench #(.DataWidth(DataWidth), .FullDuplex(1'b1)) i_fd1 ();
