@@ -399,7 +399,6 @@ module tb_idma_transpose_nd
     transpose_req_from_tb.burst_req.opt.dst_protocol = idma_pkg::AXI;
     transpose_req_from_tb.burst_req.opt.src.burst = axi_pkg::BURST_INCR;
     transpose_req_from_tb.burst_req.opt.dst.burst = axi_pkg::BURST_INCR;
-    transpose_req_from_tb.burst_req.opt.beo.decouple_rw = 1'b1;
     transpose_req_from_tb.burst_req.opt.beo.decouple_aw = 1'b1;
     transpose_req_from_tb.burst_req.opt.beo.src_max_llen = '0;
     transpose_req_from_tb.burst_req.opt.beo.dst_max_llen = '0;
@@ -484,7 +483,6 @@ module tb_idma_transpose_nd
     req.opt.dst_protocol = idma_pkg::AXI;
     req.opt.src.burst = axi_pkg::BURST_INCR;
     req.opt.dst.burst = axi_pkg::BURST_INCR;
-    req.opt.beo.decouple_rw = 1'b1;
     req.opt.beo.decouple_aw = 1'b1;
     req.opt.compute.enable = 1'b1;
     req.opt.compute.op = idma_pkg::COMPUTE_TRANSPOSE;

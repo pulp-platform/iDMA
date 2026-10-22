@@ -422,6 +422,7 @@
 
         // parsed fields
         int unsigned            num_errors;
+        logic                   reserved_legacy_flag;
         string                  is_read, error_handling;
         addr_t                  err_addr;
         tb_dma_job_t            now;
@@ -447,7 +448,8 @@
             void'($fscanf(job_file, "%d\n", now.max_src_len));
             void'($fscanf(job_file, "%d\n", now.max_dst_len));
             void'($fscanf(job_file, "%b\n", now.aw_decoupled));
-            void'($fscanf(job_file, "%b\n", now.rw_decoupled));
+            // Retain the former RW-decoupling line in existing job files as a reserved field.
+            void'($fscanf(job_file, "%b\n", reserved_legacy_flag));
             if (now.IsND) begin
                 for (int d = 0; d < now.NumDim-1; d++) begin
                     void'($fscanf(job_file, "%d\n", now.n_dims[d].reps));
