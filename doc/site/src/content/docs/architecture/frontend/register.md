@@ -92,7 +92,38 @@ The bit positions of `enable_nd` and the protocol fields depend on the number of
 | 12:10 | 10 | 11:10 | `enable_nd` | Dimensions in use beyond the first (0: 1D) |
 | 15:13 | 13:11 | 14:12 | `src_protocol` | Source protocol (idma_pkg::protocol_e) |
 | 18:16 | 16:14 | 17:15 | `dst_protocol` | Destination protocol (idma_pkg::protocol_e) |
+| 19 | 17 | 18 | `deadlock_free` | Reserve data-buffer space before issuing read requests |
 <!-- END GENERATED reg_conf -->
+
+### Enabling Deadlock-Free Mode
+
+Set `conf.deadlock_free` before launching a transfer. It defaults to zero and
+is sampled with the other fields when `next_id` is read. Its bit position depends
+on the frontend variant; use the generated register definitions or table above.
+
+When enabled, the backend shortens read bursts to fit its buffer and waits for
+space for all data a burst will return before issuing it. This differs from
+setting a small `src_max_llen`: several short bursts can still fill the buffer
+if there is no space check. Smaller user burst limits remain in effect.
+
+The default is the largest power-of-two read burst that fits in the buffer. A
+full-buffer burst can force the next one to wait for a full drain. For depth 8,
+try also setting `src_reduce_len=1` and `src_max_llen=2` for four-beat reads. This
+allows earlier reads but adds address transactions; measure it against the default.
+See [Choosing a Read Burst Limit](../../backend/#choosing-a-read-burst-limit).
+
+The mode requires `HardwareLegalizer=1`; otherwise the bit is ignored. It is
+independent of `decouple_rw` and `decouple_aw`. It cannot rescue an earlier unsafe
+transfer that is already stuck. See [Deadlock-Free Mode](../../backend/#deadlock-free-mode)
+for the buffer accounting and limits.
+
+For example, on `reg32_3d`, bit 19 enables safe mode:
+
+```c
+// Use generated field names in real code; bit 19 is specific to reg32_3d.
+write(conf, existing_configuration | (1u << 19));
+// Set addresses/length and launch with next_id as usual.
+```
 
 ### Compute Configuration Register (`compute_cfg`)
 

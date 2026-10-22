@@ -49,6 +49,13 @@ The `IDMA_TYPEDEF_FULL_REQ_T` macro is a convenience wrapper that internally inv
 
 ### 3. Instantiate
 
+For transfers that may block each other's reads and writes, enable
+`be_req.opt.beo.deadlock_free` on each request and keep `HardwareLegalizer=1`.
+This limits read bursts and checks buffer space before issuing them. Register
+frontends expose the option in `conf`; descriptors use flag bit 24. The instruction
+frontend currently leaves it off. See
+[Deadlock-Free Mode](../../architecture/backend/#deadlock-free-mode) for details.
+
 All iDMA modules use a single clock (`clk_i`) and synchronous active-low reset (`rst_ni`). The clock must be the same for all three layers (frontend, midend, backend) and the attached memory system.
 
 Wire the three layers together. The key connections are:

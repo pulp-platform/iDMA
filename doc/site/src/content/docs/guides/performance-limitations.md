@@ -17,10 +17,40 @@ This guide summarizes practical constraints and tradeoffs that impact performanc
 
 `BufferDepth` impacts throughput and alignment tolerance. Depth 3 is the default recommendation for mixed alignment cases; smaller depths can stall when read and write offsets differ.
 
-## Decoupling Tradeoffs
+## Decoupling and Deadlocks
 
-- `decouple_rw=1` maximizes throughput but can deadlock if the buffer is too shallow.
+- `decouple_rw=1` lets read and write bursts use different lengths. Clearing it
+  does not guarantee that enough buffer space exists for outstanding reads.
 - `decouple_aw=1` enables R-AW coupling, which can reduce bus contention but adds latency.
+- `deadlock_free=1` shortens read bursts to fit the buffer and waits for enough
+  free space before issuing each one. It also counts reads whose data has not
+  arrived yet. Short bursts alone do not provide this check.
+- The mode is off by default and requires `HardwareLegalizer=1`. Use it on all
+  transfers that may block each other's reads and writes. It does not fix an
+  already-stuck unsafe transfer or a memory system that never responds.
+
+See [Deadlock-Free Mode](../../architecture/backend/#deadlock-free-mode) for
+buffer accounting and examples. The extra checks and shorter bursts may reduce
+throughput; disabling the mode is appropriate only if the system guarantees progress.
+
+### Read Burst Size in Safe Mode
+
+The default read limit is the largest power of two that fits in `BufferDepth`,
+subject to the protocol and field limits. Depth 8 therefore permits eight-beat
+reads. A burst that reserves the whole buffer makes the next equally sized read
+wait for all lanes to drain, leaving a gap while new data arrives.
+
+Try a smaller limit near half the depth, rounded down to a power of two (minimum
+one beat). For depth 8, keep `deadlock_free=1`, set `src_reduce_len=1`, and set
+`src_max_llen=2` for four-beat reads. The next read can start while writes still
+have buffered data. More small bursts can remain outstanding without exceeding
+the buffer's total space.
+
+This trades earlier reads for more address transactions. Measure both settings;
+half depth is a starting point, not always the best choice. With `decouple_rw=0`,
+write bursts may become shorter as well. See
+[Choosing a Read Burst Limit](../../architecture/backend/#choosing-a-read-burst-limit)
+for examples and frontend controls.
 
 ## Outstanding Transactions
 
@@ -29,6 +59,9 @@ This guide summarizes practical constraints and tradeoffs that impact performanc
 ## Software Legalization
 
 If `HardwareLegalizer=0`, software must split transfers into protocol-legal bursts. This reduces hardware but shifts correctness burden to software.
+
+In this configuration `deadlock_free` is ignored; software must also ensure
+the memory system cannot deadlock on outstanding DMA reads and writes.
 
 ## On-the-Fly Compute
 
