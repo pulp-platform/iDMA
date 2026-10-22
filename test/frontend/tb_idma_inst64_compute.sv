@@ -10,7 +10,7 @@
 module tb_idma_inst64_compute #(
     /// Elaborate the backend compute datapath; 0 must fail the golden compare
     parameter bit          EnableCompute = 1'b1,
-    /// Topology under test (1: TCDM over OBI); run with the matching monitor bind top
+    /// Topology under test (1: TCDM over OBI)
     parameter bit          EnableTcdmObi = 1'b0,
     /// 0 runs the compute test; 1 latches an undecodable DMOPC byte
     parameter int unsigned NegCase       = 32'd0,
@@ -34,6 +34,22 @@ module tb_idma_inst64_compute #(
         .ComputeOps    ( idma_pkg::compute_enable_t'(ComputeOpsMask) ),
         .DMATracing    ( DMATracing    )
     ) harness ();
+
+    `include "include/tb_idma_mx_axi_mon.svh"
+    // Each channel gets its own monitor, connected to the selected backend topology.
+    for (genvar channel = 0; channel < NumChannels; channel++) begin : gen_axi_monitor
+        if (EnableTcdmObi) begin : gen_obi
+            `IDMA_MX_AXI_MON(
+                harness.i_dut.gen_backend[channel].gen_obi_backend.i_idma_backend_r_init_rw_axi_rw_obi,
+                i_mx_axi_mon, EnableCompute, idma_pkg::compute_enable_t'(ComputeOpsMask),
+                AxiDataWidth / 8, AxiAddrWidth, AxiAddrWidth, AxiIdWidth, AxiUserWidth)
+        end else begin : gen_axi
+            `IDMA_MX_AXI_MON(
+                harness.i_dut.gen_backend[channel].gen_axi_backend.i_idma_backend_rw_axi,
+                i_mx_axi_mon, EnableCompute, idma_pkg::compute_enable_t'(ComputeOpsMask),
+                AxiDataWidth / 8, AxiAddrWidth, AxiAddrWidth, AxiIdWidth, AxiUserWidth)
+        end
+    end
 
     localparam int unsigned TimeoutCycles = 32'd200000;
 
@@ -640,13 +656,4 @@ module tb_idma_inst64_compute #(
         $fatal(1, "simulation timeout after %0d cycles", TimeoutCycles);
     end
 
-endmodule
-
-/// Monitor bind tops: `tb_idma_inst64_mon_axi` for the AXI topology, `_obi` for EnableTcdmObi
-module tb_idma_inst64_mon_axi;
-`include "include/tb_idma_mx_axi_mon_bind.svh"
-endmodule
-
-module tb_idma_inst64_mon_obi;
-`IDMA_MX_AXI_MON_BIND(idma_backend_r_init_rw_axi_rw_obi)
 endmodule

@@ -55,6 +55,9 @@ addrmap idma_reg #(
         field {
             desc = "Destination protocol (idma_pkg::protocol_e)";
          } dst_protocol [2*NumProtBits+11+Log2NumDims-1:11+Log2NumDims+NumProtBits] = 0;
+        field {
+            desc = "Reserve data-buffer space before issuing read requests";
+        } deadlock_free [2*NumProtBits+11+Log2NumDims:2*NumProtBits+11+Log2NumDims] = 0;
     };
 
     reg status {
@@ -71,11 +74,11 @@ addrmap idma_reg #(
     reg next_id {
         regwidth = 32;
         name = "next_id";
-        desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
+        desc = "Launch transfer and return its allocated ID. Returns 0 if the launch queue cannot accept the transfer or this register port loses simultaneous launch arbitration.";
         default sw = r;
         default hw = w;
         field {
-            desc = "Next ID, launches transfer, returns 0 if transfer not set up properly.";
+            desc = "Launch transfer and return its allocated ID. ID 0 means that no transfer was queued and software must retry.";
             rd_swacc = true;
         } next_id [31:0] = 0;
     };
