@@ -88,7 +88,44 @@ If all repetition counts for a dimension are zero, that dimension is treated as 
 
 The transpose midend (`idma_transpose_midend`) is a combinational geometry expander that pairs with the on-the-fly [transpose compute engine](../compute/). When a request carries `opt.compute.op == COMPUTE_TRANSPOSE`, it rewrites the request into a `NumDim=4` tiled ND walk (feeding the generic `idma_nd_midend`) so the transport-layer transpose engine receives its input tiles in the (col-tile, row-tile, row) order it expects, and writes the transposed tiles back with the correct strides. Non-transpose requests pass through untouched.
 
-The expander derives the tiling from the transpose parameters carried in the request: `mode` (element size `E = 1 << mode`), tensor dimensions `tensor_m` / `tensor_n` (elements), and the write-side tile edge `NE = StrbWidth / E`. It is quasi-static per request; all geometry folds to shifts except the `y_tiles * N` stride product. See the [Compute](../compute/) page for the transpose engine itself.
+The expander derives the tiling from the transpose parameters carried in the request: `mode` (element size `E = 1 << mode` bytes), tensor dimensions `tensor_m` / `tensor_n` (elements), and the write-side tile edge `NE = StrbWidth / E`. Source and destination row strides determine the spacing between rows. See the [Compute](../compute/) page for the transpose engine itself.
+
+### Row Strides and Partial Matrices
+
+Row strides let the DMA transpose part of a larger matrix without first copying
+it into a contiguous buffer. Set the source address to the first element of the
+selected region, and set `tensor_m=M` and `tensor_n=N` to its row and column counts.
+The result has `N` rows and `M` columns. Set the destination address to where its
+first element should be written.
+
+Set the incoming ND request's row strides in **bytes**:
+
+| Field | Nonzero value | Default when zero |
+|-------|---------------|-------------------|
+| `d_req[0].src_strides` | Distance between source row starts; at least `N * E` | `N * E` |
+| `d_req[0].dst_strides` | Distance between destination row starts; at least `M * E` | Compact: `M * E`; padded: `ceil(M / NE) * StrbWidth` |
+
+Each override is independent. A nonzero destination stride replaces the row
+spacing selected by `compact`; it does not change the logical matrix dimensions.
+The midend generates the tiled loops itself, replacing the incoming repetitions,
+length, and higher-dimensional strides. Do not supply a separate tiled walk.
+
+For example, transpose a **3 by 5** region of 32-bit elements from a source
+matrix with 16 columns into a destination matrix with 12 columns:
+
+```text
+src_addr = address of source[2][3]
+dst_addr = address of destination[1][2]
+tensor_m = 3; tensor_n = 5; mode = 2; compact = 1
+d_req[0].src_strides = 16 * 4 = 64 bytes
+d_req[0].dst_strides = 12 * 4 = 48 bytes
+```
+
+This writes `destination[1+c][2+r] = source[2+r][3+c]` for `r=0..2`, `c=0..4`,
+leaving the other destination elements unchanged. Both parent matrices must have
+enough rows and columns for these regions. Reads still use full bus beats, so
+bytes beyond the selected source columns may be read; the backing memory must
+allow those accesses. Row strides do not remove this requirement.
 
 ### Transpose Parameters
 

@@ -200,7 +200,7 @@ module tb_idma_backend_multihead_rw import idma_pkg::*; #(
 
     task automatic do_copy (input int unsigned len, input addr_t src, input addr_t dst,
                             input multihead_t src_head, input multihead_t dst_head, input id_t id);
-        drv.launch_tf(len, src, dst, idma_pkg::AXI, idma_pkg::AXI, 1'b0, 1'b0,
+        drv.launch_tf(len, src, dst, idma_pkg::AXI, idma_pkg::AXI, 1'b0,
                       3'd0, 3'd0, 1'b1, 1'b1, id, src_head, dst_head);
         @(posedge clk);
         while (busy != '0) @(posedge clk);

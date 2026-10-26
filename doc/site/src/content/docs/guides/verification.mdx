@@ -31,7 +31,7 @@ The `idma_model` class in `idma_test.sv` is a byte-addressed memory model that s
 
 Each job file contains one or more transfer descriptions, concatenated back-to-back. Each transfer is described by the following fields, one per line.
 
-The most important fields are `length`, `src_addr`, `dst_addr`, and the two `max_*_len` fields (which must match your protocol's actual burst limits). For a basic AXI test, set both protocols to 0, both max lengths to 256, and both decoupling flags to 0.
+The most important fields are `length`, `src_addr`, `dst_addr`, and the two `max_*_len` fields (which must match your protocol's actual burst limits). For a basic AXI test, set both protocols to 0, both max lengths to 256, and the AW-decoupling flag and reserved compatibility field to 0.
 
 ### Fields
 
@@ -45,7 +45,7 @@ The most important fields are `length`, `src_addr`, `dst_addr`, and the two `max
 | 6 | `%d` | `max_src_len` | Max source burst length in beats |
 | 7 | `%d` | `max_dst_len` | Max destination burst length in beats |
 | 8 | `%b` | `aw_decoupled` | AW decoupling flag (0 or 1) |
-| 9 | `%b` | `rw_decoupled` | RW decoupling flag (0 or 1) |
+| 9 | `%b` | reserved | Retained for compatibility with existing job files; ignored and must be 0 |
 | 10 | `%d` | `num_errors` | Number of injected errors (0 for clean transfers) |
 | 11+ | `%c%c0x%h` | error specs | One line per error: `r`/`w` + `c`/`a` + hex address |
 
@@ -64,7 +64,7 @@ Annotated `simple.txt` (a single 2-byte transfer with no errors):
 256         # max_src_len: 256 beats
 256         # max_dst_len: 256 beats
 0           # aw_decoupled: no
-0           # rw_decoupled: no
+0           # reserved compatibility field
 0           # num_errors: 0
 ```
 
@@ -79,7 +79,7 @@ Annotated error transfer (from `error_simple.txt`):
 256         # max 256 beats
 256         # max 256 beats
 0           # aw_decoupled: no
-0           # rw_decoupled: no
+0           # reserved compatibility field
 3           # 3 injected errors:
 rc0x4       #   read error at 0x4, action: continue
 rc0x8       #   read error at 0x8, action: continue

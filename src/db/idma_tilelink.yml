@@ -12,7 +12,6 @@ tb_define: "PROT_TILELINK"
 bursts: "only_pow2"
 page_size: 2048                # limited by TLToAXI4 Bridge -> To be AXI compliant -> Less than 256 beats
 tltoaxi4_compatibility_mode: "true" # If this is true burst will never cross a page boundary and only 32 beat write bursts -> Needed for TLToAXI4 Bridge
-legalizer_force_decouple: "true" # Forces the legalizer to decouple
 read_meta_channel: "a_chan"
 write_meta_channel: "a_chan"
 meta_channel_width: "localparam int unsigned tilelink_a_chan_width = $bits(tilelink_a_chan_t);"
@@ -81,6 +80,7 @@ legalizer_write_data_path: |
     w_req_o.w_dp_req = '{
         dst_protocol: opt_w_q.dst_protocol,
         dst_head: opt_w_q.dst_head,
+        num_bytes: w_num_bytes,
         offset: w_addr_offset,
         tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
         shift: opt_w_q.write_shift,
@@ -157,7 +157,6 @@ write_template: |
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} ),
-        .buffer_out_offer_o ( ${buffer_out_offer} ),
         .buffer_out_consumed_o ( ${buffer_out_consumed} )
     );
 synth_wrapper_ports_write: |
@@ -174,13 +173,13 @@ synth_wrapper_ports_write: |
 
     input logic                    tilelink_write_rsp_a_ready_i,
     input logic                    tilelink_write_rsp_d_valid_i,
-    input logic [2:0]              tilelink_write_rsp_d_opcode_i, 
+    input logic [2:0]              tilelink_write_rsp_d_opcode_i,
     input logic [1:0]              tilelink_write_rsp_d_param_i,
     input logic [3:0]              tilelink_write_rsp_d_size_i,
     input logic [4:0]              tilelink_write_rsp_d_source_i,
     input logic                    tilelink_write_rsp_d_sink_i,
     input logic                    tilelink_write_rsp_d_denied_i,
-    input data_t                   tilelink_write_rsp_d_data_i, 
+    input data_t                   tilelink_write_rsp_d_data_i,
     input logic                    tilelink_write_rsp_d_corrupt_i,
 synth_wrapper_ports_read: |
     output logic                   tilelink_read_req_a_valid_o,
@@ -196,13 +195,13 @@ synth_wrapper_ports_read: |
 
     input logic                    tilelink_read_rsp_a_ready_i,
     input logic                    tilelink_read_rsp_d_valid_i,
-    input logic [2:0]              tilelink_read_rsp_d_opcode_i, 
+    input logic [2:0]              tilelink_read_rsp_d_opcode_i,
     input logic [1:0]              tilelink_read_rsp_d_param_i,
     input logic [3:0]              tilelink_read_rsp_d_size_i,
     input logic [4:0]              tilelink_read_rsp_d_source_i,
     input logic                    tilelink_read_rsp_d_sink_i,
     input logic                    tilelink_read_rsp_d_denied_i,
-    input data_t                   tilelink_read_rsp_d_data_i, 
+    input data_t                   tilelink_read_rsp_d_data_i,
     input logic                    tilelink_read_rsp_d_corrupt_i,
 synth_wrapper_assign_write: |
     assign tilelink_write_req_a_valid_o   = tilelink_write_req.a_valid;

@@ -219,7 +219,6 @@ module tb_idma_transpose_obi
     nd_req.burst_req.opt.dst_protocol = idma_pkg::OBI;
     nd_req.burst_req.opt.src.burst    = axi_pkg::BURST_INCR;
     nd_req.burst_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    nd_req.burst_req.opt.beo.decouple_rw = 1'b1;
     nd_req.burst_req.opt.beo.decouple_aw = 1'b1;
     nd_req.burst_req.opt.beo.src_max_llen = '0;
     nd_req.burst_req.opt.beo.dst_max_llen = '0;
