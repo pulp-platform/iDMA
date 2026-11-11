@@ -435,9 +435,14 @@ idma_sim_tb_idma_otf_transpose:
 .PHONY: idma_sim_tb_idma_transpose_nd
 idma_sim_tb_idma_transpose_nd: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
-	# the TB sweeps the geometry list internally; one run per bus width
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=32 tb_idma_transpose_nd -do "run -all; quit"
-	cd $(IDMA_VSIM_DIR); $(VSIM) -c -t 1ps -voptargs=+acc -gDataWidth=64 tb_idma_transpose_nd -do "run -all; quit"
+	# the TB sweeps the geometry list internally; the shallow-queue runs must still fit a whole tile
+	cd $(IDMA_VSIM_DIR); for g in "-gDataWidth=32" "-gDataWidth=64" "-gDataWidth=64 -gAxIF=2" \
+	  "-gDataWidth=64 -gAxIF=2 -gMaxAwAhead=1" "-gDataWidth=128 -gAxIF=2 -gMaxAwAhead=1" \
+	  "-gDataWidth=512 -gAxIF=24 -gMaxAwAhead=1" "-gDataWidth=512 -gAxIF=24 -gMaxAwAhead=2"; do \
+	  $(VSIM) -c -t 1ps -voptargs=+acc $$g tb_idma_transpose_nd -logfile transpose_nd.log \
+	    -do "run -all; quit"; \
+	  ! grep -qE "Error:|Fatal:" transpose_nd.log || exit 1; \
+	  grep -q "\[TPN\] ALL PASS" transpose_nd.log || exit 1; done
 
 # OBI-destination transpose: the write strobe must mask edge tiles and padding
 .PHONY: idma_sim_tb_idma_transpose_obi

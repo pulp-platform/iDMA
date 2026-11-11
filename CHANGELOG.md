@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Fixed
+- Transpose no longer deadlocks when `NumAxInFlight` is below the tile height: the R-AW coupler
+  and the write queues hold at least one whole tile, including rows split at a 4 KiB boundary
+  [#275](https://github.com/pulp-platform/iDMA/issues/275).
+
 ## 0.7.4 - 2026-10-06
 
 MX changes the on-chip MX format and layout; MX has no production users yet, so they stay on 0.7.x.

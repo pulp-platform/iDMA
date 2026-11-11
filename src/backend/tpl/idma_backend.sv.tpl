@@ -180,11 +180,17 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     output idma_busy_t busy_o
 );
 
-    /// Extra write-descriptor slots covering the compute (transpose) tile-fill latency.
+    /// Write queues holding a whole transpose tile; a transpose config change drains the backend
 % if compute_eligible:
     localparam int unsigned ComputeFifoDepth = EnableCompute ? StrbWidth : 32'd0;
+    // a transpose tile is up to StrbWidth row writes, each split in two at a 4 KiB boundary
+    localparam int unsigned TransposeTileDepth =
+        (EnableCompute && ComputeOps.transpose) ? 32'd2 * StrbWidth : 32'd0;
+    localparam int unsigned TileFifoDepth =
+        (NumAxInFlight + ComputeFifoDepth > TransposeTileDepth) ?
+        NumAxInFlight + ComputeFifoDepth : TransposeTileDepth;
 % else:
-    localparam int unsigned ComputeFifoDepth = 32'd0;
+    localparam int unsigned TileFifoDepth = NumAxInFlight;
 % endif
 
     /// Dataflow element depth; each ready cut needs one more entry for the same rate
@@ -193,8 +199,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 
     /// The localparam MetaFifoDepth holds the maximum number of transfers that can be
     /// in-flight under any circumstances.
-    localparam int unsigned MetaFifoDepth = DfeDepth + NumAxInFlight + MemSysDepth +
-        ComputeFifoDepth + 32'd2 * 32'(TimingCuts.wdp_head_spill);
+    localparam int unsigned MetaFifoDepth = DfeDepth + TileFifoDepth + MemSysDepth +
+        32'd2 * 32'(TimingCuts.wdp_head_spill);
 
     /// Address type
     typedef logic [AddrWidth-1:0]   addr_t;
@@ -746,7 +752,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     );
 
     cc_stream_fifo_optimal_wrap #(
-        .Depth     ( NumAxInFlight + ComputeFifoDepth ),
+        .Depth     ( TileFifoDepth ),
         .data_t    ( w_dp_req_t    ),
         .PrintInfo ( PrintFifoInfo )
     ) i_w_dp_req (
@@ -966,7 +972,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
 % if one_read_port and one_write_port and (used_read_protocols[0] == used_write_protocols[0]):
         // mirrors i_w_dp_req exactly: same depth, same push valid, same pop ready
         cc_stream_fifo_optimal_wrap #(
-            .Depth     ( NumAxInFlight + ComputeFifoDepth ),
+            .Depth     ( TileFifoDepth                    ),
             .data_t    ( logic                            ),
             .PrintInfo ( PrintFifoInfo                    )
         ) i_w_decouple_aw (
@@ -984,8 +990,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         );
 
         // instantiate the channel coupler
+        // holds a whole transpose tile of AWs, like i_w_dp_req
         idma_channel_coupler #(
-            .NumAxInFlight   ( NumAxInFlight               ),
+            .NumAxInFlight   ( TileFifoDepth               ),
             .AddrWidth       ( AddrWidth                   ),
             .UserWidth       ( UserWidth                   ),
             .AxiIdWidth      ( AxiIdWidth                  ),
@@ -1044,7 +1051,7 @@ w_req.decouple_aw || (w_req.w_dp_req.dst_protocol inside {\
     % if compute_eligible:
         // combined aw+w read-meta buffer; deepened for the compute engine tile read-ahead (cf. i_w_dp_req)
         cc_stream_fifo_optimal_wrap #(
-            .Depth        ( EnableCompute ? NumAxInFlight + ComputeFifoDepth : 32'd2 ),
+            .Depth        ( EnableCompute ? TileFifoDepth : 32'd2 ),
     % else:
         // Atleast one write protocol uses combined aw and w -> Need to buffer read meta requests
         // As a write could depend on up to two reads

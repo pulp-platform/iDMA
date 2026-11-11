@@ -21,7 +21,10 @@ module tb_idma_transpose_nd
   parameter int unsigned UserWidth   = 1,
   parameter int unsigned AxiIdWidth  = 12,
   parameter int unsigned TFLenWidth  = 32,
-  parameter int unsigned BufferDepth = 3
+  parameter int unsigned BufferDepth = 3,
+  parameter int unsigned AxIF        = DataWidth / 8,
+  // AWs the memory accepts ahead of their W data (0: unlimited), like an interconnect write limit
+  parameter int unsigned MaxAwAhead  = 0
 );
 
   localparam time TA = 1ns;
@@ -29,14 +32,12 @@ module tb_idma_transpose_nd
   localparam time TCK = 10ns;
 
   localparam int unsigned StrbWidth = DataWidth / 8;
-  // transpose buffers a full NE-beat tile before the first write; NE <= StrbWidth
-  localparam int unsigned AxIF = StrbWidth;
   localparam int unsigned NumDim = 4;  // 1D + {row, row-tile, col-tile}
   localparam logic [NumDim-1:0][31:0] RepWidths = '{default: 32'd16};
 
   // Geometry cases (M, N, EB) swept in one elaboration: aligned + edge
   // (M or N not a multiple of NE) for int8/fp16/fp32. EB>StrbWidth cases skip.
-  localparam int unsigned NCases = 14;
+  localparam int unsigned NCases = 16;
   localparam int unsigned Cases[NCases][3] = '{
       '{8, 8, 1},
       '{16, 16, 1},
@@ -51,7 +52,9 @@ module tb_idma_transpose_nd
       '{32, 24, 1},
       '{9, 5, 4},
       '{13, 19, 1},
-      '{9, 5, 8}
+      '{9, 5, 8},
+      '{4095, 4, 1},
+      '{2047, 2, 2}
   };
 
   // Whole-tile cases, all non-square so an M/N swap cannot hide
@@ -158,8 +161,20 @@ module tb_idma_transpose_nd
     .mst_req_o       (axi_req),
     .mst_resp_i      (axi_rsp)
   );
-  assign axi_req_mem = axi_req;
-  assign axi_rsp     = axi_rsp_mem;
+  int   aw_ahead_q;
+  logic aw_block;
+  assign aw_block = (MaxAwAhead != 0) && (aw_ahead_q >= int'(MaxAwAhead));
+  always_comb begin
+    axi_req_mem          = axi_req;
+    axi_rsp              = axi_rsp_mem;
+    axi_req_mem.aw_valid = axi_req.aw_valid & ~aw_block;
+    axi_rsp.aw_ready     = axi_rsp_mem.aw_ready & ~aw_block;
+  end
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) aw_ahead_q <= 0;
+    else
+      aw_ahead_q <= aw_ahead_q + int'(axi_req_mem.aw_valid & axi_rsp_mem.aw_ready) -
+                    int'(axi_req.w_valid & axi_rsp.w_ready & axi_req.w.last);
 
   axi_sim_mem #(
     .AddrWidth        (AddrWidth),
@@ -553,7 +568,7 @@ module tb_idma_transpose_nd
     // Sweep aligned and sub-beat misaligned bases to reach the 2-beat-row path
     for (int unsigned misalign = 0; misalign < 2; misalign++) begin
       sb = 'h0000_1000 + (misalign ? 1 : 0);
-      db = 'h0000_4000 + (misalign ? 3 : 0);
+      db = 'h0010_0000 + (misalign ? 3 : 0);  // clear of the largest source matrix
       for (int unsigned k = 0; k < NCases; k++) begin
         if (Cases[k][2] > StrbWidth) continue;  // element must fit the bus
         for (int unsigned compact = 0; compact < 2; compact++) begin
