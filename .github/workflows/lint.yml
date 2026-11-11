@@ -15,7 +15,8 @@ on:
 jobs:
 
   lint-license:
-    runs-on: ubuntu-latest
+    # pulp-actions lint-license pins Python 3.9, which Ubuntu 26.04 lacks
+    runs-on: ubuntu-24.04
     steps:
     -
       name: Checkout
@@ -75,7 +76,7 @@ jobs:
         name: Install Python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.9
+          python-version: '3.12'
       -
         name: Lint Python
         run: |
@@ -92,7 +93,7 @@ jobs:
         name: Install Python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.9
+          python-version: '3.12'
       -
         name: Lint Yaml
         uses: ibiqlik/action-yamllint@v3
