@@ -189,8 +189,11 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     localparam int unsigned TileFifoDepth =
         (NumAxInFlight + ComputeFifoDepth > TransposeTileDepth) ?
         NumAxInFlight + ComputeFifoDepth : TransposeTileDepth;
+    localparam int unsigned CouplerDepth =
+        (EnableCompute && ComputeOps.transpose) ? TileFifoDepth : NumAxInFlight;
 % else:
     localparam int unsigned TileFifoDepth = NumAxInFlight;
+    localparam int unsigned CouplerDepth = NumAxInFlight;
 % endif
 
     /// Dataflow element depth; each ready cut needs one more entry for the same rate
@@ -990,9 +993,9 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         );
 
         // instantiate the channel coupler
-        // holds a whole transpose tile of AWs, like i_w_dp_req
+        // holds a whole transpose tile of AWs when transpose is enabled
         idma_channel_coupler #(
-            .NumAxInFlight   ( TileFifoDepth               ),
+            .NumAxInFlight   ( CouplerDepth                ),
             .AddrWidth       ( AddrWidth                   ),
             .UserWidth       ( UserWidth                   ),
             .AxiIdWidth      ( AxiIdWidth                  ),
