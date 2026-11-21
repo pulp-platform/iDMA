@@ -5412,6 +5412,8 @@ module idma_backend_rw_axi #(
     // datapath busy indicates the datapath is actively working on a transfer. It is composed of
     // the activity of the buffer as well as both the read and write machines
     logic dp_busy;
+    // write datapath holds a request; a write response is still outstanding
+    logic w_dp_active, w_rsp_pending;
     // blanks invalid data
     logic dp_poison;
 
@@ -5669,7 +5671,10 @@ module idma_backend_rw_axi #(
     //--------------------------------------
     assign dp_busy = busy_o.buffer_busy |
                      busy_o.r_dp_busy   |
-                     busy_o.w_dp_busy;
+                     w_dp_active;
+
+    // busy holds until every legalized write burst has its response back
+    assign busy_o.w_dp_busy = w_dp_active | w_rsp_pending;
 
 
     //--------------------------------------
@@ -5747,7 +5752,7 @@ module idma_backend_rw_axi #(
         .valid_i    ( w_valid & w_ready               ),
         .ready_o    ( w_last_ready                    ),
         .data_o     ( {w_super_last, w_last_burst}    ),
-        .valid_o    ( /* NOT CONNECTED */             ),
+        .valid_o    ( w_rsp_pending                   ),
         .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 
@@ -5796,7 +5801,7 @@ module idma_backend_rw_axi #(
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_active          ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .r_chan_ready_o  ( r_chan_ready         ),
         .r_chan_valid_o  ( r_chan_valid         )
@@ -6120,6 +6125,8 @@ module idma_backend_r_obi_w_axi #(
     // datapath busy indicates the datapath is actively working on a transfer. It is composed of
     // the activity of the buffer as well as both the read and write machines
     logic dp_busy;
+    // write datapath holds a request; a write response is still outstanding
+    logic w_dp_active, w_rsp_pending;
     // blanks invalid data
     logic dp_poison;
 
@@ -6343,7 +6350,10 @@ module idma_backend_r_obi_w_axi #(
     //--------------------------------------
     assign dp_busy = busy_o.buffer_busy |
                      busy_o.r_dp_busy   |
-                     busy_o.w_dp_busy;
+                     w_dp_active;
+
+    // busy holds until every legalized write burst has its response back
+    assign busy_o.w_dp_busy = w_dp_active | w_rsp_pending;
 
 
     //--------------------------------------
@@ -6421,7 +6431,7 @@ module idma_backend_r_obi_w_axi #(
         .valid_i    ( w_valid & w_ready               ),
         .ready_o    ( w_last_ready                    ),
         .data_o     ( {w_super_last, w_last_burst}    ),
-        .valid_o    ( /* NOT CONNECTED */             ),
+        .valid_o    ( w_rsp_pending                   ),
         .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 
@@ -6472,7 +6482,7 @@ module idma_backend_r_obi_w_axi #(
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_active          ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .r_chan_ready_o  ( r_chan_ready         ),
         .r_chan_valid_o  ( r_chan_valid         )
@@ -6776,6 +6786,8 @@ module idma_backend_r_axi_w_obi #(
     // datapath busy indicates the datapath is actively working on a transfer. It is composed of
     // the activity of the buffer as well as both the read and write machines
     logic dp_busy;
+    // write datapath holds a request; a write response is still outstanding
+    logic w_dp_active, w_rsp_pending;
     // blanks invalid data
     logic dp_poison;
 
@@ -6999,7 +7011,10 @@ module idma_backend_r_axi_w_obi #(
     //--------------------------------------
     assign dp_busy = busy_o.buffer_busy |
                      busy_o.r_dp_busy   |
-                     busy_o.w_dp_busy;
+                     w_dp_active;
+
+    // busy holds until every legalized write burst has its response back
+    assign busy_o.w_dp_busy = w_dp_active | w_rsp_pending;
 
 
     //--------------------------------------
@@ -7077,7 +7092,7 @@ module idma_backend_r_axi_w_obi #(
         .valid_i    ( w_valid & w_ready               ),
         .ready_o    ( w_last_ready                    ),
         .data_o     ( {w_super_last, w_last_burst}    ),
-        .valid_o    ( /* NOT CONNECTED */             ),
+        .valid_o    ( w_rsp_pending                   ),
         .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 
@@ -7128,7 +7143,7 @@ module idma_backend_r_axi_w_obi #(
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_active          ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .r_chan_ready_o  ( r_chan_ready         ),
         .r_chan_valid_o  ( r_chan_valid         )
@@ -7453,6 +7468,8 @@ module idma_backend_rw_axi_rw_axis #(
     // datapath busy indicates the datapath is actively working on a transfer. It is composed of
     // the activity of the buffer as well as both the read and write machines
     logic dp_busy;
+    // write datapath holds a request; a write response is still outstanding
+    logic w_dp_active, w_rsp_pending;
     // blanks invalid data
     logic dp_poison;
 
@@ -7678,7 +7695,10 @@ module idma_backend_rw_axi_rw_axis #(
     //--------------------------------------
     assign dp_busy = busy_o.buffer_busy |
                      busy_o.r_dp_busy   |
-                     busy_o.w_dp_busy;
+                     w_dp_active;
+
+    // busy holds until every legalized write burst has its response back
+    assign busy_o.w_dp_busy = w_dp_active | w_rsp_pending;
 
 
     //--------------------------------------
@@ -7760,7 +7780,7 @@ module idma_backend_rw_axi_rw_axis #(
         .valid_i    ( w_valid & w_ready               ),
         .ready_o    ( w_last_ready                    ),
         .data_o     ( {w_super_last, w_last_burst}    ),
-        .valid_o    ( /* NOT CONNECTED */             ),
+        .valid_o    ( w_rsp_pending                   ),
         .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 
@@ -7817,7 +7837,7 @@ module idma_backend_rw_axi_rw_axis #(
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_active          ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .r_chan_ready_o  ( r_chan_ready         ),
         .r_chan_valid_o  ( r_chan_valid         )
@@ -8149,6 +8169,8 @@ module idma_backend_r_obi_rw_init_w_axi #(
     // datapath busy indicates the datapath is actively working on a transfer. It is composed of
     // the activity of the buffer as well as both the read and write machines
     logic dp_busy;
+    // write datapath holds a request; a write response is still outstanding
+    logic w_dp_active, w_rsp_pending;
     // blanks invalid data
     logic dp_poison;
 
@@ -8374,7 +8396,10 @@ module idma_backend_r_obi_rw_init_w_axi #(
     //--------------------------------------
     assign dp_busy = busy_o.buffer_busy |
                      busy_o.r_dp_busy   |
-                     busy_o.w_dp_busy;
+                     w_dp_active;
+
+    // busy holds until every legalized write burst has its response back
+    assign busy_o.w_dp_busy = w_dp_active | w_rsp_pending;
 
 
     //--------------------------------------
@@ -8456,7 +8481,7 @@ module idma_backend_r_obi_rw_init_w_axi #(
         .valid_i    ( w_valid & w_ready               ),
         .ready_o    ( w_last_ready                    ),
         .data_o     ( {w_super_last, w_last_burst}    ),
-        .valid_o    ( /* NOT CONNECTED */             ),
+        .valid_o    ( w_rsp_pending                   ),
         .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 
@@ -8515,7 +8540,7 @@ module idma_backend_r_obi_rw_init_w_axi #(
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_active          ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .r_chan_ready_o  ( r_chan_ready         ),
         .r_chan_valid_o  ( r_chan_valid         )
@@ -8849,6 +8874,8 @@ module idma_backend_r_axi_rw_init_rw_obi #(
     // datapath busy indicates the datapath is actively working on a transfer. It is composed of
     // the activity of the buffer as well as both the read and write machines
     logic dp_busy;
+    // write datapath holds a request; a write response is still outstanding
+    logic w_dp_active, w_rsp_pending;
     // blanks invalid data
     logic dp_poison;
 
@@ -9074,7 +9101,10 @@ module idma_backend_r_axi_rw_init_rw_obi #(
     //--------------------------------------
     assign dp_busy = busy_o.buffer_busy |
                      busy_o.r_dp_busy   |
-                     busy_o.w_dp_busy;
+                     w_dp_active;
+
+    // busy holds until every legalized write burst has its response back
+    assign busy_o.w_dp_busy = w_dp_active | w_rsp_pending;
 
 
     //--------------------------------------
@@ -9156,7 +9186,7 @@ module idma_backend_r_axi_rw_init_rw_obi #(
         .valid_i    ( w_valid & w_ready               ),
         .ready_o    ( w_last_ready                    ),
         .data_o     ( {w_super_last, w_last_burst}    ),
-        .valid_o    ( /* NOT CONNECTED */             ),
+        .valid_o    ( w_rsp_pending                   ),
         .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 
@@ -9217,7 +9247,7 @@ module idma_backend_r_axi_rw_init_rw_obi #(
         .aw_ready_o      ( aw_ready_dp          ),
         .dp_poison_i     ( dp_poison            ),
         .r_dp_busy_o     ( busy_o.r_dp_busy     ),
-        .w_dp_busy_o     ( busy_o.w_dp_busy     ),
+        .w_dp_busy_o     ( w_dp_active          ),
         .buffer_busy_o   ( busy_o.buffer_busy   ),
         .r_chan_ready_o  ( r_chan_ready         ),
         .r_chan_valid_o  ( r_chan_valid         )
