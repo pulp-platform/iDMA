@@ -84,7 +84,7 @@ Software can poll the busy signal to check if the backend is idle before clock-g
 typedef struct packed {
     logic buffer_busy;       // Data buffer contains valid data
     logic r_dp_busy;         // Read datapath active
-    logic w_dp_busy;         // Write datapath active
+    logic w_dp_busy;         // Write datapath active or write response outstanding
     logic r_leg_busy;        // Read legalizer processing
     logic w_leg_busy;        // Write legalizer processing
     logic eh_fsm_busy;       // Error handler FSM not idle

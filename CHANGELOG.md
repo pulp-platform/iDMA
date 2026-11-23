@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+### Fixed
+- The backend busy (`w_dp_busy`) holds until every write response has returned, so a busy poll of
+  a single backend (inst64 DMSTAT busy, the reg and desc64 status) no longer reads idle with a
+  write response outstanding. `idma_mp_dist_midend` still ANDs the busy of its backends, so its
+  busy can read idle while one backend waits for a response.
+- The inst64 outstanding-write counter is removed; the backend busy replaces it. The counter
+  read idle with `2**$clog2(NumAxInFlight+1)` writes open and only counted AXI writes.
+
 ## 0.7.4 - 2026-10-06
 
 MX changes the on-chip MX format and layout; MX has no production users yet, so they stay on 0.7.x.
