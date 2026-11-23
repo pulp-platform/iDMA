@@ -538,6 +538,19 @@ idma_sim_tb_idma_inst64_txid: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_txid.tcl
 	  grep -q "TEST PASSED" $$log || exit 1; \
 	done
 
+# DMSTAT busy must hold until the last B, also with more open writes than NumAxInFlight
+.PHONY: idma_sim_tb_idma_inst64_busy
+idma_sim_tb_idma_inst64_busy: $(IDMA_VSIM_DIR)/compile_tb_idma_inst64_busy.tcl
+	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile_tb_idma_inst64_busy.tcl; quit"
+	# one run per BLatency x NumAxInFlight, each gated on its own transcript
+	cd $(IDMA_VSIM_DIR); for cfg in 200:3 0:3 1:2 16:24; do \
+	  bl=$${cfg%%:*}; ax=$${cfg#*:}; log=inst64_busy_$${bl}_$${ax}.log; \
+	  $(VSIM) -c -t 1ps -voptargs=+acc -gBLatency=$$bl -gNumAxInFlight=$$ax \
+	    tb_idma_inst64_busy -logfile $$log -do "run -all; quit"; \
+	  ! grep -qE "Error:|Fatal:" $$log || exit 1; \
+	  grep -q "TEST PASSED" $$log || exit 1; \
+	done
+
 .PHONY: idma_sim_tb_idma_transpose_b2b
 idma_sim_tb_idma_transpose_b2b: $(IDMA_VSIM_DIR)/compile.tcl
 	cd $(IDMA_VSIM_DIR); $(VSIM) -c -do "source compile.tcl; quit"
@@ -749,7 +762,8 @@ idma_lint_clean:
 
 # inst64 gate: the only public concrete bindings of idma_inst64_top
 IDMA_INST64_TBS  := tb_idma_inst64_axi_copy tb_idma_inst64_alias_copy \
-                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute tb_idma_inst64_txid
+                    tb_idma_inst64_tcdm_copy tb_idma_inst64_compute tb_idma_inst64_txid \
+                    tb_idma_inst64_busy
 IDMA_INST64_T    := -t rtl -t synth -t idma_test -t simulation -t sim -t test \
                     -t snitch_cluster
 
@@ -759,7 +773,9 @@ IDMA_INST64_G    := tb_idma_inst64_axi_copy:-GEnableTcdmObi=0 \
                     tb_idma_inst64_compute:-GEnableCompute=1 \
                     tb_idma_inst64_compute:-GEnableCompute=0 \
                     tb_idma_inst64_compute:-GEnableTcdmObi=1 \
-                    tb_idma_inst64_txid:-GNumChannels=2
+                    tb_idma_inst64_txid:-GNumChannels=2 \
+                    tb_idma_inst64_busy:-GBLatency=0 \
+                    tb_idma_inst64_busy:-GNumAxInFlight=24
 
 .PHONY: idma_lint_inst64
 idma_lint_inst64:

@@ -254,7 +254,8 @@
             "small"           : "backend_r_obi_rw_init_w_axi/small.txt",
             "tiny"            : "backend_r_obi_rw_init_w_axi/tiny.txt",
             "zero_transfer"   : "backend_r_obi_rw_init_w_axi/zero_transfer.txt",
-            "zero_tf_busy"    : "backend_r_obi_rw_init_w_axi/zero_transfer_busy.txt"
+            "zero_tf_busy"    : "backend_r_obi_rw_init_w_axi/zero_transfer_busy.txt",
+            "init_write"      : "backend_r_obi_rw_init_w_axi/init_write.txt"
         },
         "params" : {
             "DataWidth"           : 32,
@@ -574,6 +575,21 @@
             "token" : "[NDZ] ALL PASS",
             "legs" : [
                 { "tag" : "nd_midend_zero" }
+            ]
+        }
+    },
+    "inst64_busy" : {
+        "jobs" : {
+        },
+        "params" : {
+        },
+        "testbench" : "tb_idma_inst64_busy",
+        "verify" : {
+            "token" : "[BUSY] TEST PASSED",
+            "legs" : [
+                { "tag" : "inst64_busy" },
+                { "tag" : "inst64_busy_bl0", "params" : { "BLatency" : 0 } },
+                { "tag" : "inst64_busy_ax24", "params" : { "NumAxInFlight" : 24 } }
             ]
         }
     },
