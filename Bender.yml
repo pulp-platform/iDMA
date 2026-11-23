@@ -116,6 +116,9 @@ sources:
       # Level 1
       - test/frontend/tb_idma_desc64_top.sv
       - test/frontend/tb_idma_desc64_bench.sv
+      - target: snitch_cluster
+        files:
+          - test/frontend/tb_idma_inst64_busy.sv
       - test/future/idma_tb_per2axi.sv
       - test/future/TLToAXI4.v
       - test/midend/tb_idma_nd_midend.sv
