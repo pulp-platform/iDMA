@@ -227,6 +227,12 @@ $(IDMA_LINT_DIR)/%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) $(ID
 	mkdir -p $(IDMA_LINT_DIR)
 	$(BENDER) script verilator $(IDMA_VLT_SIM_T) --top $* > $@
 
+# inst64 testbenches need the snitch_cluster-gated sources
+$(IDMA_LINT_DIR)/tb_idma_inst64_%.f: $(IDMA_BENDER_FILES) $(IDMA_FULL_RTL) $(IDMA_FULL_TB) \
+                                     $(IDMA_INCLUDE_ALL)
+	mkdir -p $(IDMA_LINT_DIR)
+	$(BENDER) script verilator $(IDMA_INST64_T) --top tb_idma_inst64_$* > $@
+
 # idma_mxquant_dpi and idma_transpose_dpi both export gm_load/gm_get; never link both
 $(IDMA_LINT_DIR)/%_dpi.o: $(IDMA_ROOT)/test/%_dpi.c
 	mkdir -p $(IDMA_LINT_DIR)

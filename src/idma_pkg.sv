@@ -51,7 +51,7 @@ package idma_pkg;
     typedef struct packed {
         logic buffer_busy;
         logic r_dp_busy;
-        logic w_dp_busy;
+        logic w_dp_busy;        // also set while a write response is outstanding
         logic r_leg_busy;
         logic w_leg_busy;
         logic eh_fsm_busy;

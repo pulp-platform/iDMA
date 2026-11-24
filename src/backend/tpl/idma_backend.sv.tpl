@@ -372,6 +372,8 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     r_dp_req_t r_dp_req_out;
     w_dp_req_t w_dp_req_out;
     logic      w_dp_req_head_valid, w_dp_req_head_ready, w_dp_busy;
+    // write datapath holds a request; a write response is still outstanding
+    logic      w_dp_active, w_rsp_pending;
     w_dp_req_t w_dp_req_head;
     // decouple_aw tag of the R-AW coupler, kept with the write datapath request head
     logic      w_decouple_aw_out, w_decouple_aw_head;
@@ -515,7 +517,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         // a transpose config change (to or from transpose) waits until the datapath drained
         idma_pkg::compute_options_t cmp_cfg_q;
         logic backend_active, cmp_cfg_stall, cmp_cfg_tp;
-        assign backend_active = busy_o.buffer_busy | busy_o.r_dp_busy | busy_o.w_dp_busy |
+        assign backend_active = busy_o.buffer_busy | busy_o.r_dp_busy | w_dp_active |
                                 busy_o.r_leg_busy | busy_o.w_leg_busy | busy_o.raw_coupler_busy;
         assign cmp_cfg_tp     = (idma_req_i.opt.compute.enable &
                                  (idma_req_i.opt.compute.op == idma_pkg::COMPUTE_TRANSPOSE)) |
@@ -721,7 +723,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     //--------------------------------------
     assign dp_busy = busy_o.buffer_busy |
                      busy_o.r_dp_busy   |
-                     busy_o.w_dp_busy;
+                     w_dp_active;
 
 
     //--------------------------------------
@@ -789,8 +791,11 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
     );
 
     // with the head register, busy comes from valid flops (a datapath pop implies valid)
-    assign busy_o.w_dp_busy = TimingCuts.wdp_head_spill ?
-                              (w_dp_req_head_valid | w_dp_req_out_valid) : w_dp_busy;
+    assign w_dp_active = TimingCuts.wdp_head_spill ?
+                         (w_dp_req_head_valid | w_dp_req_out_valid) : w_dp_busy;
+
+    // busy holds until every legalized write burst has its response back
+    assign busy_o.w_dp_busy = w_dp_active | w_rsp_pending;
 
     `IDMA_NONSYNTH_BLOCK(
     always @(posedge clk_i) if (rst_ni && TimingCuts.wdp_head_spill)
@@ -852,7 +857,7 @@ _rsp_t ${mh_format['aw'][protocol]}${protocol}_write_rsp_i,
         .valid_i    ( w_valid & w_ready               ),
         .ready_o    ( w_last_ready                    ),
         .data_o     ( {w_super_last, w_last_burst}    ),
-        .valid_o    ( /* NOT CONNECTED */             ),
+        .valid_o    ( w_rsp_pending                   ),
         .ready_i    ( w_dp_rsp_valid & w_dp_rsp_ready )
     );
 

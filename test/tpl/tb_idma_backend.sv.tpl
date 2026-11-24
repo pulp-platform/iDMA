@@ -689,6 +689,65 @@ ${p}_${database[p]['write_meta_channel']}_width\
 
 
     //--------------------------------------
+    // Busy covers outstanding write responses
+    //--------------------------------------
+% for protocol in used_write_protocols:
+    % if protocol in ['axi', 'axi_lite', 'obi', 'init', 'tilelink']:
+    int unsigned ${protocol}_wr_rsp_pending;
+    logic        ${protocol}_wr_req_hs, ${protocol}_wr_rsp_hs;
+        % if protocol in ['axi', 'axi_lite']:
+    assign ${protocol}_wr_req_hs = ${protocol}_write_req.aw_valid & ${protocol}_write_rsp.aw_ready;
+    assign ${protocol}_wr_rsp_hs = ${protocol}_write_rsp.b_valid  & ${protocol}_write_req.b_ready;
+        % elif protocol == 'obi':
+    assign obi_wr_req_hs = obi_write_req.req    & obi_write_rsp.gnt;
+    assign obi_wr_rsp_hs = obi_write_rsp.rvalid & obi_write_req.rready;
+        % elif protocol == 'init':
+    assign init_wr_req_hs = init_write_req.req_valid & init_write_rsp.req_ready;
+    assign init_wr_rsp_hs = init_write_rsp.rsp_valid & init_write_req.rsp_ready;
+        % else:
+    // one response per burst: only the first beat opens it
+    int unsigned tilelink_wr_beats_left;
+    always_ff @(posedge clk or negedge rst_n) begin : proc_tilelink_wr_beats_left
+        if (!rst_n) begin
+            tilelink_wr_beats_left <= '0;
+        end else if (tilelink_write_req.a_valid & tilelink_write_rsp.a_ready) begin
+            if (tilelink_wr_beats_left != '0) begin
+                tilelink_wr_beats_left <= tilelink_wr_beats_left - 32'd1;
+            end else begin
+                tilelink_wr_beats_left <= ((32'd1 << tilelink_write_req.a.size) - 32'd1) /
+                                          StrbWidth;
+            end
+        end
+    end
+    assign tilelink_wr_req_hs = tilelink_write_req.a_valid & tilelink_write_rsp.a_ready &
+                                (tilelink_wr_beats_left == '0);
+    assign tilelink_wr_rsp_hs = tilelink_write_rsp.d_valid & tilelink_write_req.d_ready;
+        % endif
+
+    always_ff @(posedge clk or negedge rst_n) begin : proc_${protocol}_wr_rsp_pending
+        if (!rst_n) ${protocol}_wr_rsp_pending <= '0;
+        else ${protocol}_wr_rsp_pending <= ${protocol}_wr_rsp_pending
+                 + int'(${protocol}_wr_req_hs) - int'(${protocol}_wr_rsp_hs);
+    end
+
+    // a status poll must not report idle while a write can still fail or land late
+    a_${protocol}_busy_covers_wr_rsp : assert property (@(posedge clk) disable iff (!rst_n)
+        (${protocol}_wr_rsp_pending != '0) |-> (|busy)
+    ) else $fatal(1, "busy low with %0d ${protocol} write responses outstanding",
+                  $sampled(${protocol}_wr_rsp_pending));
+
+    % endif
+% endfor
+    int unsigned wr_rsp_pending;
+    assign wr_rsp_pending = \
+% for protocol in used_write_protocols:
+    % if protocol in ['axi', 'axi_lite', 'obi', 'init', 'tilelink']:
+${protocol}_wr_rsp_pending + \
+    % endif
+% endfor
+32'd0;
+
+    //--------------------------------------
     // DMA Tracer
     //--------------------------------------
     // only activate tracer if requested
@@ -1248,6 +1307,10 @@ axi_rsp_mem       )
         end
         // wait some additional time
         #100ns;
+        // busy must release once every write response is back
+        if ((|busy) && (wr_rsp_pending == '0)) begin
+            $fatal(1, "busy stuck high with no write response outstanding");
+        end
         // we are done!
         $finish();
     end
