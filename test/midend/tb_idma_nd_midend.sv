@@ -596,7 +596,6 @@ module tb_idma_nd_midend import idma_pkg::*; #(
                           idma_pkg::AXI,
                           idma_pkg::AXI,
                           now_nd.aw_decoupled,
-                          now_nd.rw_decoupled,
                           $clog2(now_nd.max_src_len),
                           $clog2(now_nd.max_dst_len),
                           now_nd.max_src_len != 'd256,
@@ -638,7 +637,6 @@ module tb_idma_nd_midend import idma_pkg::*; #(
                             idma_pkg::AXI,
                             now.max_src_len,
                             now.max_dst_len,
-                            now.rw_decoupled,
                             now.err_addr,
                             now.err_is_read,
                             now.err_action

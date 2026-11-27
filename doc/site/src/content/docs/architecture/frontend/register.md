@@ -22,20 +22,21 @@ A thin wrapper (`src/frontend/reg/tpl/idma_reg.sv.tpl`, rendered by MARIO for th
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `NumRegs` | 1 | Number of configuration register ports (parallel access points) |
-| `NumStreams` | 1 | Number of independent DMA streams (max 16). Each stream has its own transfer ID counter |
+| `NumStreams` | 1 | Number of independent DMA streams (max 16). IDs are allocated globally and retired per stream |
 | `IdCounterWidth` | 32 | Width of the transfer ID counter (max 32-bit) |
 | `DataWidth` | 512 | Backend data width; MX data planes, strides and lengths are checked against its beats |
 | `ComputeOps` | all | Compute ops of the backend (`idma_pkg::compute_enable_t`); a launch of any other op is refused |
+| `LaunchFifoDepth` | `NumRegs` | Number of accepted launches buffered before the request output; zero bypasses the FIFO and accepts launches only when the downstream interface is ready |
 
 ## Programming Sequence
 
 1. **Write transfer parameters**: Set `src_addr`, `length`, `dst_addr`, and optionally `reps`/`src_stride`/`dst_stride` for 2D mode
 2. **Write configuration**: Set `conf` with the desired decouple flags, protocol selection, and ND mode enable. For an on-the-fly compute transfer also set `compute_cfg` (see below). Stream selection is implicit in which `next_id[stream]` register you read in the next step
-3. **Read `next_id[stream]`**: This read atomically launches the transfer on the selected stream and returns the assigned transfer ID. It returns 0 and launches nothing if the transfer is not set up correctly: a compute op that `ComputeOps` does not name (reserved op codes included), or an MX launch that breaks a rule of [MX Scale Plane Registers](#mx-scale-plane-registers)
+3. **Read `next_id[stream]`**: This read attempts to atomically queue the transfer on the selected stream. A nonzero result is the assigned transfer ID. A zero result means no transfer was queued and the launch must be retried. Launches are rejected if the compute op is not enabled by `ComputeOps` (including reserved op codes), an MX launch breaks a rule of [MX Scale Plane Registers](#mx-scale-plane-registers), another register port wins simultaneous launch arbitration, or the launch FIFO cannot accept the request
 4. **Poll `done_id[stream]`**: Wait until `done_id >= next_id` to confirm completion
 
 :::caution[Side-effect read]
-Reading the `next_id` register has a side effect - it atomically samples the configured transfer parameters and launches the transfer. In the RDL this field is marked `rd_swacc`, so the read strobe latches the launch. This is non-standard register behavior; ensure your driver reads `next_id` exactly once per transfer.
+Reading the `next_id` register has a side effect: a successful read atomically samples the configured transfer parameters and queues the transfer. In the RDL this field is marked `rd_swacc`, so the read strobe performs the launch attempt. This is non-standard register behavior. Software must retain the configuration and retry the read if it returns ID zero.
 :::
 
 ## Register Map
@@ -65,7 +66,7 @@ Registers are 32 bits wide. 64-bit values (addresses, lengths, strides) occupy a
 | Register | Access | Description |
 |----------|--------|-------------|
 | `status` | RO | Per-stream busy flags |
-| `next_id` | RO | Per-stream next transfer ID. **Reading launches the transfer** |
+| `next_id` | RO | **Reading attempts to launch the transfer.** Returns its nonzero ID on success or zero if rejected |
 | `done_id` | RO | Per-stream last completed transfer ID |
 
 **ND Mode** - only used when `enable_nd` is set in `conf`:
@@ -84,7 +85,7 @@ The bit positions of `enable_nd` and the protocol fields depend on the number of
 | Bits `reg32_3d` | Bits `reg64_1d` | Bits `reg64_2d` | Field | Description |
 |---|---|---|---|---|
 | 0 | 0 | 0 | `decouple_aw` | R-AW coupling: hold write addresses until the read data arrives |
-| 1 | 1 | 1 | `decouple_rw` | Fully decouple the read and write channels |
+| 1 | 1 | 1 | `reserved_1` | Reserved |
 | 2 | 2 | 2 | `src_reduce_len` | Shorten source bursts to src_max_llen |
 | 3 | 3 | 3 | `dst_reduce_len` | Shorten destination bursts to dst_max_llen |
 | 6:4 | 6:4 | 6:4 | `src_max_llen` | Maximal source burst length as log2(beats) |
@@ -92,7 +93,38 @@ The bit positions of `enable_nd` and the protocol fields depend on the number of
 | 12:10 | 10 | 11:10 | `enable_nd` | Dimensions in use beyond the first (0: 1D) |
 | 15:13 | 13:11 | 14:12 | `src_protocol` | Source protocol (idma_pkg::protocol_e) |
 | 18:16 | 16:14 | 17:15 | `dst_protocol` | Destination protocol (idma_pkg::protocol_e) |
+| 19 | 17 | 18 | `deadlock_free` | Reserve data-buffer space before issuing read requests |
 <!-- END GENERATED reg_conf -->
+
+### Enabling Deadlock-Free Mode
+
+Set `conf.deadlock_free` before launching a transfer. It defaults to zero and
+is sampled with the other fields when `next_id` is read. Its bit position depends
+on the frontend variant; use the generated register definitions or table above.
+
+When enabled, the backend shortens read bursts to fit its buffer and waits for
+space for all data a burst will return before issuing it. This differs from
+setting a small `src_max_llen`: several short bursts can still fill the buffer
+if there is no space check. Smaller user burst limits remain in effect.
+
+The default is the largest power-of-two read burst that fits in the buffer. A
+full-buffer burst can force the next one to wait for a full drain. For depth 8,
+try also setting `src_reduce_len=1` and `src_max_llen=2` for four-beat reads. This
+allows earlier reads but adds address transactions; measure it against the default.
+See [Choosing a Read Burst Limit](../../backend/#choosing-a-read-burst-limit).
+
+The mode requires `HardwareLegalizer=1`; otherwise the bit is ignored. It is
+independent of `decouple_aw`. It cannot rescue an earlier unsafe
+transfer that is already stuck. See [Deadlock-Free Mode](../../backend/#deadlock-free-mode)
+for the buffer accounting and limits.
+
+For example, on `reg32_3d`, bit 19 enables safe mode:
+
+```c
+// Use generated field names in real code; bit 19 is specific to reg32_3d.
+write(conf, existing_configuration | (1u << 19));
+// Set addresses/length and launch with next_id as usual.
+```
 
 ### Compute Configuration Register (`compute_cfg`)
 
@@ -175,7 +207,7 @@ Byte offsets in the three frontend variants; a 64-bit value is a `[0]`/`[1]` wor
 
 ## Multi-Port Arbitration
 
-When `NumRegs > 1`, multiple register ports can submit transfers concurrently. An internal round-robin arbiter serializes requests to the single backend interface. Each port stalls independently on its `next_id` read until its request is accepted. This allows multiple cores to share a single DMA without software-level locking.
+When `NumRegs > 1`, multiple register ports can submit transfers. A round-robin allocator accepts at most one `next_id` read per cycle and places the descriptor, selected stream, and allocated ID into one ordered launch FIFO. Simultaneous losing reads and reads attempted while that FIFO is full return zero without consuming an ID. Software can retry them without reprogramming the descriptor. This keeps allocation and downstream issue order identical, so two ports cannot observe the same transfer ID.
 
 :::note[Figure placeholder]
 Diagram: register frontend sequence.

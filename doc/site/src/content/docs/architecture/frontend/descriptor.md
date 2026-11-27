@@ -9,7 +9,11 @@ The descriptor frontend (`idma_desc64_top`) uses a linked list of transfer descr
 
 ## Descriptor Format
 
-The descriptor frontend's reshaper (a module that converts the descriptor's flag bits into the `idma_req_t` option fields, `idma_desc64_reshaper`) maps flag bits to backend options, but also hardcodes some values. Notably, `src_max_llen` and `dst_max_llen` are always set to 0 (full debursting: every transfer is broken into single-beat bus transactions, maximum protocol compliance at the cost of throughput), and `lock`, `prot`, `qos`, `region` are zeroed. These options cannot be controlled per-descriptor.
+The reshaper (`idma_desc64_reshaper`) converts descriptor flags into backend
+options. `src_max_llen` and `dst_max_llen` are fixed at zero, so setting
+`reduce_len` limits both sides to one beat per burst. When `reduce_len` is clear,
+the user limits are ignored; safe mode may still shorten read bursts.
+`lock`, `prot`, `qos`, and `region` are fixed at zero.
 
 Each descriptor is a 256-bit packed struct stored in shared memory. In a SystemVerilog packed struct, the first field (`flags`) occupies the most-significant bits and the last field (`dest_addr`) occupies the least-significant bits. In memory (little-endian), `dest_addr` is at the lowest byte address:
 
@@ -36,15 +40,39 @@ If the CPU uses a data cache, descriptors must be in an uncached or cache-cohere
 | 0 | `irq` | Trigger interrupt on completion |
 | 2:1 | `src_burst` | Source burst type: 00=FIXED, 01=INCR, 10=WRAP |
 | 4:3 | `dst_burst` | Destination burst type: 00=FIXED, 01=INCR, 10=WRAP |
-| 5 | `decouple_rw` | Fully decouple read and write channels - the backend can write without waiting for reads to complete (risk of deadlock if buffer fills) |
+| 5 | — | Reserved; must be zero |
 | 6 | `decouple_aw` | Safer decoupling: write *addresses* are held back until the first read data arrives, but once data starts flowing, reads and writes proceed independently |
 | 7 | `reduce_len` | Reduce burst length on both source and destination (`opt.beo.src_reduce_len` + `opt.beo.dst_reduce_len`) |
 | 11:8 | `src_cache` | AXI cache attributes for source (bufferable, modifiable, read-alloc, write-alloc) |
 | 15:12 | `dst_cache` | AXI cache attributes for destination |
 | 23:16 | `axi_id` | AXI ID for the transfer |
-| 31:24 | - | Reserved |
+| 24 | `deadlock_free` | Reserve byte-lane data-buffer capacity before issuing each read request |
+| 31:25 | — | Reserved |
 
-**Typical flags values**: `0x00000000` - default (INCR burst, no decoupling, no IRQ). `0x00000001` - IRQ on completion. `0x00000061` - decouple_aw + decouple_rw + IRQ.
+Set flag bit 24 to enable deadlock-free mode for that descriptor, for example
+`flags |= (1u << 24)`. It is off when the bit is clear. Leave all other flags as
+required by the transfer; safe mode does not select burst types or enable R-AW coupling.
+
+The backend shortens read bursts to fit its buffer, then checks space before
+issuing each one. Data promised to earlier reads still counts as used space,
+even if it has not arrived yet. Smaller user limits still apply; the descriptor's
+`reduce_len` flag can further limit reads and writes to one beat each.
+
+The descriptor format cannot select a four-beat limit or another arbitrary LLEN:
+it offers only the default limit or one-beat bursts on both sides via `reduce_len`.
+For finer tuning, use the register frontend or supply backend requests directly.
+See [Choosing a Read Burst Limit](../../backend/#choosing-a-read-burst-limit).
+
+Descriptors in a chain may use different safe-mode settings. Requests with the
+mode off are still counted, but enabling it on a later descriptor cannot fix
+an earlier transfer that is already stuck. Use it on every transfer that needs
+the protection. The flag has no effect with `HardwareLegalizer=0`. See
+[Deadlock-Free Mode](../../backend/#deadlock-free-mode) for details.
+
+**Typical flags values**: `0x0000000A` selects INCR on both sides, with no IRQ;
+`0x0000000B` also requests an IRQ; `0x0000004B` also enables R-AW coupling;
+`0x0100000A` selects deadlock-free INCR transfers. Set the burst fields explicitly:
+zero does not select INCR. This backend requires INCR on both sides.
 
 ## Descriptor Chain Example
 
@@ -61,14 +89,14 @@ A two-descriptor chain that transfers 64 bytes, then 128 bytes, then stops. Assu
 //   dest_addr = 0x2000
 //   next      = 0x4020           (address of the second descriptor)
 //   length    = 64
-//   flags     = 0x00000000       (no IRQ, INCR burst, no decoupling)
+//   flags     = 0x0000000A       (INCR on both sides, no IRQ)
 
 // Descriptor at address 0x4020:
 //   src_addr  = 0x1100
 //   dest_addr = 0x2100
 //   next      = 0xFFFFFFFF_FFFFFFFF  (end of chain)
 //   length    = 128
-//   flags     = 0x00000001       (IRQ on completion)
+//   flags     = 0x0000000B       (INCR on both sides, IRQ on completion)
 ```
 
 ## Parameters

@@ -135,7 +135,8 @@ write_length = (req.length / compute_in_bytes(op)) * compute_out_bytes(op)
 ```
 
 where the MX ratio counts the data plane (32 B per block); the scale bursts come on top, one per
-group. The legalizer also forces `decouple_rw` / `decouple_aw` on for any compute transfer. Constraints enforced by legalizer assertions:
+group. Read and write bursts are always legalized independently, and the legalizer forces
+`decouple_aw` on for compute transfers. Constraints enforced by legalizer assertions:
 
 | Assertion | Requirement |
 |-----------|-------------|

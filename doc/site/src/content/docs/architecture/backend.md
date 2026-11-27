@@ -116,7 +116,7 @@ Each variant also gets its own tracer header, `idma/tracer_<id>.svh`, holding th
 
 ## Legalizer
 
-The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. It operates as two coupled state machines - one for the read side, one for the write side - that track the remaining bytes and current address of each transfer independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
+The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. Separate read and write state machines track each side's remaining bytes and current address. Read and write burst lengths are chosen independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
 
 The legalizer is pure control path: it does not touch the data. It computes page/burst boundaries, splits transfers accordingly, and emits `offset`, `tailer`, and `shift` values that the transport layer uses for data realignment.
 
@@ -146,6 +146,9 @@ The legalizer communicates with the transport layer through internal control sig
 
 When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple `stream_fork` that synchronizes the read and write paths. In this mode, software is responsible for ensuring all transfers are already legal for the target protocol (e.g., no AXI page-boundary crossings). Use this only when software pre-splits all transfers into protocol-legal bursts (e.g., an RTOS DMA driver that already handles AXI page boundaries). This saves ~1-2K gates but moves burst-splitting responsibility to the driver.
 
+`deadlock_free` has no effect in this configuration. Software burst splitting
+alone does not provide the read-buffer checks described below.
+
 ## Transport Layer
 
 ### Architecture
@@ -153,6 +156,91 @@ When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple
 The transport layer is responsible for moving data from source to destination, handling the byte-lane realignment that arises when source and destination addresses have different bus-word offsets. It contains the read channel, byte-granular data buffer, and write channel. Data flows as: **read port** -> **read barrel shifter** -> **dataflow element (buffer)** -> **write barrel shifter** -> **write port**. With compute, MX beats go from the read barrel shifter to the input queue of their engine and do not enter the dataflow element (see [Compute](../compute/)).
 
 The buffer (`idma_dataflow_element`) is an array of independent FIFOs, one per byte lane (`StrbWidth` = `DataWidth / 8`, i.e., the number of byte lanes; `StrbWidth` FIFOs of depth `BufferDepth`). This byte-granular design allows data to enter and leave the buffer at arbitrary byte-lane positions, enabling misaligned transfers without additional alignment stages.
+
+### Deadlock-Free Mode
+
+A read can get stuck if its data cannot fit in the DMA buffer while writes are
+waiting on the same memory system. Limiting burst length is not enough: several
+small read bursts can still fill the buffer together.
+
+Set `request.opt.beo.deadlock_free = 1` to make the backend check buffer space
+before issuing each read burst. The option is sampled with each transfer and is
+off by default. It requires `HardwareLegalizer=1`.
+
+The mode has two parts:
+
+1. **Shorten read bursts.** By default, the legalizer uses the largest power-of-two
+   beat limit that fits in the buffer. For example, `BufferDepth=3` allows at most
+   two full beats per read burst; depth 8 allows at most eight. A smaller user source
+   limit still applies. The LLEN field, protocol limits, and page boundaries can
+   shorten bursts further.
+   Safe mode changes the read limit only. The configured write limit and R-AW
+   coupling setting stay unchanged.
+2. **Reserve space before reading.** A gate between the read-address FIFO and the
+   bus read module counts space already promised to earlier reads. A new read
+   is allowed only if every byte-lane FIFO has enough room for its complete
+   payload. Outstanding responses count as used space, even before they arrive.
+
+The gate counts payload bytes, including the starting lane of a misaligned read.
+Read bytes discarded at the beginning or end of a transfer do not use buffer
+entries. Space becomes available when bytes leave the dataflow buffer, including
+when a compute engine takes them, not merely when read data arrives.
+
+For example, with eight byte lanes and depth 3, a 16-byte aligned read reserves
+two entries in every lane. A second 16-byte read must wait until each lane has
+at most one entry still reserved. Space freed in a cycle can be used by the gate
+on the next cycle. This avoids a combinational path from write readiness back
+to the read-address handshake.
+
+Requests with the mode off skip the space check but are still counted. This lets
+queued requests use different mode settings without losing track of earlier
+reads. It does **not** make those earlier requests safe or recover a transfer
+that is already stuck. Enable the mode on all transfers that may need it.
+
+R-AW coupling does not replace this space check. Safe mode
+addresses this DMA read-buffer problem; it is not a timeout or a general cure
+for deadlocks elsewhere in the system. Memory and response consumers must still
+make progress. Smaller bursts and waiting for space can reduce throughput, so
+leave the mode off only when the surrounding system already guarantees progress.
+
+#### Choosing a Read Burst Limit
+
+The largest burst that fits is not always the fastest choice. If a burst reserves
+the whole buffer, the next equally sized burst must wait until every lane's
+reservation count reaches zero. The buffer then has to wait for new read data.
+With default timing settings, depth 8 with eight-beat reads can cause this full-drain
+gap. Depth 3 defaults to two-beat reads, so it does not require a full drain for the next burst.
+Misalignment, page splits, or shorter transfers can also make bursts smaller.
+
+As a starting point, try a read limit of about **half the buffer depth**, rounded
+down to a power of two and at least one beat:
+
+| `BufferDepth` | Default maximum beats | Suggested starting limit | `src_max_llen` |
+|---------------|-----------------------|--------------------------|----------------|
+| 2 | 2 | 1 | 0 |
+| 3 | 2 | 1 | 0 |
+| 8 | 8 | 4 | 2 |
+| 16 | 16 | 8 | 3 |
+
+Set `src_reduce_len=1` to apply the smaller limit; safe mode remains enabled.
+For example, with depth 8:
+
+```systemverilog
+request.opt.beo.deadlock_free = 1'b1;
+request.opt.beo.src_reduce_len = 1'b1;
+request.opt.beo.src_max_llen = 3'd2; // At most four beats per read burst.
+```
+
+With four-beat reads, another read can start once four entries per lane are free,
+while writes can still use the remaining data. Multiple smaller reads may be
+outstanding, up to the configured request limit; the gate still checks their
+combined space use. This can hide some read latency instead of waiting for the
+entire buffer to drain.
+
+Smaller bursts also mean more address transactions and may reduce throughput.
+Compare the default and smaller limits on the target memory system; half depth
+is a tuning starting point, not a guaranteed optimum. Changing the read limit
+does not change the write limit. No hardware default is changed by this recommendation.
 
 ### Data Realignment
 
@@ -189,4 +277,5 @@ The error handler monitors R and W datapath responses for non-OKAY AXI responses
 - **Error handler**: `src/backend/idma_error_handler.sv`
 - **Channel coupler**: `src/backend/idma_channel_coupler.sv`
 - **Dataflow element**: `src/backend/idma_dataflow_element.sv`
+- **Read reservation gate**: `src/backend/idma_read_reservation_gate.sv`
 - **Generated output**: `target/rtl/idma_backend_*.sv`

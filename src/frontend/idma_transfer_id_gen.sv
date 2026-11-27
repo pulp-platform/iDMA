@@ -28,33 +28,26 @@ module idma_transfer_id_gen #(
 
     // count up on events
     always_comb begin : proc_next_id
-        // default
         next_d = next_q;
-        // overflow
-        if (next_q == '1) begin
-            if (issue_i)
-                next_d = 'h2;
-            else
+
+        if (issue_i) begin
+            // ID zero reports a rejected launch; wrap to the first valid ID only after issuing
+            // the maximum ID.
+            if (next_q == '1)
                 next_d = 'h1;
-        // request
-        end else begin
-            if (issue_i)
+            else
                 next_d = 'h1 + next_q;
         end
     end
 
     always_comb begin : proc_next_completed
-        // default
         completed_d = completed_q;
-        // overflow
-        if (completed_q == '1) begin
-            if (retire_i)
-                completed_d = 'h2;
-            else
+
+        if (retire_i) begin
+            // Match the issued-ID sequence when the maximum ID retires.
+            if (completed_q == '1)
                 completed_d = 'h1;
-        // request
-        end else begin
-            if (retire_i)
+            else
                 completed_d = 'h1 + completed_q;
         end
     end

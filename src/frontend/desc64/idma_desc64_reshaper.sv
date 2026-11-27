@@ -51,13 +51,13 @@ always_comb begin
         // only one region in system
         idma_req_o.opt.dst.region         = '0;
         idma_req_o.opt.beo.decouple_aw    = descriptor_i.flags[6];
-        idma_req_o.opt.beo.decouple_rw    = descriptor_i.flags[5];
         // this frontend currently only supports completely debursting
         idma_req_o.opt.beo.src_max_llen   = '0;
         // this frontend currently only supports completely debursting
         idma_req_o.opt.beo.dst_max_llen   = '0;
         idma_req_o.opt.beo.src_reduce_len = descriptor_i.flags[7];
         idma_req_o.opt.beo.dst_reduce_len = descriptor_i.flags[7];
+        idma_req_o.opt.beo.deadlock_free  = descriptor_i.flags[24];
 end
 
 endmodule
