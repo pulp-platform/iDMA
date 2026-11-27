@@ -187,12 +187,21 @@ module tb_idma_mx_obi
 
   assign init_read_rsp = '0;
 
+  localparam idma_pkg::compute_enable_t ComputeOps = '{
+    mxquant: 1'b1,
+    mxdequant: 1'b1,
+    mxfp16: Fp16,
+    default: '0
+  };
+
+  `include "include/tb_idma_mx_axi_mon.svh"
+  `IDMA_MX_AXI_MON(i_idma_backend, i_mx_axi_mon, 1'b1, ComputeOps)
+
   idma_backend_r_init_rw_axi_rw_obi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, mxfp16: Fp16,
-                                            default: '0}),
+    .ComputeOps(ComputeOps),
     .ComputeTuning('1), .TimingCuts(idma_pkg::timing_cuts_t'(Cuts)),
     .RAWCouplingAvail(1'b0), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(8),
@@ -486,8 +495,5 @@ module tb_idma_mx_obi
   end
 
   initial begin #400_000_000; $fatal(1, "[MXOBI] timeout"); end
-
-`include "include/tb_idma_mx_axi_mon_macro.svh"
-`IDMA_MX_AXI_MON_BIND(idma_backend_r_init_rw_axi_rw_obi)
 
 endmodule
