@@ -31,7 +31,6 @@ module tb_idma_mxquant
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
-  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   localparam int unsigned BlkInBytes = 64; // 32 FP16 elems
   localparam int unsigned Canary     = 64;
@@ -39,11 +38,20 @@ module tb_idma_mxquant
   assign axi_req_mem = axi_req;
   assign axi_rsp     = axi_rsp_mem;
 
+  localparam idma_pkg::compute_enable_t ComputeOps = '{
+    mxquant: 1'b1,
+    mxfp16: (StrbWidth <= 64),
+    default: '0
+  };
+
+  `include "include/tb_idma_mx_axi_mon.svh"
+  `IDMA_MX_AXI_MON(i_idma_backend, i_mx_axi_mon, 1'b1, ComputeOps)
+
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxfp16: (StrbWidth <= 64), default: '0}),
+    .ComputeOps(ComputeOps),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(StrbWidth),
@@ -78,7 +86,6 @@ module tb_idma_mxquant
     idma_req.opt.dst_protocol = idma_pkg::AXI;
     idma_req.opt.src.burst    = axi_pkg::BURST_INCR;
     idma_req.opt.dst.burst    = axi_pkg::BURST_INCR;
-    idma_req.opt.beo.decouple_rw = 1'b1;
     idma_req.opt.beo.decouple_aw = 1'b1;
     idma_req.opt.compute.enable  = 1'b1;
     idma_req.opt.compute.op      = op;

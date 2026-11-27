@@ -124,11 +124,11 @@ module idma_backend_synth_${name_uniqueifier} #(
     input  axi_pkg::qos_t          req_dst_qos_i,
     input  axi_pkg::region_t       req_dst_region_i,
     input  logic                   req_decouple_aw_i,
-    input  logic                   req_decouple_rw_i,
     input  logic [2:0]             req_src_max_llen_i,
     input  logic [2:0]             req_dst_max_llen_i,
     input  logic                   req_src_reduce_len_i,
     input  logic                   req_dst_reduce_len_i,
+    input  logic                   req_deadlock_free_i,
     input  logic                   req_last_i,
 % if compute_eligible:
     input  logic                   req_compute_enable_i,
@@ -415,8 +415,8 @@ ${p}_${database[p]['write_meta_channel']}_width\
     assign idma_req.opt.beo.src_reduce_len = req_src_reduce_len_i;
     assign idma_req.opt.beo.dst_max_llen   = req_dst_max_llen_i;
     assign idma_req.opt.beo.src_max_llen   = req_src_max_llen_i;
-    assign idma_req.opt.beo.decouple_rw    = req_decouple_rw_i;
     assign idma_req.opt.beo.decouple_aw    = req_decouple_aw_i;
+    assign idma_req.opt.beo.deadlock_free  = req_deadlock_free_i;
     assign idma_req.opt.last               = req_last_i;
 % if compute_eligible:
     assign idma_req.opt.compute.enable     = req_compute_enable_i;

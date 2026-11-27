@@ -51,15 +51,35 @@ dataflow element pointers, `r_ready` and the request FIFOs. Each field is indepe
 
 | Field | Effect | Cost |
 |-------|--------|------|
-| `dfe_ready_cut` | A full dataflow lane takes a new beat only in a cycle without a write-side pop. `r_ready` and the dataflow push no longer depend on the write datapath. Implies `dfe_reg_flags` | One more dataflow entry per byte lane (`BufferDepth + 1`), one more MX input queue entry per engine |
+| `dfe_ready_cut` | Every free dataflow slot is usable. A full lane accepts input only in the cycle after a pop, not during that pop. `r_ready` and the dataflow push no longer depend on the write datapath. | One more dataflow entry per byte lane (`BufferDepth + 1`), one more MX input queue entry per engine |
 | `mx_beat_push` | An MX beat enters its engine queue on the read beat of any read port (its response valid and the read response side ready) and the queue's ready, without the byte-lane masks and the masked buffer-ready reduction of the read port: MX beats are whole beats (asserted). The MX push no longer depends on the read datapath request offsets, the read shift or the last beat flag. Cycle-identical | None |
-| `dfe_ready_ahead` | The dataflow element's ready comes from its registered lane flags and from the lanes the next write beat pops: each write port reports them from the request head and its burst counters (`buffer_out_offer_o`), without the W handshake; a transpose reports its pending pop; an MX burst none. A lane takes its one extra entry only in such a cycle, so a full element refills in the cycle the write side starts to drain it and `r_ready` no longer depends on the write-side handshake. The MX input queues keep their depth. Combines with `dfe_ready_cut` (one entry each) | One more dataflow entry per byte lane |
 | `mx_in_reg` | MX beats enter their engine through a one-beat register stage whose data and tag load in every cycle it can take a beat, so the read handshake and data paths end at the stage instead of the engine input queues | One cycle more from R to W for MX beats; the stage takes one input queue entry of each engine |
-| `dfe_reg_flags` | Dataflow lanes keep full/empty in flops, update their pointers without load enables and write the free slot every cycle the lane can accept. Cycle-identical | A few flops per lane |
 | `wdp_head_spill` | A spill register on the head of the write datapath request FIFO, so the write datapath starts from flops instead of the FIFO read mux | +1 cycle from the legalizer to the write datapath; `MetaFifoDepth` +2 |
 | `outst_cnt_reg` | The outstanding-transfer counter of `RejectZeroTransfers` counts an accepted request one cycle late, so it does not depend on `req_ready_o`. Cycle-identical | One flop |
 
 `MetaFifoDepth` grows by each extra dataflow entry and by two with `wdp_head_spill`.
+
+The removed `dfe_ready_ahead` option is replaced by ordinary FIFO operation; there
+is no pending-write offer mask or reserved last slot. Configurations that did not
+use it retain their buffer depths. For a ready-path cut, use `dfe_ready_cut` and
+prefer named `timing_cuts_t` initializers over integer masks: `mx_beat_push` is now
+bit 4 (was bit 6). Removing `dfe_reg_flags` also moves `dfe_ready_cut` to bit 2
+and `mx_in_reg` to bit 3; bits 0 and 1 are unchanged. All current options enabled
+is 31, and `mx_beat_push` alone is 16.
+
+The separate registered-flag FIFO implementation (`RegFlags` and `dfe_reg_flags`)
+is also removed. All byte lanes use `cc_passthrough_stream_fifo`; `dfe_ready_cut`
+disables its `SameCycleRW` option to cut the downstream-ready path.
+
+For capacity comparisons, count physical entries rather than only `BufferDepth`.
+Previously the dataflow depth was `BufferDepth + dfe_ready_cut + dfe_ready_ahead`;
+it is now `BufferDepth + dfe_ready_cut`. Replacing ahead-only operation with
+`dfe_ready_cut` retains that dataflow depth but adds one MX input queue entry,
+whereas the removed option did not. Removing ahead from a configuration that also
+used the cut drops one dataflow entry and leaves MX input queue depth unchanged.
+Account for these differences when comparing completion times; a refusal in the
+first write-drain cycle alone does not measure transfer throughput.
+
 
 ## Interface
 
@@ -116,7 +136,7 @@ Each variant also gets its own tracer header, `idma/tracer_<id>.svh`, holding th
 
 ## Legalizer
 
-The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. It operates as two coupled state machines - one for the read side, one for the write side - that track the remaining bytes and current address of each transfer independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
+The legalizer decomposes a 1D transfer request into a sequence of protocol-legal bus bursts. Separate read and write state machines track each side's remaining bytes and current address. Read and write burst lengths are chosen independently. With compute, the write side keeps up to three accepted requests in a queue (`MxWqDepth`): while the write side still emits the bursts of an MX transfer, the read side takes the next decoupled request as soon as it has emitted its own bursts. The read side (dequant planes) and the write side (quant planes) keep separate MX plane state. While no MX transfer is on the write side, a request waits until both sides are done and the queue is empty, as without compute.
 
 The legalizer is pure control path: it does not touch the data. It computes page/burst boundaries, splits transfers accordingly, and emits `offset`, `tailer`, and `shift` values that the transport layer uses for data realignment.
 
@@ -146,6 +166,9 @@ The legalizer communicates with the transport layer through internal control sig
 
 When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple `stream_fork` that synchronizes the read and write paths. In this mode, software is responsible for ensuring all transfers are already legal for the target protocol (e.g., no AXI page-boundary crossings). Use this only when software pre-splits all transfers into protocol-legal bursts (e.g., an RTOS DMA driver that already handles AXI page boundaries). This saves ~1-2K gates but moves burst-splitting responsibility to the driver.
 
+`deadlock_free` has no effect in this configuration. Software burst splitting
+alone does not provide the read-buffer checks described below.
+
 ## Transport Layer
 
 ### Architecture
@@ -153,6 +176,91 @@ When `HardwareLegalizer=0`, the legalizer is bypassed and replaced with a simple
 The transport layer is responsible for moving data from source to destination, handling the byte-lane realignment that arises when source and destination addresses have different bus-word offsets. It contains the read channel, byte-granular data buffer, and write channel. Data flows as: **read port** -> **read barrel shifter** -> **dataflow element (buffer)** -> **write barrel shifter** -> **write port**. With compute, MX beats go from the read barrel shifter to the input queue of their engine and do not enter the dataflow element (see [Compute](../compute/)).
 
 The buffer (`idma_dataflow_element`) is an array of independent FIFOs, one per byte lane (`StrbWidth` = `DataWidth / 8`, i.e., the number of byte lanes; `StrbWidth` FIFOs of depth `BufferDepth`). This byte-granular design allows data to enter and leave the buffer at arbitrary byte-lane positions, enabling misaligned transfers without additional alignment stages.
+
+### Deadlock-Free Mode
+
+A read can get stuck if its data cannot fit in the DMA buffer while writes are
+waiting on the same memory system. Limiting burst length is not enough: several
+small read bursts can still fill the buffer together.
+
+Set `request.opt.beo.deadlock_free = 1` to make the backend check buffer space
+before issuing each read burst. The option is sampled with each transfer and is
+off by default. It requires `HardwareLegalizer=1`.
+
+The mode has two parts:
+
+1. **Shorten read bursts.** By default, the legalizer uses the largest power-of-two
+   beat limit that fits in the buffer. For example, `BufferDepth=3` allows at most
+   two full beats per read burst; depth 8 allows at most eight. A smaller user source
+   limit still applies. The LLEN field, protocol limits, and page boundaries can
+   shorten bursts further.
+   Safe mode changes the read limit only. The configured write limit and R-AW
+   coupling setting stay unchanged.
+2. **Reserve space before reading.** A gate between the read-address FIFO and the
+   bus read module counts space already promised to earlier reads. A new read
+   is allowed only if every byte-lane FIFO has enough room for its complete
+   payload. Outstanding responses count as used space, even before they arrive.
+
+The gate counts payload bytes, including the starting lane of a misaligned read.
+Read bytes discarded at the beginning or end of a transfer do not use buffer
+entries. Space becomes available when bytes leave the dataflow buffer, including
+when a compute engine takes them, not merely when read data arrives.
+
+For example, with eight byte lanes and depth 3, a 16-byte aligned read reserves
+two entries in every lane. A second 16-byte read must wait until each lane has
+at most one entry still reserved. Space freed in a cycle can be used by the gate
+on the next cycle. This avoids a combinational path from write readiness back
+to the read-address handshake.
+
+Requests with the mode off skip the space check but are still counted. This lets
+queued requests use different mode settings without losing track of earlier
+reads. It does **not** make those earlier requests safe or recover a transfer
+that is already stuck. Enable the mode on all transfers that may need it.
+
+R-AW coupling does not replace this space check. Safe mode
+addresses this DMA read-buffer problem; it is not a timeout or a general cure
+for deadlocks elsewhere in the system. Memory and response consumers must still
+make progress. Smaller bursts and waiting for space can reduce throughput, so
+leave the mode off only when the surrounding system already guarantees progress.
+
+#### Choosing a Read Burst Limit
+
+The largest burst that fits is not always the fastest choice. If a burst reserves
+the whole buffer, the next equally sized burst must wait until every lane's
+reservation count reaches zero. The buffer then has to wait for new read data.
+With default timing settings, depth 8 with eight-beat reads can cause this full-drain
+gap. Depth 3 defaults to two-beat reads, so it does not require a full drain for the next burst.
+Misalignment, page splits, or shorter transfers can also make bursts smaller.
+
+As a starting point, try a read limit of about **half the buffer depth**, rounded
+down to a power of two and at least one beat:
+
+| `BufferDepth` | Default maximum beats | Suggested starting limit | `src_max_llen` |
+|---------------|-----------------------|--------------------------|----------------|
+| 2 | 2 | 1 | 0 |
+| 3 | 2 | 1 | 0 |
+| 8 | 8 | 4 | 2 |
+| 16 | 16 | 8 | 3 |
+
+Set `src_reduce_len=1` to apply the smaller limit; safe mode remains enabled.
+For example, with depth 8:
+
+```systemverilog
+request.opt.beo.deadlock_free = 1'b1;
+request.opt.beo.src_reduce_len = 1'b1;
+request.opt.beo.src_max_llen = 3'd2; // At most four beats per read burst.
+```
+
+With four-beat reads, another read can start once four entries per lane are free,
+while writes can still use the remaining data. Multiple smaller reads may be
+outstanding, up to the configured request limit; the gate still checks their
+combined space use. This can hide some read latency instead of waiting for the
+entire buffer to drain.
+
+Smaller bursts also mean more address transactions and may reduce throughput.
+Compare the default and smaller limits on the target memory system; half depth
+is a tuning starting point, not a guaranteed optimum. Changing the read limit
+does not change the write limit. No hardware default is changed by this recommendation.
 
 ### Data Realignment
 
@@ -189,4 +297,5 @@ The error handler monitors R and W datapath responses for non-OKAY AXI responses
 - **Error handler**: `src/backend/idma_error_handler.sv`
 - **Channel coupler**: `src/backend/idma_channel_coupler.sv`
 - **Dataflow element**: `src/backend/idma_dataflow_element.sv`
+- **Read reservation gate**: `src/backend/idma_read_reservation_gate.sv`
 - **Generated output**: `target/rtl/idma_backend_*.sv`

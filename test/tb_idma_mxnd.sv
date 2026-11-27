@@ -32,7 +32,6 @@ module tb_idma_mxnd
   import "DPI-C" function int  gm_stim_fp32(input int e, input int total, input int salt);
 
   `include "include/tb_idma_mx_common.svh"
-  `include "include/tb_idma_mx_axi_mon_bind.svh"
 
   localparam int unsigned NumDim = 3;
   localparam bit          Fp16   = StrbWidth <= 64;
@@ -59,12 +58,21 @@ module tb_idma_mxnd
     .busy_o()
   );
 
+  localparam idma_pkg::compute_enable_t ComputeOps = '{
+    mxquant: 1'b1,
+    mxdequant: 1'b1,
+    mxfp16: Fp16,
+    default: '0
+  };
+
+  `include "include/tb_idma_mx_axi_mon.svh"
+  `IDMA_MX_AXI_MON(i_idma_backend, i_mx_axi_mon, 1'b1, ComputeOps)
+
   idma_backend_rw_axi #(
     .CombinedShifter(1'b0), .DataWidth(DataWidth), .AddrWidth(AddrWidth), .AxiIdWidth(AxiIdWidth),
     .UserWidth(UserWidth), .TFLenWidth(TFLenWidth), .MaskInvalidData(1'b1), .BufferDepth(3),
     .EnableCompute(1'b1),
-    .ComputeOps(idma_pkg::compute_enable_t'{mxquant: 1'b1, mxdequant: 1'b1, mxfp16: Fp16,
-                                            default: '0}),
+    .ComputeOps(ComputeOps),
     .ComputeTuning('1),
     .RAWCouplingAvail(1'b1), .HardwareLegalizer(1'b1), .RejectZeroTransfers(1'b1),
     .ErrorCap(idma_pkg::NO_ERROR_HANDLING), .PrintFifoInfo(1'b0), .NumAxInFlight(16),

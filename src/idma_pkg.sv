@@ -71,16 +71,16 @@ package idma_pkg;
 
     /// Backend option type:
     /// - `decouple_aw`: `AWs` will only be sent after the first corresponding `R` is received
-    /// - `decouple_rw`: decouples the `R` and `W` channels completely: can cause deadlocks
+    /// - `deadlock_free`: reserve data-buffer space before issuing each read request
     /// - `*_max_llen`: the maximum log length of a burst
     /// - `*_reduce_len`: should bursts be reduced in length?
     typedef struct packed {
         logic       decouple_aw;
-        logic       decouple_rw;
         logic [2:0] src_max_llen;
         logic [2:0] dst_max_llen;
         logic       src_reduce_len;
         logic       dst_reduce_len;
+        logic       deadlock_free;
     } backend_options_t;
 
     /// MX block geometry (OCP MX): 32 elements per block, width-independent
@@ -166,14 +166,10 @@ package idma_pkg;
     typedef struct packed {
         /// MX beats enter their engine on the read beat, past the byte-lane masks (whole beats)
         logic mx_beat_push;
-        /// Dataflow element ready from flops; a lane's extra entry fills only on a pending W pop
-        logic dfe_ready_ahead;
         /// MX beats enter their engine through a one-beat register stage, which takes one input entry
         logic mx_in_reg;
-        /// Dataflow element ready from flops, no same-cycle refill of a full lane; one more entry
+        /// Dataflow element ready independent of downstream ready; no full-lane refill; one more entry
         logic dfe_ready_cut;
-        /// Dataflow element lanes with registered full/empty flags, pointers without enables
-        logic dfe_reg_flags;
         /// Spill register on the head of the write datapath request FIFO
         logic wdp_head_spill;
         /// The outstanding-transfer counter takes accepted requests one cycle late

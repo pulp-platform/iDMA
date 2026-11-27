@@ -10,7 +10,6 @@ protocol_enum: "AXI_STREAM"
 full_name: "AXI Stream"
 tb_define: "PROT_AXI4_STREAM"
 bursts: "not_supported"
-legalizer_force_decouple: "false"
 write_meta_channel: "t_chan"
 read_meta_channel: "t_chan"
 combined_aw_and_w: "true"
@@ -280,7 +279,6 @@ write_template: |
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} ),
-        .buffer_out_offer_o ( ${buffer_out_offer} ),
         .buffer_out_consumed_o ( ${buffer_out_consumed} )
     );
 synth_wrapper_ports_read: |

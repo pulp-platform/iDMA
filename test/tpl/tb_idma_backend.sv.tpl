@@ -1086,7 +1086,6 @@ axi_rsp_mem       )
                           now.src_protocol,
                           now.dst_protocol,
                           now.aw_decoupled,
-                          now.rw_decoupled,
                           $clog2(now.max_src_len),
                           $clog2(now.max_dst_len),
                           now.max_src_len != 'd256,
@@ -1233,7 +1232,6 @@ axi_rsp_mem       )
                            now.dst_protocol,
                            now.max_src_len,
                            now.max_dst_len,
-                           now.rw_decoupled,
                            now.err_addr,
                            now.err_is_read,
                            now.err_action

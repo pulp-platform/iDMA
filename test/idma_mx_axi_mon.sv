@@ -27,7 +27,6 @@ module idma_mx_axi_mon #(
   input logic [AddrWidth-1:0]         req_scale_i,
   input logic [1:0]                   req_src_burst_i,
   input logic [1:0]                   req_dst_burst_i,
-  input logic                         req_decouple_rw_i,
   input idma_pkg::compute_options_t   req_cmp_i,
   input idma_pkg::backend_options_t   req_beo_i,
   input logic [IdWidth-1:0]           req_id_i,
@@ -86,7 +85,6 @@ module idma_mx_axi_mon #(
 
   class xfer_c;
     int   idx;
-    bit   coupled;
     logic [1:0] burst [2];
     seg_t seg [2][$];
     int   si [2];
@@ -209,10 +207,6 @@ module idma_mx_axi_mon #(
     na = x.na[s];
     n  = x.seg[s][x.si[s]].hi - na;
     if (x.ps[s] - (na % x.ps[s]) < n) n = x.ps[s] - (na % x.ps[s]);
-    if (x.coupled) begin
-      automatic u64_t q = x.base[!s] + (na - x.base[s]);
-      if (x.ps[!s] - (q % x.ps[!s]) < n) n = x.ps[!s] - (q % x.ps[!s]);
-    end
     if (bt != x.burst[s]) err($sformatf("%s burst type %0d, request %0d", ch, bt, x.burst[s]));
     if (id != x.id || o.lock != x.opt[s].lock || o.cache != x.opt[s].cache ||
         o.prot != x.opt[s].prot || o.qos != x.opt[s].qos || o.region != x.opt[s].region ||
@@ -314,7 +308,7 @@ module idma_mx_axi_mon #(
   clocking cb @(posedge clk_i);
     default input #1step;
     input rst_ni, req_valid_i, req_ready_i, req_len_i, req_src_i, req_dst_i, req_scale_i,
-          req_src_burst_i, req_dst_burst_i, req_decouple_rw_i, req_cmp_i, req_beo_i, req_id_i,
+          req_src_burst_i, req_dst_burst_i, req_cmp_i, req_beo_i, req_id_i,
           req_src_opt_i, req_dst_opt_i, req_user_i, req_src_prot_i, req_dst_prot_i, ar_valid_i,
           ar_ready_i, ar_addr_i,
           ar_len_i, ar_size_i, ar_burst_i, ar_id_i, ar_opt_i, ar_user_i, r_valid_i, r_ready_i,
@@ -375,7 +369,6 @@ module idma_mx_axi_mon #(
         automatic bit ax [2] = '{cb.req_src_prot_i == idma_pkg::AXI,
                                  cb.req_dst_prot_i == idma_pkg::AXI};
         x.idx      = nx++;
-        x.coupled  = !cb.req_decouple_rw_i && !c.enable && ax[0] && ax[1];
         x.burst[0] = cb.req_src_burst_i;
         x.burst[1] = cb.req_dst_burst_i;
         x.ps[0]    = page(cb.req_beo_i.src_reduce_len, cb.req_beo_i.src_max_llen);

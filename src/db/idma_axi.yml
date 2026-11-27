@@ -12,7 +12,6 @@ tb_define: "PROT_AXI4"
 bursts: "split_at_page_boundary"
 page_size: 4096
 max_beats_per_burst: 256
-legalizer_force_decouple: "false"
 read_meta_channel: "ar_chan"
 write_meta_channel: "aw_chan"
 combined_aw_and_w: "false"
@@ -63,6 +62,7 @@ legalizer_write_data_path: |
     w_req_o.w_dp_req = '{
         dst_protocol: opt_w_q.dst_protocol,
         dst_head: opt_w_q.dst_head,
+        num_bytes: w_num_bytes,
         offset: w_addr_offset,
         tailer: OffsetWidth'(w_num_bytes + w_addr_offset),
         shift: opt_w_q.write_shift,
@@ -132,7 +132,6 @@ write_template: |
         .buffer_out_i       ( buffer_out_shifted ),
         .buffer_out_valid_i ( buffer_out_valid_shifted ),
         .buffer_out_ready_o ( ${buffer_out_ready} ),
-        .buffer_out_offer_o ( ${buffer_out_offer} ),
         .buffer_out_consumed_o ( ${buffer_out_consumed} ),
         .mask_ext_i         ( mask_ext_shifted )
     );
