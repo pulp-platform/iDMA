@@ -15,7 +15,8 @@ IDMA_VLT_TESTBENCHES := \
 	tb_idma_rt_midend
 
 IDMA_VLT_SUFFIXES_tb_idma_otf_transpose := sw8_fd0 sw8_fd1 sw64_fd0 sw64_fd1
-IDMA_VLT_SUFFIXES_tb_idma_transpose_nd := dw32 dw64
+IDMA_VLT_SUFFIXES_tb_idma_transpose_nd := dw32 dw64 dw64_axif2 dw64_axif2_aw1 dw128_axif2_aw1 \
+	dw512_axif24_aw1 dw512_axif24_aw2
 IDMA_VLT_SUFFIXES_tb_idma_transpose_b2b := dw32 dw64
 IDMA_VLT_SUFFIXES_tb_idma_transpose_midend := dw64 dw512
 IDMA_VLT_SUFFIXES_tb_idma_nd_midend_b2b := default
@@ -42,6 +43,14 @@ IDMA_VLT_RUN_ARGS_tb_idma_otf_transpose__sw64_fd1 := +BP
 # End-to-end transpose and transpose-midend bus-width configurations.
 IDMA_VLT_ELAB_ARGS_tb_idma_transpose_nd__dw32 := -GDataWidth=32
 IDMA_VLT_ELAB_ARGS_tb_idma_transpose_nd__dw64 := -GDataWidth=64
+# Shallow AW queues and a slave taking one AW ahead of its W must still fit a whole tile
+IDMA_VLT_ELAB_ARGS_tb_idma_transpose_nd__dw64_axif2 := -GDataWidth=64 -GAxIF=2
+IDMA_VLT_ELAB_ARGS_tb_idma_transpose_nd__dw64_axif2_aw1 := -GDataWidth=64 -GAxIF=2 -GMaxAwAhead=1
+IDMA_VLT_ELAB_ARGS_tb_idma_transpose_nd__dw128_axif2_aw1 := -GDataWidth=128 -GAxIF=2 -GMaxAwAhead=1
+IDMA_VLT_ELAB_ARGS_tb_idma_transpose_nd__dw512_axif24_aw1 := \
+	-GDataWidth=512 -GAxIF=24 -GMaxAwAhead=1
+IDMA_VLT_ELAB_ARGS_tb_idma_transpose_nd__dw512_axif24_aw2 := \
+	-GDataWidth=512 -GAxIF=24 -GMaxAwAhead=2
 IDMA_VLT_ELAB_ARGS_tb_idma_transpose_b2b__dw32 := -GDataWidth=32
 IDMA_VLT_ELAB_ARGS_tb_idma_transpose_b2b__dw64 := -GDataWidth=64
 IDMA_VLT_ELAB_ARGS_tb_idma_transpose_midend__dw64 := -GDataWidth=64
