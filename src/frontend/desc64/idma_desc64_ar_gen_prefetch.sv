@@ -115,7 +115,6 @@ logic                             speculation_correct;
 logic                             legalization_usage;
 logic                             idma_enough_slots;
 addr_t                            speculation_addr;
-addr_t                            speculation_check_addr;
 logic                             speculation_ready, speculation_valid;
 logic [SpeculationUsageWidth-1:0] speculation_usage_short;
 logic [SpeculationWidth-1:0]      speculation_usage;
@@ -151,11 +150,12 @@ assign staging_addr_legalization = flush ? (
                                     next_address_from_descriptor_i == '1 ? queued_address_i :
                                     next_address_from_descriptor_i ) : staging_addr.addr;
 
-assign speculation_check_addr = speculation_valid ? speculation_addr : next_ar.addr;
-
-assign speculation_correct = next_address_from_descriptor_i == '1 ?
-        (queued_address_valid_i && speculation_check_addr == queued_address_i) :
-        speculation_check_addr == next_address_from_descriptor_i;
+// Only an address already in the speculation FIFO can be committed. If
+// the FIFO is empty, redirect to the decoded link (or queued job head).
+// This also cancels any pending prediction generated on this edge.
+assign speculation_correct = speculation_valid && (next_address_from_descriptor_i == '1 ?
+        (queued_address_valid_i && speculation_addr == queued_address_i) :
+        speculation_addr == next_address_from_descriptor_i);
 
 assign flush  = next_addr_valid_this_cycle && !speculation_correct;
 assign commit = next_addr_valid_this_cycle && speculation_correct;
