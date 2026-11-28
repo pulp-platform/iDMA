@@ -307,7 +307,7 @@ module tb_idma_desc64_chain #(
 
   initial begin
     automatic int unsigned failures = 0;
-    byte unsigned source [MemoryBytes];
+    byte unsigned before_run [MemoryBytes];
 
     for (int unsigned addr = 0; addr < MemoryBytes; addr++) begin
       memory[addr] = 8'(addr * 61 + addr / 256);
@@ -320,7 +320,7 @@ module tb_idma_desc64_chain #(
       store_word(desc_addr(i) + 16, addr_t'(src_addr(i)));
       store_word(desc_addr(i) + 24, addr_t'(dst_addr(i)));
     end
-    foreach (memory[a]) source[a] = memory[a];
+    foreach (memory[a]) before_run[a] = memory[a];
 
     repeat (3) tick();
     rst_n = 1'b1;
@@ -336,30 +336,34 @@ module tb_idma_desc64_chain #(
     repeat (RunCycles) tick();
 
     $display("[DESC64] %0d descriptors submitted, %0d completed", submitted, completed);
-    for (int unsigned i = 0; i <= ChainLength; i++) begin
+    if (submitted != ChainLength || completed != ChainLength) begin
+      failures++;
+      $display("[DESC64] expected %0d submissions and completions", ChainLength);
+    end
+    for (int unsigned i = 0; i < ChainLength; i++) begin
       logic copied, marked;
       copied = 1'b1;
       marked = 1'b1;
       for (int unsigned lane = 0; lane < 8; lane++) begin
-        if (memory[dst_addr(i) + lane] != source[src_addr(i) + lane]) copied = 1'b0;
-        if (memory[desc_addr(i) + lane] != 8'hff) marked = 1'b0;
+        if (memory[dst_addr(i) + lane] !== before_run[src_addr(i) + lane]) copied = 1'b0;
+        if (memory[desc_addr(i) + lane] !== 8'hff) marked = 1'b0;
       end
-      if (i == ChainLength) begin
-        if (copied || marked) begin
-          failures++;
-          $display("[DESC64] unlinked descriptor at 0x%0h: %s, %s", desc_addr(i),
-                   copied ? "destination written" : "destination untouched",
-                   marked ? "status word written" : "status word untouched");
-        end
-      end else if (!copied || !marked) begin
+      if (!copied || !marked) begin
         failures++;
         $display("[DESC64] descriptor %0d at 0x%0h: destination %s, status word %s", i,
                  desc_addr(i), copied ? "copied" : "NOT copied",
                  marked ? "marked complete" : "NOT marked complete");
       end
     end
+    for (int unsigned lane = 0; lane < 8; lane++) begin
+      if (memory[dst_addr(ChainLength) + lane] !== before_run[dst_addr(ChainLength) + lane] ||
+          memory[desc_addr(ChainLength) + lane] !== before_run[desc_addr(ChainLength) + lane]) begin
+        failures++;
+        $display("[DESC64] unlinked descriptor destination or status changed at byte %0d", lane);
+      end
+    end
     if (failures != 0) begin
-      $fatal(1, "[DESC64] FAIL: %0d descriptors with a wrong outcome", failures);
+      $fatal(1, "[DESC64] FAIL: %0d failed checks", failures);
     end
     $display("[DESC64] ALL PASS");
     $finish;
