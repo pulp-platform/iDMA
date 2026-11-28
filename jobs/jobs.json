@@ -577,6 +577,20 @@
             ]
         }
     },
+    "desc64_chain" : {
+        "jobs" : {
+        },
+        "params" : {
+        },
+        "testbench" : "tb_idma_desc64_chain",
+        "verify" : {
+            "token" : "[DESC64] ALL PASS",
+            "legs" : [
+                { "tag" : "desc64_chain_bd5", "params" : { "BackendDepth" : 5 } },
+                { "tag" : "desc64_chain_bd6", "params" : { "BackendDepth" : 6 } }
+            ]
+        }
+    },
     "transpose_midend" : {
         "jobs" : {
         },
